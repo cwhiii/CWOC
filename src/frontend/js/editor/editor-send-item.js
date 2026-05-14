@@ -228,9 +228,7 @@ function _renderSendItemPopup(allChits) {
   });
 }
 
-function _escHtml(text) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escHtml — now in shared-utils.js (single source of truth)
 
 /* ── Full search modal for single item ────────────────────────────────────── */
 
@@ -277,6 +275,12 @@ function _openSendItemSearchModal() {
     });
     document.getElementById('sendItemGoBtn').addEventListener('click', function() {
       _sendItemDoSearch();
+    });
+    // Search-as-you-type with debounce
+    var _sendItemDebounce = null;
+    document.getElementById('sendItemSearchInput').addEventListener('input', function() {
+      clearTimeout(_sendItemDebounce);
+      _sendItemDebounce = setTimeout(_sendItemDoSearch, 300);
     });
     document.getElementById('sendItemCancelBtn').addEventListener('click', function() { _closeSendItemSearchModal(); });
     document.getElementById('sendItemCopyNewBtn').addEventListener('click', function() {

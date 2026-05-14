@@ -81,6 +81,12 @@ async function _openSendContentModal(e, contentType) {
     document.getElementById('sendContentGoBtn').addEventListener('click', function() {
       _sendContentDoSearch();
     });
+    // Search-as-you-type with debounce
+    var _sendContentDebounce = null;
+    document.getElementById('sendContentSearch').addEventListener('input', function() {
+      clearTimeout(_sendContentDebounce);
+      _sendContentDebounce = setTimeout(_sendContentDoSearch, 300);
+    });
 
     document.getElementById('sendContentCancelBtn').addEventListener('click', function() {
       _closeSendContentModal();

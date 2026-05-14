@@ -1,0 +1,1 @@
+Fixed global search result cards to properly show chit colors with auto-contrasting text. Field labels in matched results now inherit the contrast color instead of using a hardcoded brown that was unreadable on dark backgrounds.

@@ -23,7 +23,7 @@ from uuid import uuid4
 
 from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
 from src.backend.rules_engine import dispatch_trigger
-from src.backend.routes.bundles import classify_email_into_bundle, classify_email_into_bundles
+from src.backend.routes.bundles import classify_email_into_bundle, classify_email_into_bundles, classify_email_auto_bundles, ensure_auto_bundles_exist
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,112 @@ def _decrypt_password(ciphertext: str) -> str:
     # Base64 fallback
     logger.warning("Using base64 fallback for password decryption (not secure)")
     return base64.b64decode(ciphertext.encode("utf-8")).decode("utf-8")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Tracking Pixel & External Content Stripping
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _strip_tracking_pixels(html: str) -> str:
+    """Remove 1x1 and 1x2 pixel tracking images from HTML email content.
+
+    Detects tracking pixels by:
+    - Explicit width/height attributes of 1 or 2 (any combination)
+    - Inline style with width/height of 1px or 2px
+    - Images with no alt text and very small dimensions
+
+    Returns the HTML with tracking pixel <img> tags removed.
+    """
+    if not html:
+        return html
+
+    # Pattern 1: <img> with width="1" height="1" (or 2) in attributes
+    # Matches any img tag where both width and height are 1 or 2
+    def _is_tracking_pixel(match):
+        tag = match.group(0)
+        # Check explicit width/height attributes
+        w_attr = re.search(r'\bwidth\s*=\s*["\']?([12])\b', tag, re.IGNORECASE)
+        h_attr = re.search(r'\bheight\s*=\s*["\']?([12])\b', tag, re.IGNORECASE)
+        if w_attr and h_attr:
+            return True
+        # Check inline style for width:1px/2px and height:1px/2px
+        style_match = re.search(r'style\s*=\s*["\']([^"\']*)["\']', tag, re.IGNORECASE)
+        if style_match:
+            style = style_match.group(1)
+            w_style = re.search(r'width\s*:\s*[12]px', style, re.IGNORECASE)
+            h_style = re.search(r'height\s*:\s*[12]px', style, re.IGNORECASE)
+            if w_style and h_style:
+                return True
+        return False
+
+    # Find all <img> tags and remove tracking pixels
+    def _replace_pixel(match):
+        if _is_tracking_pixel(match):
+            return ''  # Remove the tracking pixel
+        return match.group(0)
+
+    result = re.sub(r'<img\b[^>]*/?>', _replace_pixel, html, flags=re.IGNORECASE)
+    return result
+
+
+def _strip_external_content(html: str) -> str:
+    """Replace all external image sources with a placeholder.
+
+    Replaces remote <img src="http..."> with a data URI placeholder,
+    preserving the tag structure so a "Load external content" action
+    can restore them on the frontend.
+
+    Stores the original src in a data-original-src attribute.
+    """
+    if not html:
+        return html
+
+    def _replace_external_img(match):
+        tag = match.group(0)
+        src_match = re.search(r'src\s*=\s*["\']?(https?://[^"\'>\s]+)["\']?', tag, re.IGNORECASE)
+        if not src_match:
+            return tag  # No external src, leave as-is
+        original_src = src_match.group(1)
+        # Replace src with a 1x1 transparent placeholder and store original
+        placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+        new_tag = tag[:src_match.start(1)] + placeholder + tag[src_match.end(1):]
+        # Add data-original-src attribute
+        new_tag = new_tag.replace('<img', '<img data-original-src="' + original_src + '"', 1)
+        return new_tag
+
+    result = re.sub(r'<img\b[^>]*/?>', _replace_external_img, html, flags=re.IGNORECASE)
+    return result
+
+
+def _get_user_email_privacy_settings(cursor, user_id: str) -> dict:
+    """Fetch email privacy settings for a user.
+
+    Returns dict with keys:
+      block_tracking_pixels: bool
+      external_content: str ('block', 'allow', 'known_senders')
+      read_receipts: str ('never', 'always', 'ask', 'contacts_only')
+      undo_send_delay: int (seconds)
+    """
+    cursor.execute(
+        "SELECT email_block_tracking_pixels, email_external_content, "
+        "email_read_receipts, email_undo_send_delay FROM settings WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return {
+            "block_tracking_pixels": True,
+            "external_content": "allow",
+            "read_receipts": "never",
+            "undo_send_delay": 5,
+        }
+    return {
+        "block_tracking_pixels": row[0] != "0",
+        "external_content": row[1] or "allow",
+        "read_receipts": row[2] or "never",
+        "undo_send_delay": int(row[3] or 5),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -363,6 +469,11 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
     # Extract file attachments
     extracted_attachments = _extract_attachments_from_message(msg)
 
+    # Detect auto-bundle signals
+    has_list_unsubscribe = bool(msg.get("List-Unsubscribe", ""))
+    has_calendar_attachment = _has_calendar_part(msg)
+    disposition_notification_to = msg.get("Disposition-Notification-To", "")
+
     return {
         "email_from": from_addr,
         "email_to": email_to,
@@ -376,7 +487,21 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
         "email_body_html": body_html,
         "point_in_time": point_in_time,
         "extracted_attachments": extracted_attachments,
+        # Auto-bundle signals
+        "has_list_unsubscribe": has_list_unsubscribe,
+        "has_calendar_attachment": has_calendar_attachment,
+        "disposition_notification_to": disposition_notification_to,
     }
+
+
+def _has_calendar_part(msg) -> bool:
+    """Check if the email contains a text/calendar MIME part (iCal invite)."""
+    if not msg.is_multipart():
+        return msg.get_content_type() == "text/calendar"
+    for part in msg.walk():
+        if part.get_content_type() == "text/calendar":
+            return True
+    return False
 
 
 def _extract_text_from_message(msg) -> str:
@@ -883,6 +1008,10 @@ def _build_rfc2822_message(chit: dict, account: dict) -> email.message.EmailMess
     references = chit.get("email_references", "")
     if references:
         msg["References"] = references
+
+    # Read receipt request (Disposition-Notification-To header)
+    if chit.get("email_request_read_receipt"):
+        msg["Disposition-Notification-To"] = from_addr
 
     # Body — plain text + HTML alternative (markdown → HTML)
     # The email body is written as markdown in the frontend. We always send
@@ -1584,6 +1713,12 @@ def email_sync(request: Request):
         # ── Bundle classification for new email chits ─────────────────
         if all_email_chits:
             try:
+                # Ensure auto-bundles exist before classification
+                try:
+                    ensure_auto_bundles_exist(user_id)
+                except Exception as e:
+                    logger.warning(f"Failed to ensure auto-bundles: {e}")
+
                 # Read the bundles_multi_placement setting
                 multi_placement = False
                 try:
@@ -1611,6 +1746,16 @@ def email_sync(request: Request):
                             "Bundle classification failed for chit %s: %s",
                             email_chit_data.get("id", "?"), e,
                         )
+
+                # Auto-bundle classification (Newsletters, Receipts, Calendar Invites)
+                for email_chit_data in all_email_chits:
+                    try:
+                        classify_email_auto_bundles(email_chit_data, email_chit_data["id"], user_id)
+                    except Exception as e:
+                        logger.warning(
+                            "Auto-bundle classification failed for chit %s: %s",
+                            email_chit_data.get("id", "?"), e,
+                        )
             except Exception as e:
                 logger.warning(f"Bundle classification error: {e}")
 
@@ -1627,32 +1772,50 @@ def email_sync(request: Request):
         except Exception:
             pass
 
-        # Send push notification if new emails were fetched
+        # Send push notification for each new email individually
         if total_new > 0:
             try:
                 from src.backend.routes.ntfy import send_ntfy_notification
                 from src.backend.schedulers import _get_server_base_url
                 base = _get_server_base_url()
-                ntfy_title = f"📬 {total_new} new email{'s' if total_new != 1 else ''}"
-                if all_email_summaries:
-                    body_lines = all_email_summaries[:5]
-                    if len(all_email_summaries) > 5:
-                        body_lines.append(f"… and {len(all_email_summaries) - 5} more")
-                    ntfy_body = "\n".join(body_lines)
-                else:
-                    ntfy_body = "You have new mail in CWOC."
-                click_url = f"{base}/frontend/html/index.html?tab=Email"
                 icon_url = f"{base}/static/cwoc-icon-192.png"
-                send_ntfy_notification(
-                    user_id=user_id,
-                    title=ntfy_title,
-                    body=ntfy_body,
-                    click_url=click_url,
-                    tags="email,incoming_envelope",
-                    icon_url=icon_url,
-                )
+
+                for email_chit in all_email_chits:
+                    chit_id = email_chit.get("id", "")
+                    subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
+                    sender = email_chit.get("email_from", "Unknown")
+                    click_url = f"{base}/frontend/html/editor.html?id={chit_id}&expand=email"
+                    send_ntfy_notification(
+                        user_id=user_id,
+                        title=f"📬 {sender}",
+                        body=subject,
+                        click_url=click_url,
+                        tags="email,incoming_envelope",
+                        icon_url=icon_url,
+                    )
             except Exception as e:
                 logger.warning(f"Ntfy notification failed for new email: {e}")
+
+            # Also store email notifications in the notifications table for the Notifications view
+            try:
+                notif_conn = sqlite3.connect(DB_PATH)
+                notif_cursor = notif_conn.cursor()
+                now_iso = datetime.utcnow().isoformat()
+                for email_chit in all_email_chits:
+                    chit_id = email_chit.get("id", "")
+                    subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
+                    sender = email_chit.get("email_from", "Unknown")
+                    notif_cursor.execute(
+                        """INSERT INTO notifications
+                           (id, user_id, chit_id, chit_title, owner_display_name,
+                            notification_type, status, created_datetime)
+                           VALUES (?, ?, ?, ?, ?, 'email', 'pending', ?)""",
+                        (str(uuid4()), user_id, chit_id, f"📬 {sender}: {subject}", "", now_iso),
+                    )
+                notif_conn.commit()
+                notif_conn.close()
+            except Exception as e:
+                logger.warning(f"Failed to store email notifications in DB: {e}")
 
         result = {"new_count": total_new, "deleted_count": total_deleted, "accounts_synced": accounts_synced}
         if sync_errors:
@@ -1677,14 +1840,15 @@ def email_sync(request: Request):
 # POST /api/email/send/{chit_id} — Send a draft email via SMTP
 # ───────────────────────────────────────────────────────────────────────────
 
-@email_router.post("/api/email/send/{chit_id}")
-def email_send(chit_id: str, request: Request):
-    """Send a draft email chit via SMTP.
 
-    On success, updates the chit's ``email_status`` to ``"sent"``,
-    ``email_folder`` to ``"sent"``, and populates ``email_message_id``.
+def _do_send_email_by_id(chit_id: str, user_id: str) -> dict:
+    """Internal: send a draft email chit via SMTP.
+
+    Called by both the API endpoint and the send-later scheduler.
+    Returns {"status": "sent", "email_message_id": ...} on success.
+    Raises HTTPException on failure (when called from API) or raises
+    generic Exception (when called from scheduler).
     """
-    user_id = request.state.user_id
     conn = None
     smtp_conn = None
     try:
@@ -1711,7 +1875,6 @@ def email_send(chit_id: str, request: Request):
         email_to = chit.get("email_to")
         if email_to:
             email_to = deserialize_json_field(email_to)
-        # Unwrap double/triple-encoded JSON: '["[\"addr\"]"]' → ["addr"]
         email_to = _unwrap_json_list(email_to)
         if not email_to or (isinstance(email_to, list) and len(email_to) == 0):
             raise HTTPException(
@@ -1720,9 +1883,7 @@ def email_send(chit_id: str, request: Request):
             )
 
         # Load email account credentials
-        # Reset row_factory for settings query
         cursor2 = conn.cursor()
-        # Use the chit's email_account_id if available, otherwise default
         chit_account_id = chit.get("email_account_id")
         account = _get_email_account(cursor2, user_id, account_id=chit_account_id)
 
@@ -1736,15 +1897,11 @@ def email_send(chit_id: str, request: Request):
         chit_data["email_cc"] = deserialize_json_field(chit.get("email_cc")) or []
         chit_data["email_bcc"] = deserialize_json_field(chit.get("email_bcc")) or []
 
-        # Unwrap any double-encoded JSON arrays
         for _fld in ("email_to", "email_cc", "email_bcc"):
             chit_data[_fld] = _unwrap_json_list(chit_data[_fld])
 
         logger.info(f"Sending email — To: {chit_data['email_to']}, Cc: {chit_data['email_cc']}, Bcc: {chit_data['email_bcc']}")
-        logger.info(f"Sending email — Body length: {len(chit_data.get('email_body_text', '') or '')}, Body preview: {repr((chit_data.get('email_body_text', '') or '')[:200])}")
-        logger.info(f"Sending email — Subject: {chit_data.get('email_subject', '')}, Title: {chit_data.get('title', '')}")
-        logger.info(f"Sending email — note field: {repr((chit_data.get('note', '') or '')[:200])}")
-        logger.info(f"Sending email — raw email_body_text type: {type(chit.get('email_body_text'))}, value: {repr((chit.get('email_body_text') or '')[:200])}")
+        logger.info(f"Sending email — Subject: {chit_data.get('email_subject', '')}")
 
         # Build the RFC 2822 message
         message = _build_rfc2822_message(chit_data, account)
@@ -1755,45 +1912,27 @@ def email_send(chit_id: str, request: Request):
             smtp_conn = _connect_smtp(account)
             sent_message_id = _send_email(smtp_conn, message, from_addr)
         except smtplib.SMTPAuthenticationError:
-            raise HTTPException(
-                status_code=401,
-                detail="SMTP authentication failed.",
-            )
+            raise HTTPException(status_code=401, detail="SMTP authentication failed.")
         except (smtplib.SMTPConnectError, OSError, ConnectionError, TimeoutError) as e:
-            import logging
-            logging.error(f"SMTP connection failed: {type(e).__name__}: {e}")
             raise HTTPException(
                 status_code=502,
                 detail=f"Cannot reach SMTP server {account.get('smtp_host', '?')}:{account.get('smtp_port', '?')} — {type(e).__name__}: {e}",
             )
         except smtplib.SMTPRecipientsRefused as e:
             refused = ", ".join(e.recipients.keys()) if e.recipients else "unknown"
-            raise HTTPException(
-                status_code=422,
-                detail=f"Recipient address rejected: {refused}",
-            )
+            raise HTTPException(status_code=422, detail=f"Recipient address rejected: {refused}")
         except smtplib.SMTPDataError as e:
             if "size" in str(e).lower() or "552" in str(e):
-                raise HTTPException(
-                    status_code=413,
-                    detail="Message exceeds server size limit.",
-                )
-            raise HTTPException(
-                status_code=502,
-                detail=f"SMTP error: {str(e)}",
-            )
+                raise HTTPException(status_code=413, detail="Message exceeds server size limit.")
+            raise HTTPException(status_code=502, detail=f"SMTP error: {str(e)}")
 
-        # On success: update chit status
+        # On success: update chit status and clear send_at
         now = datetime.now(timezone.utc).isoformat()
 
-        # Recompute system tags for the sent email
-        # Read current tags, strip old email folder tags, add new ones
         current_tags_raw = chit.get("tags", "[]")
         current_tags = deserialize_json_field(current_tags_raw) if isinstance(current_tags_raw, str) else (current_tags_raw or [])
-        # Remove old email folder system tags
         updated_tags = [t for t in current_tags if not (isinstance(t, str) and t.startswith("CWOC_System/Email/"))]
         updated_tags.append("CWOC_System/Email/Sent")
-        # Ensure base email tag is present
         if "CWOC_System/Email" not in updated_tags:
             updated_tags.append("CWOC_System/Email")
 
@@ -1802,6 +1941,7 @@ def email_send(chit_id: str, request: Request):
                SET email_status = 'sent',
                    email_folder = 'sent',
                    email_message_id = ?,
+                   email_send_at = NULL,
                    tags = ?,
                    modified_datetime = ?
                WHERE id = ?""",
@@ -1822,6 +1962,80 @@ def email_send(chit_id: str, request: Request):
                 smtp_conn.quit()
             except Exception:
                 pass
+        if conn:
+            conn.close()
+
+
+@email_router.post("/api/email/send/{chit_id}")
+def email_send(chit_id: str, request: Request):
+    """Send a draft email chit via SMTP.
+
+    On success, updates the chit's ``email_status`` to ``"sent"``,
+    ``email_folder`` to ``"sent"``, and populates ``email_message_id``.
+    """
+    user_id = request.state.user_id
+    # Clear any scheduled send_at since this is an immediate send
+    try:
+        _conn = sqlite3.connect(DB_PATH)
+        _cur = _conn.cursor()
+        _cur.execute("UPDATE chits SET email_send_at = NULL WHERE id = ?", (chit_id,))
+        _conn.commit()
+        _conn.close()
+    except Exception:
+        pass
+    return _do_send_email_by_id(chit_id, user_id)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# POST /api/email/schedule/{chit_id} — Schedule an email for later sending
+# ───────────────────────────────────────────────────────────────────────────
+
+
+@email_router.post("/api/email/schedule/{chit_id}")
+def email_schedule(chit_id: str, body: dict, request: Request):
+    """Schedule a draft email to be sent at a future time.
+
+    Body: {"send_at": "ISO 8601 datetime"}
+    To cancel: {"send_at": null}
+    """
+    user_id = request.state.user_id
+    conn = None
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Verify chit exists and is a draft owned by user
+        cursor.execute(
+            "SELECT id, email_status, owner_id FROM chits WHERE id = ?", (chit_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Email chit not found.")
+        if row[1] != "draft":
+            raise HTTPException(status_code=400, detail="Only drafts can be scheduled.")
+        if row[2] != user_id:
+            raise HTTPException(status_code=403, detail="Not your email.")
+
+        send_at = body.get("send_at")
+
+        cursor.execute(
+            "UPDATE chits SET email_send_at = ?, modified_datetime = ? WHERE id = ?",
+            (send_at, datetime.now(timezone.utc).isoformat(), chit_id),
+        )
+        conn.commit()
+
+        if send_at:
+            return {"status": "scheduled", "send_at": send_at}
+        else:
+            return {"status": "cancelled"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email schedule error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
         if conn:
             conn.close()
 
@@ -2157,16 +2371,22 @@ def email_toggle_read(chit_id: str, request: Request):
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# GET /api/email/{chit_id}/raw — Download raw email (.eml) from IMAP
+# ───────────────────────────────────────────────────────────────────────────
+# GET /api/email/{chit_id}/raw — Download reconstructed .eml from stored data
 # ───────────────────────────────────────────────────────────────────────────
 
 @email_router.get("/api/email/{chit_id}/raw")
 def email_download_raw(chit_id: str, request: Request):
-    """Re-fetch the raw RFC 2822 email from IMAP and return as .eml download.
+    """Build an RFC 2822 .eml file from the stored email fields and return as download.
 
-    Looks up the chit's email_message_id, connects to the appropriate IMAP
-    account, searches for the message, and returns the raw bytes.
+    No IMAP connection needed — reconstructs the message from the chit's
+    email_from, email_to, email_cc, email_subject, email_body_text,
+    email_body_html, email_date, and email_message_id fields.
     """
+    import email as _email_mod
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.utils import formatdate, parsedate_to_datetime
     from fastapi.responses import Response
 
     conn = None
@@ -2176,113 +2396,64 @@ def email_download_raw(chit_id: str, request: Request):
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT email_message_id, email_account_id, email_subject, owner_id FROM chits WHERE id = ?",
+            "SELECT email_message_id, email_from, email_to, email_cc, email_bcc, "
+            "email_subject, email_body_text, email_body_html, email_date "
+            "FROM chits WHERE id = ?",
             (chit_id,),
         )
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Email chit not found.")
 
-        message_id = row["email_message_id"]
-        account_id = row["email_account_id"]
-        subject = row["email_subject"] or "email"
-        owner_id = row["owner_id"]
+        subject = row["email_subject"] or ""
+        body_text = row["email_body_text"] or ""
+        body_html = row["email_body_html"] or ""
 
-        if not message_id:
-            raise HTTPException(status_code=400, detail="This chit has no email Message-ID.")
+        # Build the MIME message
+        if body_html and body_text:
+            msg = MIMEMultipart("alternative")
+            msg.attach(MIMEText(body_text, "plain", "utf-8"))
+            msg.attach(MIMEText(body_html, "html", "utf-8"))
+        elif body_html:
+            msg = MIMEText(body_html, "html", "utf-8")
+        else:
+            msg = MIMEText(body_text, "plain", "utf-8")
 
-        # Load the email account credentials
-        cursor.execute(
-            "SELECT email_accounts FROM settings WHERE user_id = ?",
-            (owner_id,),
+        # Set headers
+        if row["email_from"]:
+            msg["From"] = row["email_from"]
+        if row["email_to"]:
+            msg["To"] = row["email_to"]
+        if row["email_cc"]:
+            msg["Cc"] = row["email_cc"]
+        if row["email_bcc"]:
+            msg["Bcc"] = row["email_bcc"]
+        if subject:
+            msg["Subject"] = subject
+        if row["email_message_id"]:
+            msg["Message-ID"] = row["email_message_id"]
+        if row["email_date"]:
+            msg["Date"] = row["email_date"]
+
+        raw_bytes = msg.as_bytes()
+
+        # Build a safe filename
+        safe_subject = "".join(c for c in subject if c.isalnum() or c in " -_").strip()[:50]
+        if not safe_subject:
+            safe_subject = "email"
+        filename = f"{safe_subject}.eml"
+
+        return Response(
+            content=raw_bytes,
+            media_type="message/rfc822",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-        settings_row = cursor.fetchone()
-        if not settings_row or not settings_row["email_accounts"]:
-            raise HTTPException(status_code=400, detail="No email accounts configured.")
-
-        import json as _json
-        accounts = _json.loads(settings_row["email_accounts"]) if settings_row["email_accounts"] else []
-        account = None
-        for acct in accounts:
-            if acct.get("id") == account_id:
-                account = acct
-                break
-
-        if not account:
-            # Fallback: try first account
-            if accounts:
-                account = accounts[0]
-            else:
-                raise HTTPException(status_code=400, detail="Email account not found.")
-
-        imap_host = account.get("imap_host", "")
-        imap_port = int(account.get("imap_port", 993))
-        imap_user = account.get("email", "")
-        imap_pass = _decrypt_password(account.get("password", ""))
-
-        if not imap_host or not imap_user or not imap_pass:
-            raise HTTPException(status_code=400, detail="Incomplete IMAP credentials.")
-
-        # Connect to IMAP and search for the message
-        imap = None
-        try:
-            imap = imaplib.IMAP4_SSL(imap_host, imap_port)
-            imap.login(imap_user, imap_pass)
-
-            # Search across common folders
-            raw_bytes = None
-            for folder in ["INBOX", "Sent", "[Gmail]/Sent Mail", "[Gmail]/All Mail", "INBOX.Sent", "Drafts"]:
-                try:
-                    status, _ = imap.select(folder, readonly=True)
-                    if status != "OK":
-                        continue
-                    # Search by Message-ID header
-                    search_criteria = f'(HEADER Message-ID "{message_id}")'
-                    status, data = imap.search(None, search_criteria)
-                    if status != "OK" or not data[0]:
-                        continue
-                    uid = data[0].split()[0]
-                    status, msg_data = imap.fetch(uid, "(BODY.PEEK[])")
-                    if status == "OK" and msg_data:
-                        for part in msg_data:
-                            if isinstance(part, tuple):
-                                raw_bytes = part[1]
-                                break
-                    if raw_bytes:
-                        break
-                except Exception:
-                    continue
-
-            if not raw_bytes:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Could not find the original email on the mail server. It may have been deleted."
-                )
-
-            # Build a safe filename from the subject
-            safe_subject = "".join(c for c in subject if c.isalnum() or c in " -_").strip()[:50]
-            if not safe_subject:
-                safe_subject = "email"
-            filename = f"{safe_subject}.eml"
-
-            return Response(
-                content=raw_bytes,
-                media_type="message/rfc822",
-                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-            )
-
-        finally:
-            if imap:
-                try:
-                    imap.logout()
-                except Exception:
-                    pass
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Raw email download error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to download raw email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to build email: {str(e)}")
     finally:
         if conn:
             conn.close()

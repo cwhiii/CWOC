@@ -8,6 +8,35 @@ var _emailAccounts = [];
 /** Index of the account currently being edited in the modal (-1 = none) */
 var _emailModalEditIdx = -1;
 
+
+// ── Email Privacy Settings ───────────────────────────────────────────────────
+
+/** Load email privacy settings into the settings form */
+function _loadEmailPrivacySettings(settings) {
+  var el;
+  el = document.getElementById('emailBlockTrackingPixels');
+  if (el) el.checked = settings.email_block_tracking_pixels !== '0';
+  el = document.getElementById('emailExternalContent');
+  if (el) el.value = settings.email_external_content || 'allow';
+  el = document.getElementById('emailReadReceipts');
+  if (el) el.value = settings.email_read_receipts || 'never';
+  el = document.getElementById('emailUndoSendDelay');
+  if (el) el.value = settings.email_undo_send_delay || '5';
+  el = document.getElementById('emailGroupBy');
+  if (el) el.value = settings.email_group_by || 'date';
+}
+
+/** Collect email privacy settings for the save payload */
+function _collectEmailPrivacySettings() {
+  return {
+    email_block_tracking_pixels: document.getElementById('emailBlockTrackingPixels')?.checked ? '1' : '0',
+    email_external_content: (document.getElementById('emailExternalContent') || {}).value || 'allow',
+    email_read_receipts: (document.getElementById('emailReadReceipts') || {}).value || 'never',
+    email_undo_send_delay: (document.getElementById('emailUndoSendDelay') || {}).value || '5',
+    email_group_by: (document.getElementById('emailGroupBy') || {}).value || 'date',
+  };
+}
+
 /** Populate email accounts from loaded settings */
 function _loadEmailAccountSettings(settings) {
   try {
@@ -53,7 +82,7 @@ function _renderEmailAccountsSummary() {
     el.innerHTML = '<span style="opacity:0.5;">No accounts configured.</span>';
   } else {
     var items = _emailAccounts.map(function(a) {
-      return '<span style="display:inline-block;background:#f5e6cc;border:1px solid rgba(139,90,43,0.3);border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:0.85em;">' + _escapeHtml(a.email || 'Unnamed') + '</span>';
+      return '<span style="display:inline-block;background:#f5e6cc;border:1px solid rgba(139,90,43,0.3);border-radius:4px;padding:2px 8px;margin:2px 4px 2px 0;font-size:0.85em;">' + _escHtml(a.email || 'Unnamed') + '</span>';
     });
     el.innerHTML = items.join('');
   }
@@ -283,11 +312,7 @@ function _collectEmailAccountsSettings() {
   return accounts;
 }
 
-/** Escape HTML for safe insertion */
-function _escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escapeHtml — now using shared _escHtml from shared-utils.js
 
 /** Escape for HTML attribute values */
 function _escapeAttr(str) {

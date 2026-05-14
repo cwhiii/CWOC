@@ -3,34 +3,13 @@
    Fetches 16-day forecasts for all saved locations and renders a table.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-// ── Weather icon map (same as main.js) ───────────────────────────────────────
-var _wxPageIcons = {
-  0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
-  45: '🌫️', 48: '🌫️',
-  51: '🌦️', 53: '🌦️', 55: '🌦️', 56: '🌦️', 57: '🌦️',
-  61: '🌧️', 63: '🌧️', 65: '🌧️', 66: '🌧️', 67: '🌧️',
-  71: '🌨️', 73: '🌨️', 75: '🌨️', 77: '🌨️',
-  80: '🌧️', 81: '🌧️', 82: '🌧️',
-  85: '🌨️', 86: '🌨️',
-  95: '⛈️', 96: '⛈️', 99: '⛈️'
-};
+// _wxPageIcons — now in shared-utils.js as _cwocWeatherIcons
 
-function _wxPageGetIcon(code) {
-  return _wxPageIcons[code] || '❓';
-}
+function _wxPageGetIcon(code) { return _cwocGetWeatherIcon(code); }
 
-function _wxPageC2F(c) {
-  return _convertTemp(c);
-}
+// _wxPageC2F — removed, use _convertTemp directly
 
-/** Get precipitation type from WMO weather code. */
-function _wxPrecipType(code) {
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
-  if ([95, 96, 99].includes(code)) return 'thunder';
-  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
-  return '';
-}
+// _wxPrecipType — now in shared-utils.js as _cwocGetPrecipType
 
 /**
  * Check if weather conditions are extreme.
@@ -41,15 +20,7 @@ function _wxIsExtreme(highC, lowC, weatherCode) {
   return false;
 }
 
-/** Format precipitation: nearest cm with type. Sub-0.5cm = just the type. No precip = '—'. */
-function _wxFormatPrecip(precipMm, weatherCode) {
-  if (!precipMm || precipMm <= 0) return '—';
-  var pType = _wxPrecipType(weatherCode);
-  if (!pType) pType = 'precip';
-  var cm = Math.round(precipMm / 10);
-  if (cm < 1) return pType;
-  return cm + 'cm ' + pType;
-}
+// _wxFormatPrecip — now in shared-utils.js as _cwocFormatPrecip (with '—' as emptyVal)
 
 // ── Day-of-week abbreviations ────────────────────────────────────────────────
 var _wxDow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -637,8 +608,8 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
     for (var j = 0; j < locations.length; j++) {
       var errMsg = results[j].ok ? '' : (results[j].error || 'Unknown error');
       html += '<div class="weather-row-error">' +
-        '<div class="weather-row-header"><span class="loc-label">' + _wxEsc(locations[j].label || 'Location') + '</span></div>' +
-        '<span class="error-msg">⚠️ ' + _wxEsc(errMsg) + '</span>' +
+        '<div class="weather-row-header"><span class="loc-label">' + _escHtml(locations[j].label || 'Location') + '</span></div>' +
+        '<span class="error-msg">⚠️ ' + _escHtml(errMsg) + '</span>' +
       '</div>';
     }
     container.innerHTML = html;
@@ -674,10 +645,10 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
       rowsHtml += '<div class="weather-row-error" draggable="true" data-wx-idx="' + r + '">' +
         '<div class="weather-row-header">' +
           '<span class="drag-handle">☰</span>' +
-          '<span class="loc-label">' + _wxEsc(loc.label || 'Location') + '</span>' +
-          '<span class="loc-address">' + _wxEsc(loc.address || '') + '</span>' +
+          '<span class="loc-label">' + _escHtml(loc.label || 'Location') + '</span>' +
+          '<span class="loc-address">' + _escHtml(loc.address || '') + '</span>' +
         '</div>' +
-        '<span class="error-msg">⚠️ ' + _wxEsc(res.error || 'Weather unavailable') + '</span>' +
+        '<span class="error-msg">⚠️ ' + _escHtml(res.error || 'Weather unavailable') + '</span>' +
       '</div>';
       continue;
     }
@@ -688,8 +659,8 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
     // Row header
     rowsHtml += '<div class="weather-row-header">' +
       '<span class="drag-handle">☰</span>' +
-      '<span class="loc-label">' + _wxEsc(loc.label || 'Location') + '</span>' +
-      '<span class="loc-address">' + _wxEsc(loc.address || '') + '</span>' +
+      '<span class="loc-label">' + _escHtml(loc.label || 'Location') + '</span>' +
+      '<span class="loc-address">' + _escHtml(loc.address || '') + '</span>' +
     '</div>';
 
     // Day blocks — mark week-start blocks with a data attribute
@@ -697,18 +668,18 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
       var isToday = _wxIsToday(daily.time[dd]);
       var hasEvent = chitsByLocDate && chitsByLocDate[r] && chitsByLocDate[r][daily.time[dd]];
       var icon = _wxPageGetIcon(daily.weathercode[dd]);
-      var highF = _wxPageC2F(daily.temperature_2m_max[dd]);
-      var lowF = _wxPageC2F(daily.temperature_2m_min[dd]);
+      var highF = _convertTemp(daily.temperature_2m_max[dd]);
+      var lowF = _convertTemp(daily.temperature_2m_min[dd]);
       var precip = daily.precipitation_sum[dd];
       var wCode = daily.weathercode[dd];
-      var precipStr = _wxFormatPrecip(precip, wCode);
+      var precipStr = _cwocFormatPrecip(precip, wCode, '—');
 
       var blockClasses = 'weather-day-block';
       if (isToday) blockClasses += ' today';
       if (hasEvent) blockClasses += ' has-event';
       if (_wxIsExtreme(daily.temperature_2m_max[dd], daily.temperature_2m_min[dd], wCode)) blockClasses += ' wx-extreme';
       var wsAttr = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
-      var locAddr = _wxEsc(loc.address || loc.label || '');
+      var locAddr = _escHtml(loc.address || loc.label || '');
 
       var lowAlt = _tempAltUnit(daily.temperature_2m_min[dd]);
       var highAlt = _tempAltUnit(daily.temperature_2m_max[dd]);
@@ -749,11 +720,7 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
   _wxInitCityTap(container);
 }
 
-/** Simple HTML escape. */
-function _wxEsc(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _wxEsc — now using shared _escHtml from shared-utils.js
 
 // ── Day block click → navigate to dashboard Day view ─────────────────────────
 
@@ -1196,7 +1163,7 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
     var cityName = cityData.displayName || cityKey;
 
     // Update loading text with progress
-    loadingEl.innerHTML = '⏳ Loading weather for city ' + (ci + 1) + ' of ' + cityNames.length + ' (' + _wxEsc(cityName) + ')…';
+    loadingEl.innerHTML = '⏳ Loading weather for city ' + (ci + 1) + ' of ' + cityNames.length + ' (' + _escHtml(cityName) + ')…';
 
     // Fetch forecast for this city
     var forecast = null;
@@ -1213,10 +1180,10 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
     var rowHtml = '<div class="weather-row weather-city-row" draggable="true" data-wx-idx="city-' + ci + '">';
 
     // Row header — title on both container and label for reliable hover
-    rowHtml += '<div class="weather-row-header weather-city-header" title="' + _wxEsc(cityName) + '">' +
+    rowHtml += '<div class="weather-row-header weather-city-header" title="' + _escHtml(cityName) + '">' +
       '<span class="drag-handle">☰</span>' +
-      '<span class="loc-label" title="' + _wxEsc(cityName) + '"><span class="wx-pin-icon">📍 </span>' + _wxEsc(cityName) + '</span>' +
-      '<span class="loc-address" title="' + _wxEsc(cityName) + '" style="font-size:11px;opacity:0.6;">from chits</span>' +
+      '<span class="loc-label" title="' + _escHtml(cityName) + '"><span class="wx-pin-icon">📍 </span>' + _escHtml(cityName) + '</span>' +
+      '<span class="loc-address" title="' + _escHtml(cityName) + '" style="font-size:11px;opacity:0.6;">from chits</span>' +
     '</div>';
 
     // Day blocks — only for dates that have chits in this city
@@ -1242,11 +1209,11 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
 
       var isToday = _wxIsToday(dateStr);
       var icon = _wxPageGetIcon(forecast.weathercode[fIdx]);
-      var highF = _wxPageC2F(forecast.temperature_2m_max[fIdx]);
-      var lowF = _wxPageC2F(forecast.temperature_2m_min[fIdx]);
+      var highF = _convertTemp(forecast.temperature_2m_max[fIdx]);
+      var lowF = _convertTemp(forecast.temperature_2m_min[fIdx]);
       var precip = forecast.precipitation_sum[fIdx];
       var wCode = forecast.weathercode[fIdx];
-      var precipStr = _wxFormatPrecip(precip, wCode);
+      var precipStr = _cwocFormatPrecip(precip, wCode, '—');
 
       var blockClasses = 'weather-day-block has-event';
       if (isToday) blockClasses += ' today';
@@ -1265,7 +1232,7 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
 
       rowHtml += '<div class="' + blockClasses + '"' + wsAttr +
         ' data-wx-date="' + dateStr + '"' +
-        ' data-wx-loc="' + _wxEsc(cityName) + '"' +
+        ' data-wx-loc="' + _escHtml(cityName) + '"' +
         ' title="' + tooltip + '"' +
         ' style="' + borderStyleCity + '">' +
         '<span class="wx-icon" title="' + tooltip + '">' + icon + '</span>' +

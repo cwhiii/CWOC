@@ -1,0 +1,1 @@
+Added Cron Triggers & Habit Rules: rules can now use cron expressions for scheduling, track execution as habits with streak/success metrics, and filter entities by date age with new "days ago" condition operators. Includes cron builder UI with presets, habit mode toggle, and habits view integration showing rule-based habits alongside chit habits.

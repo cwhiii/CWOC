@@ -550,7 +550,7 @@ li.cwoc-dragging {
 }
 .global-search-matched-fields > div > span:first-child {
     font-weight: bold;
-    color: #6b4e31;
+    opacity: 0.8;
     margin-right: 6px;
 }
 
@@ -865,6 +865,13 @@ li.cwoc-dragging {
     box-shadow: 0 2px 8px rgba(107, 66, 38, 0.15);
 }
 
+/* Rule habit badge (🤖) */
+.habit-rule-badge {
+    font-size: 1.1em;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
 /* Completed habit: faded with strikethrough title */
 .habit-card.habit-done {
     opacity: 0.75;
@@ -1167,6 +1174,38 @@ li.cwoc-dragging {
 .habit-separator {
     color: #6b4e31;
     opacity: 0.6;
+}
+
+/* ── Habits aggregate success rate bar ───────────────────────────────── */
+.habits-aggregate-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background: rgba(139, 90, 43, 0.08);
+    border: 1px solid #8b5a2b;
+    border-radius: 6px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    color: #4a2c2a;
+    flex-wrap: wrap;
+}
+
+.habits-aggregate-label {
+    font-weight: bold;
+}
+
+.habits-aggregate-value {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #3b1f0a;
+}
+
+.habits-aggregate-hint {
+    font-size: 0.8em;
+    color: #6b4e31;
+    opacity: 0.8;
 }
 
 /* ── Owner badge on chit cards (multi-user) ───────────────────────────────── */
@@ -1547,50 +1586,52 @@ li.cwoc-dragging {
     padding: 4px 10px;
     margin: 2px 4px 2px 0;
     border-radius: 12px;
-    border: 1px solid rgba(139, 90, 43, 0.4);
+    border: 2px solid rgba(139, 90, 43, 0.25);
     background: #f5e6cc;
-    color: #6b4e31;
+    color: #a08060;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     font-family: inherit;
+    opacity: 0.6;
 }
 .email-account-pill:hover {
     background: #e8dcc8;
     border-color: #8b5a2b;
+    opacity: 0.8;
 }
 .email-account-pill.active {
     background: #8b5a2b;
     color: #fff8e1;
     border-color: #5c4033;
+    opacity: 1;
+    box-shadow: 0 1px 4px rgba(92, 64, 51, 0.3);
 }
 
+/* Error state — red border + icon, preserves active/inactive distinction */
 .email-account-pill-error {
-    background: #c0392b !important;
-    color: #fff !important;
-    border-color: #922b21 !important;
+    border-color: #c0392b !important;
     animation: pillErrorPulse 2s ease-in-out infinite;
 }
-
-.email-account-pill-error:hover {
-    background: #e74c3c !important;
-    border-color: #c0392b !important;
+.email-account-pill-error:not(.active) {
+    background: #fde8e8;
+    color: #922b21;
+    opacity: 0.9;
+}
+.email-account-pill-error.active {
+    background: #c0392b;
+    color: #fff;
+    border-color: #922b21 !important;
+    opacity: 1;
 }
 
-.email-account-pill-ok {
-    background: #27ae60 !important;
-    color: #fff !important;
-    border-color: #1e8449 !important;
+/* OK state — subtle green border glow, does NOT override active/inactive colors */
+.email-account-pill-ok:not(.active) {
+    border-color: #27ae60;
+    opacity: 0.6;
 }
-
-.email-account-pill-ok:hover {
-    background: #2ecc71 !important;
-    border-color: #27ae60 !important;
-}
-
 .email-account-pill-ok.active {
-    background: #27ae60 !important;
-    color: #fff !important;
-    border-color: #1e8449 !important;
+    border-color: #27ae60;
+    box-shadow: 0 1px 4px rgba(39, 174, 96, 0.3);
 }
 
 @keyframes pillErrorPulse {
@@ -1607,6 +1648,20 @@ li.cwoc-dragging {
     background: url("/static/parchment.jpg") center/cover;
     background-color: rgba(120, 90, 30, 0.14);
     border-radius: 4px;
+}
+
+/* ── Email date group headers ─────────────────────────────────────────────── */
+.email-date-group-header {
+    padding: 12px 8px 4px;
+    margin-top: 8px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #6b4e31;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.email-date-group-header:first-child {
+    margin-top: 0;
 }
 
 /* ── Ensure email cards have a solid background for contrast ──────────────── */
@@ -2589,4 +2644,86 @@ li.cwoc-dragging {
     background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
     transition: width 0.1s linear;
     border-radius: 3px;
+}
+
+
+/* ── Attachment Preview Modal (dashboard) ─────────────────────────────────── */
+.cwoc-attachment-preview-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.cwoc-attachment-preview-modal {
+    background: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 12px;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.cwoc-attachment-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #d4c4a8;
+    background: rgba(139, 90, 43, 0.05);
+    gap: 12px;
+}
+.cwoc-attachment-preview-title {
+    font-weight: 600;
+    color: #1a1208;
+    font-size: 0.95em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.cwoc-attachment-preview-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.cwoc-attachment-preview-dl {
+    font-size: 0.85em;
+    padding: 4px 10px;
+    border: 1px solid #6b4e31;
+    border-radius: 4px;
+    color: #6b4e31;
+    text-decoration: none;
+    background: rgba(139, 90, 43, 0.08);
+}
+.cwoc-attachment-preview-dl:hover {
+    background: rgba(139, 90, 43, 0.2);
+}
+.cwoc-attachment-preview-close {
+    font-size: 1.3em;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b4e31;
+    padding: 2px 8px;
+    line-height: 1;
+}
+.cwoc-attachment-preview-close:hover {
+    color: #b22222;
+}
+.cwoc-attachment-preview-content {
+    padding: 16px;
+    overflow: auto;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

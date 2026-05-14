@@ -26,6 +26,68 @@
  *   _getAllIndicators, _shouldShow, _STATUS_ICONS, enableNotesDragReorder, applyNotesLayout
  */
 
+/* ── URL Hash Routing ─────────────────────────────────────────────────────────
+ * Keeps the URL hash in sync with the current tab + mode.
+ * Format: #tab or #tab/mode
+ * Examples: #calendar, #calendar/day, #tasks/habits, #alarms/independent
+ */
+
+// Map of tab names to their mode variable getter
+var _hashTabModes = {
+  'calendar': function() { return (typeof currentView !== 'undefined') ? currentView.toLowerCase() : null; },
+  'tasks': function() { return (typeof _tasksViewMode !== 'undefined' && _tasksViewMode !== 'tasks') ? _tasksViewMode : null; },
+  'alarms': function() { return (typeof _alarmsViewMode !== 'undefined' && _alarmsViewMode !== 'independent') ? _alarmsViewMode : null; },
+  'projects': function() { return (typeof _projectsViewMode !== 'undefined' && _projectsViewMode !== 'kanban') ? _projectsViewMode : null; }
+};
+
+// Default modes (not shown in hash since they're the default)
+var _hashDefaultModes = {
+  'calendar': 'week',
+  'tasks': 'tasks',
+  'alarms': 'list',
+  'projects': 'kanban'
+};
+
+/**
+ * Update the URL hash to reflect the current tab + mode.
+ * Called from filterChits, _setTasksMode, _setAlarmsMode, _setProjectsMode, changePeriod.
+ */
+function _updateUrlHash() {
+  var tab = (typeof currentTab !== 'undefined') ? currentTab.toLowerCase() : '';
+  if (!tab) return;
+  var mode = _hashTabModes[tab] ? _hashTabModes[tab]() : null;
+  var hash = '#' + tab;
+  if (mode) hash += '/' + mode;
+  if (window.location.hash !== hash) {
+    history.replaceState(null, '', hash);
+  }
+}
+
+/**
+ * Parse the URL hash and apply the tab + mode.
+ * Returns { tab, mode } or null if no valid hash.
+ */
+function _parseUrlHash() {
+  var hash = window.location.hash;
+  if (!hash || hash === '#') return null;
+  var parts = hash.substring(1).toLowerCase().split('/');
+  var tab = parts[0] || '';
+  var mode = parts[1] || null;
+  // Map hash tab names to actual tab names (capitalize first letter)
+  var tabMap = {
+    'calendar': 'Calendar',
+    'checklists': 'Checklists',
+    'alarms': 'Alarms',
+    'projects': 'Projects',
+    'tasks': 'Tasks',
+    'notes': 'Notes',
+    'omni': 'Omni'
+  };
+  var realTab = tabMap[tab];
+  if (!realTab) return null;
+  return { tab: realTab, mode: mode };
+}
+
 /** Check if a chit is shared with viewer-only access (no inline edits allowed). */
 function _isViewerRole(chit) {
   return chit._shared && chit.effective_role === 'viewer';
@@ -207,11 +269,11 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
       if (typeof wd === 'string') { try { wd = JSON.parse(wd); } catch (e) { wd = null; } }
       if (wd && wd.weather_code !== undefined && wd.high !== undefined && wd.low !== undefined) {
         var wdIcon = _getWeatherIcon(wd.weather_code);
-        var wdHighF = _celsiusToFahrenheit(wd.high);
-        var wdLowF = _celsiusToFahrenheit(wd.low);
+        var wdHighF = _convertTemp(wd.high);
+        var wdLowF = _convertTemp(wd.low);
         var wdStale = _isWeatherStale(wd.updated_time) ? '⏳' : '';
         var wdTooltip = wdHighF + '°/' + wdLowF + '°';
-        var wdPrecipText = _formatPrecip(wd.precipitation, wd.weather_code);
+        var wdPrecipText = _cwocFormatPrecip(wd.precipitation, wd.weather_code);
         if (wdPrecipText) wdTooltip += ' · ' + wdPrecipText;
         if (wdStale) wdTooltip += ' (stale)';
         wxSpan.textContent = wdStale + wdIcon;
@@ -702,8 +764,12 @@ function _restoreViewModeButtons() {
   // Alarms
   const aListBtn = document.getElementById('alarms-mode-list');
   const aIndBtn = document.getElementById('alarms-mode-independent');
+  const aNotifBtn = document.getElementById('alarms-mode-notifications');
+  const aRemBtn = document.getElementById('alarms-mode-reminders');
   if (aListBtn) { aListBtn.style.background = _alarmsViewMode === 'list' ? 'ivory' : ''; aListBtn.style.color = _alarmsViewMode === 'list' ? '#3b1f0a' : ''; }
   if (aIndBtn) { aIndBtn.style.background = _alarmsViewMode === 'independent' ? 'ivory' : ''; aIndBtn.style.color = _alarmsViewMode === 'independent' ? '#3b1f0a' : ''; }
+  if (aNotifBtn) { aNotifBtn.style.background = _alarmsViewMode === 'notifications' ? 'ivory' : ''; aNotifBtn.style.color = _alarmsViewMode === 'notifications' ? '#3b1f0a' : ''; }
+  if (aRemBtn) { aRemBtn.style.background = _alarmsViewMode === 'reminders' ? 'ivory' : ''; aRemBtn.style.color = _alarmsViewMode === 'reminders' ? '#3b1f0a' : ''; }
   // Tasks
   const tTasksBtn = document.getElementById('tasks-mode-tasks');
   const tHabitsBtn = document.getElementById('tasks-mode-habits');
@@ -717,6 +783,9 @@ function filterChits(tab) {
   storePreviousState();
 
   currentTab = tab;
+
+  // Update URL hash to reflect current tab + mode (enables bookmarking/pinning)
+  _updateUrlHash();
 
   // Restore saved sort preference for this tab
   if (typeof getSortPreference === 'function') {
@@ -811,12 +880,17 @@ function filterChits(tab) {
 
   _loadLabelFilters();
 
-  // Apply default search filter for this tab (from settings)
-  const search = document.getElementById('search');
-  if (search && _defaultFilters) {
-    const tabKey = tab.toLowerCase();
-    if (_defaultFilters[tabKey] && !search.value) {
-      search.value = _defaultFilters[tabKey];
+  // Apply custom view filters for this tab (from settings)
+  if (typeof _applyCustomViewFilters === 'function') {
+    _applyCustomViewFilters(tab);
+  } else {
+    // Fallback: apply legacy default search filter for this tab
+    const search = document.getElementById('search');
+    if (search && _defaultFilters) {
+      const tabKey = tab.toLowerCase();
+      if (_defaultFilters[tabKey] && !search.value) {
+        search.value = _defaultFilters[tabKey];
+      }
     }
   }
 
@@ -836,17 +910,5 @@ function searchChits() {
  * Returns original text unchanged if query is empty.
  */
 function highlightMatch(text, query) {
-  if (!text) return '';
-  if (!query) return text;
-  // HTML-escape the text first
-  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-  // Escape regex special chars in query using a loop to avoid replacement issues
-  var specials = '.*+?^${}()|[]\\';
-  var safeQuery = '';
-  for (var i = 0; i < query.length; i++) {
-    if (specials.indexOf(query[i]) !== -1) safeQuery += '\\';
-    safeQuery += query[i];
-  }
-  var regex = new RegExp('(' + safeQuery + ')', 'gi');
-  return escaped.replace(regex, '<mark>$1</mark>');
+  return cwocHighlightMatch(text, query);
 }

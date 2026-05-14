@@ -9,6 +9,36 @@
  */
 
 /**
+ * POST to /api/settings with 401 retry. If the first attempt gets 401,
+ * checks auth status and retries once. Redirects to login if truly expired.
+ * @param {object} body - JSON body to send
+ * @returns {Promise<Response>} the fetch response
+ */
+async function _postSettingsWithRetry(body) {
+  var resp = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (resp.status === 401) {
+    console.warn('[Tags] POST /api/settings got 401, checking auth...');
+    var authResp = await fetch('/api/auth/me');
+    if (authResp.status === 401) {
+      localStorage.setItem('cwoc_auth_return', window.location.href);
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+    // Auth valid — retry
+    resp = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+  return resp;
+}
+
+/**
  * Load the complete tag list from settings. This is the single source of truth
  * for building tag lists across the editor and sidebar. All code paths that add
  * tags to chits must also register them in settings — there should never be
@@ -75,9 +105,13 @@ function buildTagTree(flatTags) {
   }
   inheritColors(root, null);
 
-  // Sort alphabetically at every level
+  // Sort: favorites first, then alphabetically at every level
   function sortLevel(nodes) {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    nodes.sort((a, b) => {
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
     nodes.forEach(n => { if (n.children.length > 0) sortLevel(n.children); });
   }
   sortLevel(root);
@@ -124,10 +158,11 @@ function matchesTagFilter(chitTags, filterTag) {
  * @param {Array} tree - from buildTagTree()
  * @param {string[]} selectedTags - currently selected full paths
  * @param {function} onToggle - callback(fullPath, isNowSelected) when a tag is toggled
- * @param {object} [opts] - { showFavorites: bool }
+ * @param {object} [opts] - { showFavorites: bool, onSelectOnly: function(fullPath) }
  */
 function renderTagTree(container, tree, selectedTags, onToggle, opts) {
   container.innerHTML = '';
+  var onSelectOnly = (opts && opts.onSelectOnly) ? opts.onSelectOnly : null;
 
   function renderLevel(nodes, parentEl, depth) {
     nodes.forEach(node => {
@@ -169,6 +204,9 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
       cb.addEventListener('click', (e) => { e.stopPropagation(); });
       cb.addEventListener('change', () => {
         if (onToggle) onToggle(node.fullPath, cb.checked);
+        // Update badge visual
+        badge.style.fontWeight = cb.checked ? 'bold' : '';
+        badge.style.outline = cb.checked ? '2px solid #4a2c2a' : '';
       });
       row.appendChild(cb);
 
@@ -189,9 +227,19 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
       badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:4px;background:${tagColor};color:${tagFontColor};white-space:nowrap;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
       row.appendChild(badge);
 
-      // Click row to toggle selection
-      row.addEventListener('click', () => {
-        if (onToggle) onToggle(node.fullPath, !isSelected);
+      // Click row to toggle; Shift+Click to select ONLY this tag
+      row.addEventListener('click', (e) => {
+        if (e.shiftKey && onSelectOnly) {
+          // Shift+Click: select only this tag, deselect all others
+          onSelectOnly(node.fullPath);
+        } else {
+          // Normal click: toggle this tag's checkbox
+          cb.checked = !cb.checked;
+          if (onToggle) onToggle(node.fullPath, cb.checked);
+          // Update badge visual
+          badge.style.fontWeight = cb.checked ? 'bold' : '';
+          badge.style.outline = cb.checked ? '2px solid #4a2c2a' : '';
+        }
       });
 
       parentEl.appendChild(row);
@@ -238,11 +286,7 @@ function _saveRecentTags() {
   // Debounce saves to avoid hammering the server
   if (_recentTagsSaveTimer) clearTimeout(_recentTagsSaveTimer);
   _recentTagsSaveTimer = setTimeout(function() {
-    fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recent_tags: _recentTags }),
-    }).catch(function() {});
+    _postSettingsWithRetry({ recent_tags: _recentTags }).catch(function() {});
   }, 1000);
 }
 
@@ -279,13 +323,12 @@ async function createTagInline(name, opts) {
       fontColor: opts.fontColor || '#5c3317',
       favorite: !!opts.favorite,
     });
-    settings.tags = tags;
-    var resp = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    if (!resp.ok) return false;
+    // Send only the tags field (partial update) — avoids overwriting other settings
+    var resp = await _postSettingsWithRetry({ tags: tags });
+    if (!resp.ok) {
+      console.error('createTagInline: POST failed with status', resp.status);
+      return false;
+    }
     _invalidateSettingsCache();
     return true;
   } catch (e) {
@@ -329,13 +372,12 @@ async function updateTagInline(oldName, tagData) {
       }
     }
     if (!found) return false;
-    settings.tags = tags;
-    var resp = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    if (!resp.ok) return false;
+    // Send only the tags field (partial update)
+    var resp = await _postSettingsWithRetry({ tags: tags });
+    if (!resp.ok) {
+      console.error('updateTagInline: POST failed with status', resp.status);
+      return false;
+    }
     _invalidateSettingsCache();
     return true;
   } catch (e) {
@@ -356,16 +398,16 @@ async function deleteTagInline(tagName) {
     var settings = await getCachedSettings();
     var tags = Array.isArray(settings.tags) ? settings.tags : [];
     var prefix = tagName + '/';
-    settings.tags = tags.filter(function(t) {
+    var updatedTags = tags.filter(function(t) {
       var tName = (typeof t === 'string') ? t : (t.name || '');
       return tName !== tagName && !tName.startsWith(prefix);
     });
-    var resp = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    if (!resp.ok) return false;
+    // Send only the tags field (partial update)
+    var resp = await _postSettingsWithRetry({ tags: updatedTags });
+    if (!resp.ok) {
+      console.error('deleteTagInline: POST failed with status', resp.status);
+      return false;
+    }
     _invalidateSettingsCache();
     return true;
   } catch (e) {

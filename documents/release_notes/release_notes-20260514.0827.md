@@ -1,0 +1,1 @@
+Tag filter now renders as a tree (with expand/collapse, proper tag colors and font colors) instead of a flat numbered list. Search input filters visible tags in realtime. Removed redundant outer search input from sidebar HTML.

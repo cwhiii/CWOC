@@ -1,0 +1,2 @@
+title = "Code Deduplication Audit"
+description = "Find and consolidate duplicated logic across the CWOC codebase so one change propagates everywhere"

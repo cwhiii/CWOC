@@ -147,7 +147,7 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
     var chipBg = chit.color || '#f5e6d3';
     var chipHtml = '<span class="birthday-chip" style="background-color:' + chipBg + ';">';
     if (chit._contact_image_url) {
-      chipHtml += '<img src="' + chit._contact_image_url + '" class="birthday-chip-img">';
+      chipHtml += '<img src="' + chit._contact_image_url + '" class="birthday-chip-img" onerror="console.warn(\'[CWOC] Missing profile image for birthday chip: \' + this.src);this.style.display=\'none\'">';
     }
     chipHtml += displayName + chipEmoji + labelPart + '</span>';
     return chipHtml;

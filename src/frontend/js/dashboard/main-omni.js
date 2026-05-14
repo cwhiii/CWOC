@@ -26,17 +26,18 @@ var _omniHSTMode = 'both';        // HST bar icon mode: 'chits', 'both', 'weathe
 /* ── Default layout config ───────────────────────────────────────────────── */
 
 var _omniDefaultLayout = [
-    { id: "hst", width: "full", visible: true, position: 0 },
-    { id: "weather", width: "full", visible: true, position: 1 },
-    { id: "hst_weather", width: "full", visible: false, position: 2 },
-    { id: "hst_temp_strip", width: "full", visible: false, position: 3 },
-    { id: "chrono", width: "half", visible: true, position: 4, column: "left" },
-    { id: "ondeck", width: "half", visible: true, position: 5, column: "left" },
-    { id: "soon", width: "half", visible: true, position: 6, column: "left" },
-    { id: "email", width: "half", visible: true, position: 7, column: "left" },
-    { id: "pinned_notes", width: "half", visible: true, position: 8, column: "right" },
-    { id: "pinned_checklists", width: "half", visible: true, position: 9, column: "right" },
-    { id: "pinned_all", width: "half", visible: false, position: 10, column: "right" }
+    { id: "hst", width: "full", visible: true, position: 0, hideWhenEmpty: true },
+    { id: "weather", width: "full", visible: true, position: 1, hideWhenEmpty: true },
+    { id: "hst_weather", width: "full", visible: false, position: 2, hideWhenEmpty: true },
+    { id: "hst_temp_strip", width: "full", visible: false, position: 3, hideWhenEmpty: true },
+    { id: "chrono", width: "half", visible: true, position: 4, column: "left", hideWhenEmpty: true },
+    { id: "reminders", width: "half", visible: true, position: 5, column: "left", hideWhenEmpty: true },
+    { id: "ondeck", width: "half", visible: true, position: 6, column: "left", hideWhenEmpty: true },
+    { id: "soon", width: "half", visible: true, position: 7, column: "left", hideWhenEmpty: true },
+    { id: "email", width: "half", visible: true, position: 8, column: "left", hideWhenEmpty: true },
+    { id: "pinned_notes", width: "half", visible: true, position: 9, column: "right", hideWhenEmpty: true },
+    { id: "pinned_checklists", width: "half", visible: true, position: 10, column: "right", hideWhenEmpty: true },
+    { id: "pinned_all", width: "half", visible: false, position: 11, column: "right", hideWhenEmpty: true }
 ];
 
 /* ── Section display names and icons ─────────────────────────────────────── */
@@ -47,6 +48,7 @@ var _omniSectionMeta = {
     hst_weather: { label: "HST + Weather", icon: "📊🌤️" },
     hst_temp_strip: { label: "HST Weather Strip", icon: "" },
     chrono: { label: "Chrono Anchored", icon: "⏰" },
+    reminders: { label: "Reminders", icon: "📢" },
     ondeck: { label: "On Deck", icon: "🔜" },
     soon: { label: "Soon", icon: "🗓️" },
     email: { label: "Email", icon: "📧" },
@@ -91,6 +93,20 @@ function displayOmniView(filteredChits) {
                 : settings.omni_layout;
             if (Array.isArray(parsed) && parsed.length > 0) {
                 layout = parsed;
+                // Merge in any new default blocks not present in saved layout
+                var savedIds = new Set(layout.map(function(s) { return s.id; }));
+                _omniDefaultLayout.forEach(function(def) {
+                    if (!savedIds.has(def.id)) {
+                        layout.push(Object.assign({}, def));
+                    }
+                });
+                // Ensure hideWhenEmpty is set on all items (backfill for older saved layouts)
+                layout.forEach(function(item) {
+                    if (item.hideWhenEmpty === undefined) {
+                        var def = _omniDefaultLayout.find(function(d) { return d.id === item.id; });
+                        item.hideWhenEmpty = def ? def.hideWhenEmpty : true;
+                    }
+                });
             }
         } catch (e) {
             console.error('[Omni] Failed to parse omni_layout, using defaults:', e);
@@ -225,6 +241,7 @@ function _buildOmniSection(sectionConfig, widthClass) {
 function _omniDeduplicateChits(filteredChits) {
     var result = {
         email: [],
+        reminders: [],
         chrono: [],
         ondeck: [],
         soon: [],
@@ -243,6 +260,17 @@ function _omniDeduplicateChits(filteredChits) {
     // End of week (7 days from today start)
     var weekEnd = new Date(today);
     weekEnd.setDate(weekEnd.getDate() + 7);
+
+    // ── Step 0: Separate reminder chits (today, not complete) ────────────────
+    filteredChits.forEach(function(chit) {
+        if (chit.notification && chit.point_in_time && chit.status !== 'Complete' && !chit.archived) {
+            var pitDate = new Date(chit.point_in_time);
+            if (pitDate >= today && pitDate <= todayEnd) {
+                result.reminders.push(chit);
+                placedIds.add(chit.id);
+            }
+        }
+    });
 
     // ── Step 1: Separate email chits ────────────────────────────────────────
     // Use the GLOBAL chits array for emails — sidebar filters should not exclude emails
@@ -489,6 +517,9 @@ function _populateOmniSections(filteredChits, visibleSections) {
                     _renderOmniChrono(contentEl, categorized.chrono, _viSettings);
                 }
                 break;
+            case "reminders":
+                _renderOmniReminders(contentEl, categorized.reminders, _viSettings);
+                break;
             case "ondeck":
                 // On Deck — implemented in task 6.2
                 if (typeof _renderOmniOnDeck === 'function') {
@@ -543,7 +574,7 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 break;
         }
 
-        // Hide empty sections (Requirement 2.2)
+        // Hide empty sections based on per-section hideWhenEmpty setting
         if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather" && sectionConfig.id !== "hst_temp_strip") {
             var sectionEl = contentEl.parentElement;
             var items;
@@ -556,7 +587,17 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 items = categorized[dataKey] || [];
             }
             if (items.length === 0 && sectionEl) {
-                sectionEl.style.display = "none";
+                // Check hideWhenEmpty setting (default true for backward compat)
+                var shouldHide = sectionConfig.hideWhenEmpty !== false;
+                if (shouldHide) {
+                    sectionEl.style.display = "none";
+                } else {
+                    // Show empty state message
+                    var meta = _omniSectionMeta[sectionConfig.id] || { label: sectionConfig.id };
+                    if (!contentEl.innerHTML.trim()) {
+                        contentEl.innerHTML = '<div class="omni-empty">No ' + meta.label.toLowerCase() + ' right now.</div>';
+                    }
+                }
             }
         }
     });
@@ -769,6 +810,77 @@ function _updateOmniTimeUntilBadges(contentEl) {
  *
  * @param {HTMLElement} contentEl - The section content container
  * @param {Array} ondeckItems - Array of deduplication results:
+/* ── Reminders section renderer ───────────────────────────────────────────── */
+
+function _renderOmniReminders(contentEl, reminderChits, viSettings) {
+    if (!reminderChits || reminderChits.length === 0) {
+        contentEl.innerHTML = '<div class="omni-empty">No reminders for today.</div>';
+        return;
+    }
+
+    // Sort by point_in_time ascending
+    reminderChits.sort(function(a, b) {
+        return (a.point_in_time || '').localeCompare(b.point_in_time || '');
+    });
+
+    reminderChits.forEach(function(chit) {
+        var card = document.createElement('div');
+        card.className = 'chit-card reminder-card';
+        card.style.cssText = 'margin-bottom:4px;padding:8px 12px;cursor:pointer;position:relative;display:flex;align-items:center;gap:8px;';
+        card.dataset.chitId = chit.id;
+        if (typeof applyChitColors === 'function') applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+
+        // Complete button (check circle)
+        var completeBtn = document.createElement('button');
+        completeBtn.className = 'email-hover-btn';
+        completeBtn.title = 'Mark Complete';
+        completeBtn.innerHTML = '<i class="fas fa-check-circle"></i>';
+        completeBtn.style.cssText = 'opacity:0.5;flex-shrink:0;';
+        completeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0.3';
+            card.style.transform = 'translateX(20px)';
+            _emailUndoToast(
+                '✓ ' + (chit.title || 'Reminder'),
+                function() {
+                    fetch('/api/chits/' + encodeURIComponent(chit.id), {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'Complete', archived: true })
+                    }).then(function(r) { if (r.ok) { card.remove(); if (typeof displayChits === 'function') displayChits(); } });
+                },
+                function() { card.style.opacity = ''; card.style.transform = ''; }
+            );
+        });
+        card.appendChild(completeBtn);
+
+        // Title
+        var titleEl = document.createElement('a');
+        titleEl.href = '/editor?id=' + chit.id;
+        titleEl.textContent = chit.title || '(Untitled)';
+        titleEl.style.cssText = 'flex:1;color:#4a2c2a;text-decoration:none;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        titleEl.addEventListener('click', function(e) { e.preventDefault(); if (typeof storePreviousState === 'function') storePreviousState(); window.location.href = this.href; });
+        card.appendChild(titleEl);
+
+        // Time
+        var pitDate = new Date(chit.point_in_time);
+        var timeStr = String(pitDate.getHours()).padStart(2, '0') + ':' + String(pitDate.getMinutes()).padStart(2, '0');
+        var timeEl = document.createElement('span');
+        timeEl.style.cssText = 'font-size:0.85em;color:#6b4e31;white-space:nowrap;';
+        timeEl.textContent = timeStr;
+        card.appendChild(timeEl);
+
+        card.addEventListener('dblclick', function() {
+            if (typeof storePreviousState === 'function') storePreviousState();
+            window.location.href = '/editor?id=' + chit.id;
+        });
+
+        contentEl.appendChild(card);
+    });
+}
+
+/**
  *   { type: 'event'|'task', chit: {...} } — all-day events or untimed tasks
  *   { type: 'habit', chit: {...}, goal: N, success: N, daysLeft: N } — habits due today
  * @param {Object} viSettings - Visual indicator settings
@@ -1214,24 +1326,14 @@ function _renderHSTWeatherIcons(iconsLayer, codes) {
             }
         });
 
-        // Mobile long-press → open weather modal (500ms threshold)
-        (function(el) {
-            var longPressTimer = null;
-            el.addEventListener("touchstart", function(e) {
-                longPressTimer = setTimeout(function() {
-                    e.preventDefault();
-                    if (typeof _openWeatherModal === "function") {
-                        _openWeatherModal();
-                    }
-                }, 500);
-            }, { passive: false });
-            el.addEventListener("touchend", function() {
-                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        // Mobile long-press → open weather modal
+        if (typeof enableLongPress === "function") {
+            enableLongPress(weatherEl, function() {
+                if (typeof _openWeatherModal === "function") {
+                    _openWeatherModal();
+                }
             });
-            el.addEventListener("touchmove", function() {
-                if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-            });
-        })(weatherEl);
+        }
 
         iconsLayer.appendChild(weatherEl);
     }
@@ -1264,6 +1366,15 @@ function _renderOmniWeather(contentEl) {
         }
     });
 
+    // Mobile long-press → open weather modal
+    if (typeof enableLongPress === "function") {
+        enableLongPress(bar, function() {
+            if (typeof _openWeatherModal === "function") {
+                _openWeatherModal();
+            }
+        });
+    }
+
     // Show loading state initially
     bar.innerHTML = '<span class="omni-weather-loading">⏳ Loading weather…</span>';
     contentEl.appendChild(bar);
@@ -1284,19 +1395,11 @@ function _renderOmniWeather(contentEl) {
         bar.innerHTML =
             '<span class="omni-weather-icon">' + wx.icon + '</span>' +
             wx.tempBarHtml +
-            '<span class="omni-weather-location">' + _escOmniHtml(locationLabel) + '</span>';
+            '<span class="omni-weather-location">' + _escHtml(locationLabel) + '</span>';
     });
 }
 
-/**
- * Simple HTML escape for weather bar text content.
- * @param {string} str
- * @returns {string}
- */
-function _escOmniHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+// _escOmniHtml — now using shared _escHtml from shared-utils.js
 
 /* ── HST + Weather Combo Section ──────────────────────────────────────────── */
 
@@ -2095,6 +2198,7 @@ function _applyLockedFiltersToSidebar(locked) {
         if (labelContainer) {
             labelContainer.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
         }
+        _cwocUpdateTagVirtualOptions();
     }
 
     // ── People ──────────────────────────────────────────────────────────────

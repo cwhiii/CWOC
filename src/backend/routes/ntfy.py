@@ -23,7 +23,7 @@ import urllib.error
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, utcnow_iso, require_admin
 from src.backend.routes.audit import get_actor_from_request, insert_audit_entry
 
 
@@ -279,43 +279,6 @@ def build_ntfy_actions(base_url: str, chit_id: str = None, source_type: str = "c
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO 8601 string with Z suffix."""
-    from datetime import datetime
-    return datetime.utcnow().isoformat() + "Z"
-
-
-def _require_admin(request: Request) -> str:
-    """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if row is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        if not row["is_admin"]:
-            raise HTTPException(status_code=403, detail="Admin access required")
-
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Admin check error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-    finally:
-        if conn:
-            conn.close()
-
 
 def _auto_enable_ntfy(server_url: str):
     """Ensure ntfy is enabled in the network_access table with the given server_url.
@@ -327,7 +290,7 @@ def _auto_enable_ntfy(server_url: str):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        now = _utcnow_iso()
+        now = utcnow_iso()
 
         existing = conn.execute(
             "SELECT id, enabled, created_datetime FROM network_access WHERE provider = ?",
@@ -375,7 +338,7 @@ def ntfy_status(request: Request):
     and returns active/unreachable/not_configured/disabled.
     Also includes 'enabled' boolean so the frontend can set button state.
     """
-    _require_admin(request)
+    require_admin(request)
 
     config = get_ntfy_config()
 
@@ -452,7 +415,7 @@ def save_ntfy_config(body: dict, request: Request):
     Rejects empty or whitespace-only server_url with a 400 error.
     Otherwise delegates to the standard network_access upsert pattern.
     """
-    _require_admin(request)
+    require_admin(request)
 
     config = body.get("config", {})
     server_url = config.get("server_url", "")
@@ -471,7 +434,7 @@ def save_ntfy_config(body: dict, request: Request):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        now = _utcnow_iso()
+        now = utcnow_iso()
 
         existing = conn.execute(
             "SELECT id, created_datetime FROM network_access WHERE provider = ?",
@@ -535,13 +498,13 @@ def disable_ntfy(request: Request):
     Preserves the existing config (server_url, etc.) so re-enabling is seamless.
     Requires admin access. Audit logged.
     """
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        now = _utcnow_iso()
+        now = utcnow_iso()
 
         existing = conn.execute(
             "SELECT id FROM network_access WHERE provider = ?",
@@ -584,13 +547,13 @@ def enable_ntfy(request: Request):
     Preserves the existing config. If ntfy was never configured, auto-enables
     with the default server_url. Requires admin access. Audit logged.
     """
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        now = _utcnow_iso()
+        now = utcnow_iso()
 
         existing = conn.execute(
             "SELECT id, config FROM network_access WHERE provider = ?",

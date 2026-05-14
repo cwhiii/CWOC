@@ -215,6 +215,14 @@
     // ── ESC to exit ─────────────────────────────────────────────────────
     window.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
+        // Close camera modal first
+        var cameraModal = document.getElementById('camera-modal');
+        if (cameraModal && cameraModal.style.display === 'flex') {
+            closeCameraCapture();
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return;
+        }
         // Close modals first
         var imgModal = document.getElementById('image-modal');
         if (imgModal && imgModal.style.display === 'flex') {
@@ -338,12 +346,31 @@
     };
 
     /** Stage an image locally (preview only) — actual upload happens on save.
-     *  Resizes large images to max 512px on the longest side. */
+     *  Resizes large images to max 512px on the longest side.
+     *  GIFs are uploaded as-is to preserve animation frames. */
     var MAX_IMAGE_SIZE = 512;
     function _stageImage(file) {
         _pendingImageRemove = false;
         var reader = new FileReader();
         reader.onload = function (e) {
+            var dataUrl = e.target.result;
+
+            // GIFs: skip canvas resize (canvas flattens to single frame)
+            if (file.type === 'image/gif') {
+                _pendingImageFile = file;
+                var imgEl = document.getElementById('profileImage');
+                var placeholder = document.getElementById('profilePlaceholder');
+                var removeBtn = document.getElementById('removeImageBtn');
+                var viewBtn = document.getElementById('viewImageBtn');
+                imgEl.src = dataUrl;
+                imgEl.style.display = '';
+                placeholder.style.display = 'none';
+                removeBtn.style.display = '';
+                if (viewBtn) viewBtn.style.display = '';
+                return;
+            }
+
+            // Non-GIF: resize via canvas
             var img = new Image();
             img.onload = function () {
                 var w = img.width, h = img.height;
@@ -373,11 +400,121 @@
                     if (viewBtn) viewBtn.style.display = '';
                 }, file.type || 'image/jpeg', 0.85);
             };
-            img.src = e.target.result;
+            img.src = dataUrl;
         };
         reader.readAsDataURL(file);
         if (_saveSystem) _saveSystem.markUnsaved();
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Camera Capture ──────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    var _cameraStream = null;
+    var _cameraFacingMode = 'user'; // 'user' = front, 'environment' = back
+
+    window.openCameraCapture = function () {
+        var modal = document.getElementById('camera-modal');
+        modal.style.display = 'flex';
+        modal.style.cursor = 'default';
+        _startCamera();
+    };
+
+    function _startCamera() {
+        var video = document.getElementById('cameraVideo');
+        var preview = document.getElementById('cameraPreview');
+        var captureBtn = document.getElementById('cameraCaptureBtn');
+        var retakeBtn = document.getElementById('cameraRetakeBtn');
+        var useBtn = document.getElementById('cameraUseBtn');
+        var switchBtn = document.getElementById('cameraSwitchBtn');
+
+        // Reset to live view
+        video.style.display = '';
+        preview.style.display = 'none';
+        captureBtn.style.display = '';
+        retakeBtn.style.display = 'none';
+        useBtn.style.display = 'none';
+        switchBtn.style.display = '';
+
+        // Stop any existing stream
+        _stopCameraStream();
+
+        var constraints = {
+            video: { facingMode: _cameraFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
+        };
+
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function (stream) {
+                _cameraStream = stream;
+                video.srcObject = stream;
+            })
+            .catch(function (err) {
+                console.error('[Camera] Access denied or unavailable:', err);
+                var wrap = document.querySelector('.camera-preview-wrap');
+                wrap.innerHTML = '<div class="camera-error-msg"><i class="fas fa-video-slash" style="font-size:2em;margin-bottom:10px;display:block;"></i>Camera not available.<br><small>' + (err.message || 'Permission denied') + '</small></div>';
+            });
+    }
+
+    function _stopCameraStream() {
+        if (_cameraStream) {
+            _cameraStream.getTracks().forEach(function (t) { t.stop(); });
+            _cameraStream = null;
+        }
+    }
+
+    window.switchCamera = function () {
+        _cameraFacingMode = (_cameraFacingMode === 'user') ? 'environment' : 'user';
+        _startCamera();
+    };
+
+    window.capturePhoto = function () {
+        var video = document.getElementById('cameraVideo');
+        var canvas = document.getElementById('cameraCanvas');
+        var preview = document.getElementById('cameraPreview');
+        var captureBtn = document.getElementById('cameraCaptureBtn');
+        var retakeBtn = document.getElementById('cameraRetakeBtn');
+        var useBtn = document.getElementById('cameraUseBtn');
+        var switchBtn = document.getElementById('cameraSwitchBtn');
+
+        // Draw current frame to canvas
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+
+        // Show preview
+        preview.src = canvas.toDataURL('image/jpeg', 0.9);
+        video.style.display = 'none';
+        preview.style.display = '';
+        captureBtn.style.display = 'none';
+        switchBtn.style.display = 'none';
+        retakeBtn.style.display = '';
+        useBtn.style.display = '';
+    };
+
+    window.retakePhoto = function () {
+        _startCamera();
+    };
+
+    window.useCapturedPhoto = function () {
+        var canvas = document.getElementById('cameraCanvas');
+        canvas.toBlob(function (blob) {
+            if (!blob) { console.error('[Camera] Failed to create blob'); return; }
+            var file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+            _stageImage(file);
+            closeCameraCapture();
+        }, 'image/jpeg', 0.9);
+    };
+
+    window.closeCameraCapture = function () {
+        _stopCameraStream();
+        var modal = document.getElementById('camera-modal');
+        modal.style.display = 'none';
+        // Reset video element
+        var video = document.getElementById('cameraVideo');
+        video.srcObject = null;
+    };
 
     /** Upload the pending image file to the server (called during save) */
     async function _uploadPendingImage() {

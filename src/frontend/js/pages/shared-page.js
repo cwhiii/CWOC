@@ -555,7 +555,8 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       activeOthers.forEach(function(u) {
         var item = document.createElement('div');
         item.className = 'cwoc-switch-user-item';
-        item.innerHTML = '<img src="' + (u.profile_image_url ? _escHtml(u.profile_image_url) : '/static/default-avatar.svg') + '" class="cwoc-switch-user-avatar" alt="" />' +
+        var avatarSrc = u.profile_image_url ? _escHtml(u.profile_image_url) : '/static/default-avatar.svg';
+        item.innerHTML = '<img src="' + avatarSrc + '" class="cwoc-switch-user-avatar" alt="" onerror="this.src=\'/static/default-avatar.svg\'" />' +
           '<span class="cwoc-switch-user-name">' + _escHtml(u.display_name) + '</span>' +
           '<span class="cwoc-switch-user-username">(' + _escHtml(u.username) + ')</span>';
         item.onclick = function(e) {
@@ -642,14 +643,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     }
   }
 
-  /**
-   * Simple HTML escaping for user-provided strings.
-   */
-  function _escHtml(str) {
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-  }
+  // _escHtml — now in shared-utils.js (single source of truth)
 
   /**
    * Logout: POST /api/auth/logout, then redirect to /login.
@@ -849,11 +843,17 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
     if (user) {
       btn.title = user.username;
-      if (user.profile_image_url && img) img.src = user.profile_image_url;
+      if (user.profile_image_url && img) {
+        img.src = user.profile_image_url;
+        img.onerror = function() { this.src = '/static/default-avatar.svg'; this.onerror = null; };
+      }
     } else if (typeof waitForAuth === 'function') {
       waitForAuth().then(function(u) {
         if (u && btn) btn.title = u.username;
-        if (u && u.profile_image_url && img) img.src = u.profile_image_url;
+        if (u && u.profile_image_url && img) {
+          img.src = u.profile_image_url;
+          img.onerror = function() { this.src = '/static/default-avatar.svg'; this.onerror = null; };
+        }
       });
     }
   }

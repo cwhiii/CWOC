@@ -109,6 +109,7 @@ function _renderUserTable() {
     imgEl.src = user.profile_image_url || '/static/default-avatar.svg';
     imgEl.alt = '';
     imgEl.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid rgba(139,90,43,0.3);';
+    imgEl.onerror = function() { this.src = '/static/default-avatar.svg'; };
     tdImg.appendChild(imgEl);
     tr.appendChild(tdImg);
 
@@ -522,10 +523,7 @@ async function submitEditUser() {
   }
 }
 
-function _escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escHtml — now in shared-utils.js (single source of truth)
 
 
 // ── Initialization ───────────────────────────────────────────────────────────

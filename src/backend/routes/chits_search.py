@@ -5,6 +5,8 @@ used by both global search and admin chit search.
 """
 
 import logging
+import re
+import traceback
 from typing import Optional
 
 import sqlite3
@@ -24,7 +26,7 @@ def _search_filter_chits(chits_list, query_str):
     """Filter a list of deserialized chit dicts using the boolean search expression parser.
 
     This is the shared search logic used by both the global search endpoint and
-    the admin chit search. Supports #tags, &&, ||, !, parentheses, field:value, and implicit AND.
+    the admin chit search. Supports #tags, &&, ||, !, parentheses, field::value, and implicit AND.
 
     Args:
         chits_list: list of chit dicts (already deserialized from DB)
@@ -126,12 +128,12 @@ def _search_filter_chits(chits_list, query_str):
                 while j < len(q_str) and q_str[j] not in ' \t()&|!#':
                     j += 1
                 word = q_str[i:j]
-                # Check for field:value syntax
-                colon_pos = word.find(':')
+                # Check for field::value syntax
+                colon_pos = word.find('::')
                 if colon_pos > 0:
                     field_name = word[:colon_pos]
                     if field_name in _field_aliases:
-                        i += colon_pos + 1
+                        i += colon_pos + 2
                         while i < len(q_str) and q_str[i] in ' \t':
                             i += 1
                         if i < len(q_str) and q_str[i] == '(':
@@ -256,6 +258,7 @@ def _search_filter_chits(chits_list, query_str):
                 if child_ids and isinstance(child_ids, list):
                     try:
                         child_conn = sqlite3.connect(DB_PATH)
+                        child_conn.execute("PRAGMA busy_timeout=5000")
                         child_cursor = child_conn.cursor()
                         placeholders = ','.join('?' * len(child_ids))
                         child_cursor.execute(
@@ -363,7 +366,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
     #   #parent matches sub-tags (parent/child, etc.)
 
     # ── Field-scoped search support ─────────────────────────────────────────
-    # Recognized field prefixes for field:value syntax.
+    # Recognized field prefixes for field::value syntax.
     # Maps user-facing aliases to internal field names (or lists for multi-field aliases).
     _FIELD_ALIASES = {
         'title': ['title'],
@@ -396,7 +399,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
     }
 
     def _tokenize_search(q_str):
-        """Tokenize search query into operators, #tags, field:value, and text terms."""
+        """Tokenize search query into operators, #tags, field::value, and text terms."""
         tokens = []
         i = 0
         while i < len(q_str):
@@ -457,24 +460,24 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 i = j
             else:
                 # Text term — read until operator or whitespace
-                # But first check for field:value syntax
+                # But first check for field::value syntax
                 j = i
                 while j < len(q_str) and q_str[j] not in ' \t()&|!#':
                     j += 1
                 word = q_str[i:j]
 
-                # Check if this is a field:value or field:(multi word) token
-                colon_pos = word.find(':')
+                # Check if this is a field::value or field::(multi word) token
+                colon_pos = word.find('::')
                 if colon_pos > 0:
                     field_name = word[:colon_pos]
                     if field_name in _FIELD_ALIASES:
                         # It's a recognized field prefix
-                        i += colon_pos + 1  # advance past "field:"
+                        i += colon_pos + 2  # advance past "field::"
                         # Read the value — either (parenthesized multi-word) or single word
                         while i < len(q_str) and q_str[i] in ' \t':
                             i += 1
                         if i < len(q_str) and q_str[i] == '(':
-                            # Parenthesized value: field:(multi word value)
+                            # Parenthesized value: field::(multi word value)
                             i += 1  # skip (
                             val_start = i
                             depth = 1
@@ -638,6 +641,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         # We need to query the DB for child titles
         try:
             child_conn = sqlite3.connect(DB_PATH)
+            child_conn.execute("PRAGMA busy_timeout=5000")
             child_cursor = child_conn.cursor()
             placeholders = ','.join('?' * len(child_ids))
             child_cursor.execute(
@@ -843,10 +847,19 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
     try:
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
 
+        # Get column names, excluding heavy fields not needed for search
+        cursor.execute("PRAGMA table_info(chits)")
+        all_columns = [row[1] for row in cursor.fetchall()]
+        # Exclude email_body_html and attachments (can be megabytes per row) — never searched or displayed in results
+        exclude_cols = {"email_body_html", "attachments"}
+        select_cols = [c for c in all_columns if c not in exclude_cols]
+        col_list = ", ".join(select_cols)
+
         # Fetch all non-deleted chits for this user
-        cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
+        cursor.execute(f"SELECT {col_list} FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         results = []
         seen_ids = set()
 
@@ -899,21 +912,96 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             # Include this chit in results (deduplicate by ID)
             if matched_fields and chit["id"] not in seen_ids:
                 seen_ids.add(chit["id"])
+                # Truncate large text fields in the response to reduce payload size
+                if chit.get("email_body_text") and len(chit["email_body_text"]) > 300:
+                    chit["email_body_text"] = chit["email_body_text"][:300] + "\u2026"
+                if chit.get("note") and len(chit["note"]) > 500:
+                    chit["note"] = chit["note"][:500] + "\u2026"
+                # Remove fields never needed in search results
+                chit.pop("weather_data", None)
+                chit.pop("health_data", None)
                 results.append({"chit": chit, "matched_fields": matched_fields})
 
-        # Sort results: title matches first, then others
-        def _sort_key(result):
+        # Sort results: score by match quality (full-word > partial-word, title > other fields)
+        # Collect positive text terms for word-boundary scoring
+        _positive_terms = _collect_positive_text_terms(search_ast) if search_ast else []
+
+        def _score_result(result):
+            """Higher score = better match. Full-word matches score higher than partial."""
+            chit = result.get("chit", {})
             mf = result.get("matched_fields", [])
-            # Title match = highest priority (sort value 0)
+            score = 0
+
+            for term in _positive_terms:
+                if not term:
+                    continue
+                # Build a word-boundary regex for this term
+                word_pattern = re.compile(r'\b' + re.escape(term) + r'\b', re.IGNORECASE)
+                partial_pattern = term.lower()
+
+                # Title scoring (highest value field)
+                title = (chit.get("title") or "").lower()
+                if title:
+                    if word_pattern.search(chit.get("title") or ""):
+                        score += 100  # Full word match in title
+                    elif partial_pattern in title:
+                        score += 30   # Partial match in title
+
+                # Other field scoring
+                for field_name in ["note", "location", "status", "priority"]:
+                    val = chit.get(field_name)
+                    if val:
+                        val_str = str(val)
+                        if word_pattern.search(val_str):
+                            score += 20  # Full word match in other field
+                        elif partial_pattern in val_str.lower():
+                            score += 5   # Partial match in other field
+
+                # People field
+                people = chit.get("people")
+                if people and isinstance(people, list):
+                    people_text = " ".join(str(p) for p in people if p)
+                    if word_pattern.search(people_text):
+                        score += 20
+                    elif partial_pattern in people_text.lower():
+                        score += 5
+
+                # Checklist field
+                checklist = chit.get("checklist")
+                if checklist and isinstance(checklist, list):
+                    cl_text = " ".join(str(item.get("text", "")) for item in checklist if isinstance(item, dict))
+                    if word_pattern.search(cl_text):
+                        score += 15
+                    elif partial_pattern in cl_text.lower():
+                        score += 3
+
+                # Tags field
+                tags = chit.get("tags")
+                if tags and isinstance(tags, list):
+                    tags_text = " ".join(str(t) for t in tags if t)
+                    if word_pattern.search(tags_text):
+                        score += 15
+                    elif partial_pattern in tags_text.lower():
+                        score += 3
+
+            # Bonus: title match in matched_fields (backward compat)
             if "title" in mf:
-                return 0
-            return 1
+                score += 10
 
-        results.sort(key=_sort_key)
+            return score
 
-        # Add title_match flag for frontend display logic
+        # Score and sort descending (highest score first)
+        for r in results:
+            r["_score"] = _score_result(r)
+        results.sort(key=lambda r: r["_score"], reverse=True)
+
+        # Cap results to prevent massive payloads
+        results = results[:200]
+
+        # Add title_match flag and score for frontend display/sort logic
         for r in results:
             r["title_match"] = "title" in r.get("matched_fields", [])
+            r["score"] = r.pop("_score", 0)
 
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])
@@ -1009,7 +1097,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
 
         return results
     except Exception as e:
-        logger.error(f"Error searching chits: {str(e)}")
+        logger.error(f"Error searching chits: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to search chits: {str(e)}")
     finally:
         if conn:

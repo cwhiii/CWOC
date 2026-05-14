@@ -23,7 +23,6 @@ var _mapsFocusMode = false;
 
 // Chits filter state
 var _mapsChitsFilterStatus = [];
-var _mapsChitsFilterTags = [];
 var _mapsChitsFilterPriority = [];
 var _mapsChitsFilterPeople = [];
 var _mapsChitsFilterText = '';
@@ -778,29 +777,10 @@ function _initChitsFilters() {
  * panels — the shared sidebar's standard container IDs.
  */
 async function _loadChitsFilterData() {
-  // ── Load tags from settings via CwocSidebarFilter ──
-  try {
-    var settings = await getCachedSettings();
-    var rawTags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
-    var tagObjects = rawTags.map(function(t) {
-      return typeof t === 'string' ? { name: t, color: null, favorite: false } : t;
-    }).filter(function(t) {
-      return t.name && !isSystemTag(t.name);
-    });
-
-    if (typeof CwocSidebarFilter === 'function') {
-      CwocSidebarFilter({
-        containerId: 'label-multi',
-        items: tagObjects.map(function(t) { return { name: t.name, favorite: !!t.favorite, color: t.color }; }),
-        selection: _mapsChitsFilterTags,
-        onChange: function() { _onChitsFilterChange(); },
-        searchPlaceholder: 'Search tags…',
-        showColorBadge: true
-      });
-    }
-  } catch (e) {
-    console.warn('Could not load tags for chits filter:', e);
-  }
+  // ── Load tags using the shared tag filter (same as dashboard) ──
+  await cwocLoadTagFilter({
+    onChange: function() { _onChitsFilterChange(); }
+  });
 
   // ── Load people (contacts + system users) via CwocSidebarFilter ──
   try {
@@ -914,28 +894,8 @@ function _applyChitsFilters(chits) {
       if (_mapsChitsFilterStatus.indexOf(chit.status) === -1) continue;
     }
 
-    // ── Tag filter ──
-    if (_mapsChitsFilterTags.length > 0) {
-      var chitTags = chit.tags;
-      if (chitTags) {
-        if (typeof chitTags === 'string') {
-          try { chitTags = JSON.parse(chitTags); } catch (e) { chitTags = [chitTags]; }
-        }
-      }
-      if (!Array.isArray(chitTags)) chitTags = [];
-
-      var hasMatchingTag = false;
-      for (var ti = 0; ti < _mapsChitsFilterTags.length; ti++) {
-        for (var tj = 0; tj < chitTags.length; tj++) {
-          if (chitTags[tj] === _mapsChitsFilterTags[ti]) {
-            hasMatchingTag = true;
-            break;
-          }
-        }
-        if (hasMatchingTag) break;
-      }
-      if (!hasMatchingTag) continue;
-    }
+    // ── Tag filter (uses shared function) ──
+    if (!cwocChitPassesTagFilter(chit.tags)) continue;
 
     // ── Priority filter ──
     if (_mapsChitsFilterPriority.length > 0) {
@@ -1035,7 +995,7 @@ function _onChitsFilterChange() {
 function _clearChitsFilters() {
   // Reset filter state
   _mapsChitsFilterStatus = [];
-  _mapsChitsFilterTags = [];
+  cwocClearTagFilter();
   _mapsChitsFilterPriority = [];
   _mapsChitsFilterPeople = [];
   _mapsChitsFilterText = '';
@@ -1505,7 +1465,7 @@ async function _handleFocusAddress(focusType, address) {
       highlightMarker.addTo(_mapsLeafletMap);
       highlightMarker.bindPopup(
         '<div style="font-family:Lora,Georgia,serif;font-size:13px;">' +
-        '<strong>📍 ' + _mapsEsc(address) + '</strong>' +
+        '<strong>📍 ' + _escHtml(address) + '</strong>' +
         '</div>'
       ).openPopup();
 
@@ -1749,26 +1709,7 @@ function _clearPeopleFilters() {
  * Returns true if query is empty/null/undefined.
  */
 function _mapsContactMatchesFilter(contact, query) {
-  if (!query) return true;
-  var q = query.toLowerCase();
-  var fields = [
-    contact.display_name || '',
-    contact.given_name || '',
-    contact.surname || '',
-    contact.nickname || '',
-    contact.organization || '',
-    contact.social_context || '',
-    contact.notes || '',
-    (contact.emails || []).map(function (e) { return (e.value || '') + ' ' + (e.label || ''); }).join(' '),
-    (contact.phones || []).map(function (p) { return (p.value || '') + ' ' + (p.label || ''); }).join(' '),
-    (contact.addresses || []).map(function (a) { return (a.value || ''); }).join(' '),
-    (contact.call_signs || []).map(function (cs) { return (cs.value || ''); }).join(' '),
-    (contact.x_handles || []).map(function (x) { return (x.value || ''); }).join(' '),
-    (contact.websites || []).map(function (w) { return (w.value || ''); }).join(' '),
-    (contact.dates || []).map(function (d) { return (d.label || '') + ' ' + (d.value || ''); }).join(' '),
-    (contact.tags || []).join(' ')
-  ];
-  return fields.some(function (f) { return f.toLowerCase().indexOf(q) !== -1; });
+  return cwocContactMatchesFilter(contact, query);
 }
 
 /**
@@ -1916,7 +1857,7 @@ function _placeContactMarkers(geocodedContacts) {
         }
       });
     })(marker, contact);
-    marker.bindTooltip(_mapsEsc(contact.display_name || contact.given_name || '(Unknown)'), {
+    marker.bindTooltip(_escHtml(contact.display_name || contact.given_name || '(Unknown)'), {
       permanent: true,
       direction: 'top',
       offset: [0, -10],
@@ -1952,30 +1893,30 @@ function _buildContactPopupContent(contact, address) {
 
   // Profile image thumbnail (floated right)
   if (contact.image_url) {
-    html += '<img src="' + _mapsEsc(contact.image_url) + '" alt="" style="float:right;width:40px;height:40px;border-radius:6px;object-fit:cover;margin:0 0 4px 8px;border:1px solid #d2b48c;" />';
+    html += '<img src="' + _escHtml(contact.image_url) + '" alt="" style="float:right;width:40px;height:40px;border-radius:6px;object-fit:cover;margin:0 0 4px 8px;border:1px solid #d2b48c;" />';
   }
 
   // Contact display name (bold)
-  html += '<strong style="font-size:14px;">' + _mapsEsc(name) + '</strong>';
+  html += '<strong style="font-size:14px;">' + _escHtml(name) + '</strong>';
 
   // Address
   if (address) {
-    html += '<br><span style="font-size:12px;color:#5c4033;">📍 ' + _mapsEsc(address) + '</span>';
+    html += '<br><span style="font-size:12px;color:#5c4033;">📍 ' + _escHtml(address) + '</span>';
   }
 
   // Organization
   if (contact.organization) {
-    html += '<br><span style="font-size:12px;">🏢 ' + _mapsEsc(contact.organization) + '</span>';
+    html += '<br><span style="font-size:12px;">🏢 ' + _escHtml(contact.organization) + '</span>';
   }
 
   // Primary phone (first entry in phones array)
   if (contact.phones && contact.phones.length > 0 && contact.phones[0].value) {
-    html += '<br><span style="font-size:12px;">📞 ' + _mapsEsc(contact.phones[0].value) + '</span>';
+    html += '<br><span style="font-size:12px;">📞 ' + _escHtml(contact.phones[0].value) + '</span>';
   }
 
   // Primary email (first entry in emails array)
   if (contact.emails && contact.emails.length > 0 && contact.emails[0].value) {
-    html += '<br><span style="font-size:12px;">✉️ ' + _mapsEsc(contact.emails[0].value) + '</span>';
+    html += '<br><span style="font-size:12px;">✉️ ' + _escHtml(contact.emails[0].value) + '</span>';
   }
 
   // Editor link
@@ -2185,15 +2126,15 @@ function _buildPopupContent(chit) {
   if (chit.status && chit.status !== 'No Status') {
     var statusIcons = { 'ToDo': '📋', 'In Progress': '🔄', 'Blocked': '🚫', 'Complete': '✅', 'Rejected': '❌' };
     var statusIcon = statusIcons[chit.status] || '📋';
-    icons.push('<span title="' + _mapsEsc(chit.status) + '" style="cursor:pointer;">' + statusIcon + '</span>');
+    icons.push('<span title="' + _escHtml(chit.status) + '" style="cursor:pointer;">' + statusIcon + '</span>');
   }
   if (icons.length > 0) {
     html += '<div style="display:flex;gap:4px;margin-bottom:4px;font-size:14px;">' + icons.join('') + '</div>';
   }
 
-  html += '<strong style="font-size:14px;">' + _mapsEsc(title) + '</strong>';
+  html += '<strong style="font-size:14px;">' + _escHtml(title) + '</strong>';
   if (dateStr) {
-    html += '<br><span style="font-size:12px;color:#666;">📅 ' + _mapsEsc(dateStr) + '</span>';
+    html += '<br><span style="font-size:12px;color:#666;">📅 ' + _escHtml(dateStr) + '</span>';
   }
   html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '&from=' + encodeURIComponent('/frontend/html/maps.html') + '" style="font-size:12px;color:#2196F3;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open in Editor →</a>';
   html += '</div>';
@@ -2212,11 +2153,7 @@ function _mapsFormatDate(isoString) {
   return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
 }
 
-/** Simple HTML escape for popup content. */
-function _mapsEsc(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _mapsEsc — now using shared _escHtml from shared-utils.js
 
 // ── Marker placement ─────────────────────────────────────────────────────────
 
@@ -2276,7 +2213,7 @@ function _placeMarkers(geocodedChits) {
         }
       });
     })(marker, item.chit);
-    marker.bindTooltip(_mapsEsc(item.chit.title || '(Untitled)'), {
+    marker.bindTooltip(_escHtml(item.chit.title || '(Untitled)'), {
       permanent: true,
       direction: 'top',
       offset: [0, -14],

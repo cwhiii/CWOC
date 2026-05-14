@@ -122,6 +122,14 @@
     max-width: 100%;
 }
 
+.omni-empty {
+    font-style: italic;
+    color: #8b5a2b;
+    font-size: 0.9em;
+    padding: 8px 12px;
+    opacity: 0.7;
+}
+
 /* Universal 4px vertical spacing for ALL card types in Omni View */
 .omni-section-content > *,
 .omni-section-content .chit-card,
@@ -548,9 +556,18 @@
 /* ── Responsive: Single-Column Below 768px ───────────────────────────────── */
 
 @media (max-width: 768px) {
+    .omni-view {
+        overflow-y: auto;
+    }
+
     .omni-grid {
         grid-template-columns: 1fr;
-        gap: 8px;
+        gap: 0;
+        overflow: visible;
+    }
+
+    .omni-col {
+        overflow: visible;
     }
 
     .omni-section-full {

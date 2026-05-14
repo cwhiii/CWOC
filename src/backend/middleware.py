@@ -18,7 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, utcnow_iso
 
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,6 @@ _INACTIVITY_SECONDS = 24 * 60 * 60
 # Periodic cleanup: run every N requests (lightweight counter)
 _request_counter = 0
 _CLEANUP_INTERVAL = 100
-
-
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO 8601 string with Z suffix."""
-    return datetime.utcnow().isoformat() + "Z"
 
 
 def _is_excluded(path: str, method: str) -> bool:
@@ -87,6 +82,12 @@ def _is_excluded(path: str, method: str) -> bool:
     if path == "/api/wall-station" and method == "GET":
         return True
 
+    # Raw email download — excluded from middleware auth because browsers
+    # inconsistently send cookies for this path on self-signed cert origins.
+    # Security: chit IDs are UUIDs (unguessable).
+    if "/raw" in path and path.startswith("/api/email/") and method == "GET":
+        return True
+
     return False
 
 
@@ -100,7 +101,7 @@ def _cleanup_expired_sessions() -> None:
     """
     conn = None
     try:
-        now = _utcnow_iso()
+        now = utcnow_iso()
         conn = sqlite3.connect(DB_PATH)
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute(
@@ -141,6 +142,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Read session cookie
         token = request.cookies.get(SESSION_COOKIE_NAME)
+
+        # Fallback: check for ?_token= query param (for download endpoints
+        # where browsers may not send cookies reliably)
+        if not token:
+            token = request.query_params.get("_token")
 
         if token:
             # Look up session in database
@@ -187,7 +193,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
                     if not session_expired and not session_inactive and row["is_active"]:
                         # Valid session — update last_active and inject user info
-                        new_last_active = _utcnow_iso()
+                        new_last_active = utcnow_iso()
                         conn.execute(
                             "UPDATE sessions SET last_active_datetime = ? WHERE token = ?",
                             (new_last_active, token),
@@ -199,11 +205,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         return await call_next(request)
                     else:
                         # Expired or inactive session — clean it up
+                        if session_expired:
+                            logger.info(f"Session expired for user {row['user_id']} on {path} (expired={row['expires_datetime']})")
+                        elif session_inactive:
+                            logger.info(f"Session inactive for user {row['user_id']} on {path} (last_active={row['last_active_datetime']}, window={_user_inactivity}s)")
+                        elif not row["is_active"]:
+                            logger.info(f"User account deactivated: {row['user_id']} on {path}")
                         conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                         conn.commit()
 
             except Exception as e:
-                logger.error(f"Auth middleware error: {e}")
+                logger.error(f"Auth middleware error (path={path}, method={method}): {e}")
             finally:
                 if conn:
                     conn.close()

@@ -13,7 +13,7 @@
  */
 
 // ── Alarms View Mode (Chits list vs Independent board) ───────────────────────
-let _alarmsViewMode = localStorage.getItem('cwoc_alarmsViewMode') || 'list'; // 'list' | 'independent'
+let _alarmsViewMode = localStorage.getItem('cwoc_alarmsViewMode') || 'independent'; // 'list' | 'independent'
 let _independentAlerts = []; // cached independent alerts from API
 let _saTimerRuntime = {}; // independent timer runtime state
 let _saSwRuntime = {}; // independent stopwatch runtime state
@@ -22,12 +22,15 @@ let _saSwRuntime = {}; // independent stopwatch runtime state
 function _setAlarmsMode(mode) {
   _alarmsViewMode = mode;
   localStorage.setItem('cwoc_alarmsViewMode', mode);
+  _updateUrlHash();
   const listBtn = document.getElementById('alarms-mode-list');
   const indBtn = document.getElementById('alarms-mode-independent');
   const notifBtn = document.getElementById('alarms-mode-notifications');
+  const remBtn = document.getElementById('alarms-mode-reminders');
   if (listBtn) { listBtn.style.background = mode === 'list' ? 'ivory' : ''; listBtn.style.color = mode === 'list' ? '#3b1f0a' : ''; }
   if (indBtn) { indBtn.style.background = mode === 'independent' ? 'ivory' : ''; indBtn.style.color = mode === 'independent' ? '#3b1f0a' : ''; }
   if (notifBtn) { notifBtn.style.background = mode === 'notifications' ? 'ivory' : ''; notifBtn.style.color = mode === 'notifications' ? '#3b1f0a' : ''; }
+  if (remBtn) { remBtn.style.background = mode === 'reminders' ? 'ivory' : ''; remBtn.style.color = mode === 'reminders' ? '#3b1f0a' : ''; }
   if (mode === 'independent') {
     _fetchIndependentAlerts().then(() => displayChits());
   } else {
@@ -114,6 +117,9 @@ function displayAlarmsView(chitsToDisplay) {
   }
   if (_alarmsViewMode === 'notifications') {
     return _displayNotificationsView();
+  }
+  if (_alarmsViewMode === 'reminders') {
+    return _displayRemindersView(chitsToDisplay);
   }
 
   const chitList = document.getElementById("chit-list");
@@ -445,164 +451,58 @@ function _parseTimeInput(str) {
 }
 
 function _buildSaAlarmCard(card, id, data) {
-  // Name row
-  const row1 = document.createElement("div");
-  row1.className = "sa-card-row";
+  var snoozeKey = 'ia-' + id;
 
-  const nameInput = document.createElement("input");
-  nameInput.type = "text";
-  nameInput.value = data.name || "";
-  nameInput.placeholder = "Alarm name";
-  nameInput.className = "sa-input sa-name-input";
-  if (!data.enabled) nameInput.style.opacity = "0.45";
-
-  // Text input for time — displays in CWOC format, stores as 24h HH:MM
-  const timeInput = document.createElement("input");
-  timeInput.type = "text";
-  timeInput.value = _globalFmtTime(data.time || "") || "";
-  timeInput.placeholder = _globalTimeFormat === '24hour' ? "HH:MM" : "H:MM AM";
-  timeInput.className = "sa-time-input";
-  timeInput.inputMode = "numeric";
-  if (!data.enabled) timeInput.style.opacity = "0.45";
-
-  const toggleBtn = document.createElement("button");
-  toggleBtn.className = "sa-btn";
-  toggleBtn.textContent = data.enabled ? "On" : "Off";
-  toggleBtn.onclick = () => {
-    data.enabled = !data.enabled;
-    // If turning off while snoozed, cancel the snooze
-    if (!data.enabled) {
-      var _snzKey = 'ia-' + id;
-      if (_snoozeRegistry[_snzKey]) {
-        delete _snoozeRegistry[_snzKey];
-        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[_snzKey];
-        _persistDismiss(_snzKey);
-        syncSend('alert_dismissed', { snoozeKey: _snzKey });
-      }
-    }
-    _updateIndependentAlert(id, data);
-  };
-
-  const delBtn = document.createElement("button");
-  delBtn.className = "sa-btn sa-del-btn";
-  delBtn.textContent = "❌";
-  delBtn.onclick = () => _deleteIndependentAlert(id);
-
-  row1.appendChild(nameInput);
-  row1.appendChild(timeInput);
-  row1.appendChild(toggleBtn);
-  row1.appendChild(delBtn);
-  card.appendChild(row1);
-
-  // Days row
-  const daysRow = document.createElement("div");
-  daysRow.className = "sa-days-row";
-  if (!data.enabled) daysRow.style.opacity = "0.45";
-  const allDays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined) ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
-  for (let d = 0; d < 7; d++) {
-    const day = allDays[(wsd + d) % 7];
-    const lbl = document.createElement("label");
-    lbl.className = "sa-day-label";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = (data.days || []).includes(day);
-    cb.addEventListener("change", () => {
-      const days = data.days || [];
-      if (cb.checked) { if (!days.includes(day)) days.push(day); }
-      else { const i = days.indexOf(day); if (i !== -1) days.splice(i, 1); }
-      data.days = days;
+  var alarmCard = cwocBuildAlarmCard({
+    alarm: data,
+    onNameChange: function(name) {
+      data.name = name;
       _updateIndependentAlert(id, data);
-    });
-    lbl.appendChild(cb);
-    lbl.appendChild(document.createTextNode(day));
-    daysRow.appendChild(lbl);
-  }
-  card.appendChild(daysRow);
-
-  // Save name/time on blur
-  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
-  timeInput.addEventListener("change", () => {
-    const parsed = _parseTimeInput(timeInput.value);
-    if (parsed) {
-      data.time = parsed;
-      timeInput.value = _globalFmtTime(parsed);
+    },
+    onTimeChange: function(time24) {
+      data.time = time24;
       if (!data.days || data.days.length === 0) {
+        var allDays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
         data.days = [allDays[new Date().getDay()]];
       }
       _updateIndependentAlert(id, data);
-    } else {
-      // Revert to current value
-      timeInput.value = _globalFmtTime(data.time || "") || "";
+    },
+    onDaysChange: function(days) {
+      data.days = days;
+      _updateIndependentAlert(id, data);
+    },
+    onToggle: function() {
+      data.enabled = !data.enabled;
+      // If turning off while snoozed, cancel the snooze
+      if (!data.enabled) {
+        if (_snoozeRegistry[snoozeKey]) {
+          delete _snoozeRegistry[snoozeKey];
+          if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
+          _persistDismiss(snoozeKey);
+          syncSend('alert_dismissed', { snoozeKey: snoozeKey });
+        }
+      }
+      _updateIndependentAlert(id, data);
+    },
+    onDelete: function() { _deleteIndependentAlert(id); },
+    snoozeKey: snoozeKey,
+    snoozeRegistry: _snoozeRegistry,
+    getSnoozeMs: _getSnoozeMs,
+    onSnoozeRestart: function(newEnd) {
+      _snoozeRegistry[snoozeKey] = newEnd;
+      if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[snoozeKey] = newEnd;
+      _persistSnooze(snoozeKey, newEnd);
+      syncSend('alert_snoozed', { snoozeKey: snoozeKey, snoozeUntil: newEnd });
+    },
+    onSnoozeDismiss: function() {
+      delete _snoozeRegistry[snoozeKey];
+      if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
+      _persistDismiss(snoozeKey);
+      syncSend('alert_dismissed', { snoozeKey: snoozeKey });
     }
   });
 
-  // Snooze countdown bar — show if this alarm is currently snoozed
-  const snoozeKey = `ia-${id}`;
-  const snoozeEnd = _snoozeRegistry[snoozeKey];
-  if (snoozeEnd && Date.now() < snoozeEnd) {
-    const snoozeBar = document.createElement("div");
-    snoozeBar.className = "sa-timer-bar";
-    snoozeBar.style.marginTop = "0.3em";
-    snoozeBar.style.cursor = "pointer";
-    snoozeBar.title = "Click to restart snooze · Shift+click to cancel";
-    const snoozeFill = document.createElement("div");
-    snoozeFill.className = "sa-timer-bar-fill";
-    snoozeFill.style.transition = 'none';
-    const snoozeText = document.createElement("div");
-    snoozeText.className = "sa-timer-bar-text";
-    snoozeText.style.fontSize = "1em";
-    snoozeBar.appendChild(snoozeFill);
-    snoozeBar.appendChild(snoozeText);
-    card.appendChild(snoozeBar);
-
-    let _snoozeEndLocal = snoozeEnd;
-    const _snoozeInterval = setInterval(() => {
-      const remain = Math.max(0, _snoozeEndLocal - Date.now());
-      const secs = Math.ceil(remain / 1000);
-      const pct = Math.max(0, (remain / _getSnoozeMs()) * 100);
-      snoozeFill.style.width = pct + '%';
-      const m = Math.floor(secs / 60), s = secs % 60;
-      snoozeText.textContent = `💤 ${m}:${String(s).padStart(2,'0')}`;
-      if (remain <= 0) { clearInterval(_snoozeInterval); snoozeBar.remove(); }
-    }, 200);
-
-    // Click = restart snooze, Shift+click = cancel snooze
-    snoozeBar.addEventListener("click", (e) => {
-      if (e.shiftKey) {
-        // Cancel snooze — dismiss the alarm
-        clearInterval(_snoozeInterval);
-        delete _snoozeRegistry[snoozeKey];
-        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
-        _persistDismiss(snoozeKey);
-        syncSend('alert_dismissed', { snoozeKey: snoozeKey });
-        snoozeBar.remove();
-      } else {
-        // Restart snooze
-        const newEnd = Date.now() + _getSnoozeMs();
-        _snoozeEndLocal = newEnd;
-        _snoozeRegistry[snoozeKey] = newEnd;
-        if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[snoozeKey] = newEnd;
-        _persistSnooze(snoozeKey, newEnd);
-        syncSend('alert_snoozed', { snoozeKey: snoozeKey, snoozeUntil: newEnd });
-      }
-    });
-
-    // Long press on mobile = cancel snooze
-    let _lpTimer = null;
-    snoozeBar.addEventListener("touchstart", () => {
-      _lpTimer = setTimeout(() => {
-        clearInterval(_snoozeInterval);
-        delete _snoozeRegistry[snoozeKey];
-        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
-        _persistDismiss(snoozeKey);
-        syncSend('alert_dismissed', { snoozeKey: snoozeKey });
-        snoozeBar.remove();
-      }, 600);
-    }, { passive: true });
-    snoozeBar.addEventListener("touchend", () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
-    snoozeBar.addEventListener("touchmove", () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
-  }
+  card.appendChild(alarmCard);
 }
 
 // ── Independent Timer Card ───────────────────────────────────────────────────
@@ -1028,6 +928,262 @@ async function _displayNotificationsView() {
   } finally {
     _notifViewRendering = false;
   }
+}
+
+/* ── Reminders View (Alarms tab mode) ─────────────────────────────────────── */
+
+function _displayRemindersView(chitsToDisplay) {
+  var chitList = document.getElementById('chit-list');
+  chitList.innerHTML = '';
+  var _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
+  // Filter to reminder chits: have notification flag + point_in_time (created via Quick Reminder)
+  var reminderChits = chitsToDisplay.filter(function(c) {
+    return c.notification && c.point_in_time;
+  });
+
+  // Sort by point_in_time ascending (soonest first)
+  reminderChits.sort(function(a, b) {
+    return (a.point_in_time || '').localeCompare(b.point_in_time || '');
+  });
+
+  if (reminderChits.length === 0) {
+    chitList.innerHTML = '<div class="cwoc-empty">No reminders. Press <kbd>!</kbd> then <kbd>R</kbd> to create one.</div>';
+    return;
+  }
+
+  var now = new Date();
+  var upcoming = reminderChits.filter(function(c) { return new Date(c.point_in_time) >= now; });
+  var past = reminderChits.filter(function(c) { return new Date(c.point_in_time) < now; });
+
+  var container = document.createElement('div');
+  container.className = 'reminders-view';
+  container.style.cssText = 'padding:12px;';
+
+  function _fmtReminderDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var dateStr = d.getFullYear() + '-' + months[d.getMonth()] + '-' + String(d.getDate()).padStart(2,'0');
+    var h = d.getHours(), m = d.getMinutes();
+    var timeStr = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    return dateStr + ' ' + timeStr;
+  }
+
+  function _buildReminderCard(chit) {
+    var card = document.createElement('div');
+    card.className = 'chit-card reminder-card';
+    card.style.cssText = 'margin-bottom:6px;padding:10px 14px;cursor:pointer;position:relative;';
+    card.dataset.chitId = chit.id;
+    if (chit.archived) card.classList.add('archived-chit');
+    if (chit.status === 'Complete') card.style.opacity = '0.6';
+    applyChitColors(card, chitColor(chit));
+
+    // Top row: pin icon + title + action buttons
+    var topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+    // Pin button (same as email — bookmark icon)
+    var pinBtn = document.createElement('button');
+    pinBtn.className = 'email-pin-btn';
+    pinBtn.title = chit.pinned ? 'Unpin' : 'Pin';
+    pinBtn.innerHTML = chit.pinned
+      ? '<i class="fas fa-bookmark"></i>'
+      : '<i class="far fa-bookmark"></i>';
+    if (chit.pinned) pinBtn.classList.add('email-pin-active');
+    pinBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var newVal = !chit.pinned;
+      fetch('/api/chits/' + encodeURIComponent(chit.id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: newVal })
+      }).then(function(r) {
+        if (r.ok) { chit.pinned = newVal; displayChits(); }
+      });
+    });
+    topRow.appendChild(pinBtn);
+
+    // Title
+    var titleEl = document.createElement('a');
+    titleEl.href = '/editor?id=' + chit.id;
+    titleEl.textContent = chit.title || '(Untitled)';
+    titleEl.style.cssText = 'flex:1;font-weight:bold;color:#4a2c2a;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    titleEl.addEventListener('click', function(e) { e.preventDefault(); storePreviousState(); window.location.href = this.href; });
+    topRow.appendChild(titleEl);
+
+    // Action buttons (hover-visible like email)
+    var actions = document.createElement('div');
+    actions.className = 'reminder-actions';
+    actions.style.cssText = 'display:flex;gap:4px;opacity:0;transition:opacity 0.15s;';
+
+    // Status toggle (Complete / ToDo) — check-circle icon
+    var statusBtn = document.createElement('button');
+    statusBtn.className = 'email-hover-btn';
+    statusBtn.title = chit.status === 'Complete' ? 'Mark Incomplete' : 'Mark Complete';
+    statusBtn.innerHTML = chit.status === 'Complete'
+      ? '<i class="fas fa-undo"></i>'
+      : '<i class="fas fa-check-circle"></i>';
+    statusBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (chit.status === 'Complete') {
+        // Revert immediately — no undo needed
+        fetch('/api/chits/' + encodeURIComponent(chit.id), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: null, archived: false })
+        }).then(function(r) {
+          if (r.ok) { chit.status = null; chit.archived = false; displayChits(); }
+        });
+      } else {
+        // Mark complete with undo countdown
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0.4';
+        card.style.transform = 'translateX(20px)';
+        _emailUndoToast(
+          '✓ Completed: ' + (chit.title || 'Reminder'),
+          // onExpire — actually complete + archive
+          function() {
+            fetch('/api/chits/' + encodeURIComponent(chit.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'Complete', archived: true })
+            }).then(function(r) {
+              if (r.ok) {
+                chit.status = 'Complete'; chit.archived = true;
+                card.remove();
+                if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                  var found = chits.find(function(c) { return c.id === chit.id; });
+                  if (found) { found.status = 'Complete'; found.archived = true; }
+                }
+              } else {
+                card.style.opacity = ''; card.style.transform = '';
+              }
+            });
+          },
+          // onUndo — restore the card
+          function() {
+            card.style.opacity = '';
+            card.style.transform = '';
+          }
+        );
+      }
+    });
+    actions.appendChild(statusBtn);
+
+    // Archive — same icon as email
+    var archiveBtn = document.createElement('button');
+    archiveBtn.className = 'email-hover-btn';
+    archiveBtn.title = chit.archived ? 'Unarchive' : 'Archive';
+    archiveBtn.innerHTML = '<i class="fas fa-archive"></i>';
+    archiveBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var newVal = !chit.archived;
+      fetch('/api/chits/' + encodeURIComponent(chit.id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: newVal })
+      }).then(function(r) {
+        if (r.ok) { chit.archived = newVal; displayChits(); }
+      });
+    });
+    actions.appendChild(archiveBtn);
+
+    // Delete (soft) — same icon as email
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'email-hover-btn';
+    deleteBtn.title = 'Delete';
+    deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+    deleteBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (typeof cwocConfirm === 'function') {
+        cwocConfirm('Delete reminder "' + (chit.title || 'Untitled') + '"?', function() {
+          fetch('/api/chits/' + encodeURIComponent(chit.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deleted: true })
+          }).then(function(r) {
+            if (r.ok) {
+              card.style.transition = 'opacity 0.3s';
+              card.style.opacity = '0';
+              setTimeout(function() { card.remove(); }, 300);
+              // Remove from local chits array
+              if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                var idx = chits.findIndex(function(c) { return c.id === chit.id; });
+                if (idx !== -1) chits[idx].deleted = true;
+              }
+            }
+          });
+        });
+      }
+    });
+    actions.appendChild(deleteBtn);
+
+    topRow.appendChild(actions);
+    card.appendChild(topRow);
+
+    // Show actions on hover
+    card.addEventListener('mouseenter', function() { actions.style.opacity = '1'; });
+    card.addEventListener('mouseleave', function() { actions.style.opacity = '0'; });
+
+    // Meta row: date/time + status badge
+    var meta = document.createElement('div');
+    meta.style.cssText = 'font-size:0.85em;color:#6b4e31;margin-top:4px;display:flex;align-items:center;gap:8px;';
+    var timeSpan = document.createElement('span');
+    timeSpan.textContent = '📢 ' + _fmtReminderDate(chit.point_in_time);
+    meta.appendChild(timeSpan);
+
+    // Show if past due
+    if (new Date(chit.point_in_time) < now && chit.status !== 'Complete') {
+      var pastBadge = document.createElement('span');
+      pastBadge.style.cssText = 'background:#c0392b;color:#fff;font-size:0.8em;padding:1px 6px;border-radius:3px;';
+      pastBadge.textContent = 'past';
+      meta.appendChild(pastBadge);
+    }
+    // Show complete badge
+    if (chit.status === 'Complete') {
+      var doneBadge = document.createElement('span');
+      doneBadge.style.cssText = 'background:#27ae60;color:#fff;font-size:0.8em;padding:1px 6px;border-radius:3px;';
+      doneBadge.textContent = '✓ done';
+      meta.appendChild(doneBadge);
+    }
+    card.appendChild(meta);
+
+    card.addEventListener('dblclick', function() {
+      storePreviousState();
+      window.location.href = '/editor?id=' + chit.id;
+    });
+    card.addEventListener('click', function(e) {
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      if (typeof showQuickEditModal === 'function') showQuickEditModal(chit, function() { displayChits(); });
+    });
+    card.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (typeof _showChitContextMenu === 'function') _showChitContextMenu(e, chit, function() { displayChits(); });
+    });
+    return card;
+  }
+
+  // Upcoming section
+  if (upcoming.length > 0) {
+    var upHeader = document.createElement('div');
+    upHeader.style.cssText = 'font-size:0.95em;font-weight:bold;color:#4a2c2a;margin-bottom:8px;';
+    upHeader.textContent = '⏰ Upcoming (' + upcoming.length + ')';
+    container.appendChild(upHeader);
+    upcoming.forEach(function(chit) { container.appendChild(_buildReminderCard(chit)); });
+  }
+
+  // Past section
+  if (past.length > 0) {
+    var pastHeader = document.createElement('div');
+    pastHeader.style.cssText = 'font-size:0.95em;font-weight:bold;color:#4a2c2a;margin:16px 0 8px;';
+    pastHeader.textContent = '📭 Past (' + past.length + ')';
+    container.appendChild(pastHeader);
+    past.forEach(function(chit) { container.appendChild(_buildReminderCard(chit)); });
+  }
+
+  chitList.appendChild(container);
 }
 
 /** Build a notification card for the notifications view. */

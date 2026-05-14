@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field
+from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field, row_to_dict
 from src.backend.models import BundleCreate, BundleUpdate, BundleReorder, BundleRuleAssociate
 from src.backend.rules_engine import evaluate_condition_tree
 
@@ -23,11 +23,6 @@ bundles_router = APIRouter()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
-
-def _row_to_dict(cursor, row) -> dict:
-    """Convert a sqlite3 row tuple to a dict using cursor.description."""
-    columns = [col[0] for col in cursor.description]
-    return dict(zip(columns, row))
 
 
 def _query_bundles(cursor, owner_id: str) -> list:
@@ -39,7 +34,7 @@ def _query_bundles(cursor, owner_id: str) -> list:
     )
     bundles = []
     for row in cursor.fetchall():
-        bundle = _row_to_dict(cursor, row)
+        bundle = row_to_dict(cursor, row)
         # Fetch associated rule_ids
         cursor.execute(
             "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
@@ -188,6 +183,7 @@ def get_bundles(request: Request):
     """List all bundles for the authenticated user.
 
     If no bundles exist, initializes defaults ("From Contacts", "Everything Else").
+    Also ensures auto-bundles (Newsletters, Receipts, Calendar Invites) exist.
     Returns bundles with their associated rule_ids and the multi-placement setting.
     """
     conn = None
@@ -207,6 +203,17 @@ def get_bundles(request: Request):
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             bundles = _query_bundles(cursor, user_id)
+
+        # Ensure auto-bundles exist (idempotent)
+        conn.close()
+        conn = None
+        try:
+            ensure_auto_bundles_exist(user_id)
+        except Exception as e:
+            logger.warning(f"Failed to ensure auto-bundles in get_bundles: {e}")
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        bundles = _query_bundles(cursor, user_id)
 
         # Get bundles_multi_placement setting
         cursor.execute(
@@ -296,6 +303,117 @@ def create_bundle(bundle: BundleCreate, request: Request):
             conn.close()
 
 
+@bundles_router.post("/api/bundles/{bundle_id}/add-rule")
+async def add_rule_to_bundle(bundle_id: str, request: Request):
+    """Add a new OR condition rule to an existing bundle.
+    
+    Creates a rule that matches emails by subject or sender and adds them to the bundle.
+    The rule is added as an OR condition to the bundle's existing rules.
+    
+    Request body:
+    - match_type: "subject" or "sender"
+    - match_value: the subject line or sender email to match
+    """
+    conn = None
+    try:
+        owner_id = request.state.user_id
+        body = await request.json()
+        
+        match_type = body.get("match_type")
+        match_value = body.get("match_value", "").strip()
+        
+        if match_type not in ["subject", "sender"]:
+            raise HTTPException(status_code=400, detail="match_type must be 'subject' or 'sender'")
+        
+        if not match_value:
+            raise HTTPException(status_code=400, detail="match_value is required")
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Verify bundle exists and is owned by user
+        cursor.execute(
+            "SELECT name, removable FROM bundles WHERE id = ? AND owner_id = ?",
+            (bundle_id, owner_id)
+        )
+        bundle_row = cursor.fetchone()
+        if not bundle_row:
+            raise HTTPException(status_code=404, detail="Bundle not found")
+        
+        bundle_name, removable = bundle_row
+        
+        # Don't allow adding rules to "Everything Else" (catch-all bundle)
+        if bundle_name == "Everything Else":
+            raise HTTPException(status_code=400, detail="Cannot add rules to the catch-all bundle")
+        
+        # Create the rule
+        rule_id = str(uuid4())
+        rule_name = f"Auto: {match_type.title()} matches '{match_value}'"
+        
+        # Build condition tree based on match type
+        if match_type == "subject":
+            conditions = {
+                "type": "leaf",
+                "field": "email_subject",
+                "operator": "contains",
+                "value": match_value
+            }
+        else:  # sender
+            conditions = {
+                "type": "leaf", 
+                "field": "email_from",
+                "operator": "contains",
+                "value": match_value
+            }
+        
+        # Create actions array
+        actions = [
+            {"type": "add_tag", "params": {"tag": f"CWOC_System/Bundle/{bundle_name}"}}
+        ]
+        
+        # Create the rule
+        now = datetime.utcnow().isoformat()
+        cursor.execute("""
+            INSERT INTO rules (id, owner_id, name, trigger_type, enabled, priority,
+                             conditions, actions, confirm_before_apply, created_datetime, modified_datetime)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            rule_id, owner_id, rule_name, "email_received",
+            1, 0,  # enabled=1, priority=0
+            serialize_json_field(conditions),
+            serialize_json_field(actions),
+            0,  # confirm_before_apply=0
+            now, now
+        ))
+        
+        # Associate rule with bundle
+        bundle_rule_id = str(uuid4())
+        cursor.execute("""
+            INSERT INTO bundle_rules (id, bundle_id, rule_id, owner_id, created_datetime)
+            VALUES (?, ?, ?, ?, ?)
+        """, (bundle_rule_id, bundle_id, rule_id, owner_id, now))
+        
+        conn.commit()
+        
+        logger.info(f"Added rule {rule_id} to bundle {bundle_name} for {match_type}='{match_value}'")
+        
+        return {
+            "success": True,
+            "rule_id": rule_id,
+            "rule_name": rule_name,
+            "bundle_name": bundle_name
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding rule to bundle: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add rule to bundle")
+    finally:
+        if conn:
+            conn.close()
+
+
 @bundles_router.post("/api/bundles/reclassify")
 def reclassify_emails(request: Request):
     """Reclassify all inbox emails into bundles for the authenticated user.
@@ -370,7 +488,7 @@ def update_bundle(bundle_id: str, bundle: BundleUpdate, request: Request):
         if not existing_row:
             raise HTTPException(status_code=404, detail="Bundle not found")
 
-        existing = _row_to_dict(cursor, existing_row)
+        existing = row_to_dict(cursor, existing_row)
         old_name = existing["name"]
         current_time = datetime.utcnow().isoformat()
 
@@ -477,7 +595,7 @@ def update_bundle(bundle_id: str, bundle: BundleUpdate, request: Request):
             (bundle_id, user_id),
         )
         updated_row = cursor.fetchone()
-        result = _row_to_dict(cursor, updated_row)
+        result = row_to_dict(cursor, updated_row)
         cursor.execute(
             "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
             (bundle_id, user_id),
@@ -512,7 +630,7 @@ def delete_bundle(bundle_id: str, request: Request):
         if not existing_row:
             raise HTTPException(status_code=404, detail="Bundle not found")
 
-        existing = _row_to_dict(cursor, existing_row)
+        existing = row_to_dict(cursor, existing_row)
 
         # Check if removable
         if not existing.get("removable", True):
@@ -563,6 +681,53 @@ def delete_bundle(bundle_id: str, request: Request):
     except Exception as e:
         logger.error(f"Error deleting bundle {bundle_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete bundle: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@bundles_router.post("/api/bundles/{bundle_id}/disable")
+def disable_bundle(bundle_id: str, request: Request):
+    """Disable an auto-bundle: set display_order to -1 and strip its tags from all emails.
+
+    The bundle remains in the DB but is hidden from the UI and stops receiving
+    new classifications. Can be re-enabled by updating display_order back.
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute(
+            "SELECT name, display_order FROM bundles WHERE id = ? AND owner_id = ?",
+            (bundle_id, user_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bundle not found")
+
+        bundle_name = row[0]
+        current_time = datetime.utcnow().isoformat()
+
+        # Set display_order to -1 (disabled marker)
+        cursor.execute(
+            "UPDATE bundles SET display_order = -1, modified_datetime = ? WHERE id = ?",
+            (current_time, bundle_id),
+        )
+
+        # Strip this bundle's tag from all emails
+        _remove_bundle_tag_from_chits(cursor, user_id, bundle_name)
+
+        conn.commit()
+        logger.info(f"Disabled auto-bundle '{bundle_name}' for user {user_id}")
+        return {"message": "Bundle disabled", "id": bundle_id, "name": bundle_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error disabling bundle {bundle_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to disable bundle: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -715,6 +880,28 @@ def _get_rules_for_bundle(cursor, bundle_id: str, owner_id: str) -> list:
     return rules
 
 
+def _is_generic_condition(conditions: dict) -> bool:
+    """Check if a condition tree uses only generic/broad operators.
+
+    Generic operators: contains_contact_email (matches any contact).
+    Specific operators: contains, equals, starts_with, etc. (targeted match).
+
+    For compound conditions (AND/OR), returns True only if ALL leaves are generic.
+    """
+    if not conditions:
+        return False
+    ctype = conditions.get("type", "leaf")
+    if ctype == "leaf":
+        op = conditions.get("operator", "")
+        return op in ("contains_contact_email",)
+    elif ctype in ("and", "or"):
+        children = conditions.get("children", [])
+        if not children:
+            return False
+        return all(_is_generic_condition(c) for c in children)
+    return False
+
+
 def _add_tag_to_chit(cursor, chit_id: str, tag: str, owner_id: str):
     """Add a tag to a chit's tags list in the database."""
     cursor.execute("SELECT tags FROM chits WHERE id = ?", (chit_id,))
@@ -732,11 +919,16 @@ def _add_tag_to_chit(cursor, chit_id: str, tag: str, owner_id: str):
 
 
 def classify_email_into_bundle(chit: dict, owner_id: str):
-    """Classify an email into exactly one bundle (first match by display_order).
+    """Classify an email into exactly one bundle (specific rules first, then generic).
 
-    Evaluates bundle rules in bundle display_order (left-to-right).
-    Stops at the first matching bundle and assigns only that bundle's tag.
-    If no bundle matches, the email falls into "Everything Else" (no tag needed).
+    Two-pass evaluation:
+    1. First pass: evaluate SPECIFIC rules (sender/subject contains) across all bundles
+       in display_order. Specific rules always win over generic ones.
+    2. Second pass: evaluate GENERIC rules (contains_contact_email) across all bundles
+       in display_order. Only runs if no specific rule matched.
+
+    This ensures that explicit user-created sender rules (e.g., "Add to Bundle")
+    always take priority over the broad "From Contacts" catch-all.
 
     Args:
         chit: The email chit dict (must have "id" key).
@@ -760,24 +952,22 @@ def classify_email_into_bundle(chit: dict, owner_id: str):
 
         # Pre-load contacts for cross-reference conditions
         contacts = _load_user_contacts(cursor, owner_id)
-        logger.debug(f"[Classify] Loaded {len(contacts)} contacts, {len(bundles)} bundles for chit {chit.get('id', '?')[:8]}")
+
+        # Collect all bundle rules, split into specific vs generic
+        # "Generic" = uses contains_contact_email operator (broad catch-all)
+        # "Specific" = uses contains, equals, starts_with, etc. (targeted)
+        specific_matches = []  # [(bundle, rule, conditions)]
+        generic_matches = []   # [(bundle, rule, conditions)]
 
         for bundle in bundles:
-            # Skip "Everything Else" — it's computed, not rule-based
             if bundle["name"] == "Everything Else":
                 continue
 
             rules = _get_rules_for_bundle(cursor, bundle["id"], owner_id)
-            if not rules:
-                logger.debug(f"[Classify]   Bundle '{bundle['name']}': no rules, skipping")
-                continue
-
             for rule in rules:
                 if not rule.get("enabled", False):
-                    logger.debug(f"[Classify]   Bundle '{bundle['name']}': rule '{rule.get('name')}' disabled, skipping")
                     continue
 
-                # Parse conditions
                 conditions_raw = rule.get("conditions")
                 if isinstance(conditions_raw, str):
                     conditions = deserialize_json_field(conditions_raw)
@@ -787,17 +977,36 @@ def classify_email_into_bundle(chit: dict, owner_id: str):
                 if not conditions or not isinstance(conditions, dict):
                     continue
 
-                # Evaluate condition tree against the email chit
-                if evaluate_condition_tree(conditions, chit, contacts):
-                    # First match wins — assign this bundle's tag and stop
-                    tag = f"CWOC_System/Bundle/{bundle['name']}"
-                    _add_tag_to_chit(cursor, chit["id"], tag, owner_id)
-                    conn.commit()
-                    logger.info(
-                        "Bundle classification (single): chit %s → %s",
-                        chit.get("id", "?"), bundle["name"],
-                    )
-                    return  # Done — single placement
+                # Determine if this is a generic or specific rule
+                is_generic = _is_generic_condition(conditions)
+                if is_generic:
+                    generic_matches.append((bundle, rule, conditions))
+                else:
+                    specific_matches.append((bundle, rule, conditions))
+
+        # Pass 1: Evaluate specific rules (in bundle display_order)
+        for bundle, rule, conditions in specific_matches:
+            if evaluate_condition_tree(conditions, chit, contacts):
+                tag = f"CWOC_System/Bundle/{bundle['name']}"
+                _add_tag_to_chit(cursor, chit["id"], tag, owner_id)
+                conn.commit()
+                logger.info(
+                    "Bundle classification (single/specific): chit %s → %s",
+                    chit.get("id", "?"), bundle["name"],
+                )
+                return
+
+        # Pass 2: Evaluate generic rules (only if no specific match)
+        for bundle, rule, conditions in generic_matches:
+            if evaluate_condition_tree(conditions, chit, contacts):
+                tag = f"CWOC_System/Bundle/{bundle['name']}"
+                _add_tag_to_chit(cursor, chit["id"], tag, owner_id)
+                conn.commit()
+                logger.info(
+                    "Bundle classification (single/generic): chit %s → %s",
+                    chit.get("id", "?"), bundle["name"],
+                )
+                return
 
         # No match — email falls into "Everything Else" (no tag needed)
         logger.debug(
@@ -966,6 +1175,8 @@ def reclassify_all_emails(owner_id: str):
                 classify_email_into_bundles(chit, owner_id)
             else:
                 classify_email_into_bundle(chit, owner_id)
+            # Also apply auto-bundle classification
+            classify_email_auto_bundles(chit, chit["id"], owner_id)
             classified_count += 1
 
         # Count how many actually got tagged
@@ -982,6 +1193,323 @@ def reclassify_all_emails(owner_id: str):
 
     except Exception as e:
         logger.error(f"Error reclassifying emails: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Auto-Bundle System Bundles ────────────────────────────────────────────
+# Built-in bundles that auto-classify based on email signals:
+# - Newsletters: List-Unsubscribe header present
+# - Receipts: noreply@ sender + transactional subject patterns
+# - Calendar Invites: text/calendar MIME part
+
+AUTO_BUNDLE_NEWSLETTERS = "Junk"
+AUTO_BUNDLE_RECEIPTS = "Receipts"
+AUTO_BUNDLE_CALENDAR = "Calendar Invites"
+AUTO_BUNDLE_FINANCE = "Finance"
+
+# Transactional subject patterns for Receipts detection
+_RECEIPT_SUBJECT_PATTERNS = [
+    "order confirmation", "your order has shipped", "your order",
+    "order #", "invoice #", "purchase confirmation",
+    "payment received", "payment confirmation",
+    "your receipt", "receipt for your",
+]
+
+# Finance/banking subject patterns
+_FINANCE_SUBJECT_PATTERNS = [
+    "statement is ready", "statement available", "your statement",
+    "billing statement", "account statement", "monthly statement",
+    "payment due", "payment reminder", "bill is ready",
+    "autopay", "auto-pay", "automatic payment",
+    "balance update", "account alert", "low balance",
+    "direct deposit", "transaction alert", "fraud alert",
+    "credit score", "fico score",
+    "tax document", "tax form", "1099", "w-2",
+]
+
+# Known financial institution sender domains
+_FINANCE_SENDER_DOMAINS = [
+    "chase.com", "bankofamerica.com", "wellsfargo.com", "citi.com",
+    "capitalone.com", "discover.com", "americanexpress.com", "amex.com",
+    "usaa.com", "navyfederal.org", "pnc.com", "usbank.com",
+    "ally.com", "synchrony.com", "barclays.com", "barclaycard",
+    "paypal.com", "venmo.com", "zelle", "cashapp.com",
+    "mint.com", "creditkarma.com", "experian.com", "equifax.com",
+    "transunion.com", "irs.gov", "turbotax", "hrblock",
+    "fidelity.com", "vanguard.com", "schwab.com", "etrade.com",
+    "robinhood.com", "wealthfront.com", "betterment.com",
+    "sofi.com", "marcus.com", "lending", "mortgage",
+]
+
+# noreply-style sender patterns
+_NOREPLY_PATTERNS = [
+    "noreply@", "no-reply@", "donotreply@", "do-not-reply@",
+    "notifications@", "mailer@", "automated@", "system@",
+]
+
+
+def _is_noreply_sender(email_from: str) -> bool:
+    """Check if the sender address matches a noreply pattern."""
+    if not email_from:
+        return False
+    lower = email_from.lower()
+    return any(pat in lower for pat in _NOREPLY_PATTERNS)
+
+
+def _is_receipt_subject(subject: str) -> bool:
+    """Check if the subject matches transactional/receipt patterns."""
+    if not subject:
+        return False
+    lower = subject.lower()
+    return any(pat in lower for pat in _RECEIPT_SUBJECT_PATTERNS)
+
+
+def _is_finance_email(email_from: str, subject: str) -> bool:
+    """Check if an email is from a financial institution or has finance subject patterns.
+
+    Matches if:
+    - Sender domain matches a known financial institution, OR
+    - Subject matches finance/banking patterns (statement, payment due, etc.)
+    """
+    if not email_from and not subject:
+        return False
+    from_lower = (email_from or "").lower()
+    subject_lower = (subject or "").lower()
+
+    # Check sender domain
+    if any(domain in from_lower for domain in _FINANCE_SENDER_DOMAINS):
+        return True
+
+    # Check subject patterns (only if sender is noreply-style to avoid false positives)
+    if _is_noreply_sender(email_from) and any(pat in subject_lower for pat in _FINANCE_SUBJECT_PATTERNS):
+        return True
+
+    return False
+
+
+def ensure_auto_bundles_exist(owner_id: str):
+    """Ensure the three system auto-bundles exist for a user.
+
+    Creates them if missing. These are non-removable system bundles
+    placed after user bundles but before "Everything Else".
+    Does NOT create rules — classification is done directly by signal detection.
+
+    Also handles migration: renames "Newsletters" to "Junk" if it exists
+    as a non-removable auto-bundle from a prior version.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Migration: rename "Newsletters" → "Junk" if it's a non-removable auto-bundle
+        cursor.execute(
+            "SELECT id FROM bundles WHERE owner_id = ? AND name = 'Newsletters' AND removable = 0",
+            (owner_id,),
+        )
+        newsletters_row = cursor.fetchone()
+        if newsletters_row:
+            # Check if "Junk" already exists
+            cursor.execute(
+                "SELECT id FROM bundles WHERE owner_id = ? AND name = 'Junk'",
+                (owner_id,),
+            )
+            if not cursor.fetchone():
+                # Rename Newsletters → Junk
+                _rename_bundle_tags(cursor, owner_id, "Newsletters", "Junk")
+                cursor.execute(
+                    "UPDATE bundles SET name = 'Junk', description = 'Emails with unsubscribe links (marketing, newsletters, junk)', modified_datetime = ? WHERE id = ?",
+                    (datetime.utcnow().isoformat(), newsletters_row[0]),
+                )
+                conn.commit()
+                logger.info(f"Renamed auto-bundle 'Newsletters' → 'Junk' for user {owner_id}")
+
+        # Get existing bundle names
+        cursor.execute(
+            "SELECT name FROM bundles WHERE owner_id = ?", (owner_id,)
+        )
+        existing_names = {row[0] for row in cursor.fetchall()}
+
+        # Get the current max display_order (before "Everything Else")
+        cursor.execute(
+            "SELECT MAX(display_order) FROM bundles WHERE owner_id = ? AND name != 'Everything Else'",
+            (owner_id,),
+        )
+        max_order_row = cursor.fetchone()
+        next_order = (max_order_row[0] + 1) if max_order_row and max_order_row[0] is not None else 0
+
+        current_time = datetime.utcnow().isoformat()
+        auto_bundles = [
+            (AUTO_BUNDLE_NEWSLETTERS, "Emails with unsubscribe links (marketing, newsletters, junk)"),
+            (AUTO_BUNDLE_RECEIPTS, "Order confirmations, invoices, payment receipts"),
+            (AUTO_BUNDLE_FINANCE, "Banking, bills, statements, financial alerts"),
+            (AUTO_BUNDLE_CALENDAR, "Calendar invitations and event updates"),
+        ]
+
+        created = 0
+        for name, description in auto_bundles:
+            if name not in existing_names:
+                bundle_id = str(uuid4())
+                cursor.execute(
+                    """INSERT INTO bundles (id, owner_id, name, description, display_order,
+                       is_default, removable, created_datetime, modified_datetime)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (bundle_id, owner_id, name, description,
+                     next_order, 1, 0, current_time, current_time),
+                )
+                next_order += 1
+                created += 1
+
+        # Ensure "Everything Else" is always last
+        if created > 0:
+            cursor.execute(
+                "UPDATE bundles SET display_order = ? WHERE owner_id = ? AND name = 'Everything Else'",
+                (next_order, owner_id),
+            )
+
+        conn.commit()
+        if created > 0:
+            logger.info(f"Created {created} auto-bundles for user {owner_id}")
+    except Exception as e:
+        logger.error(f"Error ensuring auto-bundles: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def classify_email_auto_bundles(parsed: dict, chit_id: str, owner_id: str):
+    """Classify an email into auto-bundles based on signal detection.
+
+    Called during IMAP sync AFTER the chit is created. Checks:
+    1. Junk/Newsletters: has_list_unsubscribe AND sender not in another bundle
+    2. Receipts: noreply sender + transactional subject
+    3. Calendar Invites: has text/calendar MIME part
+
+    If the sender is already classified into a user-created bundle,
+    the Junk auto-bundle is skipped (sender is "promoted").
+
+    Looks up actual bundle names from DB (handles user renames).
+
+    Args:
+        parsed: The parsed email dict from _parse_email_message (with signal fields).
+        chit_id: The ID of the created chit.
+        owner_id: The user/owner ID.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Look up actual auto-bundle names (user may have renamed them)
+        # Auto-bundles are non-removable (removable=0) and not "Everything Else"
+        # Skip disabled bundles (display_order = -1)
+        cursor.execute(
+            "SELECT name, description FROM bundles WHERE owner_id = ? AND removable = 0 AND name != 'Everything Else' AND display_order != -1",
+            (owner_id,),
+        )
+        auto_bundle_rows = cursor.fetchall()
+
+        # Identify bundles by their description (stable even after rename)
+        junk_bundle_name = None
+        receipts_bundle_name = None
+        finance_bundle_name = None
+        calendar_bundle_name = None
+        for name, desc in auto_bundle_rows:
+            desc_lower = (desc or "").lower()
+            if "unsubscribe" in desc_lower or "junk" in desc_lower or "newsletter" in desc_lower:
+                junk_bundle_name = name
+            elif "receipt" in desc_lower or "order confirmation" in desc_lower:
+                receipts_bundle_name = name
+            elif "banking" in desc_lower or "bills" in desc_lower or "financial" in desc_lower:
+                finance_bundle_name = name
+            elif "calendar" in desc_lower or "invitation" in desc_lower:
+                calendar_bundle_name = name
+
+        if not junk_bundle_name and not receipts_bundle_name and not calendar_bundle_name and not finance_bundle_name:
+            return  # No auto-bundles found
+
+        # Load current tags on the chit
+        cursor.execute("SELECT tags FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+        tags = deserialize_json_field(row[0]) or []
+
+        # Build set of auto-bundle tags for exclusion check
+        auto_tags = set()
+        if junk_bundle_name:
+            auto_tags.add(f"CWOC_System/Bundle/{junk_bundle_name}")
+        if receipts_bundle_name:
+            auto_tags.add(f"CWOC_System/Bundle/{receipts_bundle_name}")
+        if finance_bundle_name:
+            auto_tags.add(f"CWOC_System/Bundle/{finance_bundle_name}")
+        if calendar_bundle_name:
+            auto_tags.add(f"CWOC_System/Bundle/{calendar_bundle_name}")
+        auto_tags.add("CWOC_System/Bundle/Everything Else")
+
+        # Check if already in a non-auto bundle (user-created bundle = "promoted")
+        has_user_bundle = any(
+            t.startswith("CWOC_System/Bundle/") and t not in auto_tags
+            for t in tags if isinstance(t, str)
+        )
+
+        added_tags = []
+
+        # 1. Calendar Invites — highest priority, always applies
+        if calendar_bundle_name and parsed.get("has_calendar_attachment"):
+            tag = f"CWOC_System/Bundle/{calendar_bundle_name}"
+            if tag not in tags:
+                added_tags.append(tag)
+
+        # 2. Finance — known financial domains or finance subject patterns
+        email_from = parsed.get("email_from", "")
+        subject = parsed.get("email_subject", "")
+        if finance_bundle_name and _is_finance_email(email_from, subject):
+            tag = f"CWOC_System/Bundle/{finance_bundle_name}"
+            if tag not in tags:
+                added_tags.append(tag)
+
+        # 3. Receipts — noreply sender + transactional subject (skip if already Finance)
+        if receipts_bundle_name and _is_noreply_sender(email_from) and _is_receipt_subject(subject):
+            finance_tag = f"CWOC_System/Bundle/{finance_bundle_name}" if finance_bundle_name else ""
+            if finance_tag not in tags and finance_tag not in added_tags:
+                tag = f"CWOC_System/Bundle/{receipts_bundle_name}"
+                if tag not in tags:
+                    added_tags.append(tag)
+
+        # 3. Junk — List-Unsubscribe present, but NOT if sender is in a user bundle
+        if junk_bundle_name and parsed.get("has_list_unsubscribe") and not has_user_bundle:
+            # Also skip if already classified as Receipts or Calendar
+            skip = False
+            if receipts_bundle_name:
+                rt = f"CWOC_System/Bundle/{receipts_bundle_name}"
+                if rt in tags or rt in added_tags:
+                    skip = True
+            if calendar_bundle_name and not skip:
+                ct = f"CWOC_System/Bundle/{calendar_bundle_name}"
+                if ct in tags or ct in added_tags:
+                    skip = True
+            if not skip:
+                tag = f"CWOC_System/Bundle/{junk_bundle_name}"
+                if tag not in tags:
+                    added_tags.append(tag)
+
+        # Apply tags
+        if added_tags:
+            tags.extend(added_tags)
+            cursor.execute(
+                "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",
+                (serialize_json_field(tags), datetime.utcnow().isoformat(), chit_id),
+            )
+            conn.commit()
+            logger.info(
+                f"[AutoBundle] chit {chit_id[:8]} → {', '.join(t.split('/')[-1] for t in added_tags)}"
+            )
+
+    except Exception as e:
+        logger.error(f"[AutoBundle] Error classifying chit {chit_id}: {e}")
     finally:
         if conn:
             conn.close()

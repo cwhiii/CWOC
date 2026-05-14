@@ -119,7 +119,13 @@ function changePeriod() {
   if (!sel) return;
   _weekViewDayOffset = 0;
   currentView = sel.value;
-  if (currentView === 'SevenDay') currentWeekStart = new Date();
+  _updateUrlHash();
+  if (currentView === 'SevenDay' || currentView === 'Itinerary') {
+    currentWeekStart = new Date();
+    currentWeekStart.setHours(0, 0, 0, 0);
+  } else if (currentView === 'Work') {
+    currentWeekStart = getWeekStart(new Date());
+  }
   // Show/hide calendar options (compress/scroll toggle) for Month view
   var calOpts = document.getElementById('section-cal-options');
   if (calOpts) calOpts.style.display = (currentView === 'Month') ? '' : 'none';
@@ -130,7 +136,7 @@ function changePeriod() {
 function goToToday() {
   var now = new Date();
   _weekViewDayOffset = 0;
-  if (currentView === 'Week') currentWeekStart = getWeekStart(now);
+  if (currentView === 'Week' || currentView === 'Work') currentWeekStart = getWeekStart(now);
   else if (currentView === 'Month') currentWeekStart = getMonthStart(now);
   else if (currentView === 'Year') currentWeekStart = getYearStart(now);
   else currentWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -143,12 +149,16 @@ function previousPeriod() {
   _weekViewDayOffset = 0;
   if (currentView === "Day") {
     currentWeekStart.setDate(currentWeekStart.getDate() - 1);
-  } else if (currentView === "Week") {
+  } else if (currentView === "Week" || currentView === "Work") {
     currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+  } else if (currentView === "SevenDay") {
+    currentWeekStart.setDate(currentWeekStart.getDate() - (_customDaysCount || 7));
   } else if (currentView === "Month") {
     currentWeekStart.setMonth(currentWeekStart.getMonth() - 1);
   } else if (currentView === "Year") {
     currentWeekStart.setFullYear(currentWeekStart.getFullYear() - 1);
+  } else if (currentView === "Itinerary") {
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
   }
   updateDateRange();
   displayChits();
@@ -159,12 +169,16 @@ function nextPeriod() {
   _weekViewDayOffset = 0;
   if (currentView === "Day") {
     currentWeekStart.setDate(currentWeekStart.getDate() + 1);
-  } else if (currentView === "Week") {
+  } else if (currentView === "Week" || currentView === "Work") {
     currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  } else if (currentView === "SevenDay") {
+    currentWeekStart.setDate(currentWeekStart.getDate() + (_customDaysCount || 7));
   } else if (currentView === "Month") {
     currentWeekStart.setMonth(currentWeekStart.getMonth() + 1);
   } else if (currentView === "Year") {
     currentWeekStart.setFullYear(currentWeekStart.getFullYear() + 1);
+  } else if (currentView === "Itinerary") {
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
   }
   updateDateRange();
   displayChits();
@@ -185,7 +199,7 @@ function updateDateRange() {
   if (currentView === "Day") {
     yearElement.textContent = currentWeekStart.getFullYear() + ' · ' + monthNames[currentWeekStart.getMonth()];
     rangeElement.textContent = formatDate(currentWeekStart);
-  } else if (currentView === "Week") {
+  } else if (currentView === "Week" || currentView === "Work") {
     var start = new Date(currentWeekStart);
     var end = new Date(start);
     end.setDate(start.getDate() + 6);
@@ -194,7 +208,13 @@ function updateDateRange() {
   } else if (currentView === "SevenDay") {
     var start = new Date(currentWeekStart);
     var end = new Date(start);
-    end.setDate(start.getDate() + (_customDaysCount - 1));
+    end.setDate(start.getDate() + ((_customDaysCount || 7) - 1));
+    yearElement.textContent = start.getFullYear() + ' · ' + monthNames[start.getMonth()];
+    rangeElement.innerHTML = formatWeekRange(start, end);
+  } else if (currentView === "Itinerary") {
+    var start = new Date(currentWeekStart);
+    var end = new Date(start);
+    end.setDate(start.getDate() + 6);
     yearElement.textContent = start.getFullYear() + ' · ' + monthNames[start.getMonth()];
     rangeElement.innerHTML = formatWeekRange(start, end);
   } else if (currentView === "Month") {
@@ -1026,13 +1046,13 @@ function displayItineraryView(chitsToDisplay) {
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const now = new Date();
-  const today = new Date(now);
+  const today = new Date(currentWeekStart);
   today.setHours(0, 0, 0, 0);
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  // End of week (7 days from today start)
+  // End of week (7 days from anchor start)
   const weekEnd = new Date(today);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
@@ -1629,6 +1649,7 @@ function displayYearView(chitsToDisplay) {
         currentView = "Day";
         currentWeekStart = dayDate;
         document.getElementById("period-select").value = "Day";
+        _updateUrlHash();
         updateDateRange();
         displayChits();
       });
@@ -1816,12 +1837,12 @@ function displaySevenDayView(chitsToDisplay, opts) {
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
   const numDays = _customDaysCount || 7;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const startDate = new Date(currentWeekStart);
+  startDate.setHours(0, 0, 0, 0);
   const allSevenDays = [];
   for (let i = 0; i < numDays; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
     allSevenDays.push(d);
   }
 

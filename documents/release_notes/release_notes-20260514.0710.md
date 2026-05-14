@@ -1,0 +1,1 @@
+Upgraded OpenPGP.js from 5.11.2 to 5.11.3 (security patch for CVE-2025-47934). Added onerror handlers to all contact/user profile image tags — when an image_url is set in the DB but the file is missing, it now shows a ⚠ indicator and logs a console.warn with the contact name and missing path, so you know which contact has a broken image reference.

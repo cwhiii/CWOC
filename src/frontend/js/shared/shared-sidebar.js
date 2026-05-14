@@ -81,13 +81,13 @@ function _cwocInjectSidebar() {
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="inbox" checked onchange="_setEmailSubFilter(\'inbox\')"> <i class="fas fa-inbox"></i> Inbox</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="sent" onchange="_setEmailSubFilter(\'sent\')"> <i class="fas fa-paper-plane"></i> Sent</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="drafts" onchange="_setEmailSubFilter(\'drafts\')"> <i class="fas fa-file-alt"></i> Drafts</label>';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="scheduled" onchange="_setEmailSubFilter(\'scheduled\')"> <i class="fas fa-clock"></i> Scheduled</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="email-trash" onchange="window.location.href=\'/frontend/html/trash.html?filter=email\'"> <i class="fas fa-trash-alt"></i> Trash</label>';
   html += '      </div>';
   html += '    </div>';
   html += '  </div>';
   html += '  <div class="filter-group" style="margin-top:8px;">';
-  html += '    <label class="email-folder-opt" style="cursor:pointer;"><input type="checkbox" id="email-threaded-toggle" onchange="_toggleEmailThreadedView()" checked> <i class="fas fa-layer-group"></i> Group threads</label>';
-  html += '    <label class="email-folder-opt" style="cursor:pointer;margin-top:4px;"><input type="checkbox" id="email-unread-top-toggle" onchange="_toggleEmailUnreadTop()"> <i class="fas fa-envelope"></i> Unread at top</label>';
+  html += '    <label class="email-folder-opt" style="cursor:pointer;"><input type="checkbox" id="email-unread-top-toggle" onchange="_toggleEmailUnreadTop()"> <i class="fas fa-envelope"></i> Unread at top</label>';
   html += '  </div>';
   html += '</div>';
 
@@ -167,10 +167,11 @@ function _cwocInjectSidebar() {
   /* 3c. Alarms view mode toggle (only visible on Alarms tab) */
   html += '<div class="sidebar-section" id="section-alarms-mode" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
-  html += '  <div style="display:flex;gap:4px;">';
-  html += '    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📋 Chits</button>';
-  html += '    <button class="action-button" id="alarms-mode-independent" onclick="_setAlarmsMode(\'independent\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🛎️ Independent</button>';
-  html += '    <button class="action-button" id="alarms-mode-notifications" onclick="_setAlarmsMode(\'notifications\')" title="Notifications" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔔 Notifs</button>';
+  html += '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">';
+  html += '    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode(\'list\')" style="margin-bottom:0;font-size:0.8em;padding:6px;">📋 Chits</button>';
+  html += '    <button class="action-button" id="alarms-mode-independent" onclick="_setAlarmsMode(\'independent\')" style="margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">🛎️ Independent</button>';
+  html += '    <button class="action-button" id="alarms-mode-notifications" onclick="_setAlarmsMode(\'notifications\')" style="margin-bottom:0;font-size:0.8em;padding:6px;">🔔 Notifs</button>';
+  html += '    <button class="action-button" id="alarms-mode-reminders" onclick="_setAlarmsMode(\'reminders\')" style="margin-bottom:0;font-size:0.8em;padding:6px;">📢 Reminders</button>';
   html += '  </div>';
   html += '</div>';
 
@@ -191,6 +192,11 @@ function _cwocInjectSidebar() {
   html += '      <option value="90">Last 90 days</option>';
   html += '      <option value="all">All time</option>';
   html += '    </select>';
+  html += '    <label class="sidebar-section-label" style="margin-top:8px;">Rule Habits</label>';
+  html += '    <label class="cwoc-checkbox-label" style="font-size:0.85em;cursor:pointer;display:flex;align-items:center;gap:4px;">';
+  html += '      <input type="checkbox" id="habits-include-rules-cb" onchange="_onHabitsIncludeRulesChange(this.checked)" />';
+  html += '      Include in success rate';
+  html += '    </label>';
   html += '  </div>';
   html += '</div>';
 
@@ -284,7 +290,6 @@ function _cwocInjectSidebar() {
   html += '      <span class="section-toggle">▶</span> Tags';
   html += '    </label>';
   html += '    <div class="filter-group-body" style="display:none;">';
-  html += '      <input type="text" id="tag-filter-search" placeholder="Search tags..." oninput="_filterTagCheckboxes()" style="width:100%;padding:3px 6px;font-size:0.8em;margin-bottom:3px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;" />';
   html += '      <div class="multi-select" id="label-multi"></div>';
   html += '      <button class="filter-clear-btn" onclick="clearFilterGroup(\'label-multi\')">Clear</button>';
   html += '    </div>';
@@ -323,17 +328,17 @@ function _cwocInjectSidebar() {
   html += '    </label>';
   html += '    <div class="filter-group-body" style="display:none;">';
   html += '      <div class="multi-select">';
-  html += '        <label><input type="checkbox" id="show-pinned" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>';
+  html += '        <label><input type="checkbox" id="show-pinned" checked /> 📌 Pinned</label>';
   html += '        <label><input type="checkbox" id="show-archived" /> 📦 Archived</label>';
   html += '        <label><input type="checkbox" id="show-snoozed" /> 😴 Snoozed</label>';
   html += '        <label><input type="checkbox" id="show-unmarked" checked /> 📄 Unmarked</label>';
   html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
-  html += '        <label><input type="checkbox" id="hide-past-due" /> 🚫 Hide Past-Due</label>';
-  html += '        <label><input type="checkbox" id="hide-complete" /> ✅ Hide Complete</label>';
-  html += '        <label><input type="checkbox" id="hide-declined" /> 🚫 Hide Declined</label>';
-  html += '        <label><input type="checkbox" id="hide-habits" /> 🎯 Hide Habits</label>';
-  html += '        <label><input type="checkbox" id="show-email-received" /> 📨 Show Email (Received)</label>';
-  html += '        <label><input type="checkbox" id="show-email-sent" /> 📤 Show Email (Sent)</label>';
+  html += '        <label><input type="checkbox" id="show-past-due" checked /> ⏰ Past-Due</label>';
+  html += '        <label><input type="checkbox" id="show-complete" checked /> ✅ Complete</label>';
+  html += '        <label><input type="checkbox" id="show-declined" checked /> ✗ Declined</label>';
+  html += '        <label><input type="checkbox" id="show-habits" checked /> 🎯 Habits</label>';
+  html += '        <label><input type="checkbox" id="show-email-received" /> 📨 Email (Received)</label>';
+  html += '        <label><input type="checkbox" id="show-email-sent" /> 📤 Email (Sent)</label>';
   html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
   html += '        <label><input type="checkbox" id="filter-shared-with-me" /> 🔗 Shared with me</label>';
   html += '        <label><input type="checkbox" id="filter-shared-by-me" /> 📤 Shared by me</label>';
@@ -484,6 +489,10 @@ function _cwocInitSidebar(context) {
   if (createBtn) {
     createBtn.onclick = function() { _cb('onCreateChit')(); };
     createBtn.onauxclick = function() { window.open('/frontend/html/editor.html', '_blank'); };
+    createBtn.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (typeof _openQuickAlertModal === 'function') _openQuickAlertModal();
+    });
   }
 
   /* Wire email sidebar Check Mail button */
@@ -525,6 +534,14 @@ function _cwocInitSidebar(context) {
   if (weatherBtn) {
     weatherBtn.id = 'cal-weather-btn'; /* preserve ID for existing CSS/hotkey references */
     weatherBtn.onclick = function(e) { _cb('onWeatherClick')(e); };
+    // Mobile long-press → open weather modal (equivalent to shift+click)
+    if (typeof enableLongPress === 'function') {
+      enableLongPress(weatherBtn, function() {
+        if (typeof _openWeatherModal === 'function') {
+          _openWeatherModal();
+        }
+      });
+    }
   }
 
   /* Maps */
@@ -587,6 +604,12 @@ function _cwocInitSidebar(context) {
   var clearAllBtn = document.getElementById('sidebar-clear-all-btn');
   if (clearAllBtn) clearAllBtn.onclick = function() {
     _cb('onClearFilters')();
+    _updateClearAllButton();
+  };
+
+  var resetDefaultsBtn = document.getElementById('reset-defaults-btn');
+  if (resetDefaultsBtn) resetDefaultsBtn.onclick = function() {
+    if (typeof _resetDefaultFilters === 'function') _resetDefaultFilters();
     _updateClearAllButton();
   };
 
@@ -685,7 +708,7 @@ function _wireFilterCheckboxes(context) {
   }
 
   /* Display checkboxes (show-pinned, show-archived, show-snoozed, etc.) */
-  var displayIds = ['show-pinned', 'show-archived', 'show-snoozed', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'show-email-received', 'show-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
+  var displayIds = ['show-pinned', 'show-archived', 'show-snoozed', 'show-unmarked', 'show-past-due', 'show-complete', 'show-declined', 'show-habits', 'show-email-received', 'show-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
   displayIds.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.onchange = function() { cb(); };
@@ -729,19 +752,19 @@ function _updateClearAllButton() {
   var showPinned = document.getElementById('show-pinned');
   var showArchived = document.getElementById('show-archived');
   var showUnmarked = document.getElementById('show-unmarked');
-  var hidePastDue = document.getElementById('hide-past-due');
-  var hideComplete = document.getElementById('hide-complete');
-  var hideDeclined = document.getElementById('hide-declined');
-  var hideHabits = document.getElementById('hide-habits');
+  var showPastDue = document.getElementById('show-past-due');
+  var showComplete = document.getElementById('show-complete');
+  var showDeclined = document.getElementById('show-declined');
+  var showHabits = document.getElementById('show-habits');
   var showEmailReceived = document.getElementById('show-email-received');
   var showEmailSent = document.getElementById('show-email-sent');
   var hasDisplayFilter = (showPinned && !showPinned.checked)
     || (showArchived && showArchived.checked)
     || (showUnmarked && !showUnmarked.checked)
-    || (hidePastDue && hidePastDue.checked)
-    || (hideComplete && hideComplete.checked)
-    || (hideDeclined && hideDeclined.checked)
-    || (hideHabits && hideHabits.checked)
+    || (showPastDue && !showPastDue.checked)
+    || (showComplete && !showComplete.checked)
+    || (showDeclined && !showDeclined.checked)
+    || (showHabits && !showHabits.checked)
     || (showEmailReceived && showEmailReceived.checked)
     || (showEmailSent && showEmailSent.checked);
 

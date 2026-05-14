@@ -505,6 +505,108 @@ Time format, tag management with color picker and tree view, custom colors, visu
 
 ---
 
+## Home Assistant Integration (HACS Distribution)
+
+CWOC includes a custom Home Assistant integration that exposes chit data as sensors and provides services for creating/updating chits from HA automations. The integration source lives in the private repo at `ha_integration/custom_components/cwoc/` and is distributed via a separate **public** GitHub repository (`cwoc-ha-integration`) so users can install it through HACS without exposing the CWOC backend source.
+
+### Architecture
+
+```
+Private Repo (this repo)              Public Repo (cwoc-ha-integration)
+─────────────────────────             ─────────────────────────────────
+ha_integration/                       custom_components/cwoc/  ← copied from private
+  custom_components/cwoc/               manifest.json (semver version)
+    __init__.py                       hacs.json
+    manifest.json                     info.md
+    config_flow.py                    README.md
+    coordinator.py
+    sensor.py
+    services.py
+    ...
+  hacs.json
+  info.md
+  README.md
+  cwoc-release.sh  ← syncs to public repo
+```
+
+### Release Script (`ha_integration/cwoc-release.sh`)
+
+A single bash script handles both server deployment and HA integration publishing:
+
+```bash
+# Default: build CWOC.zip and upload to FTP (server release only)
+./ha_integration/cwoc-release.sh
+
+# Also sync HA integration to public repo (prints manual git instructions)
+./ha_integration/cwoc-release.sh --ha
+
+# Full auto: sync + commit + tag + push to GitHub
+./ha_integration/cwoc-release.sh --ha --push
+```
+
+**Phases:**
+1. **Validation** — checks `src/VERSION`, `~/.cwoc-release.conf` (FTP creds), required directories
+2. **Build zip** — creates `CWOC.zip` with `src/`, `install/`, `documents/`, `ha_integration/`
+3. **FTP upload** — uploads zip to web server via curl
+4. **HA sync** (if `--ha`) — copies integration files + metadata to public repo, stamps `manifest.json` with the version from `src/VERSION`
+5. **Git** (if `--ha --push`) — commits, tags with the version, pushes; otherwise prints manual commands
+
+**Config file** (`~/.cwoc-release.conf`):
+```bash
+FTP_HOST="ftp.cwholemaniii.com"
+FTP_USER="<username>"
+FTP_PASS="<password>"
+FTP_PATH="/code/cwoc/releases/"
+PUBLIC_REPO_PATH="../cwoc-ha-integration"   # optional, defaults to this
+```
+
+### Versioning
+
+Both CWOC and the HA integration use the same `YYYYMMDD.HHMM` CalVer format (e.g., `20260514.0633`). The version is read from `src/VERSION` and stamped into the public repo's `manifest.json` automatically by the release script. No separate version management needed — Home Assistant's AwesomeVersion library supports CalVer natively.
+
+### First-Time Setup (Manual Steps)
+
+These are one-time steps to get the HACS distribution pipeline working:
+
+1. **Create the public repo** — Create `cwoc-ha-integration` on GitHub (public, empty — no README/license/gitignore). Clone it as a sibling directory:
+   ```bash
+   cd /path/to/parent-of-CWOC
+   git clone git@github.com:cwhiii/cwoc-ha-integration.git
+   ```
+
+2. **Create the FTP config** — The release script reads credentials from `~/.cwoc-release.conf`:
+   ```bash
+   cat > ~/.cwoc-release.conf << 'EOF'
+   FTP_HOST="ftp.cwholemaniii.com"
+   FTP_USER="your-ftp-username"
+   FTP_PASS="your-ftp-password"
+   FTP_PATH="/code/cwoc/releases/"
+   EOF
+   chmod 600 ~/.cwoc-release.conf
+   ```
+
+3. **Run the first release** — From the CWOC repo root:
+   ```bash
+   ./ha_integration/cwoc-release.sh --ha --push
+   ```
+
+4. **Create a GitHub Release** — Go to `https://github.com/cwhiii/cwoc-ha-integration/releases`, create a release from the tag that was just pushed (it'll match `src/VERSION`, e.g. `20260514.0633`) with brief notes. HACS uses GitHub releases for version detection and update notifications.
+
+5. **Verify in HACS** — In Home Assistant: HACS → ⋮ → Custom repositories → add `https://github.com/cwhiii/cwoc-ha-integration` (type: Integration) → search "CWOC" → Install → Restart HA.
+
+After this initial setup, future releases only require running `./ha_integration/cwoc-release.sh --ha --push` and creating a GitHub release for the new tag.
+
+### HACS Installation Flow (End User)
+
+1. Open HACS in Home Assistant
+2. Add `https://github.com/cwhiii/cwoc-ha-integration` as a custom repository (type: Integration)
+3. Search "CWOC" → Install → Restart HA
+4. Settings → Integrations → Add → search "CWOC" → enter server URL + credentials
+
+No SSH, no file copying required.
+
+---
+
 ## Visual Theme
 
 1940s parchment/magic aesthetic with brown tones, Courier New font, and parchment background textures. CSS variables are defined in:

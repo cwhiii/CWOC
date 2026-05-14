@@ -65,6 +65,7 @@
                             <li><a href="#network-access">Dependent Apps</a></li>
                             <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
                             <li><a href="#home-assistant">Home Assistant</a></li>
+                            <li><a href="#cron-triggers">Cron Triggers & Habit Rules</a></li>
                             <li><a href="#install-app">Install as App</a></li>
                         </ul>
                     </div>
@@ -405,37 +406,37 @@
                 <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
                 <li><strong>Boolean Operators</strong> — <code>&&</code> (AND, default), <code>||</code> (OR), <code>!</code> (NOT), <code>()</code> (grouping). Multiple terms without operators default to AND. Example: <code>(meeting || lunch) && #work && !cancelled</code></li>
                 <li><strong>Tag Search</strong> — Prefix with <code>#</code> to match tags: <code>#work</code>, <code>#personal/health</code>. Parent tags match sub-tags.</li>
-                <li><strong>Field-Scoped Search</strong> — Use <code>field:value</code> to search only within a specific field. For multi-word values, use parentheses: <code>field:(multi word value)</code>. This restricts matching to only the named field instead of searching all fields.</li>
+                <li><strong>Field-Scoped Search</strong> — Use <code>field::value</code> to search only within a specific field. For multi-word values, use parentheses: <code>field::(multi word value)</code>. This restricts matching to only the named field instead of searching all fields.</li>
             </ul>
             <h4>Available Field Prefixes</h4>
             <ul>
-                <li><code>title:</code> — Chit title</li>
-                <li><code>note:</code> / <code>notes:</code> — Note/body content</li>
-                <li><code>location:</code> / <code>loc:</code> — Location field</li>
-                <li><code>status:</code> — Status (ToDo, In Progress, Blocked, Complete, Rejected)</li>
-                <li><code>priority:</code> — Priority level</li>
-                <li><code>severity:</code> — Severity level</li>
-                <li><code>people:</code> / <code>person:</code> — People field</li>
-                <li><code>assigned:</code> / <code>assigned_to:</code> — Assigned user</li>
-                <li><code>checklist:</code> — Checklist item text</li>
-                <li><code>child:</code> — Child chit titles (for projects)</li>
-                <li><code>subject:</code> — Email subject / title</li>
-                <li><code>sender:</code> / <code>from:</code> — Email sender</li>
-                <li><code>to:</code> — Email recipients</li>
-                <li><code>cc:</code> — Email CC</li>
-                <li><code>bcc:</code> — Email BCC</li>
-                <li><code>body:</code> — Email body / note content</li>
-                <li><code>due:</code> / <code>start:</code> / <code>end:</code> — Date fields</li>
-                <li><code>color:</code> — Chit color</li>
+                <li><code>title::</code> — Chit title</li>
+                <li><code>note::</code> / <code>notes::</code> — Note/body content</li>
+                <li><code>location::</code> / <code>loc::</code> — Location field</li>
+                <li><code>status::</code> — Status (ToDo, In Progress, Blocked, Complete, Rejected)</li>
+                <li><code>priority::</code> — Priority level</li>
+                <li><code>severity::</code> — Severity level</li>
+                <li><code>people::</code> / <code>person::</code> — People field</li>
+                <li><code>assigned::</code> / <code>assigned_to::</code> — Assigned user</li>
+                <li><code>checklist::</code> — Checklist item text</li>
+                <li><code>child::</code> — Child chit titles (for projects)</li>
+                <li><code>subject::</code> — Email subject / title</li>
+                <li><code>sender::</code> / <code>from::</code> — Email sender</li>
+                <li><code>to::</code> — Email recipients</li>
+                <li><code>cc::</code> — Email CC</li>
+                <li><code>bcc::</code> — Email BCC</li>
+                <li><code>body::</code> — Email body / note content</li>
+                <li><code>due::</code> / <code>start::</code> / <code>end::</code> — Date fields</li>
+                <li><code>color::</code> — Chit color</li>
             </ul>
             <h4>Field Search Examples</h4>
             <ul>
-                <li><code>title:email</code> — Chits with "email" in the title only</li>
-                <li><code>title:(email stuff)</code> — Chits with "email stuff" in the title</li>
-                <li><code>location:park && people:john</code> — Location contains "park" AND people contains "john"</li>
-                <li><code>child:deploy && !#done</code> — Projects with a child chit titled "deploy", excluding #done tag</li>
-                <li><code>sender:boss || from:ceo</code> — Emails from "boss" or "ceo"</li>
-                <li><code>status:blocked && priority:high</code> — Blocked high-priority tasks</li>
+                <li><code>title::email</code> — Chits with "email" in the title only</li>
+                <li><code>title::(email stuff)</code> — Chits with "email stuff" in the title</li>
+                <li><code>location::park && people::john</code> — Location contains "park" AND people contains "john"</li>
+                <li><code>child::deploy && !#done</code> — Projects with a child chit titled "deploy", excluding #done tag</li>
+                <li><code>sender::boss || from::ceo</code> — Emails from "boss" or "ceo"</li>
+                <li><code>status::blocked && priority::high</code> — Blocked high-priority tasks</li>
             </ul>
             <h3 id="trash">Trash</h3>
             <p>When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from Settings → Data.</p>
@@ -493,7 +494,7 @@
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes view). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits. Creating from the Indicators view auto-sets Point in Time to the current date/time and marks the chit Complete.</p>
             <h4>Alerts Zone</h4>
             <p>Add notifications, alarms, timers, and stopwatches. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit.</p>
-            <p>Notifications fire relative to a chit's date/time fields. The first dropdown selects the direction: <strong>At</strong> (fires exactly at the target time), <strong>Before</strong>, <strong>After</strong>, or <strong>Desktop</strong> (fires next time the page is opened). For Before/After, a number and unit (minutes/hours/days/weeks) appear to set the offset. A target dropdown then shows the available reference points based on the active date mode: start/end for Start/End mode, due for Due mode, or point for Point in Time mode. For habit chits, the timing changes to "before end of [day/week/month/year]" based on the habit's cycle frequency, and a "disable if done" checkbox suppresses the notification when the habit goal is already met for the current period.</p>
+            <p>Notifications fire relative to a chit's date/time fields. The first dropdown selects the direction: <strong>At</strong> (fires exactly at the target time), <strong>Before</strong>, <strong>After</strong>, or <strong>Desktop</strong> (fires next time the page is opened). For Before/After, a number and unit (minutes/hours/days/weeks) appear to set the offset. A target dropdown then shows the available reference points based on the active date mode: start/end for Start/End mode, due for Due mode, or point for Point in Time mode. For habit chits, a <strong>Will Be Missed Within</strong> option appears as the primary choice — set a number and unit to be notified when the habit goal hasn't been met and the cycle end is approaching (e.g., "will be missed within 2 hours"). This automatically suppresses when the goal is already met. The <strong>Before</strong> option is also available for habits, targeting "end of [day/week/month/year]" based on the habit's cycle frequency, with a "disable if done" checkbox to suppress when the goal is met.</p>
             <p><strong>Weather Notifications:</strong> When a chit has a location (and weather data has been fetched), the notification direction dropdown includes a <strong>Weather Condition</strong> option alongside Desktop, At, Before, and After. Select it to configure a weather-based alert: choose a condition (high above/below, low above/below, rain, snow, hail, or wind gusts over a threshold). Temperature thresholds use your configured unit system (°F or °C); wind uses mph or km/h. When the forecast for the chit's date meets the condition, a notification fires on the dashboard and in the editor.</p>
             <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
             <h4>Independent Alerts Board</h4>
@@ -513,11 +514,18 @@
                 <li><strong>Cascade</strong> — When a chit is marked Complete, any chits that had it as their last incomplete prerequisite are automatically unblocked</li>
             </ul>
             <h4>Checklist Zone</h4>
-            <p>The checklist zone header includes two utility buttons:</p>
+            <p>The checklist zone header includes a <strong>Data</strong> menu (⋮) with clipboard and management actions:</p>
             <ul>
-                <li><strong>🏁 Auto-Complete</strong> — Click to cycle through: Off → Auto-Complete (marks chit "Complete" when last item is checked) → Auto-Complete + Archive (also archives the chit) → Off</li>
-                <li><strong>← Notes</strong> — Appends note lines as new checklist items. Recognizes markdown checklist syntax (<code>- [ ]</code> / <code>- [x]</code>), bullet points, and plain lines. Indentation is preserved.</li>
+                <li><strong>Paste as list items</strong> — Reads your clipboard and creates each line as a new checklist item. Recognizes markdown checklist syntax (<code>- [ ]</code> / <code>- [x]</code>), bullet points, numbered lists, and plain lines. Indentation is preserved as nesting levels.</li>
+                <li><strong>Copy incomplete to clipboard</strong> — Copies all unchecked items to your clipboard as markdown checklist lines (<code>- [ ] item</code>), preserving indentation.</li>
+                <li><strong>Delete checked/unchecked items</strong> — Bulk remove completed or incomplete items.</li>
+                <li><strong>Clean up empty items</strong> — Remove items with no text.</li>
+                <li><strong>Move to note</strong> — Converts all checklist items to markdown in the Notes zone.</li>
+                <li><strong>Send to another chit</strong> — Transfer checklist items to a different chit.</li>
+                <li><strong>Print checklist</strong> — Open a print dialog for the checklist.</li>
+                <li><strong>Auto-save toggle</strong> — Enable/disable automatic saving on checklist changes.</li>
             </ul>
+            <p>Additionally, the header has <strong>Undo/Redo</strong> buttons (↺/↻) and the <strong>🏁 Auto-Complete</strong> cycle: Off → Auto-Complete (marks chit "Complete" when last item is checked) → Auto-Complete + Archive (also archives the chit) → Off.</p>
             <h4>Notes Zone</h4>
             <p>The notes zone provides a <strong>markdown editor</strong> with a format toolbar and render toggle. Write in markdown and switch between edit and rendered views. The underlying data is standard markdown.</p>
             <p><strong>Format Toolbar:</strong> Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On mobile, the toolbar scrolls horizontally.</p>
@@ -579,9 +587,9 @@
                 <li><strong>Add Chit</strong> — Opens a modal to browse and select existing chits as children</li>
                 <li><strong>Create New</strong> — Prompts for a title, creates a brand new chit with status "ToDo", and immediately adds it as a child of the project</li>
             </ul>
-            <p>For chits that are children of a project, an <strong>Auto-Complete</strong> button appears in the Projects zone header:</p>
+            <p>An <strong>Auto-Complete</strong> button appears in the Task zone header for all chits (enabled by default):</p>
             <ul>
-                <li><strong>Auto-Complete</strong> — When enabled, the chit's status automatically changes to "Complete" when all non-blank checklist items are checked. If any item is unchecked or a new unchecked item is added, the status reverts to "ToDo". This is a per-chit toggle that persists across sessions.</li>
+                <li><strong>Auto-Complete</strong> — When enabled, the chit's status automatically changes to "Complete" when all non-blank checklist items are checked. If any item is unchecked or a new unchecked item is added, the status reverts to "ToDo". This is a per-chit toggle that persists across sessions. It is ON by default for all chits.</li>
             </ul>
             <h4>Health Indicators Zone</h4>
             <p>The Health Indicators zone tracks vitals, measurements, and activity data on a per-chit basis. It is powered by the <a href="#custom-objects">Custom Objects</a> registry — indicators are dynamically loaded from objects assigned to the <code>indicators_zone</code>.</p>
@@ -661,7 +669,7 @@
                 <li><kbd>W</kbd> — Weather page (full forecast) · <kbd>Shift+W</kbd> — Weather modal (default location forecast)</li>
                 <li><kbd>L</kbd> — Clock modal · <kbd>F9</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
                 <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
-                <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
+                <li><kbd>!</kbd> — Quick Alert menu (add Reminder, Alarm, Timer, or Stopwatch). Reminder creates a chit with a date/time and notification. Alarm/Timer/Stopwatch: on the dashboard, creates an independent alert; in the editor, adds to the current chit; on other pages, creates an independent alert</li>
                 <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
                 <li><kbd>~</kbd> (Shift+`) — Toggle topbar visibility (setting is retained)</li>
                 <li><kbd>F4</kbd> — Calculator popover (open/close from any page)</li>
@@ -697,7 +705,7 @@
                 <li><strong>People</strong> — Multi-select from contacts assigned to chits</li>
                 <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Snoozed, Unmarked chits, and Hide Past-Due</li>
             </ul>
-            <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has a default filter (configured in Settings → Default Filters), a "🔄 Defaults" button resets to that filter.</p>
+            <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has custom filters configured (Settings → Custom Filters &amp; Sorting), the "Clear" button resets to those custom defaults. A "🔄 Defaults" button also appears to quickly restore the saved custom filter state.</p>
             <h4>Sorting</h4>
             <p>The Order section in the sidebar provides sort options: Title, Start Date, Due Date, Updated, Created, Status, Manual (drag-to-reorder), Random/Shuffle, and Upcoming (due soon first, completed at bottom). Click the ▲/▼ button to toggle ascending/descending.</p>
             <h3 id="contacts">Contact Editor</h3>
@@ -868,7 +876,7 @@
                 <li><strong>Map Settings</strong> — Auto-zoom to markers toggle, default center latitude/longitude, default zoom level (used by the Maps View)</li>
                 <li><strong>Custom Colors</strong> — Two sections: Default Colors (7 palette colors plus Overdue Border and Blocked Border swatches) and Custom Colors (user-added with delete buttons). Click any swatch to assign it as the overdue or blocked border color. Ring indicators show which color is assigned to each role. The overdue border highlights chits past their due date; the blocked border highlights chits with Blocked status.</li>
                 <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
-                <li><strong>Default Filters</strong> — Per-tab default search text</li>
+                <li><strong>Custom Filters &amp; Sorting</strong> — Per-view custom filter and sort defaults. Click a view button to open a modal with the full sidebar filter UI (status, priority, display toggles, text search, sort). Save to auto-apply those filters every time you switch to that view. Reset to Defaults reverts to system defaults.</li>
                 <li><strong>Visual Indicators</strong> — Per-indicator visibility (Always / Never / If Space), combine alerts toggle</li>
                 <li><strong>Habits</strong> — Success rate window (7/30/90 days or all time), default show habits on calendar toggle</li>
                 <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log, restart service (admin only)</li>
@@ -893,7 +901,28 @@
             <p>Exported files are self-contained JSON with metadata including the CWOC version, export timestamp, and instance ID. Files can be imported into any CWOC instance.</p>
             <h4 id="calendar-import">📅 Calendar Import (.ics)</h4>
             <p>Import events and tasks from <strong>Google Calendar</strong>, <strong>Apple Calendar</strong>, or <strong>Outlook</strong> using standard iCalendar (.ics) files. Click the <strong>📅 Import Calendar (.ics)</strong> button in the Data Management section to select a file.</p>
-            <p><strong>What gets imported:</strong></p>
+            <h4>How to Export from Google Calendar</h4>
+            <ol>
+                <li>Go to <a href="https://calendar.google.com/calendar/r/settings/export" target="_blank" rel="noopener">Google Calendar Settings → Export</a></li>
+                <li>Click <strong>Export</strong> — this downloads a .zip file containing one .ics file per calendar</li>
+                <li>Unzip the downloaded file</li>
+                <li>In CWOC, go to Settings → Data Management → <strong>📅 Import Calendar (.ics)</strong></li>
+                <li>Select the .ics file(s) you want to import</li>
+            </ol>
+            <p><strong>Tip:</strong> To export a single Google calendar, open that calendar's settings (click the ⋮ menu next to the calendar name → Settings and sharing) and scroll down to "Export calendar."</p>
+            <h4>How to Export from Apple Calendar</h4>
+            <ol>
+                <li>Open the Calendar app on your Mac</li>
+                <li>Select the calendar you want to export in the sidebar</li>
+                <li>Go to File → Export → Export…</li>
+                <li>Save the .ics file, then import it in CWOC</li>
+            </ol>
+            <h4>How to Export from Outlook</h4>
+            <ol>
+                <li><strong>Desktop:</strong> File → Open &amp; Export → Import/Export → Export to a file → iCalendar (.ics)</li>
+                <li><strong>Web:</strong> Settings ⚙️ → Calendar → Shared calendars → Publish a calendar → Download the ICS</li>
+            </ol>
+            <h4>What gets imported</h4>
             <ul>
                 <li><strong>Events (VEVENT)</strong> — Title, description, start/end dates, location, categories (as tags), priority, and recurrence rules</li>
                 <li><strong>Tasks (VTODO)</strong> — Title, description, due date, status (ToDo/In Progress/Complete), priority, and categories</li>
@@ -1160,6 +1189,153 @@ action:
 
             <h4>HA State Change Trigger</h4>
             <p>CWOC can poll HA entity states and fire rules when a state changes. In the Rules Editor, select <code>ha_state_change</code> as the trigger type and specify the entity_id to monitor (e.g., <code>binary_sensor.front_door</code>). CWOC polls at the configured interval and fires the trigger when the state differs from the last known value. The condition tree can evaluate <code>ha_entity_id</code>, <code>old_state</code>, <code>new_state</code>, and <code>attributes</code>.</p>
+
+            <h3 id="cron-triggers">Cron Triggers & Habit Rules</h3>
+            <p>The Rules Engine supports <strong>cron-based scheduling</strong> for precise control over when rules fire, and <strong>habit mode</strong> for tracking whether automated maintenance tasks actually run on schedule.</p>
+
+            <h4>Cron Expression Syntax</h4>
+            <p>A cron expression is a 5-field string that defines a recurring schedule: <code>minute hour day-of-month month day-of-week</code>. When a rule's schedule config includes a <code>cron</code> field, it takes precedence over the simple frequency/interval settings.</p>
+            <table class="cwoc-table">
+                <thead>
+                    <tr><th>Field</th><th>Range</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Minute</td><td>0–59</td><td>Minute of the hour</td></tr>
+                    <tr><td>Hour</td><td>0–23</td><td>Hour of the day (24h)</td></tr>
+                    <tr><td>Day of Month</td><td>1–31</td><td>Day of the month</td></tr>
+                    <tr><td>Month</td><td>1–12 or JAN–DEC</td><td>Month of the year</td></tr>
+                    <tr><td>Day of Week</td><td>0–6 or MON–SUN</td><td>Day of the week (0 = Sunday)</td></tr>
+                </tbody>
+            </table>
+
+            <h4>Supported Syntax</h4>
+            <table class="cwoc-table">
+                <thead>
+                    <tr><th>Token</th><th>Example</th><th>Meaning</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>*</code></td><td><code>* * * * *</code></td><td>Every minute (wildcard — matches all values)</td></tr>
+                    <tr><td>Value</td><td><code>30 9 * * *</code></td><td>At a specific value (9:30 AM)</td></tr>
+                    <tr><td>Range</td><td><code>0 9-17 * * *</code></td><td>Every hour from 9 AM to 5 PM</td></tr>
+                    <tr><td>List</td><td><code>0 9,12,17 * * *</code></td><td>At 9 AM, noon, and 5 PM</td></tr>
+                    <tr><td>Step</td><td><code>*/15 * * * *</code></td><td>Every 15 minutes</td></tr>
+                    <tr><td>Range + Step</td><td><code>0 9-17/2 * * *</code></td><td>Every 2 hours from 9 AM to 5 PM</td></tr>
+                    <tr><td>Day names</td><td><code>0 9 * * MON-FRI</code></td><td>Weekdays at 9 AM</td></tr>
+                    <tr><td>Month names</td><td><code>0 0 1 JAN,JUL *</code></td><td>Jan 1 and Jul 1 at midnight</td></tr>
+                </tbody>
+            </table>
+
+            <h4>Common Examples</h4>
+            <table class="cwoc-table">
+                <thead>
+                    <tr><th>Expression</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>0 9 * * *</code></td><td>Every day at 9:00 AM</td></tr>
+                    <tr><td><code>*/15 * * * *</code></td><td>Every 15 minutes</td></tr>
+                    <tr><td><code>0 9 * * MON-FRI</code></td><td>Weekdays at 9:00 AM</td></tr>
+                    <tr><td><code>0 0 1 * *</code></td><td>First of every month at midnight</td></tr>
+                    <tr><td><code>0 6 * * *</code></td><td>Every morning at 6:00 AM</td></tr>
+                    <tr><td><code>0 * * * *</code></td><td>Every hour on the hour</td></tr>
+                    <tr><td><code>30 8 * * 1</code></td><td>Every Monday at 8:30 AM</td></tr>
+                </tbody>
+            </table>
+
+            <h4>Cron Builder UI</h4>
+            <p>In the Rule Editor, when the "Scheduled" trigger type is selected, a <strong>Simple/Cron</strong> toggle lets you switch between the basic frequency picker and the full cron builder. The cron builder provides five labeled input fields (Minute, Hour, Day of Month, Month, Day of Week) plus a live human-readable preview of the expression. Preset buttons — "Every morning", "Every hour", "Weekdays 9am", "1st of month" — populate common schedules with one click.</p>
+
+            <h4>Habit Mode for Rules</h4>
+            <p>Any scheduled rule can be marked as a <strong>habit</strong> by checking "Track as Habit" in the Rule Editor. When enabled, the rule's execution is tracked as a recurring obligation — each scheduled run is recorded as <strong>achieved</strong> or <strong>missed</strong>, with streak and success rate calculations visible in the Habits view.</p>
+            <ul>
+                <li><strong>Achieved</strong> — The rule ran on schedule (regardless of how many entities matched). For maintenance rules, running without errors counts as success</li>
+                <li><strong>Missed</strong> — The rule was due but didn't fire (e.g., server was down during the scheduled time)</li>
+                <li><strong>Period</strong> — Derived from the cron expression: daily cron = daily period, weekly cron = weekly period, monthly cron = monthly period. Sub-daily cron expressions default to a daily period</li>
+                <li><strong>Streak</strong> — Consecutive periods where the rule achieved its goal</li>
+                <li><strong>Success rate</strong> — Percentage of periods where the rule was achieved vs. total periods</li>
+            </ul>
+            <p>Habit rules appear in the <strong>Habits view</strong> alongside habit chits, distinguished by a 🤖 badge. Click a habit rule in the Habits view to navigate to its Rule Editor page.</p>
+
+            <h4>"Days Ago" Condition Operators</h4>
+            <p>Two date-based operators let you build conditions based on how old a record is:</p>
+            <ul>
+                <li><strong><code>days_ago_greater_than</code></strong> — True when the field's date is more than N days in the past. Example: <code>email_date days_ago_greater_than 7</code> matches emails received more than a week ago</li>
+                <li><strong><code>days_ago_less_than</code></strong> — True when the field's date is fewer than N days in the past. Example: <code>created_datetime days_ago_less_than 3</code> matches chits created in the last 3 days</li>
+            </ul>
+            <p>These operators work on any date/datetime field: <code>email_date</code>, <code>created_datetime</code>, <code>start_datetime</code>, <code>due_datetime</code>, <code>modified_datetime</code>, <code>point_in_time</code>, <code>completed_datetime</code>. If the field is empty or unparseable, the condition evaluates to false.</p>
+
+            <h4>Example: Archive Old Emails from a Specific Sender</h4>
+            <p>A common use case combining cron scheduling, habit mode, and the days-ago operator:</p>
+            <ol>
+                <li><strong>Create a new rule</strong> — Set trigger type to "Scheduled"</li>
+                <li><strong>Set the schedule</strong> — Switch to Cron mode, enter <code>0 6 * * *</code> (daily at 6:00 AM)</li>
+                <li><strong>Enable habit tracking</strong> — Check "Track as Habit" so you can see whether this maintenance task runs each day</li>
+                <li><strong>Add conditions</strong> (AND group):
+                    <ul>
+                        <li><code>email_from</code> equals <code>noreply@example.com</code></li>
+                        <li><code>email_date</code> <code>days_ago_greater_than</code> <code>7</code></li>
+                        <li><code>archived</code> equals <code>false</code></li>
+                    </ul>
+                </li>
+                <li><strong>Set the action</strong> — Archive (sets archived = true on matching chits)</li>
+            </ol>
+            <p>This rule fires every morning at 6 AM, finds unarchived emails from the specified sender that are older than 7 days, and archives them. In the Habits view, it shows as "achieved" each day it runs — whether it found 0 or 50 matching emails, the maintenance task was performed.</p>
+
+            <h4>Weather Condition Operators</h4>
+            <p>Rules can trigger based on current weather conditions or forecast data for your default location. Weather data comes from Open-Meteo and uses the location marked as "default" in your saved locations.</p>
+            
+            <h5>Current Weather Operators</h5>
+            <ul>
+                <li><strong>weather: low temp below</strong> — Today's low temperature is below threshold (°C)</li>
+                <li><strong>weather: high temp above</strong> — Today's high temperature is above threshold (°C)</li>
+                <li><strong>weather: precipitation above</strong> — Today's precipitation is above threshold (mm)</li>
+                <li><strong>weather: wind speed above</strong> — Today's max wind speed is above threshold (km/h)</li>
+                <li><strong>weather: wind gusts above</strong> — Today's max wind gusts are above threshold (km/h)</li>
+            </ul>
+            
+            <h5>Forecast Window Operators</h5>
+            <p>These operators check if ANY day in the forecast window meets the condition. Use format "threshold|days" (e.g., "13|3" for "13 mph in next 3 days"):</p>
+            <ul>
+                <li><strong>forecast: contains low temp below</strong> — Any day in next N days has low temp below threshold</li>
+                <li><strong>forecast: contains high temp above</strong> — Any day in next N days has high temp above threshold</li>
+                <li><strong>forecast: contains precipitation above</strong> — Any day in next N days has precipitation above threshold</li>
+                <li><strong>forecast: contains wind speed above</strong> — Any day in next N days has wind speed above threshold</li>
+                <li><strong>forecast: contains wind gusts above</strong> — Any day in next N days has wind gusts above threshold</li>
+            </ul>
+            
+            <h4>Create Chit Action</h4>
+            <p>The "Create Chit" action generates new chits based on rule conditions. This is useful for automated reminders, weather alerts, or follow-up tasks. The action supports template variables that are substituted from the triggering entity:</p>
+            <ul>
+                <li><strong>{{title}}</strong> — Title of the triggering chit/entity</li>
+                <li><strong>{{note}}</strong> — Note content of the triggering entity</li>
+                <li><strong>{{status}}</strong> — Status of the triggering entity</li>
+                <li><strong>{{location}}</strong> — Location of the triggering entity</li>
+                <li><strong>{{today}}</strong> — Current date in YYYY-MM-DD format</li>
+                <li><strong>{{now}}</strong> — Current timestamp in ISO format</li>
+                <li><strong>{{owner_id}}</strong> — ID of the entity owner</li>
+                <li><strong>{{weather_low}}</strong> — Today's low temperature (°C) at default location</li>
+                <li><strong>{{weather_high}}</strong> — Today's high temperature (°C) at default location</li>
+                <li><strong>{{weather_precipitation}}</strong> — Today's precipitation (mm)</li>
+                <li><strong>{{weather_wind_speed}}</strong> — Today's max wind speed (km/h)</li>
+                <li><strong>{{weather_wind_gusts}}</strong> — Today's max wind gusts (km/h)</li>
+            </ul>
+            <p>The Alert/Notification Time field also supports templates — use <code>{{today}}T08:00:00</code> to create a notification at 8am on the day the rule fires.</p>
+            
+            <p><strong>Example:</strong> Create a rule with trigger "Scheduled: every morning @ 5am" and condition "forecast: contains low temp below" with value "0|1" (freezing in next 1 day). Add action "Create Chit" with title "Cold weather alert" and due time "{{today}} 08:00" to get a morning notification when freezing weather is forecast.</p>
+
+            <h4>Habit Event Triggers</h4>
+            <p>Rules can react to habit state changes using three dedicated trigger types:</p>
+            <ul>
+                <li><strong>🎯 Habit Achieved</strong> — Fires when a habit (rule-based or chit-based) is completed for its current period</li>
+                <li><strong>🎯 Habit Missed</strong> — Fires when a habit's period passes without being achieved (detected retroactively by the scheduler)</li>
+                <li><strong>🎯 Habit Due (with offset)</strong> — Fires at a configurable time offset relative to the habit's scheduled time. Use negative minutes for "before due" and positive for "after due"</li>
+            </ul>
+            <p>Each habit trigger lets you specify which habit to watch:</p>
+            <ul>
+                <li><strong>Source Type</strong> — Rule-based habit, Chit-based habit, or Any</li>
+                <li><strong>Specific Source</strong> — Pick a specific habit rule/chit, or use "Any" to react to all habits</li>
+                <li><strong>Offset (habit_due only)</strong> — Minutes before or after the scheduled time. Examples: <code>-60</code> = 1 hour before due, <code>73</code> = 73 minutes after due, <code>-1440</code> = 1 day before</li>
+            </ul>
+            <p>The condition tree for habit triggers can evaluate fields like <code>streak</code>, <code>source_rule_name</code>, <code>source_chit_title</code>, <code>habit_goal</code>, and <code>habit_success</code>. This enables powerful chains like "When my exercise habit is missed and streak was > 5, send a notification" or "When any habit is achieved, add a tag to a celebration chit."</p>
 
             <h3 id="install-app">Install as App</h3>
             <p>CWOC is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it runs in its own window without browser chrome, just like a native app.</p>

@@ -610,6 +610,17 @@ input[type="color"] {
         font-size: 18px;
     }
 
+    /* ── Save toolbar: sticky on mobile so buttons stay visible when scrolled ── */
+    .cwoc-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: #fdf5e6;
+        padding: 8px 4px;
+        margin: 0 -8px 12px;
+        border-bottom: 1px solid rgba(139, 69, 19, 0.2);
+    }
+
     /* ── Confirmation modals: full-screen on mobile ───────────────────────── */
     .modal-content {
         width: calc(100% - 24px) !important;
@@ -2191,4 +2202,145 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
     .cwoc-undo-toast .cwoc-undo-msg {
         font-size: 0.85em;
     }
+}
+
+/* ── Add to Bundle Modal ─────────────────────────────────────────────────── */
+
+#addToBundleModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#addToBundleModalOverlay .modal-content {
+  background: url("/static/parchment.jpg") center/cover;
+  background-color: #fffaf0;
+  border: 2px solid #6b4e31;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  font-family: Lora, Georgia, serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#addToBundleModalOverlay input[type="radio"] {
+  margin-right: 8px;
+}
+
+#addToBundleModalOverlay label {
+  cursor: pointer;
+  color: #1a1208;
+}
+
+#addToBundleModalOverlay select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #6b4e31;
+  border-radius: 4px;
+  background: #fffaf0;
+  font-family: inherit;
+  color: #1a1208;
+}
+
+#addToBundleModalOverlay button {
+  padding: 8px 16px;
+  border: 1px solid #6b4e31;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.2s ease;
+}
+
+#addToBundleModalOverlay button:hover {
+  opacity: 0.9;
+}
+
+
+/* ── Attachment Preview Modal ─────────────────────────────────────────────── */
+.cwoc-attachment-preview-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.cwoc-attachment-preview-modal {
+    background: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 12px;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.cwoc-attachment-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #d4c4a8;
+    background: rgba(139, 90, 43, 0.05);
+    gap: 12px;
+}
+.cwoc-attachment-preview-title {
+    font-weight: 600;
+    color: #1a1208;
+    font-size: 0.95em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.cwoc-attachment-preview-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.cwoc-attachment-preview-dl {
+    font-size: 0.85em;
+    padding: 4px 10px;
+    border: 1px solid #6b4e31;
+    border-radius: 4px;
+    color: #6b4e31;
+    text-decoration: none;
+    background: rgba(139, 90, 43, 0.08);
+}
+.cwoc-attachment-preview-dl:hover {
+    background: rgba(139, 90, 43, 0.2);
+}
+.cwoc-attachment-preview-close {
+    font-size: 1.3em;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b4e31;
+    padding: 2px 8px;
+    line-height: 1;
+}
+.cwoc-attachment-preview-close:hover {
+    color: #b22222;
+}
+.cwoc-attachment-preview-content {
+    padding: 16px;
+    overflow: auto;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

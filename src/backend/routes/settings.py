@@ -85,9 +85,17 @@ def get_settings(user_id: str, request: Request):
         settings["session_lifetime"] = settings.get("session_lifetime", "24")
         settings["autosave_desktop"] = settings.get("autosave_desktop", "0")
         settings["autosave_mobile"] = settings.get("autosave_mobile", "0")
+        settings["custom_view_filters"] = deserialize_json_field(settings.get("custom_view_filters"))
 
         # ── Include bundles data (piggyback on settings to avoid separate API call) ──
         try:
+            # Ensure auto-bundles exist (Newsletters, Receipts, Calendar Invites)
+            from src.backend.routes.bundles import _initialize_default_bundles, ensure_auto_bundles_exist
+            try:
+                ensure_auto_bundles_exist(authenticated_user_id)
+            except Exception as auto_err:
+                logger.warning(f"Failed to ensure auto-bundles in settings: {auto_err}")
+
             cursor.execute(
                 "SELECT * FROM bundles WHERE owner_id = ? ORDER BY display_order ASC",
                 (authenticated_user_id,),
@@ -97,7 +105,6 @@ def get_settings(user_id: str, request: Request):
                 # Auto-initialize default bundles
                 conn.close()
                 conn = None
-                from src.backend.routes.bundles import _initialize_default_bundles
                 try:
                     _initialize_default_bundles(authenticated_user_id)
                 except Exception as init_err:
@@ -165,7 +172,7 @@ async def save_settings(request: Request):
     JSON_FIELDS = {
         "tags", "default_filters", "custom_colors", "visual_indicators",
         "chit_options", "default_notifications", "kiosk_users", "shared_tags",
-        "recent_tags",
+        "recent_tags", "custom_view_filters",
     }
 
     # All valid settings columns (excluding user_id which is the key)
@@ -187,7 +194,7 @@ async def save_settings(request: Request):
         "bundles_multi_placement", "bundles_enabled", "bundles_show_count",
         "show_map_thumbnails", "session_lifetime", "omni_layout",
         "omni_locked_filters", "omni_hst_clock_mode", "omni_email_count",
-        "omni_normalize_colors",
+        "omni_normalize_colors", "custom_view_filters",
     }
 
     conn = None

@@ -1,0 +1,1 @@
+Added two new buttons to the Checklist zone's Data menu: "Paste as list items" (reads clipboard and creates each line as a checklist item with markdown/indent parsing) and "Copy incomplete to clipboard" (copies all unchecked items as markdown checklist lines).

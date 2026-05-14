@@ -11,7 +11,6 @@ LOG_PREFIX="[cwoc-release]"
 FLAG_HA=false
 FLAG_PUSH=false
 FLAG_HELP=false
-VERSION_ARG=""
 
 # --- Argument parsing ---------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -23,14 +22,6 @@ while [[ $# -gt 0 ]]; do
         --push)
             FLAG_PUSH=true
             shift
-            ;;
-        --version)
-            if [[ -z "${2:-}" ]]; then
-                echo "$LOG_PREFIX ERROR: --version requires a value (e.g., --version 1.2.0)"
-                exit 1
-            fi
-            VERSION_ARG="$2"
-            shift 2
             ;;
         --help)
             FLAG_HELP=true
@@ -52,12 +43,11 @@ Usage: cwoc-release.sh [OPTIONS]
 Options:
   --ha          Sync HA integration to public repo after zip upload
   --push        (requires --ha) Auto-commit, push, and tag the public repo
-  --version     Specify the HA integration version (e.g., 1.2.0)
   --help        Show this help message
 
 Environment:
   Reads FTP credentials from ~/.cwoc-release.conf
-  Reads version from src/VERSION (relative to script's parent directory)
+  Reads version from src/VERSION (used for both CWOC zip and HA integration)
   Public repo path: ../cwoc-ha-integration (sibling directory)
 EOF
     exit 0
@@ -147,16 +137,8 @@ rm -f "$REPO_ROOT/CWOC.zip"
 if [[ "$FLAG_HA" == true ]]; then
     echo "$LOG_PREFIX Syncing HA integration..."
 
-    # --- Determine version (from --version arg or prompt) ---------------------
-    if [[ -n "$VERSION_ARG" ]]; then
-        HA_VERSION="$VERSION_ARG"
-    else
-        read -p "$LOG_PREFIX Enter new HA integration version (semver, e.g. 1.2.0): " HA_VERSION
-        if [[ -z "$HA_VERSION" ]]; then
-            echo "$LOG_PREFIX ERROR: Version cannot be empty"
-            exit 1
-        fi
-    fi
+    # --- Use CWOC version from src/VERSION ------------------------------------
+    HA_VERSION="$VERSION"
 
     # --- Copy integration files to public repo --------------------------------
     mkdir -p "$PUBLIC_REPO_RESOLVED/custom_components/cwoc"
@@ -187,19 +169,19 @@ if [[ "$FLAG_HA" == true ]]; then
     if [[ "$FLAG_PUSH" == true ]]; then
         # --- Auto-commit, tag, and push to origin -----------------------------
         echo "$LOG_PREFIX Committing and pushing to public repo..."
-        (cd "$PUBLIC_REPO_RESOLVED" && git add -A && git commit -m "Release v$HA_VERSION") || {
+        (cd "$PUBLIC_REPO_RESOLVED" && git add -A && git commit -m "Release $HA_VERSION") || {
             echo "$LOG_PREFIX ERROR: Git commit failed in $PUBLIC_REPO_RESOLVED"
             exit 1
         }
-        (cd "$PUBLIC_REPO_RESOLVED" && git tag "v$HA_VERSION") || {
-            echo "$LOG_PREFIX ERROR: Git tag v$HA_VERSION failed (tag may already exist)"
+        (cd "$PUBLIC_REPO_RESOLVED" && git tag "$HA_VERSION") || {
+            echo "$LOG_PREFIX ERROR: Git tag $HA_VERSION failed (tag may already exist)"
             exit 1
         }
-        (cd "$PUBLIC_REPO_RESOLVED" && git push origin && git push origin "v$HA_VERSION") || {
-            echo "$LOG_PREFIX ERROR: Git push failed — local changes are committed, retry with 'git push origin && git push origin v$HA_VERSION'"
+        (cd "$PUBLIC_REPO_RESOLVED" && git push origin && git push origin "$HA_VERSION") || {
+            echo "$LOG_PREFIX ERROR: Git push failed — local changes are committed, retry with 'git push origin && git push origin $HA_VERSION'"
             exit 1
         }
-        echo "$LOG_PREFIX ✓ Pushed v$HA_VERSION to origin"
+        echo "$LOG_PREFIX ✓ Pushed $HA_VERSION to origin"
     else
         # --- Print manual git instructions ------------------------------------
         echo ""
@@ -207,10 +189,10 @@ if [[ "$FLAG_HA" == true ]]; then
         echo ""
         echo "  cd $PUBLIC_REPO_RESOLVED"
         echo "  git add -A"
-        echo "  git commit -m \"Release v$HA_VERSION\""
-        echo "  git tag v$HA_VERSION"
+        echo "  git commit -m \"Release $HA_VERSION\""
+        echo "  git tag $HA_VERSION"
         echo "  git push origin"
-        echo "  git push origin v$HA_VERSION"
+        echo "  git push origin $HA_VERSION"
         echo ""
     fi
 fi

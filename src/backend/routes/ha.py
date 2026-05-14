@@ -207,6 +207,7 @@ def _set_cached(key: str, data):
 # Admin check helper
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Note: ha.py uses a different signature (user_id) — not consolidated
 def _require_admin(user_id: str):
     """Check if user_id is an admin. Raises HTTPException 403 if not."""
     conn = None

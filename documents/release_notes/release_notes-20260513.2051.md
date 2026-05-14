@@ -1,0 +1,1 @@
+Fixed race condition between checklist auto-save (PATCH) and full auto-save (CwocAutoSave) on mobile. When full auto-save is enabled, checklist changes now route through the unified save system instead of firing a separate PATCH, eliminating data conflicts. Also made `cancelOrExit()` properly await pending checklist saves before navigating.

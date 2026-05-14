@@ -268,7 +268,7 @@ function _buildWeatherResult(daily) {
   var tUnit = (typeof _tempUnit === 'function') ? _tempUnit() : '°F';
   var icon = (typeof _getWeatherIcon === 'function') ? _getWeatherIcon(weatherCode) : '❓';
   var wind = (typeof _convertWind === 'function') ? _convertWind(windKmh) : { value: Math.round(windKmh), unit: 'km/h' };
-  var precipText = (typeof _formatPrecip === 'function') ? _formatPrecip(precipMm, weatherCode) : '';
+  var precipText = (typeof _cwocFormatPrecip === 'function') ? _cwocFormatPrecip(precipMm, weatherCode) : '';
   var windText = wind.value >= ((_isMetricUnits && _isMetricUnits()) ? 24 : 15) ? '💨 ' + wind.value + ' ' + wind.unit + ' wind' : '';
   var fullDesc = (typeof _getWeatherDescription === 'function') ? _getWeatherDescription(weatherCode, minC, maxC, windKmh) : '';
 

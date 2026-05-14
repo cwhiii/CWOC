@@ -492,7 +492,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.snoozed_until,
                 serialize_json_field(chit.prerequisites),
                 1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
-                1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
+                1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -604,6 +604,24 @@ def get_chit(chit_id: str, request: Request):
         chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
         chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
         chit["effective_role"] = effective_role
+
+        # ── Email privacy: strip tracking pixels / external content ──
+        if chit.get("email_body_html") and chit.get("email_status") in ("received", "sent"):
+            try:
+                from src.backend.routes.email import (
+                    _strip_tracking_pixels,
+                    _strip_external_content,
+                    _get_user_email_privacy_settings,
+                )
+                privacy = _get_user_email_privacy_settings(cursor, user_id)
+                if privacy["block_tracking_pixels"]:
+                    chit["email_body_html"] = _strip_tracking_pixels(chit["email_body_html"])
+                if privacy["external_content"] == "block":
+                    chit["email_body_html"] = _strip_external_content(chit["email_body_html"])
+                # Pass privacy settings to frontend for UI decisions
+                chit["_email_privacy"] = privacy
+            except Exception as e:
+                logger.warning(f"Email privacy filtering failed for chit {chit_id}: {e}")
 
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [chit])
@@ -783,7 +801,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.snoozed_until,
                     serialize_json_field(chit.prerequisites),
                     1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
-                    1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
+                    1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
                     chit_id,
                 )
             )
@@ -976,7 +994,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.snoozed_until,
                     serialize_json_field(chit.prerequisites),
                     1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
-                    1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
+                    1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
                 )
             )
             # Audit logging for chit creation
@@ -1034,6 +1052,20 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             ).start()
         except Exception:
             pass  # Never block the API response for rules engine
+
+        # Fire habit triggers when chit-based habit status changes
+        try:
+            if chit.habit and existing and old_chit_dict:
+                old_success = old_chit_dict.get("habit_success", 0) or 0
+                new_success = chit.habit_success or 0
+                goal = chit.habit_goal or 1
+                # Habit achieved: success just reached goal
+                if new_success >= goal and old_success < goal:
+                    from src.backend.schedulers import _fire_chit_habit_trigger
+                    _fire_chit_habit_trigger("habit_achieved", chit_data, user_id)
+        except Exception:
+            pass  # Never block the API response for habit triggers
+
         return chit_data
     except HTTPException:
         raise

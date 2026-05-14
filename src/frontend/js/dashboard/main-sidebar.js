@@ -166,6 +166,10 @@ function clearFilterGroup(containerId) {
   container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
   var anyCb = container.querySelector('input[data-any="true"]');
   if (anyCb) anyCb.checked = true;
+  // Clear tag selection — reset to "Any Tag" via shared function
+  if (containerId === 'label-multi') {
+    cwocClearTagFilter();
+  }
   onFilterChange();
 }
 
@@ -184,16 +188,34 @@ function _filterTagCheckboxes() {
 }
 
 function _clearAllFilters() {
+  // Reset to custom view defaults if they exist for the current tab, otherwise system defaults
+  var customFilters = (typeof _customViewFilters !== 'undefined') ? _customViewFilters[currentTab] : null;
+  if (customFilters && Object.keys(customFilters).length > 0) {
+    _applyFilterStateToSidebar(customFilters);
+  } else {
+    _applySystemDefaults();
+  }
+  onFilterChange();
+  // Persist sort preference for this tab
+  if (typeof saveSortPreference === 'function') {
+    saveSortPreference(currentTab, currentSortField || '', currentSortDir || 'asc');
+  }
+}
+
+/** Apply system defaults (the hardcoded baseline) to all sidebar filters */
+function _applySystemDefaults() {
   document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
   document.querySelectorAll('#label-multi input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+  cwocClearTagFilter();
   document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
   var sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
   var sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
   var ss = document.getElementById('show-snoozed'); if (ss) ss.checked = false;
   var su = document.getElementById('show-unmarked'); if (su) su.checked = true;
-  var hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
-  var hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;
-  var hd = document.getElementById('hide-declined'); if (hd) hd.checked = false;
+  var hpd = document.getElementById('show-past-due'); if (hpd) hpd.checked = true;
+  var hc = document.getElementById('show-complete'); if (hc) hc.checked = true;
+  var hd = document.getElementById('show-declined'); if (hd) hd.checked = true;
+  var hh = document.getElementById('show-habits'); if (hh) hh.checked = true;
   var her = document.getElementById('show-email-received'); if (her) her.checked = false;
   var hes = document.getElementById('show-email-sent'); if (hes) hes.checked = false;
   var hlO = document.getElementById('highlight-overdue'); if (hlO) hlO.checked = true;
@@ -202,29 +224,161 @@ function _clearAllFilters() {
   document.querySelectorAll('input[data-any="true"]').forEach(function(cb) { cb.checked = true; });
   if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
   if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
-  // Clear sharing filters (Requirement 7.5)
+  // Clear sharing filters
   var swm = document.getElementById('filter-shared-with-me'); if (swm) swm.checked = false;
   var sbm = document.getElementById('filter-shared-by-me'); if (sbm) sbm.checked = false;
   // Clear project filter
   _clearProjectFilter(true);
   currentSortField = null;
+  currentSortDir = 'asc';
   var sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
-  onFilterChange();
-  // Persist cleared sort preference for this tab
-  if (typeof saveSortPreference === 'function') {
-    saveSortPreference(currentTab, '', 'asc');
+}
+
+/**
+ * Apply a saved filter state object to the sidebar UI.
+ * Used by both custom view filters and the clear-to-defaults flow.
+ * Structure: { statuses, priorities, tags, people, text, display, sort, project }
+ */
+function _applyFilterStateToSidebar(state) {
+  if (!state) { _applySystemDefaults(); return; }
+
+  // ── Statuses ──
+  var statusContainer = document.getElementById('status-multi');
+  if (statusContainer) {
+    statusContainer.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+    if (state.statuses && state.statuses.length > 0) {
+      state.statuses.forEach(function(val) {
+        var cb = statusContainer.querySelector('input[data-filter="status"][value="' + val + '"]');
+        if (cb) cb.checked = true;
+      });
+    } else {
+      var anyCb = statusContainer.querySelector('input[data-any="true"]');
+      if (anyCb) anyCb.checked = true;
+    }
+  }
+
+  // ── Priorities ──
+  var priorityContainer = document.getElementById('priority-multi');
+  if (priorityContainer) {
+    priorityContainer.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+    if (state.priorities && state.priorities.length > 0) {
+      state.priorities.forEach(function(val) {
+        var cb = priorityContainer.querySelector('input[data-filter="priority"][value="' + val + '"]');
+        if (cb) cb.checked = true;
+      });
+    } else {
+      var anyCb = priorityContainer.querySelector('input[data-any="true"]');
+      if (anyCb) anyCb.checked = true;
+    }
+  }
+
+  // ── Tags ──
+  if (state.tags && state.tags.length > 0) {
+    window._sidebarTagSelection = state.tags.slice();
+    var labelContainer = document.getElementById('label-multi');
+    if (labelContainer && typeof _syncSidebarTagCheckboxes === 'function' && typeof _cachedTagObjects !== 'undefined') {
+      _syncSidebarTagCheckboxes(labelContainer, _cachedTagObjects);
+    }
+    _cwocUpdateTagVirtualOptions();
+  } else {
+    cwocClearTagFilter();
+  }
+
+  // ── People ──
+  if (state.people && state.people.length > 0) {
+    window._sidebarPeopleSelection = state.people.slice();
+    if (window._cachedPeopleContacts && typeof _renderPeopleFilterPanel === 'function') {
+      _renderPeopleFilterPanel(window._cachedPeopleContacts);
+    }
+  } else {
+    if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
+    if (window._cachedPeopleContacts && typeof _renderPeopleFilterPanel === 'function') {
+      _renderPeopleFilterPanel(window._cachedPeopleContacts);
+    }
+  }
+
+  // ── Text search ──
+  var searchEl = document.getElementById('search');
+  if (searchEl) searchEl.value = (state.text || '');
+
+  // ── Display toggles ──
+  var d = state.display || {};
+  var sp = document.getElementById('show-pinned'); if (sp) sp.checked = d.pinned !== undefined ? d.pinned : true;
+  var sa = document.getElementById('show-archived'); if (sa) sa.checked = d.archived !== undefined ? d.archived : false;
+  var ss = document.getElementById('show-snoozed'); if (ss) ss.checked = d.snoozed !== undefined ? d.snoozed : false;
+  var su = document.getElementById('show-unmarked'); if (su) su.checked = d.unmarked !== undefined ? d.unmarked : true;
+  var hpd = document.getElementById('show-past-due'); if (hpd) hpd.checked = d.pastDue !== undefined ? d.pastDue : true;
+  var hc = document.getElementById('show-complete'); if (hc) hc.checked = d.complete !== undefined ? d.complete : true;
+  var hd = document.getElementById('show-declined'); if (hd) hd.checked = d.declined !== undefined ? d.declined : true;
+  var hh = document.getElementById('show-habits'); if (hh) hh.checked = d.habits !== undefined ? d.habits : true;
+  var her = document.getElementById('show-email-received'); if (her) her.checked = d.emailReceived !== undefined ? d.emailReceived : false;
+  var hes = document.getElementById('show-email-sent'); if (hes) hes.checked = d.emailSent !== undefined ? d.emailSent : false;
+  var swm = document.getElementById('filter-shared-with-me'); if (swm) swm.checked = d.sharedWithMe !== undefined ? d.sharedWithMe : false;
+  var sbm = document.getElementById('filter-shared-by-me'); if (sbm) sbm.checked = d.sharedByMe !== undefined ? d.sharedByMe : false;
+
+  // ── Sort ──
+  if (state.sort && state.sort.field) {
+    currentSortField = state.sort.field;
+    currentSortDir = state.sort.dir || 'asc';
+  } else {
+    currentSortField = null;
+    currentSortDir = 'asc';
+  }
+  var sortSel = document.getElementById('sort-select');
+  if (sortSel) sortSel.value = currentSortField || '';
+  _updateSortUI();
+
+  // ── Project ──
+  if (state.project) {
+    var projSel = document.getElementById('project-filter-select');
+    if (projSel) projSel.value = state.project;
+  } else {
+    _clearProjectFilter(true);
+  }
+}
+
+/**
+ * Apply custom view filters for a tab on entry.
+ * Called from filterChits() when switching tabs.
+ * If custom filters exist for this tab, applies them.
+ * Otherwise falls back to legacy default_filters text search.
+ */
+function _applyCustomViewFilters(tab) {
+  var customFilters = (typeof _customViewFilters !== 'undefined') ? _customViewFilters[tab] : null;
+
+  if (customFilters && Object.keys(customFilters).length > 0) {
+    _applyFilterStateToSidebar(customFilters);
+    // For Omni, mark filters as applied so _applyOmniEntryFilters doesn't override
+    if (tab === 'Omni' && typeof _omniFiltersApplied !== 'undefined') {
+      _omniFiltersApplied = true;
+    }
+  } else {
+    // Fallback: apply legacy default search filter text
+    var search = document.getElementById('search');
+    if (search && typeof _defaultFilters !== 'undefined' && _defaultFilters) {
+      var tabKey = tab.toLowerCase();
+      if (_defaultFilters[tabKey]) {
+        search.value = _defaultFilters[tabKey];
+      }
+    }
   }
 }
 
 /** Reset search to the default filter for the current tab */
 function _resetDefaultFilters() {
-  var search = document.getElementById('search');
-  var tabKey = currentTab.toLowerCase();
-  if (search && _defaultFilters && _defaultFilters[tabKey]) {
-    search.value = _defaultFilters[tabKey];
-  } else if (search) {
-    search.value = '';
+  // Reset to custom view defaults if they exist, otherwise legacy text defaults
+  var customFilters = (typeof _customViewFilters !== 'undefined') ? _customViewFilters[currentTab] : null;
+  if (customFilters && Object.keys(customFilters).length > 0) {
+    _applyFilterStateToSidebar(customFilters);
+  } else {
+    var search = document.getElementById('search');
+    var tabKey = currentTab.toLowerCase();
+    if (search && _defaultFilters && _defaultFilters[tabKey]) {
+      search.value = _defaultFilters[tabKey];
+    } else if (search) {
+      search.value = '';
+    }
   }
   displayChits();
   _updateClearFiltersButton();
@@ -235,8 +389,9 @@ function _updateClearFiltersButton() {
   var resetBtn = document.getElementById('reset-defaults-btn');
   if (resetBtn) {
     var tabKey = currentTab.toLowerCase();
-    var hasDefault = _defaultFilters && _defaultFilters[tabKey];
-    resetBtn.style.display = hasDefault ? '' : 'none';
+    var hasCustom = (typeof _customViewFilters !== 'undefined') && _customViewFilters[currentTab] && Object.keys(_customViewFilters[currentTab]).length > 0;
+    var hasLegacy = _defaultFilters && _defaultFilters[tabKey];
+    resetBtn.style.display = (hasCustom || hasLegacy) ? '' : 'none';
   }
 }
 
@@ -298,7 +453,10 @@ function _getSelectedFilterValues(containerId, filterType) {
 }
 
 function _getSelectedStatuses() { return _getSelectedFilterValues('status-multi', 'status'); }
-function _getSelectedLabels() { return _getSelectedFilterValues('label-multi', 'label'); }
+function _getSelectedLabels() {
+  // Use _sidebarTagSelection directly — contains only real tag names now.
+  return (window._sidebarTagSelection || []).slice();
+}
 function _getSelectedPriorities() { return _getSelectedFilterValues('priority-multi', 'priority'); }
 
 /* ── Archive/pinned toggles (hotkey helpers) ─────────────────────────────── */
@@ -354,6 +512,7 @@ function _buildTagFilterPanel() {
     items: allTags.map(function(t) { return { name: t.name, favorite: !!t.favorite, color: t.color }; }),
     selection: window._sidebarTagSelection,
     onChange: function() {
+      _cwocUpdateTagVirtualOptions();
       _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
       onFilterChange();
     },
@@ -462,7 +621,7 @@ function _renderPeopleChipFilter(containerId, contacts, users, selection) {
 
       var bgColor = item.color || '#d2b48c';
       chip.style.backgroundColor = bgColor;
-      chip.style.color = _isPeopleColorLight(bgColor) ? '#2b1e0f' : '#fff';
+      chip.style.color = isLightColor(bgColor) ? '#2b1e0f' : '#fff';
 
       if (item._isUser) {
         // User chips: thicker, very dark brown border
@@ -482,7 +641,11 @@ function _renderPeopleChipFilter(containerId, contacts, users, selection) {
       var thumb = document.createElement('span');
       thumb.style.cssText = 'display:inline-flex;align-items:center;flex-shrink:0;';
       if (item.image_url) {
-        thumb.innerHTML = '<img src="' + item.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" />';
+        var thumbImg = document.createElement('img');
+        thumbImg.src = item.image_url;
+        thumbImg.style.cssText = 'width:18px;height:18px;border-radius:50%;object-fit:cover;';
+        thumbImg.onerror = function() { console.warn('[CWOC] Missing profile image for "' + name + '": ' + item.image_url); this.style.display = 'none'; };
+        thumb.appendChild(thumbImg);
       } else if (item._isUser) {
         // User icon placeholder
         thumb.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(139,90,43,0.15);color:#8b5a2b;font-size:9px;"><i class="fas fa-user"></i></span>';
@@ -528,7 +691,7 @@ function _renderPeopleChipFilter(containerId, contacts, users, selection) {
   });
 }
 
-function _isPeopleColorLight(hex) { return isLightColor(hex); }
+// _isPeopleColorLight — removed, use isLightColor() from shared-utils.js directly
 
 /** Clear the people filter selection. */
 function clearPeopleFilter() {
@@ -553,12 +716,40 @@ document.addEventListener('visibilitychange', function() {
 
 /* ── Label/tag filter loading from settings ──────────────────────────────── */
 
+/**
+ * Dashboard wrapper: delegates to shared _cwocUpdateTagVirtualOptions.
+ */
+function _updateTagVirtualOptions() {
+  _cwocUpdateTagVirtualOptions();
+}
+
+/**
+ * Handle toggling a real tag — update the toggle button state.
+ */
+function _onTagToggled() {
+  _cwocUpdateTagVirtualOptions();
+}
+
+/**
+ * Select ONLY the given tag, deselecting all others (Shift+Click handler).
+ */
+function _selectOnlyTag(fullPath) {
+  window._sidebarTagSelection.length = 0;
+  window._sidebarTagSelection.push(fullPath);
+  _cwocUpdateTagVirtualOptions();
+  var container = document.getElementById('label-multi');
+  if (container) {
+    _syncSidebarTagCheckboxes(container, _cachedTagObjects);
+  }
+  onFilterChange();
+}
+
 async function _loadLabelFilters() {
   try {
     var container = document.getElementById('label-multi');
     if (!container) return;
 
-    // Load settings for non-tag config values
+    // Load settings for non-tag config values (dashboard-specific)
     try {
       var settings = await getCachedSettings();
       if (settings.chit_options) {
@@ -578,35 +769,28 @@ async function _loadLabelFilters() {
       _applyEnabledPeriods();
     } catch (e) { /* ignore */ }
 
-    // Use shared tag loader — settings is the single source of truth
-    var tagObjects = await loadAllTags();
-    _cachedTagObjects = tagObjects;
-
+    // Restore previously selected tags
     var prevSelected = [];
     container.querySelectorAll('input:checked').forEach(function(cb) { prevSelected.push(cb.value); });
     if (window._pendingLabelFilters) {
       window._pendingLabelFilters.forEach(function(v) { if (!prevSelected.includes(v)) prevSelected.push(v); });
       delete window._pendingLabelFilters;
     }
-
-    window._sidebarTagSelection = prevSelected.slice();
-
-    container.innerHTML = '';
-    if (tagObjects.length === 0) {
-      container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No tags defined</span>';
-      return;
+    if (prevSelected.length > 0) {
+      window._sidebarTagSelection = prevSelected.slice();
     }
 
-    var tree = buildTagTree(tagObjects);
-    renderTagTree(container, tree, window._sidebarTagSelection, function(fullPath, isNowSelected) {
-      var idx = window._sidebarTagSelection.indexOf(fullPath);
-      if (isNowSelected && idx === -1) window._sidebarTagSelection.push(fullPath);
-      else if (!isNowSelected && idx !== -1) window._sidebarTagSelection.splice(idx, 1);
-      _syncSidebarTagCheckboxes(container, tagObjects);
-      onFilterChange();
+    // Use the shared tag filter loader (renders virtual options + tag list)
+    await cwocLoadTagFilter({
+      onChange: function() {
+        _cachedTagObjects = window._cwocTagFilterObjects || [];
+        _syncSidebarTagCheckboxes(container, _cachedTagObjects);
+        onFilterChange();
+      }
     });
 
-    _syncSidebarTagCheckboxes(container, tagObjects);
+    _cachedTagObjects = window._cwocTagFilterObjects || [];
+    _syncSidebarTagCheckboxes(container, _cachedTagObjects);
   } catch (e) {
     console.warn('Could not load label filters:', e);
   }

@@ -1,0 +1,1 @@
+Add camera capture for profile images — dedicated "Camera" button opens a live video preview modal with capture, retake, switch camera (front/back), and use photo. Works on both desktop (webcam) and mobile (device camera). Also fixes animated GIF profile images displaying as static.

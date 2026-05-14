@@ -311,14 +311,17 @@ function _renderContactChipInTree(parent, c) {
   chip.style.margin = '2px 0 2px 12px';
   if (c.color) {
     chip.style.backgroundColor = c.color;
-    chip.style.color = _isLightColor(c.color) ? '#2b1e0f' : '#fff';
+    chip.style.color = isLightColor(c.color) ? '#2b1e0f' : '#fff';
     chip.style.borderColor = c.color;
   }
 
   var thumbEl = document.createElement('span');
   thumbEl.className = 'chip-thumb';
   if (c.image_url) {
-    thumbEl.innerHTML = '<img src="' + c.image_url + '" />';
+    var img = document.createElement('img');
+    img.src = c.image_url;
+    img.onerror = function() { console.warn('[CWOC] Missing profile image for contact "' + (c.display_name || c.given_name || 'unknown') + '": ' + c.image_url); thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-broken" title="Image missing: ' + c.image_url + '">⚠</span>'; };
+    thumbEl.appendChild(img);
   } else {
     thumbEl.innerHTML = '<span class="chip-thumb-placeholder">?</span>';
   }
@@ -364,13 +367,16 @@ function _renderUserChipInTree(parent, u, showControls) {
   // Apply user color if available
   if (u.color) {
     chip.style.backgroundColor = u.color;
-    chip.style.color = _isLightColor(u.color) ? '#2b1e0f' : '#fff';
+    chip.style.color = isLightColor(u.color) ? '#2b1e0f' : '#fff';
   }
 
   var thumbEl = document.createElement('span');
   thumbEl.className = 'chip-thumb';
   if (u.profile_image_url) {
-    thumbEl.innerHTML = '<img src="' + u.profile_image_url + '" />';
+    var img = document.createElement('img');
+    img.src = u.profile_image_url;
+    img.onerror = function() { console.warn('[CWOC] Missing profile image for user "' + (u.display_name || u.username || 'unknown') + '": ' + u.profile_image_url); thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-broken" title="Image missing: ' + u.profile_image_url + '">⚠</span>'; };
+    thumbEl.appendChild(img);
   } else {
     thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-user"><i class="fas fa-users"></i></span>';
   }
@@ -807,24 +813,7 @@ function initPeopleSharingForNewChit() {
  * emails, phones, addresses, call_signs, x_handles, websites, notes, tags.
  */
 function _contactMatchesFilter(c, filter) {
-  var fields = [
-    c.display_name || '',
-    c.given_name || '',
-    c.surname || '',
-    c.nickname || '',
-    c.organization || '',
-    c.social_context || '',
-    c.notes || '',
-    (c.emails || []).map(function (e) { return (e.value || '') + ' ' + (e.label || ''); }).join(' '),
-    (c.phones || []).map(function (p) { return (p.value || '') + ' ' + (p.label || ''); }).join(' '),
-    (c.addresses || []).map(function (a) { return (a.value || ''); }).join(' '),
-    (c.call_signs || []).map(function (cs) { return (cs.value || ''); }).join(' '),
-    (c.x_handles || []).map(function (x) { return (x.value || ''); }).join(' '),
-    (c.websites || []).map(function (w) { return (w.value || ''); }).join(' '),
-    (c.dates || []).map(function (d) { return (d.label || '') + ' ' + (d.value || ''); }).join(' '),
-    (c.tags || []).join(' ')
-  ];
-  return fields.some(function (f) { return f.toLowerCase().includes(filter); });
+  return cwocContactMatchesFilter(c, filter);
 }
 
 function _filterPeopleTree(query) {
@@ -996,14 +985,17 @@ function _renderPeopleChips() {
     chip.className = 'people-chip';
     if (data.color) {
       chip.style.backgroundColor = data.color;
-      chip.style.color = _isLightColor(data.color) ? '#2b1e0f' : '#fff';
+      chip.style.color = isLightColor(data.color) ? '#2b1e0f' : '#fff';
       chip.style.borderColor = data.color;
     }
 
     var thumbEl = document.createElement('span');
     thumbEl.className = 'chip-thumb';
     if (data.image_url) {
-      thumbEl.innerHTML = '<img src="' + data.image_url + '" />';
+      var img = document.createElement('img');
+      img.src = data.image_url;
+      img.onerror = function() { console.warn('[CWOC] Missing profile image for "' + (data.display_name || 'unknown') + '": ' + data.image_url); thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-broken" title="Image missing: ' + data.image_url + '">⚠</span>'; };
+      thumbEl.appendChild(img);
     } else {
       thumbEl.innerHTML = '<span class="chip-thumb-placeholder">?</span>';
     }
@@ -1068,13 +1060,16 @@ function _renderPeopleChips() {
     // Apply user color if available
     if (userInfo && userInfo.color) {
       chip.style.backgroundColor = userInfo.color;
-      chip.style.color = _isLightColor(userInfo.color) ? '#2b1e0f' : '#fff';
+      chip.style.color = isLightColor(userInfo.color) ? '#2b1e0f' : '#fff';
     }
 
     var thumbEl = document.createElement('span');
     thumbEl.className = 'chip-thumb';
     if (userInfo && userInfo.profile_image_url) {
-      thumbEl.innerHTML = '<img src="' + userInfo.profile_image_url + '" />';
+      var img = document.createElement('img');
+      img.src = userInfo.profile_image_url;
+      img.onerror = function() { console.warn('[CWOC] Missing profile image for user "' + (displayName || username || 'unknown') + '": ' + userInfo.profile_image_url); thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-broken" title="Image missing: ' + userInfo.profile_image_url + '">⚠</span>'; };
+      thumbEl.appendChild(img);
     } else {
       thumbEl.innerHTML = '<span class="chip-thumb-placeholder chip-thumb-user"><i class="fas fa-users"></i></span>';
     }
@@ -1270,8 +1265,7 @@ function _updateActivePeopleCount() {
   if (el) el.textContent = _peopleChipData.length + _currentShares.length;
 }
 
-// _isLightColor moved to shared.js as isLightColor()
-function _isLightColor(hex) { return isLightColor(hex); }
+// _isLightColor — removed, use isLightColor() from shared-utils.js directly
 
 // Populate chips from a chit's people array (called from loadChitData)
 function _setPeopleFromArray(peopleArray) {
@@ -1781,7 +1775,14 @@ function _renderExpandRow(person, showControls, assignedToId) {
   // ── Thumbnail column ──
   var thumbCol = _el('span', 'cwoc-pex-col-thumb');
   if (person.imageUrl) {
-    thumbCol.innerHTML = '<img src="' + person.imageUrl + '" alt="" />';
+    var img = document.createElement('img');
+    img.src = person.imageUrl;
+    img.alt = '';
+    img.onerror = function() {
+      console.warn('[CWOC] Missing profile image for "' + (person.displayName || 'unknown') + '": ' + person.imageUrl);
+      thumbCol.innerHTML = '<span class="cwoc-pex-thumb-placeholder chip-thumb-broken" title="Image missing: ' + person.imageUrl + '">⚠</span>';
+    };
+    thumbCol.appendChild(img);
   } else if (person.type === 'user') {
     thumbCol.innerHTML = '<span class="cwoc-pex-thumb-placeholder cwoc-pex-thumb-user"><i class="fas fa-users"></i></span>';
   } else {

@@ -686,3 +686,161 @@ function _updateCounterDisplay(wrap, success, goal, freqLabel) {
     span.title = 'Progress: ' + success + ' of ' + goal + ' this period';
   }
 }
+
+// ── Habit Rules Integration ──────────────────────────────────────────────────
+
+/**
+ * Fetch habit rules from the backend (rules with habit_mode enabled).
+ * Calls GET /api/rules?habit=true and returns the array of rule objects,
+ * each containing a `habit_summary` with current_status, streak, success_rate, etc.
+ *
+ * @returns {Promise<Array>} Array of habit rule objects, or empty array on error
+ */
+async function fetchHabitRules() {
+  try {
+    var resp = await fetch('/api/rules?habit=true');
+    if (!resp.ok) {
+      console.error('[fetchHabitRules] Failed to fetch habit rules:', resp.status);
+      return [];
+    }
+    var rules = await resp.json();
+    return Array.isArray(rules) ? rules : [];
+  } catch (err) {
+    console.error('[fetchHabitRules] Error fetching habit rules:', err);
+    return [];
+  }
+}
+
+/**
+ * Render habit rule cards into a container element.
+ * Each card shows: 🤖 badge, rule name, current period status, streak, success rate.
+ * Clicking navigates to the rule editor for that rule.
+ *
+ * @param {HTMLElement} container - The container to append cards into
+ * @param {Array} habitRules - Array of rule objects from fetchHabitRules()
+ */
+function _renderHabitRuleCards(container, habitRules) {
+  if (!habitRules || habitRules.length === 0) return;
+
+  // Section header for rule habits
+  var ruleHeader = document.createElement('div');
+  ruleHeader.className = 'habit-section-header';
+  ruleHeader.innerHTML = '<span class="habit-section-icon">🤖</span> Rule Habits';
+  container.appendChild(ruleHeader);
+
+  habitRules.forEach(function(rule) {
+    var summary = rule.habit_summary || {};
+    var currentStatus = summary.current_status || 'due';
+    var streak = summary.streak || 0;
+    var successRate = summary.success_rate != null ? Math.round(summary.success_rate * 100) : 0;
+    var period = summary.period || 'daily';
+    var isAchieved = currentStatus === 'achieved';
+
+    var card = document.createElement('div');
+    card.className = 'habit-card' + (isAchieved ? ' habit-done' : '');
+    card.dataset.ruleId = rule.id;
+
+    // ── Header row: 🤖 badge + rule name + period status ──
+    var header = document.createElement('div');
+    header.className = 'habit-header';
+
+    // Robot badge
+    var badge = document.createElement('span');
+    badge.className = 'habit-rule-badge';
+    badge.textContent = '🤖';
+    badge.title = 'Automated rule habit';
+    header.appendChild(badge);
+
+    // Rule name as clickable link
+    var titleLink = document.createElement('a');
+    titleLink.href = '/frontend/html/rule-editor.html?id=' + encodeURIComponent(rule.id);
+    titleLink.textContent = rule.name || '(Unnamed Rule)';
+    titleLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/frontend/html/rule-editor.html?id=' + encodeURIComponent(rule.id);
+    });
+    header.appendChild(titleLink);
+
+    // Period label
+    var sep = document.createElement('span');
+    sep.className = 'habit-separator';
+    sep.textContent = ' · ';
+    header.appendChild(sep);
+    var periodSpan = document.createElement('span');
+    periodSpan.className = 'habit-frequency';
+    periodSpan.textContent = period.charAt(0).toUpperCase() + period.slice(1);
+    header.appendChild(periodSpan);
+
+    // Status badge inline
+    if (isAchieved) {
+      var completeLine = document.createElement('span');
+      completeLine.className = 'habit-complete-line';
+      completeLine.textContent = '✅ Achieved this period';
+      header.appendChild(completeLine);
+    }
+
+    card.appendChild(header);
+
+    // ── Metrics row ──
+    var metrics = document.createElement('div');
+    metrics.className = 'habit-metrics';
+
+    // Status box
+    var statusBox = document.createElement('div');
+    statusBox.className = 'habit-metric-box';
+    var statusLabel = document.createElement('span');
+    statusLabel.className = 'habit-metric-label';
+    statusLabel.textContent = '📋 Status';
+    statusBox.appendChild(statusLabel);
+    var statusVal = document.createElement('div');
+    statusVal.className = 'habit-metric-value';
+    var statusIcon = currentStatus === 'achieved' ? '✅' : currentStatus === 'missed' ? '❌' : '⏳';
+    statusVal.textContent = statusIcon + ' ' + currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
+    statusBox.appendChild(statusVal);
+    metrics.appendChild(statusBox);
+
+    // Overall success rate box
+    var overallBox = document.createElement('div');
+    overallBox.className = 'habit-metric-box';
+    var overallLabel = document.createElement('span');
+    overallLabel.className = 'habit-metric-label';
+    overallLabel.textContent = '📈 Overall';
+    overallBox.appendChild(overallLabel);
+    var overallVal = document.createElement('div');
+    overallVal.className = 'habit-metric-value';
+    var overallSpan = document.createElement('span');
+    overallSpan.className = 'habit-success-badge';
+    overallSpan.textContent = successRate + '%';
+    overallSpan.title = 'Success rate across tracked periods';
+    overallVal.appendChild(overallSpan);
+    overallBox.appendChild(overallVal);
+    metrics.appendChild(overallBox);
+
+    // Streak box (only if streak > 0)
+    if (streak > 0) {
+      var streakBox = document.createElement('div');
+      streakBox.className = 'habit-metric-box';
+      var streakLabel = document.createElement('span');
+      streakLabel.className = 'habit-metric-label';
+      streakLabel.textContent = '🔥 Streak';
+      streakBox.appendChild(streakLabel);
+      var streakVal = document.createElement('div');
+      streakVal.className = 'habit-metric-value';
+      streakVal.textContent = streak;
+      streakBox.appendChild(streakVal);
+      metrics.appendChild(streakBox);
+    }
+
+    card.appendChild(metrics);
+
+    // ── Click to navigate to rule editor ──
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('a')) return; // Let link handle it
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/frontend/html/rule-editor.html?id=' + encodeURIComponent(rule.id);
+    });
+
+    container.appendChild(card);
+  });
+}

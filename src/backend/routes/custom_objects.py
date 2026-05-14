@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, row_to_dict
 from src.backend.models import (
     BulkReorderRequest,
     CustomObjectCreate,
@@ -32,12 +32,6 @@ VALID_VALUE_TYPES = ["integer", "decimal", "boolean", "string"]
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
-
-def _row_to_dict(row, cursor) -> dict:
-    """Convert a sqlite3 Row to a plain dict using cursor.description."""
-    columns = [col[0] for col in cursor.description]
-    return dict(zip(columns, row))
-
 
 def _format_object(obj: dict) -> dict:
     """Format a custom_objects row dict for API response."""
@@ -114,7 +108,7 @@ async def list_custom_objects(
 
         results = []
         for row in rows:
-            obj = _row_to_dict(row, cursor)
+            obj = row_to_dict(cursor, row)
             obj = _format_object(obj)
             obj["zone_assignments"] = _get_zone_assignments(conn, obj["id"], owner_id)
             results.append(obj)
@@ -295,7 +289,7 @@ async def update_custom_object(request: Request, id: str, updates: CustomObjectU
         # Return the updated object
         cursor.execute("SELECT * FROM custom_objects WHERE id = ?", (id,))
         row = cursor.fetchone()
-        obj = _row_to_dict(row, cursor)
+        obj = row_to_dict(cursor, row)
         obj = _format_object(obj)
         obj["zone_assignments"] = _get_zone_assignments(conn, id, owner_id)
         return obj
@@ -396,7 +390,7 @@ async def restore_custom_object(request: Request, id: str):
         # Return the restored object
         cursor.execute("SELECT * FROM custom_objects WHERE id = ?", (id,))
         restored_row = cursor.fetchone()
-        obj = _row_to_dict(restored_row, cursor)
+        obj = row_to_dict(cursor, restored_row)
         obj = _format_object(obj)
         obj["zone_assignments"] = _get_zone_assignments(conn, id, owner_id)
         return obj
@@ -442,7 +436,7 @@ async def get_objects_by_zone(request: Request, zone_id: str):
 
         results = []
         for row in rows:
-            obj = _row_to_dict(row, cursor)
+            obj = row_to_dict(cursor, row)
             # Extract zone-specific fields before formatting
             zone_config = obj.pop("zone_config", None)
             zone_sort_order = obj.pop("zone_sort_order", 0)

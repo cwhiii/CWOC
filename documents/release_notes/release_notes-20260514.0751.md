@@ -1,0 +1,1 @@
+Fixed global search 502 errors by adding SQLite busy_timeout, excluding heavy unused columns (email_body_html, attachments) from the query, truncating large text fields in results, capping results at 200, and adding detailed error logging.

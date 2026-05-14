@@ -36,30 +36,8 @@ var currentWeatherLat = null;
 var currentWeatherLon = null;
 var currentWeatherData = null;
 
-// Weather icon map — used by editor-location.js
-const weatherIcons = {
-  0: "☀️",
-  1: "🌤️",
-  2: "⛅",
-  3: "☁️",
-  45: "🌫️",
-  48: "🌫️",
-  51: "🌦️",
-  53: "🌦️",
-  55: "🌦️",
-  61: "🌧️",
-  63: "🌧️",
-  65: "🌧️",
-  71: "🌨️",
-  73: "🌨️",
-  75: "🌨️",
-  80: "🌧️",
-  81: "🌧️",
-  82: "🌧️",
-  95: "⛈️",
-  96: "⛈️",
-  99: "⛈️",
-};
+// weatherIcons — now in shared-utils.js as _cwocWeatherIcons
+var weatherIcons = _cwocWeatherIcons;
 
 // WMO weather code descriptions
 const weatherDescriptions = {
@@ -132,6 +110,7 @@ function _checklistAutosave() {
   if (!window.currentChitId || window.isNewChit) return; // can't autosave a new chit
 
   if (_checklistAutosaveTimer) clearTimeout(_checklistAutosaveTimer);
+  _showChecklistPending();
   _checklistAutosaveTimer = setTimeout(function() {
     _doChecklistAutosave();
   }, 2000);
@@ -166,6 +145,7 @@ async function _doChecklistAutosave() {
  * Brief visual feedback that checklist was auto-saved.
  */
 function _flashChecklistSaved() {
+  _hideChecklistPending();
   var indicator = document.getElementById('checklist-autosave-indicator');
   if (!indicator) {
     var header = document.getElementById('checklistSection')?.querySelector('.zone-header');
@@ -186,6 +166,40 @@ function _flashChecklistSaved() {
   }
   indicator.style.opacity = '1';
   setTimeout(function() { indicator.style.opacity = '0'; }, 2000);
+}
+
+/**
+ * Show "changes pending" yellow text in the checklist zone header.
+ * Appears immediately when changes are made, before autosave fires.
+ */
+function _showChecklistPending() {
+  var pending = document.getElementById('checklist-pending-indicator');
+  if (!pending) {
+    var header = document.getElementById('checklistSection')?.querySelector('.zone-header');
+    if (!header) return;
+    var zoneActions = header.querySelector('.zone-actions');
+    if (!zoneActions) return;
+    pending = document.createElement('span');
+    pending.id = 'checklist-pending-indicator';
+    pending.style.cssText = 'font-size:0.75em;color:#b8860b;margin-right:1em;';
+    pending.textContent = 'changes pending';
+    // Insert before the undo button
+    var undoBtn = zoneActions.querySelector('.notes-undo-redo');
+    if (undoBtn) {
+      zoneActions.insertBefore(pending, undoBtn);
+    } else {
+      zoneActions.appendChild(pending);
+    }
+  }
+  pending.style.display = '';
+}
+
+/**
+ * Hide the "changes pending" indicator (called after successful save).
+ */
+function _hideChecklistPending() {
+  var pending = document.getElementById('checklist-pending-indicator');
+  if (pending) pending.style.display = 'none';
 }
 
 /**
@@ -277,13 +291,12 @@ function _initAutoCompleteChecklist(chit) {
 }
 
 /**
- * Show/hide the auto-complete button based on project membership.
+ * Show/hide the auto-complete button. Always visible (no longer restricted to project children).
  */
 function _showAutoCompleteBtnIfChild() {
   var btn = document.getElementById('autoCompleteChecklistBtn');
   if (!btn) return;
-  var isChild = !!(window._cwocParentProjectId);
-  btn.style.display = isChild ? 'inline-flex' : 'none';
+  btn.style.display = 'inline-flex';
 }
 
 /**
@@ -351,9 +364,4 @@ const userTimezoneOffset = new Date().getTimezoneOffset();
 
 // _utcToLocalDate, _parseISOTime moved to shared.js
 
-function _convertDBDateToDisplayDate(dateString) {
-  if (!dateString) return "";
-  const date = _utcToLocalDate(dateString);
-  if (isNaN(date.getTime())) return "";
-  return formatDate(date);
-}
+// _convertDBDateToDisplayDate — now in shared-utils.js (single source of truth)

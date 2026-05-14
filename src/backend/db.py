@@ -98,6 +98,8 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Checklists")
     if chit.alarm:
         system_tags.append("CWOC_System/Alarms")
+    if chit.notification and getattr(chit, 'point_in_time', None):
+        system_tags.append("CWOC_System/Reminders")
     if "Project" in (chit.tags or []):
         system_tags.append("CWOC_System/Projects")
     if chit.status in ["ToDo", "In Progress", "Blocked", "Complete", "Rejected"]:
@@ -335,6 +337,35 @@ def update_version_info(version, installed_datetime):
     finally:
         if conn:
             conn.close()
+
+def utcnow_iso() -> str:
+    """Return current UTC time as ISO 8601 string with Z suffix."""
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def row_to_dict(cursor, row) -> dict:
+    """Convert a sqlite3 row tuple to a dict using cursor.description."""
+    columns = [col[0] for col in cursor.description]
+    return dict(zip(columns, row))
+
+
+def require_admin(request) -> str:
+    """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
+    from fastapi import HTTPException
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    finally:
+        conn.close()
+    return user_id
+
 
 def seed_version_info():
     """At startup, always sync version from /app/src/VERSION into the database."""

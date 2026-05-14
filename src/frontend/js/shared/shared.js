@@ -145,6 +145,7 @@ function showQuickEditModal(chit, onRefresh) {
         var img = document.createElement('img');
         img.src = match.image_url;
         img.style.cssText = 'width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;';
+        img.onerror = function() { console.warn('[CWOC] Missing profile image for "' + name + '": ' + match.image_url); this.style.display = 'none'; };
         chip.appendChild(img);
       }
 
@@ -510,7 +511,7 @@ function showQuickEditModal(chit, onRefresh) {
     modal.appendChild(recRow);
   }
 
-  // --- Pin / Archive / Delete row ---
+  // --- Pin / Snooze / Delete row ---
   addSep();
   const actionRow = document.createElement('div');
   actionRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;';
@@ -534,24 +535,6 @@ function showQuickEditModal(chit, onRefresh) {
     } catch (e) { console.error('Pin toggle failed:', e); }
   });
   actionRow.appendChild(pinBtn);
-
-  // Archive toggle
-  const archBtn = document.createElement('button');
-  archBtn.style.cssText = iconBtnStyle + `background:${chit.archived ? '#d4c5a9' : '#fdf5e6'};color:#666;`;
-  archBtn.innerHTML = `📦 ${chit.archived ? 'Unarchive' : 'Archive'}`;
-  archBtn.title = chit.archived ? 'Unarchive this chit' : 'Archive this chit';
-  archBtn.addEventListener('click', async () => {
-    try {
-      const resp = await fetch(`/api/chit/${chitId}`);
-      if (!resp.ok) return;
-      const fullChit = await resp.json();
-      fullChit.archived = !fullChit.archived;
-      await fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
-      close();
-      if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
-    } catch (e) { console.error('Archive toggle failed:', e); }
-  });
-  actionRow.appendChild(archBtn);
 
   // Snooze button
   const isSnoozed = chit.snoozed_until && new Date(chit.snoozed_until) > new Date();
@@ -688,6 +671,296 @@ function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
 }
 
 /**
+ * Show the "Add to Bundle" modal for an email chit.
+ * Allows user to choose between subject or sender matching, then select a bundle.
+ * @param {object} chit — the email chit object
+ */
+function _showAddToBundleModal(chit) {
+  console.log('[AddToBundle] Opening modal for chit:', chit.id, chit.title);
+  
+  // Remove any existing modal
+  var existing = document.getElementById('addToBundleModalOverlay');
+  if (existing) existing.remove();
+
+  // Create modal overlay
+  var overlay = document.createElement('div');
+  overlay.id = 'addToBundleModalOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+  // Create modal content
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:12px;padding:24px;max-width:500px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+
+  // Title
+  var title = document.createElement('h3');
+  title.style.cssText = 'margin:0 0 20px 0;color:#1a1208;font-size:1.3em;text-align:center;';
+  title.textContent = 'Add Email to Bundle';
+  modal.appendChild(title);
+
+  // Email info
+  var emailInfo = document.createElement('div');
+  emailInfo.style.cssText = 'background:rgba(255,255,255,0.3);border:1px solid #d4c4a8;border-radius:6px;padding:12px;margin-bottom:20px;font-size:0.9em;';
+  
+  var subject = chit.title || chit.email_subject || '(No Subject)';
+  var sender = chit.email_from || '(Unknown Sender)';
+  
+  emailInfo.innerHTML = '<strong>Subject:</strong> ' + _escHtml(subject) + '<br><strong>From:</strong> ' + _escHtml(sender);
+  modal.appendChild(emailInfo);
+
+  // Match type selection
+  var matchLabel = document.createElement('label');
+  matchLabel.style.cssText = 'display:block;margin-bottom:16px;font-weight:bold;color:#1a1208;';
+  matchLabel.textContent = 'Match emails by:';
+  modal.appendChild(matchLabel);
+
+  var matchOptions = document.createElement('div');
+  matchOptions.style.cssText = 'margin-bottom:20px;';
+
+  // Subject radio
+  var subjectRadio = document.createElement('input');
+  subjectRadio.type = 'radio';
+  subjectRadio.name = 'matchType';
+  subjectRadio.value = 'subject';
+  subjectRadio.id = 'matchSubject';
+  
+  var subjectLabel = document.createElement('label');
+  subjectLabel.htmlFor = 'matchSubject';
+  subjectLabel.style.cssText = 'display:block;margin-bottom:8px;cursor:pointer;';
+  subjectLabel.innerHTML = '<input type="radio" name="matchType" value="subject" style="margin-right:8px;"> Subject: "' + _escHtml(subject) + '"';
+  
+  // Sender radio (default)
+  var senderLabel = document.createElement('label');
+  senderLabel.htmlFor = 'matchSender';
+  senderLabel.style.cssText = 'display:block;cursor:pointer;';
+  senderLabel.innerHTML = '<input type="radio" name="matchType" value="sender" checked style="margin-right:8px;"> Sender: "' + _escHtml(sender) + '"';
+
+  matchOptions.appendChild(senderLabel);
+  matchOptions.appendChild(subjectLabel);
+  modal.appendChild(matchOptions);
+
+  // Bundle selection
+  var bundleLabel = document.createElement('label');
+  bundleLabel.style.cssText = 'display:block;margin-bottom:8px;font-weight:bold;color:#1a1208;';
+  bundleLabel.textContent = 'Add to bundle:';
+  modal.appendChild(bundleLabel);
+
+  var bundleSelect = document.createElement('select');
+  bundleSelect.style.cssText = 'width:100%;padding:8px;border:1px solid #6b4e31;border-radius:4px;background:#fffaf0;font-family:inherit;margin-bottom:20px;';
+  bundleSelect.innerHTML = '<option value="">Loading bundles...</option>';
+  modal.appendChild(bundleSelect);
+
+  // Load bundles
+  _loadBundlesForModal(bundleSelect);
+
+  // Buttons
+  var buttonRow = document.createElement('div');
+  buttonRow.style.cssText = 'display:flex;gap:12px;justify-content:flex-end;';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:8px 16px;border:1px solid #6b4e31;background:#f5f0e8;color:#1a1208;border-radius:4px;cursor:pointer;font-family:inherit;';
+  cancelBtn.onclick = function() { overlay.remove(); };
+
+  var addBtn = document.createElement('button');
+  addBtn.textContent = 'Add to Bundle';
+  addBtn.style.cssText = 'padding:8px 16px;border:1px solid #6b4e31;background:#6b4e31;color:#fdf5e6;border-radius:4px;cursor:pointer;font-family:inherit;';
+  addBtn.onclick = function() { _executeAddToBundle(chit, overlay); };
+
+  buttonRow.appendChild(cancelBtn);
+  buttonRow.appendChild(addBtn);
+  modal.appendChild(buttonRow);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // ESC to close
+  var escHandler = function(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      overlay.remove();
+      document.removeEventListener('keydown', escHandler, true);
+    }
+  };
+  document.addEventListener('keydown', escHandler, true);
+
+  // Click overlay to close
+  overlay.onclick = function(e) {
+    if (e.target === overlay) overlay.remove();
+  };
+}
+
+/**
+ * Load bundles into the bundle selection dropdown.
+ * @param {HTMLSelectElement} selectEl — the select element to populate
+ */
+function _loadBundlesForModal(selectEl) {
+  // Try to get bundles from cached settings first
+  if (window._cwocSettings && window._cwocSettings.bundles) {
+    _populateBundleSelect(selectEl, window._cwocSettings.bundles);
+    return;
+  }
+
+  // Fall back to fetching settings
+  if (typeof getCachedSettings === 'function') {
+    getCachedSettings().then(function(settings) {
+      var bundles = (settings && settings.bundles) || [];
+      _populateBundleSelect(selectEl, bundles);
+    }).catch(function(err) {
+      console.error('[AddToBundle] Failed to load bundles:', err);
+      selectEl.innerHTML = '<option value="">Error loading bundles</option>';
+    });
+  } else {
+    selectEl.innerHTML = '<option value="">No bundles available</option>';
+  }
+}
+
+/**
+ * Populate the bundle select dropdown with bundle options.
+ * @param {HTMLSelectElement} selectEl — the select element
+ * @param {Array} bundles — array of bundle objects
+ */
+function _populateBundleSelect(selectEl, bundles) {
+  selectEl.innerHTML = '';
+  
+  if (!bundles || bundles.length === 0) {
+    selectEl.innerHTML = '<option value="">No bundles available</option>';
+    return;
+  }
+
+  // Add default option
+  var defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Select a bundle...';
+  selectEl.appendChild(defaultOption);
+
+  // Filter out "Everything Else" bundle (catch-all, can't add rules to it)
+  var availableBundles = bundles.filter(function(b) {
+    return b.name !== 'Everything Else';
+  });
+
+  // Sort by display order
+  availableBundles.sort(function(a, b) {
+    return (a.display_order || 0) - (b.display_order || 0);
+  });
+
+  availableBundles.forEach(function(bundle) {
+    var option = document.createElement('option');
+    option.value = bundle.id;
+    option.textContent = bundle.name;
+    if (bundle.description) {
+      option.title = bundle.description;
+    }
+    selectEl.appendChild(option);
+  });
+}
+
+/**
+ * Execute the "Add to Bundle" action.
+ * @param {object} chit — the email chit
+ * @param {HTMLElement} overlay — the modal overlay to close
+ */
+function _executeAddToBundle(chit, overlay) {
+  var matchType = document.querySelector('input[name="matchType"]:checked');
+  var bundleSelect = overlay.querySelector('select');
+  
+  if (!matchType || !bundleSelect.value) {
+    cwocToast('Please select a match type and bundle.', 'error');
+    return;
+  }
+
+  var bundleId = bundleSelect.value;
+  var matchBy = matchType.value;
+  
+  // Get the match value
+  var matchValue;
+  if (matchBy === 'subject') {
+    matchValue = chit.title || chit.email_subject || '';
+  } else if (matchBy === 'sender') {
+    matchValue = chit.email_from || '';
+    // Extract just the email address from "Name <email>" format
+    var emailMatch = matchValue.match(/<([^>]+)>/);
+    if (emailMatch) {
+      matchValue = emailMatch[1];
+    }
+  }
+
+  if (!matchValue.trim()) {
+    cwocToast('No ' + matchBy + ' found to match against.', 'error');
+    return;
+  }
+
+  console.log('[AddToBundle] Adding rule:', { bundleId, matchBy, matchValue });
+
+  // Call the API to add the rule
+  fetch('/api/bundles/' + encodeURIComponent(bundleId) + '/add-rule', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      match_type: matchBy,
+      match_value: matchValue.trim()
+    })
+  })
+  .then(function(response) {
+    if (!response.ok) {
+      return response.json().then(function(err) {
+        throw new Error(err.detail || 'Failed to add rule');
+      });
+    }
+    return response.json();
+  })
+  .then(function(result) {
+    overlay.remove();
+    cwocToast('Added rule to bundle successfully!', 'success');
+    
+    // Immediately move THIS email to the target bundle (instant feedback)
+    // Strip old bundle tags and add the new one
+    var bundleName = result.bundle_name;
+    if (bundleName && chit.id) {
+      fetch('/api/chit/' + encodeURIComponent(chit.id))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(fullChit) {
+          if (!fullChit) return;
+          var tags = fullChit.tags || [];
+          if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+          // Strip all existing bundle tags
+          tags = tags.filter(function(t) {
+            return !(typeof t === 'string' && t.indexOf('CWOC_System/Bundle/') === 0);
+          });
+          // Add the new bundle tag
+          tags.push('CWOC_System/Bundle/' + bundleName);
+          fullChit.tags = tags;
+          // Serialize email array fields back to strings for PUT
+          ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
+            if (Array.isArray(fullChit[f])) fullChit[f] = JSON.stringify(fullChit[f]);
+          });
+          return fetch('/api/chits/' + encodeURIComponent(chit.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullChit)
+          });
+        })
+        .catch(function(e) { console.error('[AddToBundle] Immediate move failed:', e); });
+    }
+
+    // Trigger reclassification for all OTHER matching emails
+    return fetch('/api/bundles/reclassify', { method: 'POST' });
+  })
+  .then(function(reclassifyResp) {
+    if (reclassifyResp && reclassifyResp.ok) {
+      console.log('[AddToBundle] Reclassification triggered');
+      // Invalidate settings cache and refresh
+      if (typeof _invalidateSettingsCache === 'function') _invalidateSettingsCache();
+      if (typeof fetchChits === 'function') fetchChits();
+    }
+  })
+  .catch(function(err) {
+    console.error('[AddToBundle] Error:', err);
+    cwocToast('Failed to add rule: ' + err.message, 'error');
+  });
+}
+
+/**
  * Show a positioned context menu for a chit (right-click style).
  * Uses the same visual style as the project quick menu: parchment background,
  * positioned at cursor, menu items with hover highlight and icons.
@@ -744,6 +1017,13 @@ function _showChitContextMenu(e, chit, onRefresh) {
   _menuItem('<i class="fas fa-sliders" style="color:#6b4e31;"></i>', 'Quick Edit', function() {
     showQuickEditModal(chit, onRefresh);
   });
+
+  // Add to Bundle (only for emails)
+  if (chit.email_message_id || chit.email_status) {
+    _menuItem('<i class="fas fa-folder-plus" style="color:#6b4e31;"></i>', 'Add to Bundle', function() {
+      _showAddToBundleModal(chit);
+    });
+  }
 
   // Separator
   var sep1 = document.createElement('div');
@@ -892,26 +1172,11 @@ function _showChitContextMenu(e, chit, onRefresh) {
     });
   });
 
-  // ── Email-specific actions (archive, delete, mark unread) — only in Email view ──
+  // ── Email-specific actions (mark unread, add to bundle) — only in Email view ──
   if ((chit.email_from || chit.email_subject || chit.email_date) && typeof currentTab !== 'undefined' && currentTab === 'Email') {
     var emailSep = document.createElement('div');
     emailSep.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
     menu.appendChild(emailSep);
-
-    _menuItem('<i class="fas fa-archive" style="color:#155724;"></i>', 'Archive', function() {
-      var card = document.querySelector('.email-card[data-chit-id="' + chitId + '"]');
-      if (card && typeof _emailQuickArchive === 'function') {
-        _emailQuickArchive(chit, card);
-      } else {
-        chit.archived = true;
-        if (typeof chits !== 'undefined') {
-          var _lc = chits.find(function(c) { return c.id === chitId; });
-          if (_lc) _lc.archived = true;
-        }
-        if (onRefresh) onRefresh();
-        fetch('/api/chits/' + chitId + '/fields', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: true }) });
-      }
-    });
 
     var isRead = !!chit.email_read;
     _menuItem('<i class="fas fa-envelope' + (isRead ? '' : '-open') + '" style="color:#6b4e31;"></i>', isRead ? 'Mark Unread' : 'Mark Read', function() {
@@ -1984,6 +2249,8 @@ function cwocPlayAudio(audio, opts) {
   opts = opts || {};
   if (opts.loop !== undefined) audio.loop = opts.loop;
   audio.currentTime = 0;
+  // Mark audio as intentionally playing (used by retry to avoid replaying after dismiss)
+  audio._cwocIntentionalPlay = true;
 
   // Vibrate as fallback/supplement on mobile
   if (navigator.vibrate) {
@@ -1996,7 +2263,10 @@ function cwocPlayAudio(audio, opts) {
       // Playback blocked — retry on next user gesture
       var retryEvents = ['click', 'touchstart', 'keydown'];
       function _retry() {
-        audio.play().catch(function() {});
+        // Only retry if audio hasn't been intentionally stopped since the play request
+        if (audio._cwocIntentionalPlay) {
+          audio.play().catch(function() {});
+        }
         retryEvents.forEach(function(evt) {
           document.removeEventListener(evt, _retry, true);
         });
@@ -2006,6 +2276,16 @@ function cwocPlayAudio(audio, opts) {
       });
     });
   }
+}
+
+/**
+ * Stop audio and clear the intentional-play flag so retry handlers won't restart it.
+ */
+function cwocStopAudio(audio) {
+  if (!audio) return;
+  audio._cwocIntentionalPlay = false;
+  audio.pause();
+  audio.currentTime = 0;
 }
 
 // Auto-initialize on load
@@ -2027,6 +2307,9 @@ window._cwocSyncReconnectDelay = 1000;
 window._cwocSyncMode = 'none'; // 'ws' | 'poll' | 'none'
 window._cwocSyncPollId = 0; // last seen poll message ID
 window._cwocSyncPollTimer = null;
+window._cwocSyncRetries = 0; // track reconnect attempts
+window._cwocSyncMaxRetries = 3; // max retries before falling back to polling
+window._cwocSyncWasConnected = false; // track if WS ever connected this session
 
 function initSyncWebSocket() {
   if (window._cwocSyncMode === 'poll') return; // already fell back to polling
@@ -2043,6 +2326,8 @@ function initSyncWebSocket() {
     ws.onopen = function() {
       console.log('CWOC Sync: WebSocket connected');
       window._cwocSyncMode = 'ws';
+      window._cwocSyncWasConnected = true;
+      window._cwocSyncRetries = 0;
       window._cwocSyncReconnectDelay = 1000;
       // Stop polling if it was running
       if (window._cwocSyncPollTimer) { clearInterval(window._cwocSyncPollTimer); window._cwocSyncPollTimer = null; }
@@ -2057,13 +2342,20 @@ function initSyncWebSocket() {
 
     ws.onclose = function() {
       window._cwocSyncWs = null;
-      if (window._cwocSyncMode === 'ws') {
-        // Was connected, try to reconnect
+      if (window._cwocSyncMode === 'ws' || window._cwocSyncWasConnected) {
+        // Was connected (or previously connected) — try to reconnect
         window._cwocSyncMode = 'none';
-        setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
-        window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
+        window._cwocSyncRetries++;
+        if (window._cwocSyncRetries <= window._cwocSyncMaxRetries) {
+          console.debug('CWOC Sync: WebSocket disconnected, reconnecting (attempt ' + window._cwocSyncRetries + '/' + window._cwocSyncMaxRetries + ')');
+          setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
+          window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
+        } else {
+          console.debug('CWOC Sync: WebSocket reconnect failed after ' + window._cwocSyncMaxRetries + ' attempts, falling back to HTTP polling');
+          _startSyncPolling();
+        }
       } else {
-        // Never connected — fall back to polling
+        // Never connected this session — fall back to polling
         console.debug('CWOC Sync: WebSocket failed, falling back to HTTP polling');
         _startSyncPolling();
       }
@@ -2145,8 +2437,17 @@ if (typeof document !== 'undefined') {
   }
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-      if (window._cwocSyncMode === 'none') initSyncWebSocket();
-      if (window._cwocSyncMode === 'poll') _pollSync(); // immediate poll on return
+      if (window._cwocSyncMode === 'none') {
+        window._cwocSyncRetries = 0; // reset retries on tab focus
+        initSyncWebSocket();
+      }
+      if (window._cwocSyncMode === 'poll') {
+        // Try upgrading back to WebSocket when tab becomes visible
+        window._cwocSyncRetries = 0;
+        window._cwocSyncWasConnected = false;
+        window._cwocSyncMode = 'none';
+        initSyncWebSocket();
+      }
     }
   });
 }
@@ -3572,7 +3873,7 @@ function _sharedPlayAlarm() {
   window._sharedAlarmTimeout = setTimeout(_sharedStopAlarm, 5 * 60 * 1000);
 }
 function _sharedStopAlarm() {
-  if (window._sharedAlarmAudio) { window._sharedAlarmAudio.pause(); window._sharedAlarmAudio.currentTime = 0; }
+  if (window._sharedAlarmAudio) cwocStopAudio(window._sharedAlarmAudio);
   if (window._sharedAlarmTimeout) { clearTimeout(window._sharedAlarmTimeout); window._sharedAlarmTimeout = null; }
   if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) {}
 }
@@ -3582,7 +3883,7 @@ function _sharedPlayTimer() {
   cwocPlayAudio(window._sharedTimerAudio, { loop: true });
 }
 function _sharedStopTimer() {
-  if (window._sharedTimerAudio) { window._sharedTimerAudio.pause(); window._sharedTimerAudio.currentTime = 0; window._sharedTimerAudio.loop = false; }
+  if (window._sharedTimerAudio) { cwocStopAudio(window._sharedTimerAudio); window._sharedTimerAudio.loop = false; }
 }
 
 // ── Snooze helpers ──
@@ -3678,8 +3979,8 @@ function _sharedShowAlertModal(opts) {
     var openBtn = document.createElement('button'); openBtn.style.cssText = btnStyle; openBtn.textContent = '📝 Go to Chit';
     openBtn.onclick = function() {
       _sharedStopAlarm(); _sharedStopTimer();
-      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
-      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) cwocStopAudio(_timerAudio);
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) cwocStopAudio(_alarmAudio);
       _sharedDismissModal(overlay, opts);
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
@@ -3692,8 +3993,8 @@ function _sharedShowAlertModal(opts) {
     var goBtn = document.createElement('button'); goBtn.style.cssText = btnStyle; goBtn.textContent = '🛎️ Go to Alerts';
     goBtn.onclick = function() {
       _sharedStopAlarm(); _sharedStopTimer();
-      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
-      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) cwocStopAudio(_timerAudio);
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) cwocStopAudio(_alarmAudio);
       _sharedDismissModal(overlay, opts);
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
@@ -3708,8 +4009,8 @@ function _sharedShowAlertModal(opts) {
   dismissBtn.onclick = function() {
     _sharedStopAlarm(); _sharedStopTimer();
     // Also stop editor-specific audio
-    if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
-    if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+    if (typeof _timerAudio !== 'undefined' && _timerAudio) cwocStopAudio(_timerAudio);
+    if (typeof _alarmAudio !== 'undefined' && _alarmAudio) cwocStopAudio(_alarmAudio);
     _sharedDismissModal(overlay, opts);
     if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
     if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
@@ -3720,8 +4021,8 @@ function _sharedShowAlertModal(opts) {
     var snoozeBtn = document.createElement('button'); snoozeBtn.style.cssText = btnStyle; snoozeBtn.textContent = '💤 Snooze';
     snoozeBtn.onclick = function() {
       _sharedStopAlarm(); _sharedStopTimer();
-      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
-      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) cwocStopAudio(_timerAudio);
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) cwocStopAudio(_alarmAudio);
       _sharedDismissModal(overlay, opts);
       if (opts.snoozeKey) {
         var untilTs = Date.now() + _sharedGetSnoozeMs();
@@ -3752,8 +4053,8 @@ function _sharedShowAlertModal(opts) {
       e.preventDefault();
       e.stopImmediatePropagation();
       _sharedStopAlarm(); _sharedStopTimer();
-      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
-      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) cwocStopAudio(_timerAudio);
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) cwocStopAudio(_alarmAudio);
       _sharedDismissModal(overlay, opts);
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
@@ -3787,10 +4088,21 @@ function _sharedDismissModal(overlay, opts) {
 // ── Browser notification ──
 function _sharedBrowserNotif(title, body, chitId) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  var targetUrl = chitId
+    ? '/frontend/html/editor.html?id=' + chitId
+    : '/?tab=Alarms&view=independent';
+  var opts = { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true, data: { url: targetUrl } };
   try {
-    var n = new Notification(title, { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true });
-    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/frontend/html/editor.html?id=' + chitId; };
-  } catch (e) {}
+    var n = new Notification(title, opts);
+    n.onclick = function() { window.focus(); window.location.href = targetUrl; };
+  } catch (e) {
+    // Fallback: use service worker to show notification
+    if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then(function(reg) {
+        reg.showNotification(title, opts).catch(function() {});
+      });
+    }
+  }
 }
 
 // ── The alarm checker — runs every second on every page ──
@@ -3976,328 +4288,10 @@ function _initSharedAlarmSystem() {
 
 
 // ── Quick Alert Modal (! hotkey) ─────────────────────────────────────────────
-// Opens a modal with A/T/S type picker, then shows a full inline editor
-// for the selected alert type. Works on all pages.
-
-function _openQuickAlertModal() {
-  if (document.getElementById('cwoc-quick-alert-overlay')) return;
-
-  var overlay = document.createElement('div');
-  overlay.id = 'cwoc-quick-alert-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) _closeQuickAlertModal();
-  });
-
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:Lora, Georgia, serif;min-width:260px;max-width:340px;text-align:center;color:#2b1e0f;';
-  box.className = 'cwoc-quick-alert-box';
-
-  var _optStyle = 'display:flex;align-items:center;gap:12px;padding:10px 14px;margin:4px 0;border:1px solid #e0d4b5;border-radius:6px;cursor:pointer;transition:background 0.15s;font-size:1.05em;';
-  var _keyStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:2em;height:2em;background:#8b5a2b;color:#fff8e1;font-weight:bold;font-size:0.95em;border-radius:4px;border:1px solid #5a3f2a;flex-shrink:0;';
-  var _btnStyle = 'padding:8px 24px;font-family:Lora, Georgia, serif;font-size:1em;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
-
-  box.innerHTML =
-    '<h3 style="margin:0 0 12px;font-size:1.15em;color:#4a2c2a;">⚡ Quick Alert</h3>' +
-    '<p style="margin:0 0 14px;font-size:0.9em;opacity:0.7;">Press a key or click to add:</p>' +
-    '<div style="display:flex;flex-direction:column;gap:6px;">' +
-      '<div class="cwoc-qa-opt" data-type="alarm" tabindex="0" style="' + _optStyle + '">' +
-        '<span style="' + _keyStyle + '">A</span>' +
-        '<span>🔔 Alarm</span>' +
-      '</div>' +
-      '<div class="cwoc-qa-opt" data-type="timer" tabindex="0" style="' + _optStyle + '">' +
-        '<span style="' + _keyStyle + '">T</span>' +
-        '<span>⏱️ Timer</span>' +
-      '</div>' +
-      '<div class="cwoc-qa-opt" data-type="stopwatch" tabindex="0" style="' + _optStyle + '">' +
-        '<span style="' + _keyStyle + '">S</span>' +
-        '<span>⏲️ Stopwatch</span>' +
-      '</div>' +
-    '</div>' +
-    '<div style="margin-top:14px;text-align:center;">' +
-      '<button style="' + _btnStyle + '">Cancel</button>' +
-    '</div>' +
-    '<div style="margin-top:8px;font-size:0.75em;opacity:0.45;text-align:center;">ESC or click outside to close</div>';
-
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
-
-  // Done button handler
-  box.querySelector('button').addEventListener('click', function() {
-    _closeQuickAlertModal();
-  });
-
-  // Hover effect for options
-  var opts = box.querySelectorAll('.cwoc-qa-opt');
-  for (var i = 0; i < opts.length; i++) {
-    (function(opt) {
-      opt.addEventListener('mouseenter', function() { opt.style.background = 'rgba(139,69,19,0.12)'; });
-      opt.addEventListener('mouseleave', function() { opt.style.background = ''; });
-      opt.addEventListener('click', function() {
-        _quickAlertShowEditor(opt.getAttribute('data-type'));
-      });
-    })(opts[i]);
-  }
-
-  // Keyboard handler for the modal (capture phase so it fires before page handlers)
-  function _qaKeyHandler(e) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      _closeQuickAlertModal();
-      return;
-    }
-    var k = e.key.toLowerCase();
-    if (k === 'a') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('alarm'); }
-    else if (k === 't') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('timer'); }
-    else if (k === 's') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('stopwatch'); }
-  }
-  overlay._keyHandler = _qaKeyHandler;
-  document.addEventListener('keydown', _qaKeyHandler, true);
-}
-
-function _closeQuickAlertModal() {
-  var overlay = document.getElementById('cwoc-quick-alert-overlay');
-  if (!overlay) return;
-  if (overlay._keyHandler) {
-    document.removeEventListener('keydown', overlay._keyHandler, true);
-  }
-  overlay.remove();
-}
-
-/** Show the inline editor for the selected alert type inside the quick alert modal */
-function _quickAlertShowEditor(type) {
-  var overlay = document.getElementById('cwoc-quick-alert-overlay');
-  if (!overlay) return;
-  var box = overlay.querySelector('.cwoc-quick-alert-box');
-  if (!box) return;
-  if (overlay._keyHandler) { document.removeEventListener('keydown', overlay._keyHandler, true); overlay._keyHandler = null; }
-  box.innerHTML = '';
-  var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
-  var heading = document.createElement('h3');
-  heading.style.cssText = 'margin:0 0 12px;font-size:1.15em;color:#4a2c2a;';
-  heading.textContent = labels[type] || 'Alert';
-  box.appendChild(heading);
-  var formDiv = document.createElement('div');
-  formDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
-  if (type === 'alarm') {
-    var nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.placeholder = 'Alarm name (optional)';
-    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
-    formDiv.appendChild(nameInput);
-    var now = new Date(); now.setMinutes(now.getMinutes() + 1);
-    var defTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    var timeInput = document.createElement('input');
-    timeInput.type = 'text'; timeInput.value = defTime; timeInput.readOnly = true;
-    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;cursor:pointer;text-align:center;';
-    timeInput.addEventListener('mousedown', function(e) { e.preventDefault(); });
-    timeInput.addEventListener('click', function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); });
-    formDiv.appendChild(timeInput);
-    var daysDiv = document.createElement('div');
-    daysDiv.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;font-size:0.9em;';
-    var allDays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    var today = allDays[new Date().getDay()];
-    allDays.forEach(function(day) {
-      var lbl = document.createElement('label');
-      lbl.style.cssText = 'display:flex;align-items:center;gap:2px;cursor:pointer;';
-      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = day; cb.checked = (day === today);
-      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(day)); daysDiv.appendChild(lbl);
-    });
-    formDiv.appendChild(daysDiv);
-    formDiv._getData = function() {
-      var days = []; daysDiv.querySelectorAll('input:checked').forEach(function(cb) { days.push(cb.value); });
-      return { _type: 'alarm', name: nameInput.value.trim(), time: timeInput.value, days: days, enabled: true };
-    };
-    setTimeout(function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); }, 100);
-  } else if (type === 'timer') {
-    var nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.placeholder = 'Timer name (optional)';
-    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
-    formDiv.appendChild(nameInput);
-    var durRow = document.createElement('div');
-    durRow.style.cssText = 'display:flex;align-items:center;gap:4px;justify-content:center;';
-    var hInput = document.createElement('input'); hInput.type = 'number'; hInput.min = '0'; hInput.placeholder = 'HH'; hInput.value = '0';
-    hInput.style.cssText = 'width:55px;padding:6px 4px;font-family:inherit;font-size:1.1em;text-align:center;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;';
-    var mInput = document.createElement('input'); mInput.type = 'number'; mInput.min = '0'; mInput.max = '59'; mInput.placeholder = 'MM'; mInput.value = '5';
-    mInput.style.cssText = hInput.style.cssText;
-    var sInput = document.createElement('input'); sInput.type = 'number'; sInput.min = '0'; sInput.max = '59'; sInput.placeholder = 'SS'; sInput.value = '0';
-    sInput.style.cssText = hInput.style.cssText;
-    durRow.appendChild(hInput); durRow.appendChild(document.createTextNode(':')); durRow.appendChild(mInput);
-    durRow.appendChild(document.createTextNode(':')); durRow.appendChild(sInput); formDiv.appendChild(durRow);
-    var loopLbl = document.createElement('label');
-    loopLbl.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:0.9em;cursor:pointer;';
-    var loopCb = document.createElement('input'); loopCb.type = 'checkbox';
-    loopLbl.appendChild(loopCb); loopLbl.appendChild(document.createTextNode('🔁 Loop when done')); formDiv.appendChild(loopLbl);
-    formDiv._getData = function() {
-      var total = (parseInt(hInput.value)||0)*3600 + (parseInt(mInput.value)||0)*60 + (parseInt(sInput.value)||0);
-      return { _type: 'timer', name: nameInput.value.trim(), totalSeconds: total, loop: loopCb.checked };
-    };
-    setTimeout(function() { mInput.focus(); mInput.select(); }, 50);
-  } else if (type === 'stopwatch') {
-    var nameInput = document.createElement('input');
-    nameInput.type = 'text'; nameInput.placeholder = 'Stopwatch name (optional)';
-    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
-    formDiv.appendChild(nameInput);
-    var note = document.createElement('div'); note.style.cssText = 'font-size:0.85em;opacity:0.6;text-align:center;';
-    note.textContent = 'Stopwatch will start automatically'; formDiv.appendChild(note);
-    formDiv._getData = function() { return { _type: 'stopwatch', name: nameInput.value.trim() }; };
-    setTimeout(function() { nameInput.focus(); }, 50);
-  }
-  box.appendChild(formDiv);
-  var btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-top:14px;';
-  var _qaBtnPrimary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-weight:bold;font-family:Lora, Georgia, serif;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;white-space:nowrap;';
-  var _qaBtnSecondary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-family:Lora, Georgia, serif;background:#fdf5e6;color:#4a2c2a;border:1px solid #8b5a2b;border-radius:4px;white-space:nowrap;';
-
-  var saveBtn = document.createElement('button');
-  saveBtn.textContent = '✓ Create'; saveBtn.title = 'Enter'; saveBtn.style.cssText = _qaBtnPrimary;
-  saveBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), false); };
-  btnRow.appendChild(saveBtn);
-
-  // Add "Create & Start" button for timers
-  if (type === 'timer') {
-    var startBtn = document.createElement('button');
-    startBtn.textContent = '▶ Create & Start'; startBtn.title = 'Ctrl+Enter'; startBtn.style.cssText = _qaBtnPrimary + 'background:#2e7d32;border-color:#1b5e20;';
-    startBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), false, true); };
-    btnRow.appendChild(startBtn);
-  }
-
-  var saveViewBtn = document.createElement('button');
-  saveViewBtn.textContent = '✓ Create & View'; saveViewBtn.title = 'Shift+Enter'; saveViewBtn.style.cssText = _qaBtnSecondary + 'font-weight:bold;';
-  saveViewBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), true); };
-  btnRow.appendChild(saveViewBtn);
-
-  var cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel'; cancelBtn.title = 'Escape'; cancelBtn.style.cssText = _qaBtnSecondary;
-  cancelBtn.onclick = function() { _closeQuickAlertModal(); };
-  btnRow.appendChild(cancelBtn);
-  box.appendChild(btnRow);
-  function _editorKeyHandler(e) {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeQuickAlertModal(); }
-    else if (e.key === 'Enter') {
-      var tag = (document.activeElement?.tagName || '').toLowerCase();
-      if (tag !== 'textarea') {
-        e.preventDefault(); e.stopPropagation();
-        if (type === 'timer' && (e.ctrlKey || e.metaKey)) {
-          _quickAlertSave(type, formDiv._getData(), false, true);
-        } else {
-          _quickAlertSave(type, formDiv._getData(), e.shiftKey);
-        }
-      }
-    }
-  }
-  overlay._keyHandler = _editorKeyHandler;
-  document.addEventListener('keydown', _editorKeyHandler, true);
-}
-
-function _quickAlertAddToChit() { /* deprecated — now handled by _quickAlertSave */ }
-function _quickAlertAddIndependent() { /* deprecated */ }
-function _quickAlertAddIndependentDashboard() { /* deprecated */ }
-
-/** Save the alert from the quick alert editor — context-aware */
-function _quickAlertSave(type, data, andView, autoStart) {
-  var isEditor = !!document.getElementById('mainEditor');
-  if (isEditor) {
-    if (!window._alertsData) window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
-    var alertsSection = document.getElementById('alertsSection');
-    var alertsContent = document.getElementById('alertsContent');
-    if (alertsSection && alertsSection.classList.contains('collapsed')) {
-      alertsSection.classList.remove('collapsed');
-      if (alertsContent) alertsContent.style.display = '';
-      var zIcon = alertsSection.querySelector('.zone-toggle-icon');
-      if (zIcon) zIcon.textContent = '🔼';
-      alertsSection.querySelectorAll('.zone-button').forEach(function(b) { b.style.display = ''; });
-    }
-    if (type === 'alarm') {
-      window._alertsData.alarms.push(data);
-      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
-    } else if (type === 'timer') {
-      window._alertsData.timers.push(data);
-      var tIdx = window._alertsData.timers.length - 1;
-      if (!window._timerRuntime) window._timerRuntime = {};
-      window._timerRuntime[tIdx] = { remaining: data.totalSeconds, intervalId: null, running: false };
-      if (typeof renderTimersContainer === 'function') renderTimersContainer();
-      // Auto-start the timer if requested
-      if (autoStart && data.totalSeconds > 0) {
-        setTimeout(function() {
-          var startBtn = document.getElementById('timer-startstop-' + tIdx);
-          if (startBtn) startBtn.click();
-        }, 100);
-      }
-    } else if (type === 'stopwatch') {
-      var swIdx = window._alertsData.stopwatches.length;
-      window._alertsData.stopwatches.push(data);
-      if (!window._swRuntime) window._swRuntime = {};
-      window._swRuntime[swIdx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
-      var swRt = window._swRuntime[swIdx]; var swStart = Date.now();
-      swRt.intervalId = setInterval(function() { swRt.elapsed = Date.now() - swStart; var swD = document.getElementById('sw-display-' + swIdx); if (swD && typeof _swFmt === 'function') swD.textContent = _swFmt(swRt.elapsed); }, 50);
-      swRt.running = true;
-      if (typeof renderStopwatchesContainer === 'function') renderStopwatchesContainer();
-      setTimeout(function() { var swBtn = document.getElementById('sw-startstop-' + swIdx); if (swBtn) swBtn.textContent = '⏸ Pause'; }, 50);
-    }
-    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
-    _closeQuickAlertModal();
-    if (alertsSection) alertsSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } else if (typeof _createIndependentAlert === 'function') {
-    _createIndependentAlert(data).then(function(created) {
-      if (type === 'stopwatch' && created && created.id && typeof _saSwRuntime !== 'undefined') {
-        if (!_saSwRuntime[created.id]) _saSwRuntime[created.id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
-        var saRt = _saSwRuntime[created.id]; var saMs = Date.now();
-        saRt.intervalId = setInterval(function() { saRt.elapsed = Date.now() - saMs; var saD = document.getElementById('sa-sw-display-' + created.id); if (saD) saD.textContent = _saSwFmt(saRt.elapsed); }, 50);
-        saRt.running = true;
-      }
-      // Auto-start timer if requested
-      if (type === 'timer' && autoStart && created && created.id) {
-        setTimeout(function() {
-          var startBtn = document.getElementById('sa-timer-startstop-' + created.id);
-          if (startBtn) startBtn.click();
-        }, 200);
-      }
-      if (andView) {
-        _quickAlertJumpToIndependent();
-      } else {
-        _closeQuickAlertModal();
-      }
-    });
-  } else {
-    fetch('/api/standalone-alerts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-    .then(function(r) { if (!r.ok) throw new Error('Failed'); return r.json(); })
-    .then(function() {
-      _closeQuickAlertModal();
-      if (andView || (type === 'timer' && autoStart)) {
-        // Store desired tab in localStorage so dashboard picks it up on load
-        try { localStorage.setItem('cwoc_jump_tab', 'Alarms'); localStorage.setItem('cwoc_jump_alarms_mode', 'independent'); } catch(e) {}
-        window.location.href = '/';
-      } else {
-        _showQuickAlertToast(type);
-      }
-      if (typeof syncSend === 'function') syncSend('alerts_changed', {});
-    })
-    .catch(function(e) { console.error('Quick alert creation failed:', e); });
-  }
-}
-
-function _quickAlertJumpToIndependent() {
-  _closeQuickAlertModal();
-  if (typeof _alarmsViewMode !== 'undefined') {
-    _alarmsViewMode = 'independent';
-    var toggle = document.getElementById('alerts-view-toggle');
-    if (toggle) toggle.value = 'independent';
-  }
-  if (typeof filterChits === 'function') filterChits('Alarms');
-}
-
-function _showQuickAlertToast(type) {
-  var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
-  var toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:Lora, Georgia, serif;font-size:0.95em;color:#4a2c2a;display:flex;align-items:center;gap:10px;';
-  toast.appendChild(document.createTextNode((labels[type] || 'Alert') + ' created '));
-  var viewLink = document.createElement('a'); viewLink.textContent = 'View →'; viewLink.href = '/?tab=Alarms&view=independent';
-  viewLink.style.cssText = 'color:#6b4226;font-weight:bold;text-decoration:underline;'; toast.appendChild(viewLink);
-  document.body.appendChild(toast);
-  setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
-  setTimeout(function() { toast.remove(); }, 3300);
-}
+// Implementation moved to shared-alarms.js (single source of truth).
+// Functions: _openQuickAlertModal, _closeQuickAlertModal, _quickAlertShowEditor,
+//            _quickAlertSave, _quickReminderSave, _quickAlertJumpToIndependent,
+//            _showQuickAlertToast
 
 // ── Global Hotkey Listener (shared across ALL pages) ─────────────────────────
 // This runs on every page that loads shared.js — dashboard, editor, settings, etc.
@@ -4660,6 +4654,251 @@ function _executePrintChecklist(checklist, includeCompleted) {
     iframe.contentWindow.print();
   }, 200);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Print Chit — full chit with all zones
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print the entire chit with all populated zones, nicely formatted.
+ * Gathers data from the editor form and prints via hidden iframe.
+ */
+function _printChit() {
+  var titleEl = document.getElementById('title');
+  var printTitle = (titleEl ? titleEl.value.trim() : '') || 'Untitled Chit';
+
+  var sections = [];
+
+  // ── Status / Priority / Severity ──
+  var statusEl = document.getElementById('status');
+  var priorityEl = document.getElementById('priority');
+  var severityEl = document.getElementById('severity');
+  var statusParts = [];
+  if (statusEl && statusEl.value) statusParts.push('<strong>Status:</strong> ' + _escHtml(statusEl.value));
+  if (priorityEl && priorityEl.value) statusParts.push('<strong>Priority:</strong> ' + _escHtml(priorityEl.value));
+  if (severityEl && severityEl.value) statusParts.push('<strong>Severity:</strong> ' + _escHtml(severityEl.value));
+  if (statusParts.length > 0) {
+    sections.push({ title: 'Task', content: '<p>' + statusParts.join(' &nbsp;|&nbsp; ') + '</p>' });
+  }
+
+  // ── Dates ──
+  var dateMode = '';
+  var dateModeRadio = document.querySelector('input[name="dateMode"]:checked');
+  if (dateModeRadio) dateMode = dateModeRadio.value;
+  var dateContent = '';
+  if (dateMode === 'startend') {
+    var sd = document.getElementById('start_datetime');
+    var st = document.getElementById('start_time');
+    var ed = document.getElementById('end_datetime');
+    var et = document.getElementById('end_time');
+    var allDay = document.getElementById('allDay');
+    var isAllDay = allDay && allDay.checked;
+    var startStr = (sd ? sd.value : '') + (isAllDay ? ' (All Day)' : (st && st.value ? ' ' + st.value : ''));
+    var endStr = (ed ? ed.value : '') + (isAllDay ? ' (All Day)' : (et && et.value ? ' ' + et.value : ''));
+    if (startStr.trim()) dateContent += '<p><strong>Start:</strong> ' + _escHtml(startStr.trim()) + '</p>';
+    if (endStr.trim()) dateContent += '<p><strong>End:</strong> ' + _escHtml(endStr.trim()) + '</p>';
+  } else if (dateMode === 'due') {
+    var dd = document.getElementById('due_datetime');
+    var dt = document.getElementById('due_time');
+    var allDay2 = document.getElementById('allDay');
+    var isAllDay2 = allDay2 && allDay2.checked;
+    var dueStr = (dd ? dd.value : '') + (isAllDay2 ? ' (All Day)' : (dt && dt.value ? ' ' + dt.value : ''));
+    if (dueStr.trim()) dateContent += '<p><strong>Due:</strong> ' + _escHtml(dueStr.trim()) + '</p>';
+  } else if (dateMode === 'perpetual') {
+    dateContent += '<p><strong>Mode:</strong> Perpetual</p>';
+  } else if (dateMode === 'pointintime') {
+    var pitDate = document.getElementById('point_in_time_date');
+    var pitTime = document.getElementById('point_in_time_time');
+    var pitStr = (pitDate ? pitDate.value : '') + (pitTime && pitTime.dataset.time ? ' ' + pitTime.dataset.time : '');
+    if (pitStr.trim()) dateContent += '<p><strong>Point in Time:</strong> ' + _escHtml(pitStr.trim()) + '</p>';
+  }
+  // Recurrence
+  var repeatCb = document.getElementById('repeatEnabled');
+  if (repeatCb && repeatCb.checked) {
+    var recEl = document.getElementById('recurrence');
+    if (recEl && recEl.value) dateContent += '<p><strong>Recurrence:</strong> ' + _escHtml(recEl.value) + '</p>';
+  }
+  if (dateContent) sections.push({ title: 'Dates & Times', content: dateContent });
+
+  // ── Location ──
+  var locEl = document.getElementById('location');
+  var locVal = locEl ? locEl.value.trim() : '';
+  if (locVal) {
+    sections.push({ title: 'Location', content: '<p>' + _escHtml(locVal) + '</p>' });
+  }
+
+  // ── Weather Forecast ──
+  if (window._currentChitWeatherData && window._currentChitWeatherData.weather_code !== undefined) {
+    var wd = window._currentChitWeatherData;
+    var wIcon = (typeof weatherIcons !== 'undefined' && weatherIcons[wd.weather_code]) ? weatherIcons[wd.weather_code] : '';
+    var wDesc = (typeof weatherDescriptions !== 'undefined' && weatherDescriptions[wd.weather_code]) ? weatherDescriptions[wd.weather_code] : '';
+    var wParts = [];
+    if (wIcon || wDesc) wParts.push(wIcon + ' ' + wDesc);
+    if (wd.high !== null && wd.high !== undefined) wParts.push('High: ' + wd.high + '°C');
+    if (wd.low !== null && wd.low !== undefined) wParts.push('Low: ' + wd.low + '°C');
+    if (wd.precipitation) wParts.push('Precip: ' + wd.precipitation + ' mm');
+    if (wd.wind_gusts) wParts.push('Wind gusts: ' + wd.wind_gusts + ' km/h');
+    if (wd.focus_date) wParts.push('Date: ' + wd.focus_date);
+    if (wParts.length > 0) {
+      sections.push({ title: 'Weather Forecast', content: '<p>' + wParts.map(_escHtml).join(' &nbsp;|&nbsp; ') + '</p>' });
+    }
+  }
+
+  // ── Tags ──
+  var tags = Array.isArray(window._currentTagSelection) ? window._currentTagSelection : [];
+  if (tags.length > 0) {
+    var tagChips = tags.map(function(t) {
+      return '<span class="print-tag">' + _escHtml(t) + '</span>';
+    }).join(' ');
+    sections.push({ title: 'Tags', content: '<p>' + tagChips + '</p>' });
+  }
+
+  // ── People ──
+  var people = (typeof _peopleChipData !== 'undefined' && _peopleChipData.length > 0)
+    ? _peopleChipData.map(function(c) { return c.display_name; })
+    : [];
+  if (people.length > 0) {
+    sections.push({ title: 'People', content: '<p>' + people.map(_escHtml).join(', ') + '</p>' });
+  }
+
+  // ── Color ──
+  var colorEl = document.getElementById('color');
+  var colorVal = colorEl ? colorEl.value : '';
+  if (colorVal && colorVal !== 'transparent') {
+    var svgCircle = '<svg width="18" height="18" style="vertical-align:middle;margin-right:6px;"><circle cx="9" cy="9" r="8" fill="' + _escHtml(colorVal) + '" stroke="#8b5a2b" stroke-width="1"/></svg>';
+    sections.push({ title: 'Color', content: '<p>' + svgCircle + ' ' + _escHtml(colorVal) + '</p>' });
+  }
+
+  // ── Notes ──
+  var noteEl = document.getElementById('note');
+  var noteVal = noteEl ? noteEl.value.trim() : '';
+  if (noteVal) {
+    var noteHtml = '';
+    if (typeof marked !== 'undefined') {
+      noteHtml = marked.parse(noteVal);
+      if (typeof DOMPurify !== 'undefined') noteHtml = DOMPurify.sanitize(noteHtml);
+    } else {
+      noteHtml = '<pre>' + _escHtml(noteVal) + '</pre>';
+    }
+    sections.push({ title: 'Notes', content: '<div class="rendered-content">' + noteHtml + '</div>' });
+  }
+
+  // ── Checklist ──
+  var excludeCompleted = false;
+  var excludeCb = document.getElementById('printExcludeCompleted');
+  if (excludeCb) excludeCompleted = excludeCb.checked;
+
+  if (window.checklist && window.checklist.items && window.checklist.items.length > 0) {
+    var clItems = window.checklist.items;
+    if (excludeCompleted) clItems = clItems.filter(function(i) { return !i.checked; });
+    if (clItems.length > 0) {
+      var clHtml = '';
+      clItems.forEach(function(item) {
+        var indent = item.level * 24;
+        var checkbox = item.checked ? '☑' : '☐';
+        var textClass = item.checked ? 'cl-checked' : '';
+        clHtml += '<div class="cl-row" style="padding-left:' + indent + 'px;">'
+          + '<span class="cl-cb">' + checkbox + '</span>'
+          + '<span class="' + textClass + '">' + _escHtml(item.text) + '</span></div>';
+      });
+      sections.push({ title: 'Checklist', content: clHtml });
+    }
+  }
+
+  // ── Alerts ──
+  if (typeof window._alertsData !== 'undefined') {
+    var alertParts = [];
+    if (window._alertsData.alarms && window._alertsData.alarms.length > 0) {
+      var alarmLines = window._alertsData.alarms.map(function(a) {
+        return '⏰ ' + _escHtml(a.time || '') + (a.days && a.days.length ? ' (' + a.days.join(', ') + ')' : '') + (a.label ? ' — ' + _escHtml(a.label) : '');
+      });
+      alertParts.push('<p><strong>Alarms:</strong></p><p>' + alarmLines.join('<br>') + '</p>');
+    }
+    if (window._alertsData.notifications && window._alertsData.notifications.length > 0) {
+      var notifLines = window._alertsData.notifications.map(function(n) {
+        return '🔔 ' + _escHtml(n.type || '') + ': ' + _escHtml(String(n.value || '')) + ' ' + _escHtml(n.unit || '');
+      });
+      alertParts.push('<p><strong>Notifications:</strong></p><p>' + notifLines.join('<br>') + '</p>');
+    }
+    if (alertParts.length > 0) {
+      sections.push({ title: 'Alerts', content: alertParts.join('') });
+    }
+  }
+
+  // ── Pinned / Archived flags ──
+  var flags = [];
+  var pinnedEl = document.getElementById('pinned');
+  if (pinnedEl && pinnedEl.value === 'true') flags.push('📌 Pinned');
+  var archivedEl = document.getElementById('archived');
+  if (archivedEl && archivedEl.value === 'true') flags.push('📦 Archived');
+  if (flags.length > 0) {
+    sections.push({ title: 'Flags', content: '<p>' + flags.join(' &nbsp;|&nbsp; ') + '</p>' });
+  }
+
+  // ── Build final HTML ──
+  if (sections.length === 0) {
+    if (typeof cwocToast === 'function') cwocToast('Nothing to print — chit is empty.', 'info');
+    return;
+  }
+
+  var bodyContent = '';
+  sections.forEach(function(sec) {
+    bodyContent += '<div class="print-section">'
+      + '<h2 class="section-title">' + _escHtml(sec.title) + '</h2>'
+      + sec.content
+      + '</div>';
+  });
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>Print: ' + _escHtml(printTitle) + '</title>'
+    + '<style>'
+    + 'body { font-family: Lora, Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px 40px; color: #1a1208; }'
+    + 'h1 { font-size: 1.5em; border-bottom: 2px solid #8b5a2b; padding-bottom: 8px; margin-bottom: 6px; }'
+    + '.print-meta { font-size: 0.85em; color: #6b4e31; margin-bottom: 20px; }'
+    + '.print-section { margin-bottom: 16px; }'
+    + '.section-title { font-size: 1.1em; color: #4a2c2a; margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid #c9b896; }'
+    + '.print-section p { margin: 4px 0; line-height: 1.5; }'
+    + '.print-tag { display: inline-block; background: #f0e6d0; border: 1px solid #c9b896; border-radius: 4px; padding: 2px 8px; margin: 2px 4px 2px 0; font-size: 0.9em; }'
+    + '.rendered-content { line-height: 1.6; }'
+    + '.rendered-content h1, .rendered-content h2, .rendered-content h3 { margin: 0.8em 0 0.4em; }'
+    + '.rendered-content ul, .rendered-content ol { padding-left: 1.5em; }'
+    + '.rendered-content code { background: #f0e6d0; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }'
+    + '.rendered-content pre { background: #f5f0e8; padding: 12px; border-radius: 4px; overflow-x: auto; }'
+    + '.rendered-content pre code { background: none; padding: 0; }'
+    + '.rendered-content blockquote { border-left: 3px solid #8b5a2b; margin: 0.5em 0; padding: 0.3em 1em; color: #4a2c2a; }'
+    + '.rendered-content table { border-collapse: collapse; width: 100%; }'
+    + '.rendered-content th, .rendered-content td { border: 1px solid #8b5a2b; padding: 6px 10px; text-align: left; }'
+    + '.cl-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; line-height: 1.5; }'
+    + '.cl-cb { font-size: 1.2em; flex-shrink: 0; }'
+    + '.cl-checked { text-decoration: line-through; opacity: 0.6; }'
+    + '@media print { body { padding: 0; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }'
+    + '</style></head><body>'
+    + '<h1>' + _escHtml(printTitle) + '</h1>'
+    + '<div class="print-meta">Printed from C.W.\'s Omni Chits \u2014 ' + new Date().toLocaleDateString() + '</div>'
+    + bodyContent
+    + '</body></html>';
+
+  // Use the same hidden iframe approach
+  var iframe = document.getElementById('cwoc-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'cwoc-print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+  }
+
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  setTimeout(function() {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, 200);
+}
+
+// _escHtml — now in shared-utils.js (single source of truth)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Auto-init on page load (must be at the very end after all functions defined)

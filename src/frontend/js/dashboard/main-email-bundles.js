@@ -361,6 +361,16 @@ function _renderBundleToolbar(emailChits) {
     });
     row1.appendChild(readBtn);
 
+    var deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'bundle-action-btn inactive bundle-action-btn-danger';
+    deleteBtn.id = 'bundleDeleteBtn';
+    deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+    deleteBtn.addEventListener('click', function() {
+        if (typeof _emailBulkDelete === 'function') _emailBulkDelete();
+    });
+    row1.appendChild(deleteBtn);
+
     var countSpan = document.createElement('span');
     countSpan.className = 'bundle-selected-count';
     countSpan.id = 'bundleSelectedCount';
@@ -410,7 +420,9 @@ function _renderBundleTabs(container, bundles, emailChits) {
         // In single-placement mode, "Everything Else" is always last (catch-all)
         // In multi-placement mode, it can be reordered freely
         var isMultiPlacementSort = (window._cwocSettings || {}).bundles_multi_placement === '1';
-        var sortedBundles = bundles.slice().sort(function(a, b) {
+        // Filter out disabled bundles (display_order === -1)
+        var enabledBundles = bundles.filter(function(b) { return b.display_order !== -1; });
+        var sortedBundles = enabledBundles.slice().sort(function(a, b) {
             if (!isMultiPlacementSort) {
                 if (a.name === 'Everything Else') return 1;
                 if (b.name === 'Everything Else') return -1;
@@ -646,11 +658,12 @@ function _bundleUpdateActionStates() {
     var archiveBtn = document.getElementById('bundleArchiveBtn');
     var tagBtn = document.getElementById('bundleTagBtn');
     var readBtn = document.getElementById('bundleReadBtn');
+    var deleteBtn = document.getElementById('bundleDeleteBtn');
     var countEl = document.getElementById('bundleSelectedCount');
     var selectAllCb = document.getElementById('bundleSelectAllCb');
 
     // Toggle active/inactive class on action buttons
-    var btns = [archiveBtn, tagBtn, readBtn];
+    var btns = [archiveBtn, tagBtn, readBtn, deleteBtn];
     btns.forEach(function(btn) {
         if (!btn) return;
         if (hasSelection) {
@@ -1059,6 +1072,7 @@ function _showBundleContextMenu(bundle, x, y) {
     menu.className = 'bundle-context-menu';
 
     var isEverythingElse = (bundle.name === 'Everything Else');
+    var isAutoBundle = (bundle.removable === 0 || bundle.removable === false || bundle.removable === '0') && !isEverythingElse;
 
     // Edit option (always shown)
     var editItem = document.createElement('button');
@@ -1071,8 +1085,37 @@ function _showBundleContextMenu(bundle, x, y) {
     });
     menu.appendChild(editItem);
 
-    // Delete option (not shown for "Everything Else")
-    if (!isEverythingElse && bundle.removable !== false) {
+    // Disable/Enable option for auto-bundles (non-removable, non-Everything Else)
+    if (isAutoBundle) {
+        var isDisabled = bundle.display_order === -1;
+        var disableItem = document.createElement('button');
+        disableItem.type = 'button';
+        disableItem.className = 'bundle-context-menu-item' + (isDisabled ? '' : ' danger');
+        disableItem.textContent = isDisabled ? 'Enable' : 'Disable';
+        disableItem.addEventListener('click', async function() {
+            _closeBundleContextMenu();
+            if (isDisabled) {
+                // Re-enable: set display_order to a valid position
+                await _toggleAutoBundle(bundle, true);
+            } else {
+                // Confirm disable
+                var confirmed = await cwocConfirm(
+                    'Disable "' + bundle.name + '"?\n\n' +
+                    'This will hide the bundle tab and stop auto-classifying new emails into it. ' +
+                    'Existing emails already in this bundle will move to "Everything Else". ' +
+                    'You can re-enable it anytime from the bundle context menu.',
+                    { title: 'Disable Auto-Bundle', confirmLabel: 'Disable', danger: true }
+                );
+                if (confirmed) {
+                    await _toggleAutoBundle(bundle, false);
+                }
+            }
+        });
+        menu.appendChild(disableItem);
+    }
+
+    // Delete option (not shown for "Everything Else" or auto-bundles)
+    if (!isEverythingElse && !isAutoBundle) {
         var deleteItem = document.createElement('button');
         deleteItem.type = 'button';
         deleteItem.className = 'bundle-context-menu-item danger';
@@ -1196,6 +1239,50 @@ function _attachBundleTabContextMenu(tab, bundle) {
             longPressTimer = null;
         }
     });
+}
+
+
+/* ── Bundle Disable/Enable (Auto-Bundles) ─────────────────────────────────── */
+
+/**
+ * Toggle an auto-bundle enabled/disabled state.
+ * Disabled = display_order set to -1 (hidden from tabs), tags stripped from emails.
+ * Enabled = display_order restored, reclassification triggered.
+ * @param {object} bundle — the bundle object
+ * @param {boolean} enable — true to enable, false to disable
+ */
+async function _toggleAutoBundle(bundle, enable) {
+    try {
+        if (enable) {
+            // Re-enable: update display_order to put it back in line
+            var resp = await fetch('/api/bundles/' + encodeURIComponent(bundle.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: bundle.name, description: bundle.description })
+            });
+            if (!resp.ok) throw new Error('Failed to re-enable bundle');
+            cwocToast('"' + bundle.name + '" re-enabled. Reclassifying...', 'success');
+            // Trigger reclassification to re-populate
+            await fetch('/api/bundles/reclassify', { method: 'POST' });
+        } else {
+            // Disable: strip bundle tags from all emails, set display_order to -1
+            var resp = await fetch('/api/bundles/' + encodeURIComponent(bundle.id) + '/disable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!resp.ok) throw new Error('Failed to disable bundle');
+            cwocToast('"' + bundle.name + '" disabled.', 'info');
+        }
+        // Refresh
+        if (typeof _invalidateSettingsCache === 'function') _invalidateSettingsCache();
+        _emailBundlesData = null;
+        _fetchBundles(function() {
+            if (typeof fetchChits === 'function') fetchChits();
+        });
+    } catch (err) {
+        console.error('[Bundles] Toggle auto-bundle error:', err);
+        cwocToast('Failed to toggle bundle: ' + err.message, 'error');
+    }
 }
 
 

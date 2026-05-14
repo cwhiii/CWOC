@@ -828,12 +828,22 @@ function _updateEmailButtons(status) {
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = '';
+    // Show Send Later and Read Receipt for drafts
+    var sendLaterBtn = document.getElementById('emailSendLaterBtn');
+    if (sendLaterBtn) sendLaterBtn.style.display = '';
+    var readReceiptRow = document.getElementById('emailReadReceiptRow');
+    if (readReceiptRow) readReceiptRow.style.display = '';
   } else if (status === 'received') {
     if (sendBtn) sendBtn.style.display = 'none';
     if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = '';
     if (forwardBtn) forwardBtn.style.display = '';
     if (expandBtn) expandBtn.style.display = '';
+    // Hide Send Later and Read Receipt for received
+    var sendLaterBtn2 = document.getElementById('emailSendLaterBtn');
+    if (sendLaterBtn2) sendLaterBtn2.style.display = 'none';
+    var readReceiptRow2 = document.getElementById('emailReadReceiptRow');
+    if (readReceiptRow2) readReceiptRow2.style.display = 'none';
   } else if (status === 'sent') {
     if (sendBtn) sendBtn.style.display = 'none';
     if (discardBtn) discardBtn.style.display = 'none';
@@ -1136,6 +1146,18 @@ function initEmailZone(chit) {
     _setupHtmlEmailView(chit.email_body_html, bodyEl);
   }
 
+  // Show scheduled send indicator if email_send_at is set
+  if (chit.email_send_at && chit.email_status === 'draft') {
+    var sendAtDate = new Date(chit.email_send_at);
+    var sendAtStr = sendAtDate.toLocaleString();
+    var scheduledBadge = document.createElement('div');
+    scheduledBadge.className = 'email-scheduled-badge';
+    scheduledBadge.innerHTML = '<i class="fas fa-clock"></i> Scheduled: ' + sendAtStr +
+      ' <button type="button" class="zone-button" onclick="_emailCancelScheduled()" style="font-size:0.8em;padding:1px 6px;margin-left:6px;">Cancel</button>';
+    var emailContent = document.getElementById('emailContent');
+    if (emailContent) emailContent.insertBefore(scheduledBadge, emailContent.firstChild);
+  }
+
   // PGP indicator: show a banner + decrypt button if the body is PGP-encrypted
   var bodyText = chit.email_body_text || '';
   if (bodyText.trim().startsWith('-----BEGIN PGP MESSAGE-----')) {
@@ -1314,6 +1336,12 @@ function getEmailData() {
     if (_emailCurrentChit.email_body_html) {
       data.email_body_html = _emailCurrentChit.email_body_html;
     }
+  }
+
+  // Read receipt request (only for drafts)
+  var readReceiptCb = document.getElementById('emailRequestReadReceipt');
+  if (readReceiptCb && readReceiptCb.checked) {
+    data.email_request_read_receipt = true;
   }
 
   return data;
@@ -1572,6 +1600,161 @@ function _emailUndoSendCountdown(chitId, archiveOriginal) {
 }
 
 /**
+ * Send Later — open a styled modal with date + time picker (same style as Quick Reminder)
+ * to schedule the email for future sending.
+ */
+async function _emailSendLater() {
+  var chitId = window.currentChitId;
+  if (!chitId) {
+    cwocToast('Save the chit before scheduling.', 'error');
+    return;
+  }
+
+  // Validate recipients
+  var toEl = document.getElementById('emailTo');
+  var toVal = _emailGetFieldValue(toEl);
+  if (!toVal) {
+    cwocToast('Cannot schedule: no recipients specified.', 'error');
+    return;
+  }
+
+  // Build the Send Later modal (same style as Quick Reminder)
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-send-later-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) { overlay.remove(); document.removeEventListener('keydown', _slEscHandler, true); }
+  });
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:Lora, Georgia, serif;min-width:280px;max-width:360px;text-align:center;color:#2b1e0f;';
+
+  var heading = document.createElement('h3');
+  heading.style.cssText = 'margin:0 0 14px;font-size:1.15em;color:#4a2c2a;';
+  heading.textContent = '📨 Send Later';
+  box.appendChild(heading);
+
+  var formDiv = document.createElement('div');
+  formDiv.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+
+  // Date input
+  var dateLabel = document.createElement('label');
+  dateLabel.style.cssText = 'font-size:0.85em;color:#6b4e31;text-align:left;';
+  dateLabel.textContent = 'Date';
+  formDiv.appendChild(dateLabel);
+  var dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  var today = new Date();
+  dateInput.value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  dateInput.min = dateInput.value;
+  dateInput.style.cssText = 'width:100%;padding:8px 10px;font-family:inherit;font-size:1em;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;box-sizing:border-box;';
+  formDiv.appendChild(dateInput);
+
+  // Time input (uses cwocTimePicker)
+  var timeLabel = document.createElement('label');
+  timeLabel.style.cssText = 'font-size:0.85em;color:#6b4e31;text-align:left;';
+  timeLabel.textContent = 'Time';
+  formDiv.appendChild(timeLabel);
+  var now = new Date(); now.setMinutes(now.getMinutes() + 60);
+  var defTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  var timeInput = document.createElement('input');
+  timeInput.type = 'text'; timeInput.value = defTime; timeInput.readOnly = true;
+  timeInput.style.cssText = 'width:100%;padding:8px 10px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;cursor:pointer;text-align:center;';
+  timeInput.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  timeInput.addEventListener('click', function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); });
+  formDiv.appendChild(timeInput);
+
+  box.appendChild(formDiv);
+
+  // Buttons
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-top:16px;';
+  var _btnPrimary = 'padding:8px 16px;cursor:pointer;font-size:0.95em;font-weight:bold;font-family:Lora, Georgia, serif;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;white-space:nowrap;';
+  var _btnSecondary = 'padding:8px 16px;cursor:pointer;font-size:0.95em;font-family:Lora, Georgia, serif;background:#fdf5e6;color:#4a2c2a;border:1px solid #8b5a2b;border-radius:4px;white-space:nowrap;';
+
+  var scheduleBtn = document.createElement('button');
+  scheduleBtn.textContent = '📅 Schedule'; scheduleBtn.style.cssText = _btnPrimary;
+  scheduleBtn.onclick = async function() {
+    var dateVal = dateInput.value;
+    var timeVal = timeInput.value;
+    if (!dateVal || !timeVal) { cwocToast('Please select a date and time.', 'error'); return; }
+    var sendAt = new Date(dateVal + 'T' + timeVal + ':00').toISOString();
+
+    overlay.remove();
+    document.removeEventListener('keydown', _slEscHandler, true);
+
+    try {
+      if (typeof saveChitAndStay === 'function') {
+        await saveChitAndStay();
+      }
+      var resp = await fetch('/api/email/schedule/' + encodeURIComponent(chitId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ send_at: sendAt })
+      });
+      if (!resp.ok) {
+        var err = await resp.json().catch(function() { return {}; });
+        cwocToast(err.detail || 'Failed to schedule email.', 'error');
+        return;
+      }
+      var localTime = new Date(dateVal + 'T' + timeVal + ':00').toLocaleString();
+      cwocToast('Email scheduled for ' + localTime, 'success');
+      window.location.href = '/frontend/html/index.html?tab=Email&sub=scheduled';
+    } catch (err) {
+      console.error('[_emailSendLater] Error:', err);
+      cwocToast('Failed to schedule email.', 'error');
+    }
+  };
+  btnRow.appendChild(scheduleBtn);
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel'; cancelBtn.style.cssText = _btnSecondary;
+  cancelBtn.onclick = function() { overlay.remove(); document.removeEventListener('keydown', _slEscHandler, true); };
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // ESC to close
+  function _slEscHandler(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      overlay.remove();
+      document.removeEventListener('keydown', _slEscHandler, true);
+    }
+  }
+  document.addEventListener('keydown', _slEscHandler, true);
+}
+
+/**
+ * Cancel a scheduled send — clears email_send_at on the current chit.
+ */
+async function _emailCancelScheduled() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+
+  try {
+    var resp = await fetch('/api/email/schedule/' + encodeURIComponent(chitId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ send_at: null })
+    });
+
+    if (resp.ok) {
+      cwocToast('Scheduled send cancelled.', 'success');
+      // Refresh the page to update UI
+      window.location.reload();
+    } else {
+      cwocToast('Failed to cancel scheduled send.', 'error');
+    }
+  } catch (err) {
+    console.error('[_emailCancelScheduled] Error:', err);
+    cwocToast('Failed to cancel scheduled send.', 'error');
+  }
+}
+
+/**
  * Discard (soft-delete) the current draft email chit.
  * Confirms with the user, then deletes and navigates back.
  */
@@ -1616,14 +1799,65 @@ async function _emailDiscardDraft() {
 /**
  * Download the raw .eml file for the current email chit from IMAP.
  */
-function _emailDownloadRaw() {
+async function _emailDownloadRaw() {
   var chitId = window.currentChitId;
   if (!chitId) {
     if (typeof cwocToast === 'function') cwocToast('No email to download.', 'error');
     return;
   }
-  // Open the download endpoint in a new tab (triggers browser download)
-  window.open('/api/email/' + encodeURIComponent(chitId) + '/raw', '_blank');
+  try {
+    var resp = await fetch('/api/email/' + encodeURIComponent(chitId) + '/raw');
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return {}; });
+      throw new Error(errData.detail || 'Download failed');
+    }
+    var blob = await resp.blob();
+    var filename = 'email.eml';
+    var disposition = resp.headers.get('Content-Disposition');
+    if (disposition) {
+      var match = disposition.match(/filename="?([^";\n]+)"?/);
+      if (match) filename = match[1];
+    }
+    var blobUrl = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error('[_emailDownloadRaw] Error:', err);
+    if (typeof cwocToast === 'function') cwocToast(err.message || 'Failed to download raw email.', 'error');
+  }
+}
+
+/**
+ * Load external content in the current email — restores blocked images.
+ * Finds all img tags with data-original-src and restores their src attribute.
+ */
+function _emailLoadExternalContent() {
+  // Find all iframes that render email HTML
+  var iframes = document.querySelectorAll('#emailHtmlIframe, #emailExpandHtmlIframe');
+  iframes.forEach(function(iframe) {
+    try {
+      var doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!doc) return;
+      var imgs = doc.querySelectorAll('img[data-original-src]');
+      imgs.forEach(function(img) {
+        img.src = img.getAttribute('data-original-src');
+        img.removeAttribute('data-original-src');
+      });
+    } catch (e) {
+      console.error('[Email] Cannot access iframe for external content:', e);
+    }
+  });
+
+  // Remove the banner
+  var banner = document.querySelector('.email-blocked-content-banner');
+  if (banner) banner.remove();
+
+  cwocToast('External content loaded.', 'info');
 }
 
 /**
@@ -1686,6 +1920,7 @@ function _openEmailExpandModal() {
   if (status === 'draft') {
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSendLater()"><i class="fas fa-clock"></i> Send Later</button>' +
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>' +
       '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _closeEmailExpandModal(false); _emailDiscardDraft()"><i class="fas fa-trash"></i> Discard</button>';
   } else if (status === 'received') {
@@ -1734,26 +1969,26 @@ function _openEmailExpandModal() {
       '</div>' +
       '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escapeHtmlAttr(fromEl ? fromEl.textContent : '') + '</span>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escHtml(fromEl ? fromEl.textContent : '') + '</span>' +
             (status === 'received' && _emailCurrentChit && _emailCurrentChit.email_from ? '<button type="button" class="email-add-contact-btn" onclick="_emailAddSenderAsContact()" title="Add sender as contact"><i class="fas fa-plus-circle"></i></button>' : '') +
           '</div>' +
-          '<div style="display:flex;align-items:center;gap:6px;flex:2;min-width:200px;"><strong style="flex-shrink:0;">To:</strong><div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandTo" type="text" value="' + _escapeHtmlAttr(toEl ? toEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandToDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:2;min-width:200px;"><strong style="flex-shrink:0;">To:</strong><div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandTo" type="text" value="' + _escHtml(toEl ? toEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandToDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
             (isReadOnly ? '' : ' <button type="button" class="email-cc-toggle-btn" id="emailExpandShowCcBtn" onclick="_toggleExpandCcBcc(\'cc\')" title="Add CC">CC</button><button type="button" class="email-cc-toggle-btn" id="emailExpandShowBccBtn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Add BCC">BCC</button>') +
           '</div>' +
         '</div>' +
         '<div class="email-field" id="emailExpandCcRow" style="display:' + (ccEl && ccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
           '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">CC:</label>' +
-          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandCc" type="text" value="' + _escapeHtmlAttr(ccEl ? ccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandCcDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
+          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandCc" type="text" value="' + _escHtml(ccEl ? ccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandCcDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
           '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'cc\')" title="Remove CC">✕</button>' +
         '</div>' +
         '<div class="email-field" id="emailExpandBccRow" style="display:' + (bccEl && bccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
           '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">BCC:</label>' +
-          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandBcc" type="text" value="' + _escapeHtmlAttr(bccEl ? bccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandBccDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
+          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandBcc" type="text" value="' + _escHtml(bccEl ? bccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandBccDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
           '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Remove BCC">✕</button>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
           '<strong style="flex-shrink:0;min-width:50px;text-align:right;">Subject:</strong>' +
-          '<input id="emailExpandSubject" type="text" value="' + _escapeHtmlAttr(subjectVal) + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:14px;"' + disabledAttr + '>' +
+          '<input id="emailExpandSubject" type="text" value="' + _escHtml(subjectVal) + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:14px;"' + disabledAttr + '>' +
         '</div>' +
         (isReadOnly ? '' :
         '<div id="emailExpandToolbar" class="email-format-toolbar">' +
@@ -1778,7 +2013,7 @@ function _openEmailExpandModal() {
         '</div>') +
         '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 280px);">' +
           '<textarea id="emailExpandBody" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;' + (hasHtml ? 'display:none;' : '') + '"' +
-            disabledAttr + '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
+            disabledAttr + '>' + _escHtml(bodyVal) + '</textarea>' +
           '<div id="emailExpandRendered" class="email-body-preview" style="display:none;flex:1;min-height:200px;overflow-y:auto;max-height:none;cursor:pointer;" ondblclick="_toggleEmailExpandRender()" title="Double-click to edit"></div>' +
         '</div>' +
       '</div>' +
@@ -2104,11 +2339,7 @@ function _closeEmailExpandModal(save) {
   modal.remove();
 }
 
-/** Escape text for safe insertion into HTML attribute/textarea content */
-function _escapeHtmlAttr(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escapeHtmlAttr — now using shared _escHtml from shared-utils.js
 
 /**
  * Toggle Cc or Bcc field visibility in the expand modal.
@@ -2130,8 +2361,7 @@ function _toggleExpandCcBcc(field) {
   }
 }
 
-/** Alias for use in autocomplete dropdown rendering */
-var _escHtml = _escapeHtmlAttr;
+// _escHtml is now provided globally by shared-utils.js
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2377,6 +2607,16 @@ function _setupHtmlEmailView(htmlContent, bodyEl) {
 
   var bodyField = bodyEl.closest('.email-body-field') || bodyEl.parentNode;
   if (!bodyField) return;
+
+  // Check if external content was blocked (look for data-original-src attributes)
+  var hasBlockedContent = htmlContent.indexOf('data-original-src=') !== -1;
+  if (hasBlockedContent) {
+    var banner = document.createElement('div');
+    banner.className = 'email-blocked-content-banner';
+    banner.innerHTML = '<i class="fas fa-shield-alt"></i> External images blocked for privacy. ' +
+      '<button type="button" class="zone-button" onclick="_emailLoadExternalContent()" style="font-size:0.85em;padding:2px 8px;">Load External Content</button>';
+    bodyField.insertBefore(banner, bodyField.firstChild);
+  }
 
   // Create toggle row — hidden in the small zone, only shown in expand modal
   var toggleRow = document.createElement('div');
@@ -2800,18 +3040,37 @@ function _buildEmailAttachmentBar(attachments, chitId) {
   bar.className = 'email-attachment-bar';
 
   attachments.forEach(function(att) {
+    var attUrl = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(att.id);
     var item = document.createElement('a');
     item.className = 'email-attachment-chip';
-    item.href = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(att.id);
-    item.target = '_blank';
-    item.title = att.filename + ' (' + _formatAttSize(att.size) + ')';
-    item.setAttribute('download', att.filename);
+    item.href = attUrl;
+    item.title = (att.filename || 'Attachment') + ' (' + _formatAttSize(att.size) + ') — click to preview, shift+click to download';
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) {
+        // Shift+click: download
+        var dl = document.createElement('a');
+        dl.href = attUrl;
+        dl.download = att.filename || 'attachment';
+        document.body.appendChild(dl);
+        dl.click();
+        document.body.removeChild(dl);
+      } else {
+        // Normal click: preview modal
+        if (typeof cwocAttachmentPreview === 'function') {
+          cwocAttachmentPreview(attUrl, att.filename || 'Attachment', att.mime_type || '');
+        } else {
+          window.open(attUrl, '_blank');
+        }
+      }
+    });
 
     // Image attachments get a thumbnail preview
     if (att.mime_type && att.mime_type.startsWith('image/')) {
       var thumb = document.createElement('img');
       thumb.className = 'email-attachment-thumb-img';
-      thumb.src = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(att.id);
+      thumb.src = attUrl;
       thumb.alt = att.filename || '';
       thumb.loading = 'lazy';
       thumb.onerror = function() {

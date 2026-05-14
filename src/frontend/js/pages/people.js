@@ -534,7 +534,7 @@
             errorsEl.innerHTML = '<strong>Errors:</strong>' +
                 errors.map(function (e) {
                     const entry = e.entry !== undefined ? 'Entry ' + e.entry + ': ' : '';
-                    return '<div class="error-item">' + entry + _escapeHtml(e.reason || 'Unknown error') + '</div>';
+                    return '<div class="error-item">' + entry + _escHtml(e.reason || 'Unknown error') + '</div>';
                 }).join('');
         } else {
             errorsEl.innerHTML = '';
@@ -616,24 +616,11 @@
         window.location.href = '/';
     }, true);
 
-    // ── Utility: escape HTML ────────────────────────────────────────
-    function _escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+    // _escapeHtml — now using shared _escHtml from shared-utils.js
 
     /** Highlight matching substring in text (returns HTML string) */
     function _highlightMatch(text, query) {
-        if (!query || !text) return _escapeHtml(text || '');
-        const escaped = _escapeHtml(text);
-        const q = query.toLowerCase();
-        const idx = text.toLowerCase().indexOf(q);
-        if (idx === -1) return escaped;
-        var before = _escapeHtml(text.substring(0, idx));
-        var match = _escapeHtml(text.substring(idx, idx + query.length));
-        var after = _escapeHtml(text.substring(idx + query.length));
-        return before + '<mark style="background:#ffe082;padding:0 1px;border-radius:2px;">' + match + '</mark>' + after;
+        return cwocHighlightMatch(text, query);
     }
 
 })();

@@ -60,7 +60,7 @@ var _smartLinkDetectors = [
         category: 'Package',
         name: 'USPS',
         icon: '/static/tracking/usps.svg',
-        keywords: null, // format is distinctive
+        keywords: [/\b(usps|postal\s*service|united\s*states\s*postal)\b/i, /\b(tracking|shipment|delivered|delivery|package)\b/i],
         regex: /\b(\d{20,22})\b/,
         url: 'https://tools.usps.com/go/TrackConfirmAction?tLabels={code}',
         label: 'Track',
@@ -214,6 +214,16 @@ var _smartLinkDetectors = [
         label: 'View',
         priority: 7
     },
+    {
+        category: 'Hotel',
+        name: 'Wyndham',
+        icon: '/static/tracking/hotel.svg',
+        keywords: [/\b(wyndham|days\s*inn|super\s*8|ramada|la\s*quinta|wingate|baymont|microtel|hawthorn|trademark|tryp|dolce)\b/i],
+        regex: /\b(\d{8,12})\b/,
+        url: 'https://www.wyndhamhotels.com/wyndham-rewards/member/reservations',
+        label: 'Manage',
+        priority: 8
+    },
 
     // ─── Rental Cars ─────────────────────────────────────────────────────────
 
@@ -363,7 +373,7 @@ var _smartLinkDetectors = [
         category: 'Order',
         name: 'Amazon Order',
         icon: '/static/tracking/order.svg',
-        keywords: [/\b(amazon|amzn)\b/i, /\b(order|confirmation|shipped|delivered)\b/i],
+        keywords: [/\b(amazon\.com|amzn\.com)\b/i, /\b(amazon|amzn)\s+(order|shipment|delivery)\b/i],
         regex: /\b(\d{3}-\d{7}-\d{7})\b/,
         url: 'https://www.amazon.com/gp/your-account/order-history?search={code}',
         label: 'Order',
@@ -373,7 +383,7 @@ var _smartLinkDetectors = [
         category: 'Order',
         name: 'Apple Order',
         icon: '/static/tracking/order.svg',
-        keywords: [/\b(apple)\b/i, /\b(order|receipt|purchase)\b/i],
+        keywords: [/\b(apple\.com)\b/i, /\b(apple\s+store|apple\s+order|apple\s+receipt)\b/i],
         regex: /\b(W\d{9,12})\b/i,
         url: 'https://store.apple.com/xc/xc/viewOrderDetails?orderNumber={code}',
         label: 'Order',
@@ -383,7 +393,7 @@ var _smartLinkDetectors = [
         category: 'Order',
         name: 'Best Buy Order',
         icon: '/static/tracking/order.svg',
-        keywords: [/\b(best\s*buy|bestbuy)\b/i, /\b(order|confirmation|purchase)\b/i],
+        keywords: [/\b(bestbuy\.com)\b/i, /\b(best\s*buy)\s+(order|confirmation|purchase)\b/i],
         regex: /\b(BBY\d{2}-\d{8,12})\b/i,
         url: 'https://www.bestbuy.com/profile/ss/orderlookup',
         label: 'Order',
@@ -393,7 +403,7 @@ var _smartLinkDetectors = [
         category: 'Order',
         name: 'Walmart Order',
         icon: '/static/tracking/order.svg',
-        keywords: [/\b(walmart)\b/i, /\b(order|confirmation|purchase)\b/i],
+        keywords: [/\b(walmart\.com)\b/i, /\b(walmart)\s+(order|confirmation|purchase)\b/i],
         regex: /\b(\d{13,16})\b/,
         url: 'https://www.walmart.com/orders',
         label: 'Order',
@@ -403,7 +413,7 @@ var _smartLinkDetectors = [
         category: 'Order',
         name: 'Target Order',
         icon: '/static/tracking/order.svg',
-        keywords: [/\b(target)\b/i, /\b(order|confirmation|purchase)\b/i],
+        keywords: [/\b(target\.com)\b/i, /\b(target)\s+(order|confirmation|purchase)\b/i],
         regex: /\b(\d{9,15})\b/,
         url: 'https://www.target.com/orders',
         label: 'Order',

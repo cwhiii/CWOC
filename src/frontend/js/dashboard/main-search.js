@@ -201,7 +201,7 @@ async function displaySearchView() {
   // Search tips hint
   var hintDiv = document.createElement('div');
   hintDiv.className = 'global-search-hint';
-  hintDiv.innerHTML = 'Operators: <strong>&&</strong> (AND, default) \u00b7 <strong>||</strong> (OR) \u00b7 <strong>!</strong> (NOT) \u00b7 <strong>()</strong> (group) \u00b7 <strong>#tag</strong> (filter by tag) \u00b7 <strong>field:value</strong> or <strong>field:(multi word)</strong><br>Fields: <code>title</code>, <code>note</code>, <code>location</code>, <code>status</code>, <code>priority</code>, <code>people</code>, <code>checklist</code>, <code>subject</code>, <code>sender</code>, <code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>body</code>, <code>child</code>, <code>due</code>, <code>start</code>, <code>end</code>, <code>assigned</code><br>e.g. <code>title:(email stuff) && #work</code> \u00b7 <code>location:park || people:john</code> \u00b7 <code>child:deploy && !#done</code>';
+  hintDiv.innerHTML = 'Operators: <strong>&&</strong> (AND, default) \u00b7 <strong>||</strong> (OR) \u00b7 <strong>!</strong> (NOT) \u00b7 <strong>()</strong> (group) \u00b7 <strong>#tag</strong> (filter by tag) \u00b7 <strong>field::value</strong> or <strong>field::(multi word)</strong><br>Fields: <code>title</code>, <code>note</code>, <code>location</code>, <code>status</code>, <code>priority</code>, <code>people</code>, <code>checklist</code>, <code>subject</code>, <code>sender</code>, <code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>body</code>, <code>child</code>, <code>due</code>, <code>start</code>, <code>end</code>, <code>assigned</code><br>e.g. <code>title::(email stuff) && #work</code> \u00b7 <code>location::park || people::john</code> \u00b7 <code>child::deploy && !#done</code>';
   chitList.appendChild(hintDiv);
 
   // Results container
@@ -231,10 +231,15 @@ async function displaySearchView() {
     _renderSearchResults(resultsContainer, _viSettings);
   }
 
-  // Wire up Go button and Enter key
+  // Wire up Go button, Enter key, and search-as-you-type with debounce
   goBtn.addEventListener('click', executeSearch);
   input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); executeSearch(); }
+  });
+  var _searchDebounce = null;
+  input.addEventListener('input', function() {
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(executeSearch, 300);
   });
 
   // If we already have results (re-rendering after filter change), show them
@@ -265,6 +270,7 @@ function _renderSearchResults(container, viSettings) {
     var c = r.chit;
     c._matchedFields = r.matched_fields || [];
     c._titleMatch = r.title_match || false;
+    c._score = r.score || 0;
     return c;
   });
   resultChits = _applyMultiSelectFilters(resultChits);
@@ -329,11 +335,9 @@ function _renderSearchResults(container, viSettings) {
     return;
   }
 
-  // Sort: title matches first, then non-title matches
+  // Sort: by relevance score (higher = better match, full-word > partial)
   resultChits.sort(function(a, b) {
-    var aTitle = a._titleMatch ? 0 : 1;
-    var bTitle = b._titleMatch ? 0 : 1;
-    return aTitle - bTitle;
+    return (b._score || 0) - (a._score || 0);
   });
 
   // Extract highlight terms once for all cards

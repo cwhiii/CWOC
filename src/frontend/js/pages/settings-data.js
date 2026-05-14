@@ -367,3 +367,35 @@ async function _saveLoginMessage() {
     cwocToast('Failed to save login message: ' + error.message, 'error');
   }
 }
+
+// ── Calendar Export Help Modal ───────────────────────────────────────────────
+
+/**
+ * Show the calendar export instructions modal.
+ */
+function showCalendarExportHelp() {
+  var modal = document.getElementById('calendar-export-help-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+/**
+ * Close the calendar export instructions modal.
+ */
+function closeCalendarExportHelp() {
+  var modal = document.getElementById('calendar-export-help-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Switch between Google/Apple/Outlook tabs in the export help modal.
+ */
+function switchCalExportTab(tab) {
+  // Update tab buttons
+  var tabs = document.querySelectorAll('.cal-export-tab');
+  tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+  // Show/hide panels
+  var panels = document.querySelectorAll('.cal-export-panel');
+  panels.forEach(function(p) { p.style.display = 'none'; });
+  var target = document.getElementById('cal-export-' + tab);
+  if (target) target.style.display = 'block';
+}

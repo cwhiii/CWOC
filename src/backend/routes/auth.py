@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 
 from src.backend.auth_utils import hash_password, verify_password
-from src.backend.db import DB_PATH, USER_IMAGES_DIR
+from src.backend.db import DB_PATH, USER_IMAGES_DIR, utcnow_iso
 from src.backend.models import LoginRequest, PasswordChange, ProfileUpdate, PrivatePgpKeyRequest
 
 
@@ -74,15 +74,10 @@ def _clear_attempts(username: str) -> None:
     _login_attempts.pop(username, None)
 
 
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO 8601 string with Z suffix."""
-    return datetime.utcnow().isoformat() + "Z"
-
-
 def _create_session(conn: sqlite3.Connection, user_id: str) -> str:
     """Create a new session row and return the token."""
     token = str(uuid.uuid4())
-    now = _utcnow_iso()
+    now = utcnow_iso()
     lifetime_hours = _get_session_lifetime_hours(conn, user_id)
     if lifetime_hours == 0:
         # Never expire: set expiry far in the future (10 years)
@@ -380,7 +375,7 @@ def update_profile(body: ProfileUpdate, request: Request):
             raise HTTPException(status_code=400, detail="No fields to update")
 
         updates.append("modified_datetime = ?")
-        params.append(_utcnow_iso())
+        params.append(utcnow_iso())
         params.append(user_id)
 
         conn.execute(
@@ -429,7 +424,7 @@ def change_password(body: PasswordChange, request: Request):
         new_hash = hash_password(body.new_password)
         conn.execute(
             "UPDATE users SET password_hash = ?, modified_datetime = ? WHERE id = ?",
-            (new_hash, _utcnow_iso(), user_id),
+            (new_hash, utcnow_iso(), user_id),
         )
         conn.commit()
 
@@ -532,7 +527,7 @@ def save_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
 
         conn.execute(
             "UPDATE users SET private_pgp_key_encrypted = ?, modified_datetime = ? WHERE id = ?",
-            (encrypted_value, _utcnow_iso(), user_id),
+            (encrypted_value, utcnow_iso(), user_id),
         )
         conn.commit()
 

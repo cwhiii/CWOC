@@ -1,0 +1,1 @@
+Auto-complete status is now ON by default for ALL chits (not just project children). The button moved from the Projects zone header to the Task zone header so it's always visible. Existing chits with no explicit setting are migrated to enabled.

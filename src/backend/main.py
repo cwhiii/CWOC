@@ -196,6 +196,11 @@ from src.backend.migrations import (
     migrate_omni_email_count,
     migrate_omni_normalize_colors,
     migrate_add_smart_actions_config,
+    migrate_auto_complete_default_on,
+    migrate_add_habit_mode_to_rules,
+    migrate_add_custom_view_filters,
+    migrate_add_email_privacy_and_send_later,
+    migrate_add_habit_trigger_config,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -277,6 +282,11 @@ migrate_omni_view_settings()
 migrate_omni_email_count()
 migrate_omni_normalize_colors()
 migrate_add_smart_actions_config()
+migrate_auto_complete_default_on()
+migrate_add_habit_mode_to_rules()
+migrate_add_custom_view_filters()
+migrate_add_email_privacy_and_send_later()
+migrate_add_habit_trigger_config()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)

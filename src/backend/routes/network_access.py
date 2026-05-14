@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, utcnow_iso, require_admin
 from src.backend.routes.audit import get_actor_from_request, insert_audit_entry
 
 
@@ -23,10 +23,6 @@ router = APIRouter()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
-
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO 8601 string with Z suffix."""
-    return datetime.utcnow().isoformat() + "Z"
 
 
 def _encrypt_auth_key(plaintext: str) -> str:
@@ -45,38 +41,6 @@ def _decrypt_auth_key(ciphertext: str) -> str:
         return _decrypt_password(ciphertext)
     except Exception:
         return ciphertext  # Fallback: return as-is (may be plaintext from before encryption)
-
-
-def _require_admin(request: Request) -> str:
-    """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if row is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        if not row["is_admin"]:
-            raise HTTPException(status_code=403, detail="Admin access required")
-
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Admin check error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-    finally:
-        if conn:
-            conn.close()
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
@@ -149,7 +113,7 @@ def _ensure_tailscaled():
 @router.get("/api/network-access/tailscale/status")
 def tailscale_status(request: Request):
     """Get Tailscale service status — checks installation and connection state."""
-    _require_admin(request)
+    require_admin(request)
 
     try:
         import os
@@ -214,7 +178,7 @@ def tailscale_status(request: Request):
 @router.post("/api/network-access/tailscale/up")
 def tailscale_up(request: Request):
     """Start Tailscale with the saved auth key from the network_access table."""
-    _require_admin(request)
+    require_admin(request)
 
     # Load saved Tailscale config from DB
     conn = None
@@ -319,7 +283,7 @@ def tailscale_up(request: Request):
 @router.post("/api/network-access/tailscale/down")
 def tailscale_down(request: Request):
     """Stop the Tailscale service."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -367,7 +331,7 @@ def tailscale_down(request: Request):
 @router.get("/api/network-access")
 def list_network_access(request: Request):
     """List all provider configs from the network_access table."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -390,7 +354,7 @@ def list_network_access(request: Request):
 @router.get("/api/network-access/{provider}")
 def get_network_access(provider: str, request: Request):
     """Get a single provider config, or a default if not found."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -418,13 +382,13 @@ def get_network_access(provider: str, request: Request):
 @router.post("/api/network-access/{provider}")
 def save_network_access(provider: str, body: dict, request: Request):
     """Create or update a provider config using INSERT OR REPLACE."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        now = _utcnow_iso()
+        now = utcnow_iso()
 
         # Check for existing row to preserve id and created_datetime
         existing = conn.execute(

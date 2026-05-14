@@ -10,6 +10,126 @@
  * Loaded before: editor-init.js, editor.js
  */
 
+/* ── Enter Key: List Continuation ─────────────────────────────────────────── */
+
+/**
+ * Handle Enter key in a markdown textarea to auto-continue list items.
+ * Returns true if handled (caller should preventDefault), false otherwise.
+ *
+ * Supports: - bullets, * bullets, + bullets, numbered lists (1. / 1)),
+ *           checkboxes (- [ ] / - [x]), blockquotes (> )
+ * If the current line is an empty list prefix, removes it (breaks out of list).
+ */
+function _notesListContinue(textarea) {
+  var val = textarea.value;
+  var start = textarea.selectionStart;
+  var end = textarea.selectionEnd;
+
+  // Find the current line
+  var lineStart = val.lastIndexOf('\n', start - 1) + 1;
+  var lineEnd = val.indexOf('\n', start);
+  if (lineEnd === -1) lineEnd = val.length;
+  var line = val.substring(lineStart, start); // text before cursor on this line
+
+  // Match list prefixes (order matters: checkbox before bullet)
+  var prefixMatch = line.match(/^(\s*)([-*+]\s\[[ xX]\]\s|[-*+]\s|\d+[.)]\s|>\s?)/);
+  if (!prefixMatch) return false;
+
+  var indent = prefixMatch[1];
+  var marker = prefixMatch[2];
+  var content = line.substring(prefixMatch[0].length);
+
+  // If the line after the prefix is empty, break out of the list
+  if (!content.trim()) {
+    // Remove the prefix from the current line
+    var newVal = val.substring(0, lineStart) + val.substring(start);
+    textarea.value = newVal;
+    textarea.selectionStart = textarea.selectionEnd = lineStart;
+    return true;
+  }
+
+  // Build the continuation prefix
+  var newPrefix = '';
+
+  // Checkbox → always unchecked
+  if (marker.match(/^[-*+]\s\[[ xX]\]\s$/)) {
+    newPrefix = indent + marker[0] + ' [ ] ';
+  }
+  // Ordered list → increment number
+  else if (marker.match(/^\d+[.)]\s$/)) {
+    var numMatch = marker.match(/^(\d+)([.)]\s)$/);
+    if (numMatch) {
+      newPrefix = indent + (parseInt(numMatch[1], 10) + 1) + numMatch[2];
+    }
+  }
+  // Unordered list or blockquote → same prefix
+  else {
+    newPrefix = indent + marker;
+  }
+
+  // Insert newline + prefix at cursor
+  var insert = '\n' + newPrefix;
+  var before = val.substring(0, start);
+  var after = val.substring(end);
+  textarea.value = before + insert + after;
+  var newPos = start + insert.length;
+  textarea.selectionStart = textarea.selectionEnd = newPos;
+
+  // Renumber subsequent ordered list items
+  if (newPrefix.match(/^\s*\d+[.)]\s$/)) {
+    _notesRenumberOrderedList(textarea, newPos);
+  }
+
+  return true;
+}
+
+/**
+ * Renumber ordered list items following the cursor position.
+ * Walks forward through consecutive numbered lines and increments each number.
+ */
+function _notesRenumberOrderedList(textarea, fromPos) {
+  var val = textarea.value;
+  var lines = val.split('\n');
+
+  // Find which line index fromPos is on
+  var charCount = 0;
+  var startLineIdx = 0;
+  for (var i = 0; i < lines.length; i++) {
+    if (charCount + lines[i].length >= fromPos) {
+      startLineIdx = i;
+      break;
+    }
+    charCount += lines[i].length + 1; // +1 for \n
+  }
+
+  // Get the number from the newly inserted line to start incrementing from
+  var insertedMatch = lines[startLineIdx].match(/^(\s*)(\d+)([.)]\s)/);
+  if (!insertedMatch) return;
+
+  var indent = insertedMatch[1];
+  var nextNum = parseInt(insertedMatch[2], 10) + 1;
+  var sep = insertedMatch[3];
+  var changed = false;
+
+  // Walk subsequent lines and renumber consecutive ordered list items at same indent
+  for (var j = startLineIdx + 1; j < lines.length; j++) {
+    var lineMatch = lines[j].match(/^(\s*)(\d+)([.)]\s)(.*)/);
+    if (!lineMatch) break; // not a numbered list item — stop
+    if (lineMatch[1] !== indent) break; // different indent level — stop
+    if (lineMatch[3] !== sep) break; // different separator style — stop
+
+    lines[j] = indent + nextNum + sep + lineMatch[4];
+    nextNum++;
+    changed = true;
+  }
+
+  if (changed) {
+    var cursorPos = textarea.selectionStart;
+    textarea.value = lines.join('\n');
+    textarea.selectionStart = textarea.selectionEnd = cursorPos;
+  }
+}
+
 /* ── Notes Undo/Redo ──────────────────────────────────────────────────────── */
 
 function _notesUndo(e) {

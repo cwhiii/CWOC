@@ -119,23 +119,8 @@ async function _fetchWeatherData(address) {
   }
 }
 
-function _getPrecipType(code) {
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "rain";
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
-  if ([95, 96, 99].includes(code)) return "thunder";
-  if ([51, 53, 55, 56, 57].includes(code)) return "drizzle";
-  return "";
-}
-
-/** Format precipitation: nearest cm with type. Sub-0.5cm = just the type word. No precip = empty. */
-function _editorFormatPrecip(precipMm, weatherCode) {
-  if (!precipMm || precipMm <= 0) return '';
-  var pType = _getPrecipType(weatherCode);
-  if (!pType) pType = 'precip';
-  var cm = Math.round(precipMm / 10);
-  if (cm < 1) return pType;
-  return cm + 'cm ' + pType;
-}
+// _getPrecipType — now in shared-utils.js as _cwocGetPrecipType
+// _editorFormatPrecip — now in shared-utils.js as _cwocFormatPrecip
 
 /** Format precipitation amount only (no type word) for merged display. */
 function _editorFormatPrecipAmount(precipMm) {

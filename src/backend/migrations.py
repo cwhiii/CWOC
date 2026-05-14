@@ -3057,3 +3057,153 @@ def migrate_add_smart_actions_config():
     finally:
         if conn:
             conn.close()
+
+# ── Auto-Complete Default ON: migration ──────────────────────────────────
+
+def migrate_auto_complete_default_on():
+    """Set auto_complete_checklist to 1 (true) for all existing chits where it is NULL."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE chits SET auto_complete_checklist = 1 WHERE auto_complete_checklist IS NULL")
+        updated = cursor.rowcount
+        conn.commit()
+        if updated:
+            logger.info(f"migrate_auto_complete_default_on: set {updated} chits to auto_complete_checklist=1")
+    except Exception as e:
+        logger.error(f"Error in migrate_auto_complete_default_on: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# ── Habit Mode for Rules: migration ──────────────────────────────────────
+
+def migrate_add_habit_mode_to_rules():
+    """Add habit_mode and habit_history columns to rules table if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(rules)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "habit_mode" not in columns:
+            cursor.execute("ALTER TABLE rules ADD COLUMN habit_mode BOOLEAN DEFAULT 0")
+            logger.info("Added habit_mode column to rules table")
+        if "habit_history" not in columns:
+            cursor.execute("ALTER TABLE rules ADD COLUMN habit_history TEXT")
+            logger.info("Added habit_history column to rules table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding habit mode columns to rules: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# ── Custom View Filters: migration ───────────────────────────────────────
+
+def migrate_add_custom_view_filters():
+    """Add custom_view_filters column to settings table if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "custom_view_filters" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN custom_view_filters TEXT")
+            logger.info("Added custom_view_filters column to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding custom_view_filters column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Email Privacy & Send Later: migration ────────────────────────────────
+
+def migrate_add_email_privacy_and_send_later():
+    """Add email_send_at column to chits and email privacy settings to settings table.
+
+    New chit column:
+      - email_send_at: TEXT (nullable ISO datetime) — scheduled send time
+
+    New settings columns:
+      - email_block_tracking_pixels: TEXT DEFAULT '1' — block 1x1/1x2 images
+      - email_external_content: TEXT DEFAULT 'block' — 'block', 'allow', 'known_senders'
+      - email_read_receipts: TEXT DEFAULT 'never' — 'never', 'always', 'ask', 'contacts_only'
+      - email_undo_send_delay: TEXT DEFAULT '5' — seconds before send fires
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── Chits: email_send_at ──
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+        if "email_send_at" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN email_send_at TEXT")
+            logger.info("Added email_send_at column to chits table")
+        if "email_request_read_receipt" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN email_request_read_receipt BOOLEAN DEFAULT 0")
+            logger.info("Added email_request_read_receipt column to chits table")
+
+        # ── Settings: email privacy fields ──
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+        if "email_block_tracking_pixels" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_block_tracking_pixels TEXT DEFAULT '1'")
+            logger.info("Added email_block_tracking_pixels column to settings table")
+        if "email_external_content" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_external_content TEXT DEFAULT 'allow'")
+            logger.info("Added email_external_content column to settings table")
+        if "email_read_receipts" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_read_receipts TEXT DEFAULT 'never'")
+            logger.info("Added email_read_receipts column to settings table")
+        if "email_undo_send_delay" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_undo_send_delay TEXT DEFAULT '5'")
+            logger.info("Added email_undo_send_delay column to settings table")
+        if "email_group_by" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_group_by TEXT DEFAULT 'date'")
+            logger.info("Added email_group_by column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_privacy_and_send_later: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Habit Trigger Config: migration ──────────────────────────────────────
+
+def migrate_add_habit_trigger_config():
+    """Add habit_trigger_config column to rules table if missing.
+
+    This column stores JSON config for habit_achieved/habit_missed/habit_due
+    trigger types:
+    {
+        "source_rule_id": "uuid",       # Which habit rule to watch
+        "source_type": "rule" | "chit", # Whether watching a rule-habit or chit-habit
+        "source_chit_id": "uuid",       # If source_type=chit, which chit
+        "offset_minutes": int,          # For habit_due: negative=before, positive=after
+        "event": "achieved" | "missed" | "due"  # Which event to fire on
+    }
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(rules)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "habit_trigger_config" not in columns:
+            cursor.execute("ALTER TABLE rules ADD COLUMN habit_trigger_config TEXT")
+            logger.info("Added habit_trigger_config column to rules table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding habit_trigger_config column to rules: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

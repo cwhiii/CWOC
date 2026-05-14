@@ -531,7 +531,7 @@ def download_ssl_cert():
 CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
 UPDATE_LOG_PATH = "/app/data/update.log"
 
-# Directories to scan for release notes files (cwoc_release_*.md)
+# Directories to scan for daily release notes files (release_notes-YYYYMMDD.md)
 _RELEASE_NOTES_DIRS = [
     "/app/documents/release_notes",
     "documents/release_notes",
@@ -539,33 +539,37 @@ _RELEASE_NOTES_DIRS = [
 
 
 def _find_release_notes():
-    """Scan for all cwoc_release_*.md files, return sorted list of (version, content) tuples (newest first)."""
+    """Scan for daily release_notes-YYYYMMDD.md files, return sorted list of (date, content) tuples (newest first)."""
     import glob as _glob
+    import re as _re
 
-    found = {}  # version -> content
+    found = {}  # date -> content
     for directory in _RELEASE_NOTES_DIRS:
-        pattern = os.path.join(directory, "cwoc_release_*.md")
+        pattern = os.path.join(directory, "release_notes-*.md")
         for filepath in _glob.glob(pattern):
             basename = os.path.basename(filepath)
-            # Extract version from filename: cwoc_release_YYYYMMDD.HHMM.md
-            version = basename.replace("cwoc_release_", "").replace(".md", "")
-            if version not in found:
+            # Match daily files: release_notes-YYYYMMDD.md (no time component)
+            m = _re.match(r"release_notes-(\d{8})\.md$", basename)
+            if not m:
+                continue
+            date_str = m.group(1)
+            if date_str not in found:
                 try:
                     with open(filepath, "r") as f:
-                        found[version] = f.read()
+                        found[date_str] = f.read()
                 except (IOError, OSError):
                     continue
         if found:
             break  # Use first directory that has files
-    # Sort by version descending (newest first)
+    # Sort by date descending (newest first)
     return sorted(found.items(), key=lambda x: x[0], reverse=True)
 
 
 @router.get("/api/release-notes")
 def get_release_notes():
-    """Return all release notes as a list of {version, content} objects, newest first."""
+    """Return all daily release notes as a list of {date, content} objects, newest first."""
     notes = _find_release_notes()
-    return {"notes": [{"version": v, "content": c} for v, c in notes]}
+    return {"notes": [{"date": d, "content": c} for d, c in notes]}
 
 
 @router.get("/api/update/log")

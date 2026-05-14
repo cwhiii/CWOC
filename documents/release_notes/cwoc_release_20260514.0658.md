@@ -1,0 +1,1 @@
+Fixed alarm sound continuing to play after dismiss (race condition in cwocPlayAudio retry handler). Extracted shared `cwocBuildAlarmCard()` function so the editor and independent alerts board use identical alarm card UI code with the cwocTimePicker instead of separate implementations.

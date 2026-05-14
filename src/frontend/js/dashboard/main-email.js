@@ -160,6 +160,11 @@ function _updateEmailSidebarVisibility(tab) {
     var section = document.getElementById('section-email-controls');
     if (!section) return;
     section.style.display = (tab === 'Email') ? '' : 'none';
+    // Hide the general "Show Email" filters on the Email tab (redundant there)
+    var showRecvLabel = document.getElementById('show-email-received');
+    var showSentLabel = document.getElementById('show-email-sent');
+    if (showRecvLabel) showRecvLabel.closest('label').style.display = (tab === 'Email') ? 'none' : '';
+    if (showSentLabel) showSentLabel.closest('label').style.display = (tab === 'Email') ? 'none' : '';
     // Sync the radio button to the current sub-filter
     if (tab === 'Email') {
         var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
@@ -492,7 +497,15 @@ function _emailCheckPendingSend() {
  * @param {string|null} inReplyTo
  */
 function _emailShowUndoSendBar(chitId, archiveOriginal, inReplyTo) {
-    var DURATION = 5000;
+    // Read undo delay from settings (default 5 seconds)
+    var delaySec = 5;
+    try {
+        var settings = window._cwocSettings || (typeof getCachedSettings === 'function' ? getCachedSettings() : null);
+        if (settings && settings.email_undo_send_delay) {
+            delaySec = parseInt(settings.email_undo_send_delay, 10) || 5;
+        }
+    } catch(e) {}
+    var DURATION = delaySec * 1000;
 
     // Remove any existing
     var existing = document.getElementById('emailUndoSendToast');
@@ -545,7 +558,7 @@ function _emailShowUndoSendBar(chitId, archiveOriginal, inReplyTo) {
         dismissed = true;
         clearInterval(interval);
         toast.remove();
-        _showToast('Send cancelled.', 'info');
+        cwocToast('Send cancelled.', 'info');
     };
 }
 
@@ -562,11 +575,11 @@ async function _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo) {
         if (!response.ok) {
             var errData;
             try { errData = await response.json(); } catch(e) { errData = { detail: 'Send failed.' }; }
-            _showToast(errData.detail || 'Send failed.', 'error');
+            cwocToast(errData.detail || 'Send failed.', 'error');
             return;
         }
 
-        _showToast('Email sent successfully.', 'success');
+        cwocToast('Email sent successfully.', 'success');
 
         // Archive original if requested
         if (archiveOriginal && inReplyTo) {
@@ -583,7 +596,7 @@ async function _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo) {
         if (typeof fetchChits === 'function') fetchChits();
     } catch(err) {
         console.error('[Email] Send from dashboard failed:', err);
-        _showToast('Failed to send email.', 'error');
+        cwocToast('Failed to send email.', 'error');
     }
 }
 
@@ -637,7 +650,9 @@ function displayEmailView(chitsToDisplay) {
     } else if (_emailSubFilter === 'sent') {
         emailChits = emailChits.filter(function(c) { return _chitHasTag(c, 'Sent') && !c.archived; });
     } else if (_emailSubFilter === 'drafts') {
-        emailChits = emailChits.filter(function(c) { return _chitHasTag(c, 'Drafts') && c.email_status === 'draft' && !c.archived; });
+        emailChits = emailChits.filter(function(c) { return _chitHasTag(c, 'Drafts') && c.email_status === 'draft' && !c.archived && !c.email_send_at; });
+    } else if (_emailSubFilter === 'scheduled') {
+        emailChits = emailChits.filter(function(c) { return c.email_status === 'draft' && c.email_send_at && !c.archived; });
     } else if (_emailSubFilter === 'trash') {
         emailChits = emailChits.filter(function(c) { return _chitHasTag(c, 'Trash'); });
     } else if (_emailSubFilter === 'archived') {
@@ -645,10 +660,14 @@ function displayEmailView(chitsToDisplay) {
     }
 
     // Apply account filter (multi-select by nickname system tag)
-    // Only filter if some accounts are deselected (not all active)
+    // If no accounts are selected (all deselected), show no emails
+    // If all accounts are selected, show all (skip filtering)
     var allAccounts = ((window._cwocSettings || {}).email_accounts || []).filter(function(a) { return a && a.nickname; });
     var allSelected = _emailAccountFilter.length >= allAccounts.length;
-    if (_emailAccountFilter.length > 0 && !allSelected) {
+    if (_emailAccountFilter.length === 0 && _emailAccountFilterInitialized && allAccounts.length > 0) {
+        // No accounts selected — show nothing
+        emailChits = [];
+    } else if (_emailAccountFilter.length > 0 && !allSelected) {
         emailChits = emailChits.filter(function(c) {
             var tags = c.tags;
             if (typeof tags === 'string') {
@@ -762,7 +781,23 @@ function displayEmailView(chitsToDisplay) {
     var totalThreads = visibleThreads.length;
     var threadsToRender = paginateEnabled ? visibleThreads.slice(0, PAGE_SIZE) : visibleThreads;
 
+    // Date grouping: insert headers between date boundaries
+    var groupBy = (window._cwocSettings || {}).email_group_by || 'date';
+    var lastGroup = null;
+
     threadsToRender.forEach(function(thread) {
+        // Insert date group header if grouping is enabled
+        if (groupBy === 'date') {
+            var groupLabel = _emailGetDateGroup(thread.latest);
+            if (groupLabel !== lastGroup) {
+                lastGroup = groupLabel;
+                var header = document.createElement('div');
+                header.className = 'email-date-group-header';
+                header.textContent = groupLabel;
+                scrollWrap.appendChild(header);
+            }
+        }
+
         if (thread.totalCount <= 1) {
             // Single message — render as normal card
             scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
@@ -873,7 +908,16 @@ function _buildEmailCard(chit, viSettings) {
     contactImg.className = 'email-contact-img';
     var imgUrl = _emailGetContactImage(senderRaw);
     if (imgUrl) {
-        contactImg.innerHTML = '<img src="' + imgUrl + '" alt="" class="email-contact-avatar">';
+        var img = document.createElement('img');
+        img.src = imgUrl;
+        img.alt = '';
+        img.className = 'email-contact-avatar';
+        img.onerror = function() {
+            console.warn('[CWOC] Missing profile image for email contact "' + (senderName || senderRaw || 'unknown') + '": ' + imgUrl);
+            var initial = (senderName || '?').charAt(0).toUpperCase();
+            contactImg.innerHTML = '<span class="email-contact-initial">' + initial + '</span>';
+        };
+        contactImg.appendChild(img);
     } else {
         // Fallback: first letter of sender name
         var initial = (senderName || '?').charAt(0).toUpperCase();
@@ -1074,17 +1118,42 @@ function _buildEmailCard(chit, viSettings) {
         var attRow = document.createElement('span');
         attRow.className = 'email-attachment-row';
         attachments.forEach(function(att) {
+            var attUrl = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
             var attEl = document.createElement('a');
             attEl.className = 'email-attachment-thumb';
-            attEl.href = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
-            attEl.target = '_blank';
-            attEl.title = att.filename || 'Attachment';
-            attEl.addEventListener('click', function(e) { e.stopPropagation(); });
+            attEl.href = attUrl;
+            attEl.title = (att.filename || 'Attachment') + ' (click to preview, shift+click to download)';
+            attEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                if (e.shiftKey) {
+                    // Shift+click: download directly
+                    var dl = document.createElement('a');
+                    dl.href = attUrl;
+                    dl.download = att.filename || 'attachment';
+                    document.body.appendChild(dl);
+                    dl.click();
+                    document.body.removeChild(dl);
+                } else {
+                    // Normal click: preview modal
+                    if (typeof cwocAttachmentPreview === 'function') {
+                        cwocAttachmentPreview(attUrl, att.filename || 'Attachment', att.mime_type || '');
+                    } else {
+                        window.open(attUrl, '_blank');
+                    }
+                }
+            });
+            // Right-click: show attachment-specific context menu (View / Download)
+            attEl.addEventListener('contextmenu', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                _showAttachmentContextMenu(e, attUrl, att.filename || 'Attachment', att.mime_type || '');
+            });
             attEl.addEventListener('dblclick', function(e) { e.stopPropagation(); });
 
             if (att.mime_type && att.mime_type.startsWith('image/')) {
                 var img = document.createElement('img');
-                img.src = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
+                img.src = attUrl;
                 img.alt = att.filename || '';
                 img.loading = 'lazy';
                 img.onerror = function() { this.style.display = 'none'; attEl.textContent = '🖼️'; };
@@ -1478,9 +1547,9 @@ async function _emailBulkArchive() {
     }
     console.debug('[Email Bulk Archive] Done. Success: ' + successCount + ', Failed: ' + failCount);
     if (failCount > 0) {
-        _showToast(successCount + ' archived, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
+        cwocToast(successCount + ' archived, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
     } else {
-        _showToast(count + ' email(s) archived', 'success');
+        cwocToast(count + ' email(s) archived', 'success');
     }
     _emailSelectedIds = [];
     if (typeof fetchChits === 'function') fetchChits();
@@ -1525,9 +1594,9 @@ async function _emailBulkToggleRead() {
     if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
     if (typeof _refreshBundleTabCounts === 'function') _refreshBundleTabCounts();
     if (failCount > 0) {
-        _showToast(successCount + ' toggled, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
+        cwocToast(successCount + ' toggled, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
     } else {
-        _showToast(count + ' email(s) read status toggled', 'success');
+        cwocToast(count + ' email(s) read status toggled', 'success');
     }
     _emailSelectedIds = [];
     document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) {
@@ -1536,6 +1605,45 @@ async function _emailBulkToggleRead() {
         if (wrap) wrap.classList.remove('email-cb-checked');
     });
     _emailUpdateBulkBar();
+}
+
+/** Bulk delete (soft-delete) selected emails */
+async function _emailBulkDelete() {
+    if (_emailSelectedIds.length === 0) return;
+    var count = _emailSelectedIds.length;
+
+    var confirmed = await cwocConfirm('Delete ' + count + ' email(s)? They will be moved to Trash.');
+    if (!confirmed) return;
+
+    console.debug('[Email Bulk Delete] Deleting ' + count + ' items');
+    var successCount = 0;
+    var failCount = 0;
+    for (var i = 0; i < _emailSelectedIds.length; i++) {
+        var chitId = _emailSelectedIds[i];
+        try {
+            var resp = await fetch('/api/chits/' + encodeURIComponent(chitId), {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!resp.ok) {
+                console.error('[Email Bulk Delete] DELETE failed for ' + chitId + ':', resp.status);
+                failCount++;
+            } else {
+                successCount++;
+            }
+        } catch (e) {
+            console.error('[Email Bulk Delete] Exception for ' + chitId + ':', e);
+            failCount++;
+        }
+    }
+    console.debug('[Email Bulk Delete] Done. Success: ' + successCount + ', Failed: ' + failCount);
+    if (failCount > 0) {
+        cwocToast(successCount + ' deleted, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
+    } else {
+        cwocToast(count + ' email(s) moved to Trash', 'success');
+    }
+    _emailSelectedIds = [];
+    if (typeof fetchChits === 'function') fetchChits();
 }
 
 /** Bulk tag selected emails — show a prompt for the tag name */
@@ -1592,7 +1700,7 @@ async function _emailBulkTag() {
         var tagsToApply = picker ? picker.getSelected() : selectedTags;
         console.debug('[Email Bulk Tag] Tags to apply:', tagsToApply, 'to', _emailSelectedIds.length, 'chits');
         if (tagsToApply.length === 0) {
-            _showToast('No tags selected', 'info');
+            cwocToast('No tags selected', 'info');
             return;
         }
         var count = _emailSelectedIds.length;
@@ -1638,7 +1746,7 @@ async function _emailBulkTag() {
             }
         }
         overlay.remove();
-        _showToast(successCount + '/' + count + ' email(s) tagged', successCount > 0 ? 'success' : 'error');
+        cwocToast(successCount + '/' + count + ' email(s) tagged', successCount > 0 ? 'success' : 'error');
         _emailSelectedIds = [];
         if (typeof fetchChits === 'function') fetchChits();
     };
@@ -1665,7 +1773,7 @@ function _setEmailSubFilter(filter) {
 
 function _checkMail() {
     console.debug('[Email] Syncing...');
-    _showToast('Checking mail...', 'info');
+    cwocToast('Checking mail...', 'info');
     _emailSetPillSpinners(true);
     fetch('/api/email/sync', { method: 'POST' })
         .then(function(r) {
@@ -1691,7 +1799,7 @@ function _checkMail() {
                     cwocToast(toastMsg, 'success', 5000);
                 } else {
                     var acctSummary = details.map(function(d) { return d.account + ': checked ' + d.imap_found; }).join(', ');
-                    _showToast('No new emails' + (acctSummary ? ' (' + acctSummary + ')' : ''), 'success');
+                    cwocToast('No new emails' + (acctSummary ? ' (' + acctSummary + ')' : ''), 'success');
                 }
 
                 // Store errors on account pills instead of generic toasts
@@ -1740,7 +1848,7 @@ function _checkMail() {
                 _emailShowErrorWithSettingsLink(result.data.detail, 'Check your email account settings.');
             } else {
                 console.error('[Email Check Mail] Unexpected response:', result.data);
-                _showToast('Unexpected response from server', 'error');
+                cwocToast('Unexpected response from server', 'error');
             }
         })
         .catch(function(err) {
@@ -1776,6 +1884,98 @@ function _updateEmailBadge() {
     }
 }
 
+/**
+ * Show a small context menu for an attachment with View and Download options.
+ * @param {MouseEvent} e — the contextmenu event
+ * @param {string} url — attachment download URL
+ * @param {string} filename — display name
+ * @param {string} mimeType — MIME type
+ */
+function _showAttachmentContextMenu(e, url, filename, mimeType) {
+    // Remove any existing
+    var existing = document.querySelector('.cwoc-attachment-ctx-menu');
+    if (existing) existing.remove();
+
+    var menu = document.createElement('div');
+    menu.className = 'cwoc-attachment-ctx-menu';
+    menu.style.cssText = 'position:fixed;z-index:10002;background:#fffaf0;border:1px solid #6b4e31;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3);padding:4px 0;font-family:Lora,Georgia,serif;font-size:0.9em;min-width:140px;';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    function _item(icon, label, onClick) {
+        var el = document.createElement('div');
+        el.style.cssText = 'padding:6px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;color:#1a1208;';
+        el.innerHTML = icon + ' ' + label;
+        el.addEventListener('mouseenter', function() { el.style.background = 'rgba(139,90,43,0.1)'; });
+        el.addEventListener('mouseleave', function() { el.style.background = ''; });
+        el.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            menu.remove();
+            onClick();
+        });
+        menu.appendChild(el);
+    }
+
+    _item('<i class="fas fa-eye"></i>', 'View', function() {
+        if (typeof cwocAttachmentPreview === 'function') {
+            cwocAttachmentPreview(url, filename, mimeType);
+        } else {
+            window.open(url, '_blank');
+        }
+    });
+
+    _item('<i class="fas fa-download"></i>', 'Download', function() {
+        var dl = document.createElement('a');
+        dl.href = url;
+        dl.download = filename;
+        document.body.appendChild(dl);
+        dl.click();
+        document.body.removeChild(dl);
+    });
+
+    document.body.appendChild(menu);
+
+    // Close on click outside
+    function _closeMenu(ev) {
+        if (!menu.contains(ev.target)) {
+            menu.remove();
+            document.removeEventListener('click', _closeMenu);
+            document.removeEventListener('contextmenu', _closeMenu);
+        }
+    }
+    setTimeout(function() {
+        document.addEventListener('click', _closeMenu);
+        document.addEventListener('contextmenu', _closeMenu);
+    }, 10);
+}
+
+/**
+ * Determine the date group label for an email chit.
+ * Returns: "Today", "Yesterday", "Last Week", or "Older"
+ * Based on the email's most recent date (email_date or start_datetime).
+ */
+function _emailGetDateGroup(chit) {
+    var dateStr = chit.email_date || chit.start_datetime || chit.created_datetime || '';
+    if (!dateStr) return 'Older';
+
+    var emailDate = new Date(dateStr);
+    if (isNaN(emailDate.getTime())) return 'Older';
+
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    var lastWeekStart = new Date(today);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    var emailDay = new Date(emailDate.getFullYear(), emailDate.getMonth(), emailDate.getDate());
+
+    if (emailDay >= today) return 'Today';
+    if (emailDay >= yesterday) return 'Yesterday';
+    if (emailDay >= lastWeekStart) return 'Last Week';
+    return 'Older';
+}
+
 function _emailEmptyState(container) {
     var folderName = _emailSubFilter || 'inbox';
     // If filtering by specific accounts, show their names
@@ -1791,12 +1991,7 @@ function _emailEmptyState(container) {
     container.appendChild(div);
 }
 
-function _escHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+// _escHtml — now in shared-utils.js (single source of truth)
 
 /** Get a file type emoji icon for attachment display in email cards */
 function _emailGetFileIcon(mimeType) {
@@ -1924,15 +2119,7 @@ function _emailShiftSelect(currentCb) {
     _emailUpdateBulkBar();
 }
 
-function _showToast(msg, type) {
-    if (typeof cwocToast === 'function') {
-        cwocToast(msg, type);
-    } else if (typeof showToast === 'function') {
-        showToast(msg, type);
-    } else {
-        console.log('[Toast]', type, msg);
-    }
-}
+// _showToast — removed, use cwocToast() from shared-utils.js directly
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1949,7 +2136,7 @@ async function _toggleEmailReadStatus(chit, card) {
             headers: { 'Content-Type': 'application/json' }
         });
         if (!resp.ok) {
-            _showToast('Failed to toggle read status', 'error');
+            cwocToast('Failed to toggle read status', 'error');
             return;
         }
         var data = await resp.json();
@@ -1974,10 +2161,10 @@ async function _toggleEmailReadStatus(chit, card) {
         // Refresh bundle tab counts
         if (typeof _refreshBundleTabCounts === 'function') _refreshBundleTabCounts();
 
-        _showToast(data.email_read ? 'Marked as read' : 'Marked as unread', 'success');
+        cwocToast(data.email_read ? 'Marked as read' : 'Marked as unread', 'success');
     } catch (err) {
         console.error('[Email] Toggle read error:', err);
-        _showToast('Failed to toggle read status', 'error');
+        cwocToast('Failed to toggle read status', 'error');
     }
 }
 
@@ -2499,7 +2686,7 @@ function _emailQuickArchive(chit, card) {
         async function() {
             try {
                 var resp = await fetch('/api/chit/' + encodeURIComponent(chit.id));
-                if (!resp.ok) { _showToast('Failed to archive email', 'error'); _emailRestoreCard(card); return; }
+                if (!resp.ok) { cwocToast('Failed to archive email', 'error'); _emailRestoreCard(card); return; }
                 var fullChit = await resp.json();
                 fullChit.archived = true;
                 ['tags', 'checklist', 'people', 'child_chits', 'alerts',
@@ -2523,19 +2710,19 @@ function _emailQuickArchive(chit, card) {
                         if (found) found.archived = true;
                     }
                 } else {
-                    _showToast('Failed to archive email', 'error');
+                    cwocToast('Failed to archive email', 'error');
                     _emailRestoreCard(card);
                 }
             } catch (e) {
                 console.error('[Email Quick Archive]', e);
-                _showToast('Failed to archive email', 'error');
+                cwocToast('Failed to archive email', 'error');
                 _emailRestoreCard(card);
             }
         },
         // onUndo — restore the card
         function() {
             _emailRestoreCard(card);
-            _showToast('Archive undone', 'success');
+            cwocToast('Archive undone', 'success');
         }
     );
 }
@@ -2569,19 +2756,19 @@ function _emailQuickDelete(chit, card) {
                     }
                     if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
                 } else {
-                    _showToast('Failed to delete email', 'error');
+                    cwocToast('Failed to delete email', 'error');
                     _emailRestoreCard(card);
                 }
             } catch (e) {
                 console.error('[Email Quick Delete]', e);
-                _showToast('Failed to delete email', 'error');
+                cwocToast('Failed to delete email', 'error');
                 _emailRestoreCard(card);
             }
         },
         // onUndo — restore the card
         function() {
             _emailRestoreCard(card);
-            _showToast('Delete undone', 'success');
+            cwocToast('Delete undone', 'success');
         }
     );
 }

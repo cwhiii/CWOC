@@ -240,6 +240,28 @@
     opacity: 1;
 }
 
+/* ── Tag virtual option buttons (Any Tag / Tagless) ───────────────────────── */
+.tag-virtual-btn {
+    flex: 1;
+    padding: 3px 8px;
+    font-size: 0.8em;
+    font-family: 'Lora', Georgia, serif;
+    background: transparent;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    color: #6b4e31;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.tag-virtual-btn:hover {
+    background: rgba(107, 78, 49, 0.1);
+}
+.tag-virtual-btn.active {
+    background: #6b4e31;
+    color: #fffaf0;
+    font-weight: bold;
+}
+
 /* ── Project filter dropdown ──────────────────────────────────────────────── */
 .cwoc-project-filter-select {
     width: 100%;

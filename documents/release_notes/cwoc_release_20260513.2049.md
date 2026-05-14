@@ -1,0 +1,1 @@
+Fixed mobile long-press on weather elements to open the quick weather modal. Replaced broken inline touch handler on HST weather icons with the standard `enableLongPress()` function, added long-press support to the Omni weather bar, and added long-press on the sidebar weather button (equivalent to shift+click on desktop).

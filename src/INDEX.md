@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, and `migrate_omni_view_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, and `migrate_omni_view_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -58,8 +58,8 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ProfileUpdate` | Profile update request — display_name (optional), email (optional) |
 | `PasswordChange` | Password change request — current_password, new_password |
 | `Notification` | Notification record — `id`, `user_id`, `chit_id`, `chit_title`, `owner_display_name`, `notification_type` ("invited" or "assigned"), `status` ("pending", "accepted", "declined"), `created_datetime` |
-| `RuleCreate` | Create rule request — `name` (str), `description` (Optional), `enabled` (Optional bool, default True), `priority` (Optional int, default 0), `trigger_type` (str), `conditions` (Optional dict — condition tree JSON), `actions` (Optional list — array of action objects), `confirm_before_apply` (Optional bool, default True), `schedule_config` (Optional dict) |
-| `RuleUpdate` | Update rule request — all fields Optional: `name`, `description`, `enabled`, `priority`, `trigger_type`, `conditions`, `actions`, `confirm_before_apply`, `schedule_config` |
+| `RuleCreate` | Create rule request — `name` (str), `description` (Optional), `enabled` (Optional bool, default True), `priority` (Optional int, default 0), `trigger_type` (str), `conditions` (Optional dict — condition tree JSON), `actions` (Optional list — array of action objects), `confirm_before_apply` (Optional bool, default True), `schedule_config` (Optional dict), `habit_mode` (Optional bool, default False) |
+| `RuleUpdate` | Update rule request — all fields Optional: `name`, `description`, `enabled`, `priority`, `trigger_type`, `conditions`, `actions`, `confirm_before_apply`, `schedule_config`, `habit_mode`, `habit_history` (Optional list — engine-managed habit execution history) |
 | `RuleReorder` | Reorder rules request — `rule_ids` (List[str]) — ordered list of rule IDs |
 | `HAConfigUpdate` | HA config update request — `ha_base_url` (Optional[str]), `ha_access_token` (Optional[str]), `ha_poll_interval` (Optional[int], default 30) |
 | `HAWebhookPayload` | HA webhook payload — `action` (str), `user_id` (Optional[str]), `chit_id` (Optional[str]), `chit_title` (Optional[str]), `title` (Optional[str]), `note` (Optional[str]), `tags` (Optional[List[str]]), `status` (Optional[str]), `priority` (Optional[str]), `due_datetime` (Optional[str]), `checklist` (Optional[List[Dict]]), `item_text` (Optional[str]), `fields` (Optional[Dict]), `payload` (Optional[Dict]) |
@@ -91,6 +91,9 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `_build_export_envelope(data_type, data)` | Wrap data in an export envelope with metadata |
 | `get_version_info()` | Read version info from the `version_info` table |
 | `update_version_info(version, installed_datetime)` | Write version info |
+| `utcnow_iso()` | Return current UTC time as ISO 8601 string with Z suffix (shared helper) |
+| `row_to_dict(cursor, row)` | Convert a sqlite3 row tuple to a dict using cursor.description (shared helper) |
+| `require_admin(request)` | Check that the requesting user is an admin; return user_id or raise 401/403 (shared helper) |
 | `seed_version_info()` | Seed initial version info from `/app/src/VERSION` if table is empty |
 
 ### 1.5 `src/backend/migrations.py` — Database Migrations
@@ -159,6 +162,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_bundles_omni_view()` | Add `omni_view` (BOOLEAN DEFAULT 0) column to bundles table. Fully idempotent |
 | `migrate_omni_view_settings()` | Add `omni_layout` (TEXT) and `omni_locked_filters` (TEXT) columns to settings table for Omni View layout configuration and locked filter defaults. Fully idempotent |
 | `migrate_add_smart_actions_config()` | Add `smart_actions_config` (TEXT) column to settings table for badges/smart action preferences and custom detectors. Fully idempotent |
+| `migrate_add_habit_mode_to_rules()` | Add `habit_mode` (BOOLEAN DEFAULT 0) and `habit_history` (TEXT) columns to rules table. Uses column-existence-check pattern. Fully idempotent |
+| `migrate_add_custom_view_filters()` | Add `custom_view_filters` (TEXT) column to settings table for per-view custom filter/sort defaults. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -200,12 +205,21 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `weather_update()` | Main weather update — geocodes chit locations, fetches forecasts, writes to DB |
 | `_weather_hourly_loop()` | Background loop — runs `weather_update()` every hour for 7-day chits |
 | `_weather_daily_loop()` | Background loop — runs `weather_update()` every 24h for 8–16 day chits |
-| `_alert_push_loop()` | Background loop — runs every 60 seconds, checks for chits whose start/due time falls within the last 60-second window, sends push notifications to chit owners via `_send_chit_push()` and ntfy notifications via `_send_chit_ntfy()` |
+| `_alert_push_loop()` | Background loop — runs every 15 seconds, checks for chits whose start/due time falls within the last 15-second window, sends push notifications to chit owners via `_send_chit_push()` and ntfy notifications via `_send_chit_ntfy()`. Handles habit cycle notifications (targetType "cycle") using `_get_habit_cycle_end()` |
+| `_get_habit_cycle_end(chit, now)` | Calculate the end-of-cycle datetime for a habit chit based on its recurrence frequency (DAILY/WEEKLY/MONTHLY/YEARLY) |
 | `_snooze_check_loop()` | Background loop — runs every 60 seconds, clears `snoozed_until` for expired snoozes and sends push notification |
-| `start_weather_schedulers()` | Start weather background loops (hourly + daily), alert push loop, and snooze check loop |
-| `_is_scheduled_rule_due(rule, now)` | Check whether a scheduled rule is due for execution based on its `schedule_config` (frequency, interval, time_of_day) and `last_run_datetime`. Supports daily and hourly frequencies with 90-second grace for scheduler jitter |
-| `_rules_scheduled_loop()` | Background loop — runs every 60 seconds, loads all enabled scheduled rules, checks if each is due, queries matching entities (chits or contacts), evaluates condition tree, executes or queues actions, inserts execution log entries, updates rule metadata. On first iteration runs after 5-second delay to catch overdue rules after restart |
-| `start_rules_scheduler()` | Register the background rules scheduler task as an asyncio task. Called from `main.py` on startup |
+| `_email_send_later_loop()` | Background loop — runs every 5 seconds, finds draft emails with `email_send_at <= now` and sends them via `_do_send_email_by_id()`; clears `email_send_at` on permanent errors to prevent infinite retries |
+| `start_weather_schedulers()` | Start weather background loops (hourly + daily), alert push loop, snooze check loop, and email send-later loop |
+| `_is_scheduled_rule_due(rule, now)` | Check whether a scheduled rule is due for execution based on its `schedule_config` (frequency, interval, time_of_day, or cron expression) and `last_run_datetime`. Supports daily and hourly frequencies with 90-second grace for scheduler jitter. If `schedule_config` contains a `cron` field, parses it with `parse_cron()` and checks `matches(parsed, now)` |
+| `_derive_period_from_cron(cron_expr)` | Derive habit period (daily/weekly/monthly) from a cron expression. Daily if fires once per day, weekly if fires once per week (specific DOW), monthly if fires on specific DOM, sub-daily defaults to daily |
+| `_get_previous_period_date(period, now)` | Get the previous period's date string (YYYY-MM-DD) based on period type (daily/weekly/monthly) |
+| `_check_and_insert_missed_habit_entries(rule, now, cursor)` | Insert "missed" habit history entries for periods where the rule should have fired but didn't (e.g., server was down). Also fires `habit_missed` trigger for other rules to react |
+| `_fire_habit_trigger(trigger_type, source_rule_id, source_rule_name, owner_id, habit_history, now)` | Fire a habit_achieved or habit_missed trigger in a background thread. Builds a synthetic entity dict with habit metadata (streak, source info) and dispatches to the rules engine |
+| `_fire_chit_habit_trigger(trigger_type, chit, owner_id)` | Fire a habit trigger for a chit-based habit (achieved/missed/due). Builds a synthetic entity dict from the chit's habit fields |
+| `_habit_due_loop()` | Background loop — runs every 60 seconds, checks all enabled rules with trigger_type='habit_due', evaluates offset timing against source habit schedules, fires triggers when within the time window |
+| `_check_habit_due_rule(due_rule, now, cursor, conn)` | Check if a single habit_due rule should fire based on its offset config. Compares current time against source habit's scheduled time plus/minus offset |
+| `_rules_scheduled_loop()` | Background loop — runs every 60 seconds, loads all enabled scheduled rules, checks if each is due, queries matching entities (chits or contacts), evaluates condition tree, executes or queues actions, inserts execution log entries, updates rule metadata. Records habit history after execution for habit-mode rules. Fires habit_achieved trigger on success. On first iteration runs after 5-second delay to catch overdue rules after restart |
+| `start_rules_scheduler()` | Register the background rules scheduler task and habit_due loop as asyncio tasks. Called from `main.py` on startup |
 
 ### 1.8 `src/backend/test_audit.py` — Audit Diff Property Tests
 
@@ -441,13 +455,13 @@ Boolean search expression parser used by global search and admin chit search.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `GET /api/chits/search` | `search_chits(q, request)` | Global search with boolean operators, #tags, field:value |
+| `GET /api/chits/search` | `search_chits(q, request)` | Global search with boolean operators, #tags, field::value |
 
 **Internal helpers:**
 
 | Function | Description |
 |----------|-------------|
-| `_search_filter_chits(chits_list, query_str)` | Filter chit dicts using boolean search expression parser (&&, \|\|, !, #tags, field:value, parentheses) |
+| `_search_filter_chits(chits_list, query_str)` | Filter chit dicts using boolean search expression parser (&&, \|\|, !, #tags, field::value, parentheses) |
 
 ### 1.19c `src/backend/routes/chits_import.py` — Chit Import/Export
 
@@ -579,7 +593,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /health` | `health_check()` | Health check endpoint |
 | `GET /api/disk-usage` | `get_disk_usage()` | Return disk usage stats (total, used, free in bytes) for the data partition |
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
-| `GET /api/release-notes` | `get_release_notes()` | Return all release notes as a list of `{version, content}` objects (newest first), scanned from `cwoc_release_*.md` files |
+| `GET /api/release-notes` | `get_release_notes()` | Return daily release notes as a list of `{date, content}` objects (newest first), scanned from `release_notes-YYYYMMDD.md` files |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
 | `POST /api/restart` | `restart_service()` | Restart the CWOC systemd service (admin only) |
 | `GET /api/kiosk` | `get_kiosk(tags)` | Return combined non-deleted, non-stealth chits matching any of the specified tags (comma-separated, case-insensitive). Unauthenticated endpoint |
@@ -869,7 +883,8 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from configured IMAP servers and soft-delete chits for emails removed from IMAP; returns `{new_count, deleted_count, accounts_synced}` |
-| `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
+| `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; delegates to `_do_send_email_by_id()`; clears `email_send_at` first |
+| `POST /api/email/schedule/{chit_id}` | `email_schedule(chit_id, body, request)` | Schedule a draft email for future sending; body `{send_at: ISO datetime}` or `{send_at: null}` to cancel |
 | `PATCH /api/email/{chit_id}/read` | `email_toggle_read(chit_id, request)` | Toggle `email_read` on the specified email chit; returns `{email_read: bool}` |
 | `GET /api/email/{chit_id}/raw` | `email_download_raw(chit_id, request)` | Re-fetch the raw RFC 2822 email from IMAP by Message-ID and return as `.eml` download; searches across INBOX, Sent, All Mail folders |
 | `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending. Includes nested chits (non-email chits with `nest_thread_id` referencing any thread member) with `is_nest: true` flag |
@@ -883,6 +898,10 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 |----------|-------------|
 | `_get_email_account(cursor, user_id, account_id)` | Load and return an email account config for the given user; if account_id provided returns that specific account from email_accounts array; raises HTTPException(400) if not found |
 | `_get_all_email_accounts(cursor, user_id)` | Load and return all email account configs for the given user; falls back to legacy single account; returns empty list if none configured |
+| `_do_send_email_by_id(chit_id, user_id)` | Internal send logic: validates draft status, loads account, builds RFC 2822 message, sends via SMTP, updates chit status to "sent"; called by both API endpoint and send-later scheduler |
+| `_strip_tracking_pixels(html)` | Remove 1x1/1x2 pixel tracking images from HTML email content by detecting small width/height attributes or inline styles |
+| `_strip_external_content(html)` | Replace all external image sources with a data URI placeholder, storing original src in `data-original-src` attribute for frontend restore |
+| `_get_user_email_privacy_settings(cursor, user_id)` | Fetch email privacy settings (block_tracking_pixels, external_content, read_receipts, undo_send_delay) for a user |
 
 ---
 
@@ -918,10 +937,15 @@ Pure-function evaluation engine that recursively walks AND/OR group nodes and le
 | `_get_field_value(entity, field)` | Extract a field value from an entity dict. Deserializes JSON-serialized list fields (tags, people, alerts, etc.) via `deserialize_json_field`. Returns None when field is absent |
 | `_is_empty(value)` | Return True when a value is considered empty (None, whitespace-only string, or empty list) |
 | `resolve_contact_cross_ref(field, operator, value, entity, contacts)` | Resolve a condition that cross-references user contacts. Supports `contains_contact_city`, `contains_contact_email`, `contains_contact_name` operators. Returns False when contacts is None/empty or no match found |
-| `evaluate_leaf(leaf, entity, contacts=None)` | Evaluate a single leaf condition against an entity. Supports 14 operators: equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit. Returns False for missing fields instead of raising errors |
+| `evaluate_leaf(leaf, entity, contacts=None)` | Evaluate a single leaf condition against an entity. Supports 16+ operators: equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit, days_ago_greater_than, days_ago_less_than, plus weather operators (weather_temp_low_below, weather_temp_high_above, etc.) and forecast operators (weather_forecast_contains_*). Returns False for missing fields instead of raising errors |
 | `evaluate_condition_tree(tree, entity, contacts=None)` | Recursively evaluate a condition tree against an entity. Group nodes use AND (all) or OR (any) logic. Empty AND groups return True (vacuous truth), empty OR groups return False |
-| `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user), email actions (mark_email_read, mark_email_unread, move_email_to_folder), HA actions (call_ha_service, fire_ha_event), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
-| `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree, handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Recognizes trigger types: chit_created, chit_updated, email_received, contact_created, contact_updated, scheduled, ha_state_change, ha_webhook. Includes comprehensive logging at each step |
+| `_get_current_weather_for_default_location(owner_id)` | Get current weather data for the user's default saved location via Open-Meteo. Returns dict with high, low, precipitation, wind_speed, wind_gusts, weather_code or None |
+| `_get_weather_forecast_for_default_location(owner_id, days)` | Get multi-day weather forecast for the user's default saved location. Returns list of weather dicts (one per day) or None |
+| `_check_weather_condition(operator, weather_data, threshold)` | Check if weather data meets the specified condition (temp/precip/wind comparisons). Returns bool |
+| `_substitute_templates(text, entity)` | Substitute template placeholders ({{title}}, {{today}}, {{now}}, etc.) in text with entity values |
+| `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user, create_chit), email actions (mark_email_read, mark_email_unread, move_email_to_folder), HA actions (call_ha_service, fire_ha_event), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
+| `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree (with habit-trigger-specific source matching for habit_achieved/habit_missed/habit_due), handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Recognizes trigger types: chit_created, chit_updated, email_received, contact_created, contact_updated, scheduled, ha_state_change, ha_webhook, habit_achieved, habit_missed, habit_due. Includes comprehensive logging at each step |
+| `_match_habit_trigger(rule, entity)` | Check if a habit trigger rule matches the incoming habit event entity based on habit_trigger_config (source_rule_id, source_chit_id, source_type). Wildcard "*" matches any source |
 | `_build_action_description(action_type, params, entity)` | Build a human-readable description of a proposed action for the confirmation UI. Maps each action type to a descriptive string with entity title and parameter values. HA actions: `call_ha_service` → "Call HA service {domain}.{service} on {entity_id}", `fire_ha_event` → "Fire Home Assistant event '{event_type}' with {N} data fields" |
 | `_send_rule_notification(owner_id, chit_id, chit_title, message)` | Send push and ntfy notifications for a rule action. Uses the same helpers as the alert scheduler — gracefully skips if push or ntfy modules are unavailable |
 
@@ -942,7 +966,7 @@ Provides endpoints for creating, reading, updating, deleting rules, toggling ena
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `GET /api/rules` | `list_rules(request)` | List all rules for the authenticated user, sorted by priority ASC |
+| `GET /api/rules` | `list_rules(request)` | List all rules for the authenticated user, sorted by priority ASC. Supports `?habit=true` query parameter to filter only habit-mode rules |
 | `GET /api/rules/{rule_id}` | `get_rule(rule_id, request)` | Get a single rule by ID. Returns 404 if not owned by authenticated user |
 | `POST /api/rules` | `create_rule(rule, request)` | Create a new rule. UUID generated, owner_id set from authenticated user |
 | `PUT /api/rules/{rule_id}` | `update_rule(rule_id, rule, request)` | Update an existing rule. Only updates provided (non-None) fields. Returns 404 if not owned |
@@ -959,9 +983,13 @@ Provides endpoints for creating, reading, updating, deleting rules, toggling ena
 
 | Function | Description |
 |----------|-------------|
-| `_deserialize_rule(rule)` | Deserialize JSON-stored fields (conditions, actions, schedule_config) on a rule dict for API responses |
+| `_deserialize_rule(rule)` | Deserialize JSON-stored fields (conditions, actions, schedule_config) on a rule dict for API responses. If `habit_mode` is true, computes and attaches `habit_summary` object (current_status, streak, success_rate, last_achieved_datetime, period) |
 | `_deserialize_confirmation(conf)` | Deserialize JSON-stored fields (action_data) on a confirmation dict |
-| `_row_to_dict(cursor, row)` | Convert a sqlite3 row tuple to a dict using cursor.description |
+| `_compute_habit_summary(rule)` | Compute habit_summary object for a habit rule: current_status (due/achieved/missed), streak, success_rate, last_achieved_datetime, period |
+| `_get_period_start(now, period)` | Get the start datetime of the current period (daily/weekly/monthly) |
+| `_get_period_end(now, period)` | Get the end datetime of the current period (daily/weekly/monthly) |
+| `_compute_streak(habit_history, period, now)` | Compute consecutive achieved periods walking backward from current period |
+| `_compute_success_rate(habit_history)` | Compute achieved/total ratio from habit history entries |
 
 ### 1.39 `src/backend/test_rules_engine.py` — Rules Engine Property Tests
 
@@ -1120,6 +1148,28 @@ Config flow step titles, field labels, error messages.
 
 MDI icon mappings for each service action.
 
+### 1.49 `src/backend/cron_parser.py` — Pure-Python Cron Expression Parser
+
+Parses standard 5-field cron expressions (minute hour day-of-month month day-of-week) into sets of valid values, checks datetime matching, and generates human-readable descriptions. No external dependencies — uses only Python stdlib.
+
+| Function | Description |
+|----------|-------------|
+| `parse_cron(expression: str) -> dict` | Parse a 5-field cron expression into a structured dict with keys: minutes, hours, days_of_month, months, days_of_week (each a set of valid ints). Returns None if invalid |
+| `matches(parsed: dict, dt: datetime) -> bool` | Check if a datetime matches a parsed cron expression. Returns False if parsed is None or invalid |
+| `describe(expression: str) -> str` | Return a human-readable description of a cron expression (e.g., "Every day at 6:00 AM"). Returns "Invalid cron expression" if unparseable |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_replace_names(token, name_map)` | Replace named values (MON, JAN, etc.) with their numeric equivalents |
+| `_parse_field(token, min_val, max_val, name_map)` | Parse a single cron field token into a set of valid integers. Supports: *, values, ranges, lists, steps |
+| `_parse_part(part, min_val, max_val)` | Parse a single part of a cron field (no commas) |
+| `_format_time(hour, minute)` | Format hour and minute as human-readable time (12-hour with AM/PM) |
+| `_describe_common_patterns(minute_f, hour_f, dom_f, month_f, dow_f, parsed)` | Match well-known cron patterns and return a friendly description |
+| `_describe_generic(parsed)` | Build a generic description from parsed cron fields |
+| `_format_set(values)` | Format a set of integers as a compact string |
+
 ### 1.44 `src/backend/routes/bundles.py` — Bundle CRUD & Classification
 
 Provides endpoints for creating, reading, updating, deleting bundles, reordering bundle display order, managing bundle-rule associations, initializing default bundles for new users, and email classification into bundles (single-placement and multi-placement). All endpoints scoped by `owner_id` from authenticated user.
@@ -1131,6 +1181,7 @@ Provides endpoints for creating, reading, updating, deleting bundles, reordering
 | `PUT /api/bundles/{bundle_id}` | `update_bundle(bundle_id, bundle, request)` | Update bundle name/description; migrates tags on chits if name changed; returns 404 if not found/owned |
 | `DELETE /api/bundles/{bundle_id}` | `delete_bundle(bundle_id, request)` | Delete a bundle; returns 403 if non-removable, 404 if not found; removes bundle tags from chits, deletes associated rules and bundle_rules |
 | `PUT /api/bundles/reorder` | `reorder_bundles(reorder, request)` | Reorder bundles by setting display_order from ordered ID list; validates all IDs belong to user |
+| `POST /api/bundles/{bundle_id}/add-rule` | `add_rule_to_bundle(bundle_id, request)` | Add a new OR condition rule to an existing bundle; creates rule matching emails by subject or sender; validates bundle exists and is not catch-all; triggers reclassification |
 | `POST /api/bundles/{bundle_id}/rules` | `associate_rule_with_bundle(bundle_id, body, request)` | Associate an existing rule with a bundle |
 | `DELETE /api/bundles/{bundle_id}/rules/{rule_id}` | `remove_rule_from_bundle(bundle_id, rule_id, request)` | Remove a rule association from a bundle |
 
@@ -1277,8 +1328,17 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `_parseISOTime(isoString)` | Parse an ISO datetime string and return a formatted `HH:MM` time string |
 | `getPastelColor(label)` | Generate a deterministic pastel RGB color from a string label |
 | `cwocMatchesSearch(chit, searchText)` | Check if a chit matches a plain-text search term across title, note, tags (excluding system tags), status, people, location, priority, severity, checklist |
-| `cwocExtractSearchTerms(query)` | Extract positive (non-negated) search terms from a boolean query string for highlighting; strips operators (&&, \|\|, !, ()), #tag prefixes, and field: prefixes (extracts just the value portion from field:value syntax) |
+| `cwocExtractSearchTerms(query)` | Extract positive (non-negated) search terms from a boolean query string for highlighting; strips operators (&&, \|\|, !, ()), #tag prefixes, and field:: prefixes (extracts just the value portion from field::value syntax) |
 | `cwocHighlightTerms(text, terms)` | HTML-escape text and wrap matching terms in `<mark>` tags for search result highlighting |
+| `_escHtml(str)` | Escape HTML special characters (`&`, `<`, `>`, `"`, `'`) for safe DOM insertion — single source of truth |
+| `_cwocWeatherIcons` | WMO weather code → emoji icon map (single source of truth) |
+| `_cwocGetWeatherIcon(code)` | Get weather emoji icon for a WMO weather code |
+| `_cwocGetPrecipType(code)` | Get precipitation type string (`rain`, `snow`, `thunder`, `drizzle`, or `''`) from a WMO weather code |
+| `_cwocFormatPrecip(precipMm, weatherCode, emptyVal)` | Format precipitation amount with type for display; returns emptyVal when no precipitation |
+| `_convertDBDateToDisplayDate(dateString)` | Convert a UTC ISO date string to a local display date (YYYY-Mon-DD) |
+| `cwocContactMatchesFilter(contact, query)` | Check if a contact matches a search query across all fields (name, email, phone, address, org, tags, etc.) |
+| `_cwocGetHabitCycleEnd(freq)` | Calculate the end-of-cycle datetime for a habit based on its recurrence frequency (DAILY, WEEKLY, MONTHLY, YEARLY) |
+| `cwocHighlightMatch(text, query)` | HTML-escape text and highlight matching query substrings with `<mark>` tags |
 
 #### shared-touch.js
 
@@ -1374,13 +1434,16 @@ Tag tree utilities, filtering, inline tag creation, system tag detection, and ch
 
 | Function | Description |
 |----------|-------------|
+| `_postSettingsWithRetry(body)` | POST to /api/settings with 401 retry — checks auth and retries once on 401 |
 | `buildTagTree(flatTags)` | Build a nested tag tree from a flat array of tag objects |
 | `flattenTagTree(tree, originalNames)` | Flatten a tag tree back to a flat list of leaf tag objects |
 | `matchesTagFilter(chitTags, filterTag)` | Check if a chit's tags match a filter tag (including descendants) |
-| `renderTagTree(container, tree, selectedTags, onToggle, opts)` | Render a tag tree as an expandable/collapsible HTML tree with checkboxes |
+| `renderTagTree(container, tree, selectedTags, onToggle, opts)` | Render a tag tree as an expandable/collapsible HTML tree with checkboxes; opts.onSelectOnly enables Shift+Click to select only one tag |
 | `trackRecentTag(tagPath)` | Track a tag as recently used (session-level, max 3) |
 | `getRecentTags()` | Get the list of recently used tags (up to 3) |
-| `createTagInline(name, opts)` | Create a tag inline — adds it to settings if it doesn't already exist |
+| `createTagInline(name, opts)` | Create a tag inline — adds it to settings if it doesn't already exist (partial update, tags only) |
+| `updateTagInline(oldName, tagData)` | Update an existing tag in settings (rename, recolor, favorite) — partial update |
+| `deleteTagInline(tagName)` | Delete a tag and sub-tags from settings — partial update |
 | `SYSTEM_TAGS` | Array of system tag names that should not appear in user-facing tag lists |
 | `isSystemTag(tagName)` | Return true if a tag name is a system tag (flat or `CWOC_System/` prefix) |
 | `resolveChitLinks(html, allChits)` | Replace `[[title]]` patterns in HTML with links to matching chits |
@@ -1425,7 +1488,12 @@ Reusable sidebar filter panel component extracted from `main-sidebar.js`. Used b
 
 | Function | Description |
 |----------|-------------|
-| `CwocSidebarFilter(config)` | Creates a filter panel with search input, hotkey numbers (1-9), favorites-first sorting, and colored badges. Config: `containerId`, `items` (array of `{name, favorite, color?}`), `selection` (mutated array), `onChange`, `searchPlaceholder`, `showColorBadge` |
+| `CwocSidebarFilter(config)` | Creates a filter panel with search input, hotkey numbers (1-9), favorites-first sorting, and colored badges. Config: `containerId`, `items` (array of `{name, favorite, color?}`), `selection` (mutated array), `onChange`, `searchPlaceholder`, `showColorBadge`. Shift+Click selects only that item. |
+| `cwocLoadTagFilter(config)` | Shared tag filter loader — renders "Any Tag" / "Tagless" virtual options + CwocSidebarFilter into `#label-multi`. Stores selection in `window._sidebarTagSelection`. Config: `onChange` callback. |
+| `cwocChitPassesTagFilter(chitTags)` | Returns true if a chit's tags pass the current tag filter (handles real tags, tagless, any, nothing selected). |
+| `cwocClearTagFilter()` | Reset tag filter to default ("Any Tag" selected). |
+| `_cwocUpdateTagVirtualOptions()` | Update visual state of "Any Tag" / "Tagless" buttons based on current selection. |
+| `_cwocRenderTagList(container, tagObjects, onChange)` | Internal: render the CwocSidebarFilter tag list below virtual options. |
 
 #### shared-sidebar.js
 
@@ -1534,6 +1602,10 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo)` | Show a delete-undo toast with a countdown timer bar |
 | `initAudioUnlock()` | Initialize the mobile audio unlock system (resume AudioContext on first gesture) |
 | `cwocPlayAudio(audio, opts)` | Play an audio file reliably with retry on blocked playback |
+| `_showAddToBundleModal(chit)` | Show the "Add to Bundle" modal for an email chit; allows user to choose between subject or sender matching, then select a bundle |
+| `_loadBundlesForModal(selectEl)` | Load bundles into the bundle selection dropdown from cached settings or API |
+| `_populateBundleSelect(selectEl, bundles)` | Populate the bundle select dropdown with bundle options, filtering out "Everything Else" |
+| `_executeAddToBundle(chit, overlay)` | Execute the "Add to Bundle" action by creating a new rule and triggering reclassification |
 | `initSyncWebSocket()` | Initialize WebSocket sync connection (with HTTP polling fallback) |
 | `_startSyncPolling()` | Start HTTP polling fallback for sync |
 | `_pollSync()` | Execute a single sync poll request |
@@ -1559,17 +1631,21 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_sharedCheckAlarms()` | The alarm checker — runs every second, checks chit alarms and independent alerts |
 | `_initSharedAlarmSync()` | Register sync handlers for alarm_fired, alert_dismissed, alert_snoozed, timer_fired, etc. |
 | `_initSharedAlarmSystem()` | Initialize the global alarm system (settings, state, data fetch, interval, sync) |
-| `_openQuickAlertModal()` | Open the Quick Alert modal (! hotkey) — context-aware for dashboard vs editor |
+| `_openQuickAlertModal()` | Open the Quick Alert modal (! hotkey) — shows R/A/T/S type picker (Reminder, Alarm, Timer, Stopwatch) |
 | `_closeQuickAlertModal()` | Close the Quick Alert modal |
-| `_quickAlertCreate(type)` | Dispatch alert creation by type (alarm/timer/stopwatch) to the correct context (uses `mainEditor` for editor detection) |
-| `_quickAlertAddToChit(type)` | Add an alert to the current chit's _alertsData, expand alerts zone, scroll to it, and close modal (editor context) |
-| `_quickAlertAddIndependent(type)` | Create an independent alert — delegates to dashboard or direct fetch |
-| `_quickAlertAddIndependentDashboard(type)` | Create an independent alert using the dashboard's _createIndependentAlert, then show Done/View buttons |
-| `_showQuickAlertCreatedActions(type)` | Replace quick alert modal content with Done and View buttons after creation |
-| `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
+| `_quickAlertShowEditor(type)` | Show the inline editor form for the selected alert type inside the quick alert modal |
+| `_quickAlertSave(type, data, andView, autoStart)` | Save alert from quick alert editor — routes reminder to _quickReminderSave, others context-aware (editor vs dashboard vs standalone) |
+| `_quickReminderSave(data, andView)` | Create a chit with point_in_time date and notification alert from the Quick Reminder form |
+| `_quickAlertAddToChit(type)` | Deprecated — now handled by _quickAlertSave |
+| `_quickAlertAddIndependent(type)` | Deprecated |
+| `_quickAlertAddIndependentDashboard(type)` | Deprecated |
+| `_quickAlertJumpToIndependent()` | Switch to Alarms tab in independent mode after creating an alert |
+| `_showQuickAlertToast(type)` | Show a brief toast confirming alert/reminder creation (non-dashboard pages) |
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
 | `_printNoteWithChoice(text, title)` | Show a modal with Raw/Rendered choice, then open a print tab with the note content |
 | `_openPrintTab(text, title, mode)` | Print note content via a hidden iframe without leaving the page (raw or rendered) |
+| `_printChit()` | Print the entire chit with all populated zones (dates, status, location, tags, people, notes, checklist, alerts, color, flags) via hidden iframe |
+| `_escHtml(str)` | HTML-escape helper for print functions |
 | `getCurrentPeriodDate(chit)` | Return the current period's date as a `YYYY-MM-DD` string for a recurring chit based on its frequency (daily, weekly, monthly, yearly, custom interval) |
 | `_getPreviousPeriodDate(chit)` | Return the previous period's date as a `YYYY-MM-DD` string for a recurring chit, one interval before the current period |
 | `_evaluateHabitRollover(chit)` | Detect period change for a habit chit; if the current period has advanced, snapshot `habit_success`/`habit_goal` into a recurrence exception for the ended period, reset `habit_success` to 0, and clear Complete status. Returns whether rollover occurred |
@@ -1679,6 +1755,15 @@ Generalized "smart link" detection for email chits — scans email text for reco
 | `_smartLinkDetectors` | Array of built-in detector definitions (Package, Flight, Hotel, Rental, Event, Restaurant, Transit, Order) |
 | `_smartLinkConfig` | Current configuration: `{disabled, disabledCategories, maxResults, customDetectors}` |
 
+#### shared-habits.js
+
+Shared habit rule fetching and rendering for the Habits view. Fetches habit-mode rules from the API and renders them alongside chit habits with a 🤖 badge.
+
+| Function | Description |
+|----------|-------------|
+| `fetchHabitRules()` | Fetch habit rules from `GET /api/rules?habit=true`. Returns array of habit rules with habit_summary |
+| `_renderHabitRuleCards(container, habitRules)` | Render habit rule cards with 🤖 badge, showing rule name, current period status (due/achieved/missed), streak, and success rate. Click navigates to rule editor |
+
 ### 2.2 Dashboard (`src/frontend/js/dashboard/`)
 
 #### main-sidebar.js
@@ -1698,12 +1783,15 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `onFilterSpecificToggle(filterType)` | When a specific filter option is checked, uncheck "Any"; re-check "Any" if all unchecked |
 | `clearFilterGroup(containerId)` | Clear all checkboxes in a filter group and re-check "Any" |
 | `_filterTagCheckboxes()` | Filter visible tag checkboxes by the tag search input query |
-| `_clearAllFilters()` | Reset all sidebar filters (including sharing filters "Shared with me" / "Shared by me"), sort, and search to defaults |
-| `_resetDefaultFilters()` | Reset search to the default filter for the current tab (from settings) |
-| `_updateClearFiltersButton()` | Show/hide the clear-filters button based on whether any filters are active (including sharing filters) |
+| `_clearAllFilters()` | Reset sidebar filters to custom view defaults (if set) or system defaults |
+| `_applySystemDefaults()` | Apply hardcoded system defaults to all sidebar filters |
+| `_applyFilterStateToSidebar(state)` | Apply a saved filter state object to the sidebar UI (statuses, priorities, tags, people, text, display, sort, project) |
+| `_applyCustomViewFilters(tab)` | Apply custom view filters for a tab on entry; falls back to legacy default_filters text |
+| `_resetDefaultFilters()` | Reset to custom view defaults or legacy text defaults for the current tab |
+| `_updateClearFiltersButton()` | Show/hide the defaults button based on whether custom or legacy defaults exist |
 | `_getSelectedFilterValues(containerId, filterType)` | Get an array of checked filter values from a multi-select container |
 | `_getSelectedStatuses()` | Get currently selected status filter values |
-| `_getSelectedLabels()` | Get currently selected label/tag filter values |
+| `_getSelectedLabels()` | Get currently selected label/tag filter values (reads from _sidebarTagSelection directly to support virtual parent nodes) |
 | `_getSelectedPriorities()` | Get currently selected priority filter values |
 | `_toggleFilterArchived()` | Toggle the show-archived checkbox via hotkey |
 | `_toggleFilterPinned()` | Toggle the show-pinned checkbox via hotkey |
@@ -1716,7 +1804,10 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_renderPeopleChipFilter(containerId, contacts, users, selection)` | Render a chip-based people filter into a specific container; user chips get a thicker dark border and user icon |
 | `_isPeopleColorLight(hex)` | Check if a people chip color is light (delegates to isLightColor) |
 | `clearPeopleFilter()` | Clear the people filter selection and re-render |
-| `_loadLabelFilters()` | Load tag/label filters from settings API and render the tag tree in the sidebar |
+| `_updateTagVirtualOptions()` | Dashboard wrapper: delegates to shared `_cwocUpdateTagVirtualOptions` |
+| `_onTagToggled()` | Handle toggling a real tag — disables virtual options when real tags are selected |
+| `_selectOnlyTag(fullPath)` | Select ONLY the given tag, deselecting all others (Shift+Click handler) |
+| `_loadLabelFilters()` | Load dashboard settings + call shared `cwocLoadTagFilter` to render the tag filter |
 
 #### main-hotkeys.js
 
@@ -1791,7 +1882,9 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `_restoreViewModeButtons()` | Restore view mode button highlights for Projects, Alarms, and Tasks tabs |
-| `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits |
+| `_updateUrlHash()` | Update the URL hash to reflect current tab + mode (e.g., `#calendar/day`) |
+| `_parseUrlHash()` | Parse the URL hash and return `{ tab, mode }` or null |
+| `filterChits(tab)` | Switch to a tab, update URL hash, update sidebar visibility, and re-render chits |
 | `searchChits()` | Trigger a re-render of chits (called from sidebar search input) |
 | `highlightMatch(text, query)` | HTML-escape text and wrap query matches in `<mark>` tags |
 
@@ -1819,6 +1912,9 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_updateStatusBadge(card, status)` | Update or remove the status badge on a habit card |
 | `_onHabitsWindowChange(newVal)` | Handle habits success window dropdown change |
 | `_initHabitsWindowDropdown()` | Initialize the sidebar habits success window dropdown from settings |
+| `_fetchAndRenderRuleHabits(container)` | Fetch habit rules via `fetchHabitRules()` and render them in the habits view |
+| `_renderAggregateSuccessRate(container, ruleHabits)` | Render combined success rate bar including rule habits |
+| `_onHabitsIncludeRulesChange(checked)` | Handle toggle for including rule habits in the overall success rate calculation |
 
 #### main-views-notes.js
 
@@ -2308,6 +2404,8 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 
 | Symbol | Description |
 |--------|-------------|
+| `_notesListContinue(textarea)` | Handle Enter key to auto-continue list items (bullets, numbers, checkboxes, blockquotes); returns true if handled |
+| `_notesRenumberOrderedList(textarea, fromPos)` | Renumber consecutive ordered list items following the cursor position after a new item is inserted |
 | `autoGrowNote(el)` | Auto-grow the notes textarea to fit content (up to 60% viewport height); triggers chit link autocomplete |
 | `_chitLinkDropdown` | Reference to the active `[[ ]]` chit link autocomplete dropdown element |
 | `_chitLinkStart` | Character index where the current `[[` autocomplete trigger begins |
@@ -2415,7 +2513,7 @@ Alerts zone: alarms, timers, stopwatches, notifications.
 | `renderAlarmsContainer()` | Render the alarms list with name, time, days, toggle, delete, and snooze bar |
 | `_defaultNotifsApplied` | Tracks which date modes have had default notifications applied |
 | `_applyDefaultNotifications(mode)` | Auto-populate notifications from settings defaults when a date mode is first activated |
-| `renderNotificationsContainer()` | Render the notifications list with value, unit, timing dropdown (habit-aware: "before end of cycle" for habits, before/after start/due otherwise), "disable if done" checkbox for habits, and delete controls |
+| `renderNotificationsContainer()` | Render the notifications list with value, unit, timing dropdown (habit-aware: "Will Be Missed Within" for habit cycle notifications, before/after start/due otherwise), "disable if done" checkbox for non-habit-direction habits, and delete controls |
 | `_habitPeriodLabel()` | Return a human-readable label for the current habit cycle period (day/week/month/year) |
 | `_notifTargetLabel()` | Return "start", "due", or "start/due" based on which date fields the chit has (legacy helper) |
 | `_editingAlarmIdx` | Index of the alarm currently being edited (or null) |
@@ -2512,7 +2610,10 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `hasEmailData(chit)` | Check if a chit has email data (used by `applyZoneStates` for auto-expand); returns `true` if `email_message_id`, `email_status`, or `email_from` is set |
 | `_emailReply()` | Create a reply draft chit via `POST /api/chits` and navigate to the editor; sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, subject prefixed with "Re: " (no doubling), body quoted below separator |
 | `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
-| `_emailSend()` | Send the current draft email with undo-send countdown (7s); validates To field; saves chit first, then shows countdown bar — actual send happens when timer expires; clicking Undo cancels the send |
+| `_emailSend()` | Send the current draft email with undo-send countdown (configurable delay); validates To field; saves chit first, then shows countdown bar — actual send happens when timer expires; clicking Undo cancels the send |
+| `_emailSendLater()` | Open Flatpickr datetime picker to schedule email for future sending; saves chit, then calls `POST /api/email/schedule/{id}` with chosen datetime |
+| `_emailCancelScheduled()` | Cancel a scheduled send by clearing `email_send_at` via `POST /api/email/schedule/{id}` with `{send_at: null}` |
+| `_emailLoadExternalContent()` | Restore blocked external images in email HTML iframes by swapping `data-original-src` back to `src` |
 | `_emailUndoSendCountdown(chitId, archiveOriginal)` | Show undo-send countdown bar; if timer expires, calls `_emailDoActualSend`; if Undo clicked, cancels |
 | `_emailDoActualSend(chitId, archiveOriginal)` | Actually send the email via `POST /api/email/send/{id}` after undo countdown expires; updates UI to sent state; optionally archives the replied-to email |
 | `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides render toggle when read-only |
@@ -2675,6 +2776,7 @@ Save system: build chit object, save, delete, pin, archive, QR.
 | `togglePinned()` | Toggle the chit's pinned state and update the pin button UI |
 | `toggleArchived()` | Toggle the chit's archived state and update the archive button UI |
 | `_showQRCode(e)` | Show a QR code modal with data/link mode toggle for the current chit |
+| `_optPrintChit()` | Options menu handler — close menu and invoke `_printChit()` |
 
 #### editor-autosave.js
 
@@ -2760,6 +2862,9 @@ Mobile swipe-based zone navigation for the chit editor. On mobile (≤768px), tr
 | `_createMobileZoneList()` | Create the zone list overlay (slide-in panel from right) |
 | `_openMobileZoneList()` | Open the zone list, refreshing items with empty state |
 | `_closeMobileZoneList()` | Close the zone list overlay |
+| `_openMobileActionsSidebar()` | Open the left actions sidebar with save buttons (when unsaved), calendar toggle, calculator, snooze, options, exit |
+| `_closeMobileActionsSidebar()` | Close the left actions sidebar |
+| `_updateMobileUnsavedIndicator(hasUnsaved)` | Show/hide the unsaved-changes dot on the mobile zone header ☰ button |
 | `_initMobileZoneSwipe()` | Initialize swipe gestures (header: prev/next, body: actions/zone-list) |
 | `_activateMobileZoneMode()` | Activate mobile zone mode (add body class, create UI, show starting zone) |
 | `_deactivateMobileZoneMode()` | Deactivate mobile zone mode (restore all zones, remove body class) |
@@ -2796,6 +2901,8 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `Checklist.cleanUpEmptyItems()` | Remove all items with empty or whitespace-only text |
 | `Checklist._showUndoCountdown(removedItems, label)` | Show an inline undo countdown bar (8s) with Undo button; restores items if clicked |
 | `Checklist._notifyChange()` | Call the external change callback with current checklist data |
+| `_pasteClipboardAsChecklistItems(checklist)` | Async — read clipboard text and create each line as a checklist item (same parsing as note-to-checklist) |
+| `_copyIncompleteToClipboard(checklist)` | Copy all unchecked items to clipboard as markdown checklist lines |
 
 #### editor_projects.js
 
@@ -2898,9 +3005,9 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `deleteColor(hex, name)` | Delete a color with confirmation modal, save, and re-render |
 | `renderColors(colors)` | Render color swatches into `#color-list` |
 | `confirmDelete()` | Confirm deletion of the current `itemToDelete` (color or tag) |
-| `handleTagInput(event)` | Handle keypress in the new-tag input — Enter adds tag, Shift+Enter opens tag modal |
-| `handleInfoClick(event)` | Handle Shift+click on the info button — opens tag modal for new tag |
-| `addTag()` | Add a new tag from the input field with duplicate checking |
+| `handleTagInput(event)` | Handle keypress in the new-tag input — Enter quick-creates tag, Shift+Enter opens tag modal for options |
+| `handleInfoClick(event)` | Handle click on the add button — plain click quick-creates, Shift+click opens tag modal |
+| `addTag()` | Quick-create a new tag from the input field with default color (no modal) |
 | `_tagColorPalette` | Array of default tag color palette objects `{ bg, fg }` |
 | `openTagModal(tag)` | Open the tag editor modal with color swatches, font color, preview, and favorite toggle |
 | `saveTag()` | Save the current tag's name, colors, and favorite state from the modal |
@@ -2911,6 +3018,7 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `toggleTagFavorite()` | Toggle the favorite star in the tag modal |
 | `openDeleteModal(event, item)` | Open the delete confirmation modal for a tag or color |
 | `closeDuplicateTagModal()` | Close the duplicate tag warning modal |
+| `_switchSettingsTab(tabId)` | Switch between settings tabs (general, views, collections, email, admin); persists to localStorage |
 | `saveSettings()` | Save & Exit — save settings then navigate back |
 | `saveSettingsAndStay()` | Save & Stay — save settings without navigating |
 | `cancelSettings()` | Cancel/exit with unsaved-changes check via `CwocSaveSystem` |
@@ -2949,11 +3057,12 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `onUpgradeComplete(data)` | Handle upgrade completion — show result, re-enable buttons, reload version |
 | `copyUpdateLog()` | Copy the update log text to the clipboard |
 | `loadLastLog()` | Load and display the last upgrade log from `/api/update/log` |
-| `showReleaseNotes()` | Fetch all release notes from `/api/release-notes` and display the newest in a paginated modal |
-| `_renderCurrentReleaseNote()` | Render the currently selected release note (by `_releaseNotesIndex`) into the modal |
+| `showReleaseNotes()` | Fetch daily release notes from `/api/release-notes` and display the current day in a paginated modal |
+| `_formatReleaseDate(dateStr)` | Format YYYYMMDD string as human-readable date (e.g., "May 14, 2026") |
+| `_renderCurrentReleaseNote()` | Render the currently selected day's release notes into the modal |
 | `_updateReleaseNotesNav()` | Update prev/next button states and counter text |
-| `releaseNotesPrev()` | Navigate to the next older release note |
-| `releaseNotesNext()` | Navigate to the next newer release note |
+| `releaseNotesPrev()` | Navigate to the next older day's release notes |
+| `releaseNotesNext()` | Navigate to the next newer day's release notes |
 | `closeReleaseNotesModal()` | Close the release notes modal |
 | `restartCwoc()` | Admin-only: confirm and POST to `/api/restart` to restart the CWOC service |
 | `_waitForServerAndReload()` | Poll `/health` after restart and reload the page once the server is back |
@@ -3022,6 +3131,27 @@ Badges (Smart Actions) settings section — manages enable/disable toggles for b
 | `_closeBadgeCustomModal()` | Close the custom detector form modal |
 | `_saveBadgeCustomDetector()` | Validate and save a custom detector (new or edited) |
 | `_gatherBadgesConfig()` | Serialize the current badges config to JSON string for settings save |
+
+#### settings-custom-filters.js
+
+Custom Filters & Sorting settings section — per-view custom filter/sort defaults. Each view gets a button that opens a modal with the full sidebar filter UI (status, priority, display toggles, text search, sort). Saved state auto-applies on view entry.
+
+| Symbol | Description |
+|--------|-------------|
+| `_customFilterViews` | Array of view definitions in display order (Omni first, then tab order) |
+| `_customViewFilters` | In-memory state of custom view filters (loaded from settings) |
+| `_systemDisplayDefaults` | System defaults for display toggle checkboxes |
+| `_renderCustomFilterButtons()` | Render the per-view button list in the settings page |
+| `_loadCustomViewFilters(settings)` | Load custom view filters from settings object (with Omni backward compat) |
+| `_gatherCustomViewFilters()` | Serialize custom view filters to JSON string for settings save |
+| `_openCustomFilterModal(viewKey)` | Open the filter modal for a specific view |
+| `_closeCustomFilterModal()` | Close the filter modal |
+| `_buildCustomFilterHTML(viewKey)` | Build the filter UI HTML for the modal |
+| `_populateCustomFilterModal(viewKey)` | Populate modal with saved state or system defaults |
+| `_gatherCustomFilterModalState()` | Gather current modal state into a filter object |
+| `_isSystemDefault(state)` | Check if a filter state equals system defaults |
+| `_saveCustomFilterModal()` | Save modal state and close |
+| `_resetCustomFilterModal()` | Reset modal to system defaults |
 
 #### people.js
 
@@ -3228,7 +3358,6 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsAllContacts` | Cached array of all fetched contacts |
 | `_mapsFocusMode` | Boolean flag — when true, skip fitBounds on marker placement (set by focus query param) |
 | `_mapsChitsFilterStatus` | Selected status filter values (array) |
-| `_mapsChitsFilterTags` | Selected tag filter values (array, mutated by CwocSidebarFilter) |
 | `_mapsChitsFilterPriority` | Selected priority filter values (array) |
 | `_mapsChitsFilterPeople` | Selected people filter values (array, mutated by CwocSidebarFilter) |
 | `_mapsChitsFilterText` | Text search query for chits filter |
@@ -3255,7 +3384,7 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_initMapsSidebarShared()` | Initializes the shared sidebar for the maps page via `_cwocInitSidebar()` with maps-specific Page_Context (onCreateChit, onToday, onPeriodChange, onFilterChange, onClearFilters, onMapsClick no-op, periodOptions, loadTagFilters, loadPeopleFilters). Hides `.author-info` footer. Wires sidebar `transitionend` to invalidate Leaflet map size. Passes `currentPage: 'maps'` to highlight Maps button |
 | **Chits Filter Panel** | |
 | `_initChitsFilters()` | Sets up chits filter panel — period dropdown, status/priority checkboxes, and text search are wired by `_cwocInitSidebar()` via shared sidebar. Loads dynamic filter data (tags, people) via `_loadChitsFilterData()` |
-| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users, builds CwocSidebarFilter instances for tags (`#label-multi`) and people (`#people-multi`) using the shared sidebar's standard container IDs |
+| `_loadChitsFilterData()` | Loads tag filter via shared `cwocLoadTagFilter()` and people filter via CwocSidebarFilter into the shared sidebar's standard container IDs |
 | `_matchesChitTextSearch(chit, query)` | Case-insensitive text search across chit title, note, location, and tags |
 | `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, period date range) — AND-combined. Reads from shared sidebar's `#period-select`, `#status-multi`, `#priority-multi`, `#search` |
 | `_onChitsFilterChange()` | Handler for chit filter changes — reads filter state from shared sidebar's standard containers and re-renders |
@@ -3327,19 +3456,32 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 
 | Symbol | Description |
 |--------|-------------|
-| `CHIT_FIELDS` | Array of field definitions for chit triggers (title, note, status, priority, severity, location, color, tags, people, archived, pinned, all_day, habit) |
+| `CHIT_FIELDS` | Array of field definitions for chit triggers (title, note, status, priority, severity, location, color, tags, people, archived, pinned, all_day, habit, dates, `_weather`) |
 | `EMAIL_FIELDS` | Array of field definitions for email triggers (title, note, email_from, email_subject, email_body_text, email_folder, email_read, status, priority, tags, people, location) |
 | `CONTACT_FIELDS` | Array of field definitions for contact triggers (given_name, surname, organization, tags, emails, phones, addresses) |
-| `OPERATORS` | Array of 15 operator definitions (equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit) |
+| `HA_STATE_CHANGE_FIELDS` | Array of field definitions for HA state change triggers (ha_entity_id, old_state, new_state, attributes) |
+| `HABIT_TRIGGER_FIELDS` | Array of field definitions for habit triggers (source_rule_name, source_chit_title, habit_event, streak, habit_goal, habit_success, offset_minutes, timestamp, plus chit fields) |
+| `DATE_TYPE_FIELDS` | Array of date-type field names for which days_ago operators are shown |
+| `OPERATOR_GROUPS` | Array of operator groups for optgroup rendering (Comparison, Text, Presence, Tags & People, Date Age, Weather — Current, Weather — Forecast) |
+| `OPERATORS` | Flat array of all operators (built from OPERATOR_GROUPS) |
 | `NO_VALUE_OPERATORS` | Array of operators that don't need a value input (is_empty, is_not_empty) |
-| `CHIT_ACTION_TYPES` | Array of action type definitions with parameter configs (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, send_notification, mark_email_read, mark_email_unread, move_email_to_folder, add_matching_contacts_as_people, call_ha_service, fire_ha_event). add_tag and remove_tag use `type: 'tag'` for tag picker widget. call_ha_service has domain, service, entity_id, service_data (KV editor). fire_ha_event has event_type with autocomplete suggestions, event_data (KV editor) |
+| `WEATHER_FORECAST_OPERATORS` | Array of forecast window operators that use "threshold\|days" value format |
+| `WEATHER_OPERATORS` | Array of all weather operators (current + forecast) |
+| `ACTION_GROUPS` | Array of action groups for optgroup rendering (Tags & People, Status & Priority, Appearance & Location, Lifecycle, Create & Notify, Email, Home Assistant) |
+| `CHIT_ACTION_TYPES` | Flat array of all action types (built from ACTION_GROUPS). Includes create_chit, call_ha_service, fire_ha_event with custom renderers |
 | `_cachedTagList` | Cached flat list of user tags (excluding system tags) for the tag picker, sorted favorites-first then alphabetical |
+| `_cachedPeopleList` | Cached list of contact display names for smart person inputs |
+| `_cachedLocationsList` | Cached list of saved location names for smart location inputs |
 | `_loadTagList()` | Async function that fetches tags from `getCachedSettings()`, filters out system tags, sorts favorites-first, and caches in `_cachedTagList` |
+| `_loadPeopleList()` | Async function that fetches contacts from `/api/contacts` and caches display names |
+| `_loadLocationsList()` | Async function that fetches saved locations from settings and caches names |
+| `_renderSearchableInput(currentValue, options, placeholder, onChange)` | Creates a text input with a filterable dropdown of existing values |
+| `_renderCreateChitAction(action, container)` | Renders the Create Chit action panel with title, note, status, priority, due date, location fields and template variable help |
 | `_getFieldsForTrigger()` | Return the appropriate field definitions array based on the selected trigger type |
 | `renderConditionTree()` | Render the condition tree into the `#condition-tree` container |
 | `_renderNode(node, isRoot)` | Render a single condition tree node (dispatches to group or leaf renderer) |
 | `_renderGroup(group, isRoot)` | Render a group node with AND/OR toggle, children, and add condition/group buttons |
-| `_renderLeaf(leaf)` | Render a leaf condition with field dropdown, operator dropdown, value input, and remove button |
+| `_renderLeaf(leaf)` | Render a leaf condition with field dropdown (with weather field), grouped operator dropdown, smart value inputs for tags/people/locations, and remove button |
 | `_removeNode(nodeId)` | Remove a node from the condition tree by ID |
 | `_serializeTree(node)` | Serialize the condition tree for API submission (strips internal `_id` fields) |
 | `_deserializeTree(node)` | Deserialize a condition tree from API data (adds internal `_id` fields) |
@@ -3363,6 +3505,14 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `_renderJSONPreview(container, data)` | Render a read-only JSON preview panel below action inputs |
 | `_showEntityPickerModal(entities, onSelect)` | Show searchable entity picker modal with filtering |
 | `_showServicePickerModal(services, onSelect)` | Show searchable service picker modal with domain grouping |
+| `_describeCron(expr)` | Client-side human-readable cron description for the preview line |
+| `_updateCronPreview()` | Update the cron preview text from current input field values |
+| `_assembleCronExpression()` | Assemble a 5-field cron expression string from the five input fields |
+| `_validateCronExpression(expr)` | Basic client-side cron validation (5 space-separated fields, valid characters) |
+| `_setCronFields(expr)` | Populate the five cron input fields from a cron expression string |
+| `_getScheduleMode()` | Get the current schedule mode (simple or cron) from the toggle |
+| `_setScheduleMode(mode)` | Set the schedule mode and toggle UI visibility between Simple and Cron sections |
+| `_initCronBuilder()` | Initialize cron builder event listeners (preset buttons, input change handlers, mode toggle) |
 
 #### custom-objects-editor.js
 
@@ -4131,7 +4281,7 @@ New frontend pages added for Rules Engine:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault, migrate_create_rules_tables)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault, migrate_create_rules_tables, migrate_add_habit_mode_to_rules)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
   ├── src.backend.schedulers  (start_rules_scheduler)
@@ -4210,6 +4360,7 @@ src/backend/rules_engine.py
 src/backend/routes/rules.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
   ├── src.backend.models       (RuleCreate, RuleUpdate, RuleReorder)
+  ├── src.backend.cron_parser  (parse_cron, describe — used for period derivation and habit summary)
   ├── src.backend.routes.audit (get_actor_from_request, insert_audit_entry, compute_audit_diff)
   └── src.backend.rules_engine (execute_action)
 
@@ -4234,6 +4385,7 @@ src/backend/auth_utils.py
 
 src/backend/schedulers.py
   ├── src.backend.db           (DB_PATH, _update_lock, serialize_json_field, deserialize_json_field)
+  ├── src.backend.cron_parser  (parse_cron, matches)
   ├── src.backend.routes.push  (send_push_to_user — imported lazily in _send_chit_push)
   ├── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_chit_ntfy)
   └── src.backend.rules_engine (evaluate_condition_tree, execute_action, _build_action_description — imported lazily in _rules_scheduled_loop)
@@ -4248,6 +4400,9 @@ src/backend/serializers.py
 src/backend/ics_serializer.py
   └── (no internal CWOC imports — leaf module, stdlib only)
 
+src/backend/cron_parser.py
+  └── (no internal CWOC imports — leaf module, stdlib only)
+
 src/backend/routes/ics_import.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, compute_system_tags)
   ├── src.backend.models       (ICSImportRequest, ICSImportResponse, Chit)
@@ -4260,7 +4415,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, `ntfy.py`, and `rules.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` and `rules_engine.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` and `rules_engine.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. `rules_engine.py` is imported by `routes/rules.py` (for `execute_action`), `routes/chits.py` and `routes/contacts.py` (for `dispatch_trigger`), and `schedulers.py` (for condition evaluation and action execution in scheduled rules). All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, `auth_utils.py`, and `cron_parser.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, `ntfy.py`, and `rules.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` and `rules_engine.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` and `rules_engine.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `cron_parser.py` is imported by `schedulers.py` for cron expression parsing. `middleware.py` is imported by `main.py`. `rules_engine.py` is imported by `routes/rules.py` (for `execute_action`), `routes/chits.py` and `routes/contacts.py` (for `dispatch_trigger`), and `schedulers.py` (for condition evaluation and action execution in scheduled rules). All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 
@@ -4310,7 +4465,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-hotkeys.js
               │     main-calendar.js   (uses shared-calendar, shared-indicators)
               │     main-views-tasks.js
-              │     main-views-habits.js
+              │     main-views-habits.js (uses shared-habits.js for fetchHabitRules)
               │     main-views-notes.js
               │     main-views-projects.js
               │     main-views-alarms.js

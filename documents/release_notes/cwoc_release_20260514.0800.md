@@ -1,0 +1,1 @@
+Fixed mobile save buttons not being accessible: added Save & Stay / Save & Exit to the editor's mobile actions sidebar, added a pulsing unsaved-changes dot on the mobile zone header ☰ button, and made the settings page save toolbar sticky on mobile so it stays visible when scrolled.

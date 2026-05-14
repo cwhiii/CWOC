@@ -1543,6 +1543,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Attach input change listeners to mark editor unsaved on any change
   window._cwocEditorLoading = true;
   document.querySelectorAll("input, textarea, select").forEach((input) => {
+    // Skip the checklist input — checklist changes are handled by _onChecklistChange
+    // and the checklist autosave system, not the generic save button flow
+    if (input.classList.contains('checklist-input')) return;
     input.addEventListener("input", () => {
       if (!window._cwocEditorLoading) setSaveButtonUnsaved();
     });
@@ -1677,6 +1680,22 @@ document.addEventListener("DOMContentLoaded", function () {
     saveAndStay: function () { saveChitAndStay(); },
     saveAndExit: function () { saveChit(); }
   });
+
+  // ── Mobile Unsaved Indicator ────────────────────────────────────────────────
+  // Hook into setSaveButtonUnsaved/Saved to update the mobile zone header dot.
+  // This runs synchronously so it's always active regardless of autosave.
+  (function() {
+    var _mobileOrigUnsaved = window.setSaveButtonUnsaved;
+    var _mobileOrigSaved = window.setSaveButtonSaved;
+    window.setSaveButtonUnsaved = setSaveButtonUnsaved = function () {
+      if (_mobileOrigUnsaved) _mobileOrigUnsaved();
+      if (window._updateMobileUnsavedIndicator) window._updateMobileUnsavedIndicator(true);
+    };
+    window.setSaveButtonSaved = setSaveButtonSaved = function () {
+      if (_mobileOrigSaved) _mobileOrigSaved();
+      if (window._updateMobileUnsavedIndicator) window._updateMobileUnsavedIndicator(false);
+    };
+  })();
 
   // ── Auto-Save Initialization ──────────────────────────────────────────────
   // Instantiate CwocAutoSave after settings are loaded, then hook into

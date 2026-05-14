@@ -3,6 +3,45 @@
 // save/cancel, monitorChanges, pill toggles, work config, map settings.
 // Other settings modules are loaded before this file via separate script tags.
 
+// ── Settings Tab Switching ───────────────────────────────────────────────────
+
+var _settingsActiveTab = 'general';
+var _SETTINGS_TAB_KEY = 'cwoc_settings_active_tab';
+
+function _switchSettingsTab(tabId) {
+  // Update active tab button
+  var buttons = document.querySelectorAll('.settings-tab-bar button');
+  buttons.forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+
+  // Show/hide tab content
+  var tabs = document.querySelectorAll('.settings-tab-content');
+  tabs.forEach(function(tab) {
+    tab.classList.toggle('active', tab.id === 'tab-' + tabId);
+  });
+
+  _settingsActiveTab = tabId;
+  try { localStorage.setItem(_SETTINGS_TAB_KEY, tabId); } catch (e) { /* ignore */ }
+}
+
+// Restore last active tab on load
+(function() {
+  try {
+    var saved = localStorage.getItem(_SETTINGS_TAB_KEY);
+    if (saved && document.getElementById('tab-' + saved)) {
+      // Don't restore admin tab if button is hidden (non-admin user)
+      if (saved === 'admin') {
+        // Will be restored after auth check if user is admin
+        return;
+      }
+      _switchSettingsTab(saved);
+    }
+  } catch (e) { /* ignore */ }
+})();
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 const timeFormatGrid = document.getElementById("time-format-grid");
 const inactiveZone = document.getElementById("inactive-zone");
 const clocksContainer = document.getElementById("clocks-container");
@@ -373,24 +412,25 @@ function handleDropOnInactive(e) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 var _omniLayoutAreas = [
-  { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true, column: null },
-  { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true, column: null },
-  { id: 'hst_weather', label: '📊🌤️ HST + Weather', width: 'full', visible: false, column: null },
-  { id: 'hst_temp_strip', label: '📊🌡️ HST Weather Strip', width: 'full', visible: false, column: null },
-  { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true, column: 'left' },
-  { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true, column: 'left' },
-  { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true, column: 'left' },
-  { id: 'email', label: '📧 Email', width: 'half', visible: true, column: 'left' },
-  { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true, column: 'right' },
-  { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true, column: 'right' },
-  { id: 'pinned_all', label: '📌 Pinned (Notes + Checklists)', width: 'half', visible: false, column: 'right' }
+  { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true, column: null, hideWhenEmpty: true },
+  { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true, column: null, hideWhenEmpty: true },
+  { id: 'hst_weather', label: '📊🌤️ HST + Weather', width: 'full', visible: false, column: null, hideWhenEmpty: true },
+  { id: 'hst_temp_strip', label: '📊🌡️ HST Weather Strip', width: 'full', visible: false, column: null, hideWhenEmpty: true },
+  { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
+  { id: 'reminders', label: '📢 Reminders', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
+  { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
+  { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
+  { id: 'email', label: '📧 Email', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
+  { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true, column: 'right', hideWhenEmpty: true },
+  { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true, column: 'right', hideWhenEmpty: true },
+  { id: 'pinned_all', label: '📌 Pinned (Notes + Checklists)', width: 'half', visible: false, column: 'right', hideWhenEmpty: true }
 ];
 
 var _omniLayoutState = null;
 
 function _getDefaultOmniLayout() {
   return _omniLayoutAreas.map(function(area, i) {
-    return { id: area.id, label: area.label, width: area.width, visible: area.visible, position: i, column: area.column };
+    return { id: area.id, label: area.label, width: area.width, visible: area.visible, position: i, column: area.column, hideWhenEmpty: area.hideWhenEmpty !== false };
   });
 }
 
@@ -416,29 +456,74 @@ function _renderOmniLayoutGrid() {
     _omniLayoutState = _getDefaultOmniLayout();
   }
 
-  // Split into active (visible) and inactive (hidden), sorted by position
   var sorted = _omniLayoutState.slice().sort(function(a, b) { return a.position - b.position; });
   var activeAreas = sorted.filter(function(a) { return a.visible !== false; });
   var inactiveAreas = sorted.filter(function(a) { return a.visible === false; });
 
-  // ── Active list (single ordered list) ─────────────────────────────────────
-  var activeLabel = document.createElement('div');
-  activeLabel.className = 'omni-layout-col-label';
-  activeLabel.textContent = 'Active (drag to reorder)';
-  container.appendChild(activeLabel);
+  // Split active into full-width (top), left column, right column
+  var fullAreas = activeAreas.filter(function(a) { return a.width === 'full'; });
+  var leftAreas = activeAreas.filter(function(a) { return a.width === 'half' && a.column === 'left'; });
+  var rightAreas = activeAreas.filter(function(a) { return a.width === 'half' && a.column === 'right'; });
 
-  var activeList = document.createElement('div');
-  activeList.className = 'omni-layout-col-list omni-layout-active-list';
-  activeList.dataset.zone = 'active';
-  activeAreas.forEach(function(area) {
-    activeList.appendChild(_buildOmniLayoutCard(area));
-  });
-  if (activeAreas.length === 0) {
-    activeList.innerHTML = '<span class="omni-layout-empty-hint">Drop items here to activate</span>';
+  // ── Full Width zone (top) ─────────────────────────────────────────────────
+  var fullLabel = document.createElement('div');
+  fullLabel.className = 'omni-layout-col-label';
+  fullLabel.textContent = 'Full Width (top)';
+  container.appendChild(fullLabel);
+
+  var fullList = document.createElement('div');
+  fullList.className = 'omni-layout-col-list';
+  fullList.dataset.zone = 'full';
+  if (fullAreas.length === 0) {
+    fullList.innerHTML = '<span class="omni-layout-empty-hint">Drop sections here for full width</span>';
+  } else {
+    fullAreas.forEach(function(area) { fullList.appendChild(_buildOmniLayoutCard(area)); });
   }
-  container.appendChild(activeList);
+  container.appendChild(fullList);
 
-  // ── Inactive "Unused" zone ────────────────────────────────────────────────
+  // ── Two-column row (Left + Right) ─────────────────────────────────────────
+  var columnsRow = document.createElement('div');
+  columnsRow.className = 'omni-layout-columns-row';
+
+  // Left column
+  var leftWrapper = document.createElement('div');
+  leftWrapper.className = 'omni-layout-column-wrapper';
+  var leftLabel = document.createElement('div');
+  leftLabel.className = 'omni-layout-col-label';
+  leftLabel.textContent = 'Left Column';
+  leftWrapper.appendChild(leftLabel);
+  var leftList = document.createElement('div');
+  leftList.className = 'omni-layout-col-list';
+  leftList.dataset.zone = 'left';
+  if (leftAreas.length === 0) {
+    leftList.innerHTML = '<span class="omni-layout-empty-hint">Drop here</span>';
+  } else {
+    leftAreas.forEach(function(area) { leftList.appendChild(_buildOmniLayoutCard(area)); });
+  }
+  leftWrapper.appendChild(leftList);
+  columnsRow.appendChild(leftWrapper);
+
+  // Right column
+  var rightWrapper = document.createElement('div');
+  rightWrapper.className = 'omni-layout-column-wrapper';
+  var rightLabel = document.createElement('div');
+  rightLabel.className = 'omni-layout-col-label';
+  rightLabel.textContent = 'Right Column';
+  rightWrapper.appendChild(rightLabel);
+  var rightList = document.createElement('div');
+  rightList.className = 'omni-layout-col-list';
+  rightList.dataset.zone = 'right';
+  if (rightAreas.length === 0) {
+    rightList.innerHTML = '<span class="omni-layout-empty-hint">Drop here</span>';
+  } else {
+    rightAreas.forEach(function(area) { rightList.appendChild(_buildOmniLayoutCard(area)); });
+  }
+  rightWrapper.appendChild(rightList);
+  columnsRow.appendChild(rightWrapper);
+
+  container.appendChild(columnsRow);
+
+  // ── Unused zone ───────────────────────────────────────────────────────────
   var unusedLabel = document.createElement('div');
   unusedLabel.className = 'omni-layout-unused-label';
   unusedLabel.textContent = 'Unused';
@@ -448,11 +533,9 @@ function _renderOmniLayoutGrid() {
   unusedZone.className = 'omni-layout-unused-zone';
   unusedZone.dataset.zone = 'unused';
   if (inactiveAreas.length === 0) {
-    unusedZone.innerHTML = '<span class="omni-layout-empty-hint">Drag items here to hide them</span>';
+    unusedZone.innerHTML = '<span class="omni-layout-empty-hint">Drag sections here to hide them</span>';
   } else {
-    inactiveAreas.forEach(function(area) {
-      unusedZone.appendChild(_buildOmniLayoutCard(area));
-    });
+    inactiveAreas.forEach(function(area) { unusedZone.appendChild(_buildOmniLayoutCard(area)); });
   }
   container.appendChild(unusedZone);
 
@@ -464,7 +547,6 @@ function _buildOmniLayoutCard(area) {
   card.className = 'omni-layout-card' + (area.visible ? '' : ' hidden-area');
   card.draggable = true;
   card.dataset.areaId = area.id;
-  card.dataset.width = area.width;
 
   var handle = document.createElement('span');
   handle.className = 'omni-drag-handle';
@@ -477,46 +559,18 @@ function _buildOmniLayoutCard(area) {
   var controls = document.createElement('span');
   controls.className = 'omni-card-controls';
 
-  // Column/width buttons: L | R | Full
-  var leftBtn = document.createElement('button');
-  leftBtn.textContent = 'L';
-  leftBtn.title = 'Left column (half width)';
-  leftBtn.className = (area.width === 'half' && area.column === 'left') ? 'active-width' : '';
-  leftBtn.onclick = function(e) {
+  // Hide-when-empty toggle (eye icon)
+  var hideBtn = document.createElement('button');
+  hideBtn.className = 'omni-hide-toggle' + (area.hideWhenEmpty !== false ? ' hide-active' : '');
+  hideBtn.title = area.hideWhenEmpty !== false ? 'Hidden when empty (click to always show)' : 'Always visible (click to hide when empty)';
+  hideBtn.innerHTML = area.hideWhenEmpty !== false ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+  hideBtn.onclick = function(e) {
     e.stopPropagation();
-    area.width = 'half';
-    area.column = 'left';
+    area.hideWhenEmpty = !area.hideWhenEmpty;
     _renderOmniLayoutGrid();
     setSaveButtonUnsaved();
   };
-
-  var rightBtn = document.createElement('button');
-  rightBtn.textContent = 'R';
-  rightBtn.title = 'Right column (half width)';
-  rightBtn.className = (area.width === 'half' && area.column === 'right') ? 'active-width' : '';
-  rightBtn.onclick = function(e) {
-    e.stopPropagation();
-    area.width = 'half';
-    area.column = 'right';
-    _renderOmniLayoutGrid();
-    setSaveButtonUnsaved();
-  };
-
-  var fullBtn = document.createElement('button');
-  fullBtn.textContent = 'Full';
-  fullBtn.title = 'Full width (spans both columns)';
-  fullBtn.className = area.width === 'full' ? 'active-width' : '';
-  fullBtn.onclick = function(e) {
-    e.stopPropagation();
-    area.width = 'full';
-    area.column = null;
-    _renderOmniLayoutGrid();
-    setSaveButtonUnsaved();
-  };
-
-  controls.appendChild(leftBtn);
-  controls.appendChild(rightBtn);
-  controls.appendChild(fullBtn);
+  controls.appendChild(hideBtn);
 
   card.appendChild(handle);
   card.appendChild(label);
@@ -550,6 +604,7 @@ function _setupOmniDragListeners() {
         c.style.borderTop = '';
         c.style.borderBottom = '';
       });
+      allLists.forEach(function(l) { l.classList.remove('omni-drop-highlight'); });
     });
   });
 
@@ -559,6 +614,11 @@ function _setupOmniDragListeners() {
       e.dataTransfer.dropEffect = 'move';
       if (!draggedCard) return;
 
+      // Highlight the target zone
+      allLists.forEach(function(l) { l.classList.remove('omni-drop-highlight'); });
+      list.classList.add('omni-drop-highlight');
+
+      // Show insertion indicator
       container.querySelectorAll('.omni-layout-card').forEach(function(c) {
         c.style.borderTop = '';
         c.style.borderBottom = '';
@@ -570,7 +630,7 @@ function _setupOmniDragListeners() {
         if (e.clientY < rect.top + rect.height / 2) {
           cardsInList[i].style.borderTop = '3px solid #8b5a2b';
           return;
-        } else if (e.clientY < rect.bottom) {
+        } else if (i === cardsInList.length - 1) {
           cardsInList[i].style.borderBottom = '3px solid #8b5a2b';
           return;
         }
@@ -579,6 +639,7 @@ function _setupOmniDragListeners() {
 
     list.addEventListener('dragleave', function(e) {
       if (!list.contains(e.relatedTarget)) {
+        list.classList.remove('omni-drop-highlight');
         list.querySelectorAll('.omni-layout-card').forEach(function(c) {
           c.style.borderTop = '';
           c.style.borderBottom = '';
@@ -594,7 +655,7 @@ function _setupOmniDragListeners() {
       var area = _omniLayoutState.find(function(a) { return a.id === draggedAreaId; });
       if (!area) return;
 
-      // Determine insert position
+      // Determine insert position within this zone's cards
       var cardsInList = Array.from(list.querySelectorAll('.omni-layout-card:not(.dragging)'));
       var insertIdx = cardsInList.length;
       for (var i = 0; i < cardsInList.length; i++) {
@@ -605,14 +666,25 @@ function _setupOmniDragListeners() {
         }
       }
 
-      if (zone === 'unused') {
-        area.visible = false;
-      } else {
-        // 'active' zone — make visible, preserve width/column
+      // Set width/column/visibility based on target zone
+      if (zone === 'full') {
         area.visible = true;
+        area.width = 'full';
+        area.column = null;
+      } else if (zone === 'left') {
+        area.visible = true;
+        area.width = 'half';
+        area.column = 'left';
+      } else if (zone === 'right') {
+        area.visible = true;
+        area.width = 'half';
+        area.column = 'right';
+      } else {
+        // unused
+        area.visible = false;
       }
 
-      // Recalculate positions based on list order
+      // Recalculate positions
       _recalcOmniPositions(insertIdx, zone, area);
 
       _renderOmniLayoutGrid();
@@ -623,29 +695,46 @@ function _setupOmniDragListeners() {
 
 /**
  * Recalculate all positions after a drag-drop.
- * Active items get positions 0..N-1 based on their order in the active list.
- * The dropped item is inserted at insertIdx within its target zone.
+ * Full-width items get lowest positions, then left/right items, then unused.
+ * Within each zone, order is determined by the drop position.
  */
 function _recalcOmniPositions(insertIdx, targetZone, droppedArea) {
-  // Gather active items (excluding the dropped one), sorted by current position
-  var activeItems = _omniLayoutState.filter(function(a) {
-    return a.id !== droppedArea.id && a.visible;
+  // Gather items by zone (excluding the dropped one)
+  var fullItems = _omniLayoutState.filter(function(a) {
+    return a.id !== droppedArea.id && a.visible && a.width === 'full';
+  }).sort(function(a, b) { return a.position - b.position; });
+
+  var leftItems = _omniLayoutState.filter(function(a) {
+    return a.id !== droppedArea.id && a.visible && a.width === 'half' && a.column === 'left';
+  }).sort(function(a, b) { return a.position - b.position; });
+
+  var rightItems = _omniLayoutState.filter(function(a) {
+    return a.id !== droppedArea.id && a.visible && a.width === 'half' && a.column === 'right';
   }).sort(function(a, b) { return a.position - b.position; });
 
   var unusedItems = _omniLayoutState.filter(function(a) {
     return a.id !== droppedArea.id && !a.visible;
   }).sort(function(a, b) { return a.position - b.position; });
 
-  // Insert the dropped item at the correct position
-  if (targetZone === 'active') {
-    activeItems.splice(Math.min(insertIdx, activeItems.length), 0, droppedArea);
+  // Insert the dropped item at the correct position in its target zone
+  if (targetZone === 'full') {
+    fullItems.splice(Math.min(insertIdx, fullItems.length), 0, droppedArea);
+  } else if (targetZone === 'left') {
+    leftItems.splice(Math.min(insertIdx, leftItems.length), 0, droppedArea);
+  } else if (targetZone === 'right') {
+    rightItems.splice(Math.min(insertIdx, rightItems.length), 0, droppedArea);
   } else {
     unusedItems.splice(Math.min(insertIdx, unusedItems.length), 0, droppedArea);
   }
 
-  // Assign positions: active first, then unused
+  // Assign positions: full first, then left/right interleaved, then unused
   var pos = 0;
-  activeItems.forEach(function(a) { a.position = pos++; });
+  fullItems.forEach(function(a) { a.position = pos++; });
+  var maxHalf = Math.max(leftItems.length, rightItems.length);
+  for (var i = 0; i < maxHalf; i++) {
+    if (i < leftItems.length) leftItems[i].position = pos++;
+    if (i < rightItems.length) rightItems[i].position = pos++;
+  }
   unusedItems.forEach(function(a) { a.position = pos++; });
 }
 
@@ -659,7 +748,7 @@ function _loadOmniLayout(settings) {
         _omniLayoutState = defaults.map(function(def) {
           var found = saved.find(function(s) { return s.id === def.id; });
           if (found) {
-            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position, column: found.column !== undefined ? found.column : def.column };
+            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position, column: found.column !== undefined ? found.column : def.column, hideWhenEmpty: found.hideWhenEmpty !== undefined ? found.hideWhenEmpty : def.hideWhenEmpty };
           }
           return def;
         });
@@ -673,7 +762,7 @@ function _loadOmniLayout(settings) {
 function _collectOmniLayout() {
   if (!_omniLayoutState) return JSON.stringify(_getDefaultOmniLayout());
   return JSON.stringify(_omniLayoutState.map(function(area) {
-    var entry = { id: area.id, width: area.width, visible: area.visible, position: area.position, column: area.column || null };
+    var entry = { id: area.id, width: area.width, visible: area.visible, position: area.position, column: area.column || null, hideWhenEmpty: area.hideWhenEmpty !== false };
     return entry;
   }));
 }
@@ -981,14 +1070,7 @@ function toggleOrientation() {
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 
-function _isColorLight(hexColor) {
-  const c = hexColor.charAt(0) === "#" ? hexColor.substring(1) : hexColor;
-  const r = parseInt(c.substr(0, 2), 16);
-  const g = parseInt(c.substr(2, 2), 16);
-  const b = parseInt(c.substr(4, 2), 16);
-  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-  return luminance > 186;
-}
+// _isColorLight — removed, use isLightColor() from shared-utils.js directly
 
 async function loadColors() {
   try {
@@ -1309,16 +1391,29 @@ function handleTagInput(event) {
 function handleInfoClick(event) {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
-  if (event.shiftKey && tagText) {
-    if (isReservedTagPrefix(tagText)) {
-      const modal = document.getElementById("reserved-tag-modal");
-      if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
-      return;
-    }
+  if (!tagText) return;
+  if (isReservedTagPrefix(tagText)) {
+    const modal = document.getElementById("reserved-tag-modal");
+    if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
+    return;
+  }
+  if (event.shiftKey) {
+    // Shift+click: open modal for more options
     input.value = "";
     cwocTagModal.open(null, {
       prefillName: tagText,
       onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+    });
+  } else {
+    // Plain click: quick-create with defaults
+    input.value = "";
+    createTagInline(tagText).then(function(created) {
+      if (created) {
+        _renderSettingsTagTree();
+        setSaveButtonUnsaved();
+      } else {
+        if (typeof cwocToast === 'function') cwocToast('Tag already exists or could not be created.', 'info');
+      }
     });
   }
 }
@@ -1333,9 +1428,15 @@ function addTag() {
     return;
   }
   input.value = "";
-  cwocTagModal.open(null, {
-    prefillName: tagText,
-    onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+  // Quick-create: just add the tag with default color, no modal
+  createTagInline(tagText).then(function(created) {
+    if (created) {
+      _renderSettingsTagTree();
+      setSaveButtonUnsaved();
+    } else {
+      // Tag already exists or failed — show a toast if available
+      if (typeof cwocToast === 'function') cwocToast('Tag already exists or could not be created.', 'info');
+    }
   });
 }
 
@@ -1577,6 +1678,27 @@ class SettingsService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsToSave),
       });
+      if (response.status === 401) {
+        // Session may have expired — check auth and retry once
+        console.warn('Settings save got 401, checking auth...');
+        var authResp = await fetch('/api/auth/me');
+        if (authResp.status === 401) {
+          // Truly unauthenticated — redirect to login
+          localStorage.setItem('cwoc_auth_return', window.location.href);
+          window.location.href = '/login';
+          throw new Error('Session expired — redirecting to login');
+        }
+        // Auth is still valid — retry the save
+        var retryResp = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(settingsToSave),
+        });
+        if (!retryResp.ok)
+          throw new Error(`HTTP error on retry! status: ${retryResp.status}`);
+        _invalidateSettingsCache();
+        return await retryResp.json();
+      }
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
       _invalidateSettingsCache();
@@ -1710,6 +1832,7 @@ class SettingsManager {
     const filterInputs = ["calendar", "checklists", "alarms", "projects", "tasks", "indicators", "notes"];
     filterInputs.forEach((key) => {
       const input = document.getElementById(`filter-${key}`);
+      if (!input) return;
       const filters = this.settings.default_filters || {};
       if (Array.isArray(filters)) {
         input.value = filters.includes(key.charAt(0).toUpperCase() + key.slice(1)) ? `#${key}` : "";
@@ -1834,6 +1957,7 @@ class SettingsManager {
 
     _loadMapSettings(this.settings);
     _loadEmailAccountSettings(this.settings);
+    _loadEmailPrivacySettings(this.settings);
     _updateSignatureInlinePreview();
 
     var defaultShareContactsCb = document.getElementById('default-share-contacts');
@@ -1879,6 +2003,9 @@ class SettingsManager {
     _loadOmniBundleToggles();
     _renderOmniLockedFilters(this.settings);
     _omniLockedFiltersCleared = false;
+
+    // Load custom view filters
+    _loadCustomViewFilters(this.settings);
   }
 
   gatherSettings() {
@@ -1901,15 +2028,17 @@ class SettingsManager {
       all_view_end_hour: document.getElementById("all-view-end-hour")?.value || "24",
       day_scroll_to_hour: document.getElementById("day-scroll-to-hour")?.value || "5",
       default_filters: (() => {
-        const filters = {};
-        document.querySelectorAll(".filter-input").forEach(input => {
-          if (input.value.trim()) {
-            const tab = input.id.replace("filter-", "");
-            filters[tab] = input.value.trim();
+        // Legacy: gather from custom_view_filters text fields for backward compat
+        var cvf = _customViewFilters || {};
+        var filters = {};
+        Object.keys(cvf).forEach(function(key) {
+          if (cvf[key] && cvf[key].text) {
+            filters[key.toLowerCase()] = cvf[key].text;
           }
         });
-        return filters;
+        return Object.keys(filters).length > 0 ? filters : {};
       })(),
+      custom_view_filters: _gatherCustomViewFilters(),
       alarm_orientation: clocksContainer.classList.contains("vertical") ? "Vertical" : "Horizontal",
       active_clocks: JSON.stringify(Array.from(timeFormatGrid.querySelectorAll(".format-item")).map(item => item.dataset.value)),
       tags: Array.from(document.querySelectorAll("#tag-editor-hidden .tag:not(.tag-input-container .tag)")).map((tag) => ({
@@ -1973,6 +2102,7 @@ class SettingsManager {
       ..._collectMapSettings(),
       email_account: (function() { var a = _collectEmailAccountSettings(); return a ? JSON.stringify(a) : null; })(),
       email_accounts: (function() { var a = _collectEmailAccountsSettings(); return a.length > 0 ? JSON.stringify(a) : null; })(),
+      ..._collectEmailPrivacySettings(),
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
@@ -1983,7 +2113,21 @@ class SettingsManager {
       omni_email_count: (document.getElementById('omni-email-count') || {}).value || '3',
       omni_normalize_colors: document.getElementById('omni-normalize-colors')?.checked ? '1' : '0',
       omni_layout: _collectOmniLayout(),
-      omni_locked_filters: _omniLockedFiltersCleared ? '' : undefined,
+      omni_locked_filters: (function() {
+        // Sync omni_locked_filters from custom_view_filters for backward compat
+        if (_omniLockedFiltersCleared) return '';
+        var cvf = _customViewFilters || {};
+        if (cvf['Omni'] && Object.keys(cvf['Omni']).length > 0) {
+          return JSON.stringify({
+            statuses: cvf['Omni'].statuses || [],
+            tags: cvf['Omni'].tags || [],
+            priorities: cvf['Omni'].priorities || [],
+            people: cvf['Omni'].people || [],
+            text: cvf['Omni'].text || ''
+          });
+        }
+        return undefined;
+      })(),
       smart_actions_config: (typeof _gatherBadgesConfig === 'function') ? _gatherBadgesConfig() : undefined,
     };
   }
@@ -2150,19 +2294,23 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('upgrade-btn').style.display = '';
   });
 
-  // Handle hash-based deep linking (e.g. #email scrolls to email section)
+  // Handle hash-based deep linking (e.g. #email switches to email tab)
   if (window.location.hash) {
     setTimeout(function() {
       var hash = window.location.hash.substring(1).toLowerCase();
-      // Map common hash names to heading text
-      var headingMap = { 'email': '✉️ Email', 'notifications': '🔔 Notifications', 'calendar': '📅 Calendar' };
+      // Map hash names to tabs
+      var tabMap = { 'email': 'email', 'admin': 'admin', 'administration': 'admin', 'views': 'views', 'collections': 'collections', 'tags': 'collections', 'colors': 'collections', 'calendar': 'views' };
+      if (tabMap[hash]) {
+        _switchSettingsTab(tabMap[hash]);
+      }
+      // Also scroll to specific headings within the active tab
+      var headingMap = { 'notifications': '🔔 Default Notifications', 'calendar': '📅 Time Periods' };
       var target = headingMap[hash];
       if (target) {
-        var headings = document.querySelectorAll('h3');
+        var headings = document.querySelectorAll('.settings-tab-content.active h3');
         for (var i = 0; i < headings.length; i++) {
           if (headings[i].textContent.trim() === target) {
             headings[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // Flash highlight
             headings[i].style.transition = 'background 0.3s';
             headings[i].style.background = 'rgba(212, 175, 55, 0.3)';
             setTimeout(function() { headings[i].style.background = ''; }, 2000);

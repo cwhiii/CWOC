@@ -987,7 +987,7 @@ function _createMobileActionsSidebar() {
 /**
  * Open the left actions sidebar, populating with current header buttons.
  * Excludes QR and Log buttons (those are in the title zone only).
- * Layout: Save/Exit section at top | Snooze in its own section | Archive + Delete at bottom.
+ * Layout: Hide | Calculator | Snooze | Options | Exit
  */
 function _openMobileActionsSidebar() {
   if (!_mobileActionsSidebarEl) _createMobileActionsSidebar();
@@ -995,95 +995,59 @@ function _openMobileActionsSidebar() {
   var list = _mobileActionsSidebarEl.querySelector('.mobile-actions-sidebar-items');
   list.innerHTML = '';
 
-  // Grab all buttons from the header .buttons container
-  var buttonsDiv = document.querySelector('.header-row .buttons');
-  if (!buttonsDiv) return;
-
-  // IDs for buttons excluded from the side menu (they live in the title zone)
-  var excludeFromSidebar = ['qrButton', 'headerAuditBtn'];
-  // IDs for buttons that go at the very bottom
-  var bottomIds = ['archivedButton', 'deleteButton'];
-  // Snooze gets its own section
-  var snoozeId = 'snoozeButton';
-
-  var normalBtns = [];
-  var snoozeBtn = null;
-  var bottomBtns = [];
-
-  var buttons = buttonsDiv.querySelectorAll('button');
-  buttons.forEach(function(btn) {
-    // Skip disabled "Saved" indicator buttons
-    if (btn.disabled && btn.style.pointerEvents === 'none') return;
-    // Skip buttons hidden by save-state logic
-    if (btn.style.display === 'none') return;
-    // Skip buttons that belong in the title zone only
-    if (excludeFromSidebar.indexOf(btn.id) !== -1) return;
-
-    if (bottomIds.indexOf(btn.id) !== -1) {
-      bottomBtns.push(btn);
-    } else if (btn.id === snoozeId) {
-      snoozeBtn = btn;
-    } else {
-      normalBtns.push(btn);
-    }
-  });
-
-  // Helper to create a sidebar button from an original button
-  function _makeSidebarBtn(btn) {
+  // Helper to create a sidebar button with custom label and click handler
+  function _makeSidebarBtnCustom(label, onclick, extraClass) {
     var item = document.createElement('button');
-    item.className = 'mobile-actions-sidebar-btn';
-    item.innerHTML = btn.innerHTML;
-    item.disabled = btn.disabled;
-
-    var onclickAttr = btn.getAttribute('onclick');
+    item.className = 'mobile-actions-sidebar-btn' + (extraClass ? ' ' + extraClass : '');
+    item.innerHTML = label;
     item.addEventListener('click', function() {
       _closeMobileActionsSidebar();
-      if (onclickAttr) {
-        new Function(onclickAttr).call(btn);
-      } else {
-        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      }
+      onclick();
     });
     return item;
   }
 
-  // Section 1: Save & Exit buttons at the top
-  normalBtns.forEach(function(btn) { list.appendChild(_makeSidebarBtn(btn)); });
-
-  // Spacer between save/exit and snooze
-  if (snoozeBtn) {
-    var spacer1 = document.createElement('div');
-    spacer1.className = 'mobile-actions-sidebar-spacer';
-    list.appendChild(spacer1);
+  // ── Save buttons (shown when unsaved changes exist) ──
+  var hasUnsaved = window._cwocSave && window._cwocSave.hasChanges();
+  if (hasUnsaved) {
+    list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-save"></i> 📌 Save & Stay', function() {
+      if (typeof saveChitAndStay === 'function') saveChitAndStay();
+    }, 'mobile-actions-save-btn'));
+    list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-save"></i> 🚪 Save & Exit', function() {
+      if (typeof saveChit === 'function') saveChit();
+    }, 'mobile-actions-save-btn'));
   }
 
-  // Section 2: Snooze in its own section
-  if (snoozeBtn) list.appendChild(_makeSidebarBtn(snoozeBtn));
+  // 1. Hide in Calendar
+  var hideLabel = (document.getElementById('showOnCalendar') && !document.getElementById('showOnCalendar').checked)
+    ? '<i class="fas fa-calendar-check"></i> Show in Calendar'
+    : '<i class="fas fa-calendar-xmark"></i> Hide in Calendar';
+  list.appendChild(_makeSidebarBtnCustom(hideLabel, function() {
+    if (typeof toggleHideInCalendar === 'function') toggleHideInCalendar();
+  }));
 
-  // Spacer before calculator
-  var spacerCalc = document.createElement('div');
-  spacerCalc.className = 'mobile-actions-sidebar-spacer';
-  list.appendChild(spacerCalc);
-
-  // Section 3: Calculator quick-access
-  var calcItem = document.createElement('button');
-  calcItem.className = 'mobile-actions-sidebar-btn';
-  calcItem.innerHTML = '🧮 Calculator';
-  calcItem.addEventListener('click', function() {
-    _closeMobileActionsSidebar();
+  // 2. Calculator
+  list.appendChild(_makeSidebarBtnCustom('🧮 Calculator', function() {
     if (typeof cwocToggleCalculator === 'function') cwocToggleCalculator();
-  });
-  list.appendChild(calcItem);
+  }));
 
-  // Spacer between calculator and archive/delete
-  if (bottomBtns.length > 0) {
-    var spacer2 = document.createElement('div');
-    spacer2.className = 'mobile-actions-sidebar-spacer';
-    list.appendChild(spacer2);
-  }
+  // 3. Snooze
+  var snoozeLabel = (window._currentSnoozedUntil && new Date(window._currentSnoozedUntil) > new Date())
+    ? '😴 Snoozed'
+    : '😴 Snooze';
+  list.appendChild(_makeSidebarBtnCustom(snoozeLabel, function() {
+    if (typeof _openSnoozeModal === 'function') _openSnoozeModal();
+  }));
 
-  // Section 3: Archive and Delete at the bottom
-  bottomBtns.forEach(function(btn) { list.appendChild(_makeSidebarBtn(btn)); });
+  // 4. Options
+  list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-ellipsis-vertical"></i> Options', function() {
+    if (typeof _toggleOptionsMenu === 'function') _toggleOptionsMenu();
+  }));
+
+  // 5. Exit
+  list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-times"></i> Exit', function() {
+    if (typeof cancelOrExit === 'function') cancelOrExit();
+  }));
 
   _mobileActionsSidebarBackdrop.classList.add('active');
   _mobileActionsSidebarEl.classList.add('active');
@@ -1096,6 +1060,35 @@ function _closeMobileActionsSidebar() {
   if (_mobileActionsSidebarEl) _mobileActionsSidebarEl.classList.remove('active');
   if (_mobileActionsSidebarBackdrop) _mobileActionsSidebarBackdrop.classList.remove('active');
 }
+
+
+/* ── Mobile Unsaved Changes Indicator ─────────────────────────────────────── */
+
+/**
+ * Show or hide the unsaved-changes dot on the mobile zone header ☰ button.
+ * Called whenever save state changes (via wrapped setSaveButtonUnsaved/Saved).
+ */
+function _updateMobileUnsavedIndicator(hasUnsaved) {
+  if (!_mobileZoneHeaderEl) return;
+  var prevBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-prev');
+  if (!prevBtn) return;
+
+  var dot = prevBtn.querySelector('.mobile-unsaved-dot');
+  if (hasUnsaved) {
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'mobile-unsaved-dot';
+      prevBtn.appendChild(dot);
+    }
+    dot.style.display = '';
+  } else {
+    if (dot) dot.style.display = 'none';
+  }
+}
+
+// Expose globally so editor-init.js can hook into it
+window._updateMobileUnsavedIndicator = _updateMobileUnsavedIndicator;
+
 
 /* ── Swipe Handling ───────────────────────────────────────────────────────── */
 

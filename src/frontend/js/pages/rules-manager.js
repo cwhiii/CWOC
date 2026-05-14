@@ -11,12 +11,7 @@ var _confirmations = [];
 var _dragRuleId = null;
 
 // ── Helpers ──
-function _escHtml(str) {
-    if (!str) return '';
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+// _escHtml — now in shared-utils.js (single source of truth)
 
 function _formatTimestamp(iso) {
     if (!iso) return '—';

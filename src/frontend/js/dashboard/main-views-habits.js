@@ -152,6 +152,8 @@ function displayHabitsView(chitsToDisplay) {
     chitList.innerHTML = '<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.7;">' +
       '<p style="font-size:1.1em;margin-bottom:0.8em;">No habits yet. Mark a recurring chit as a habit in the editor to start tracking.</p>' +
       '</div>';
+    // Still fetch and render rule habits even if no chit habits exist
+    _fetchAndRenderRuleHabits(chitList);
     return;
   }
 
@@ -238,6 +240,100 @@ function displayHabitsView(chitsToDisplay) {
   _renderHabitCards(habitsContainer, habitData, windowDays);
 
   chitList.appendChild(habitsContainer);
+
+  // Fetch and render rule habits below chit habits
+  _fetchAndRenderRuleHabits(chitList);
+}
+
+/**
+ * Fetch habit rules from the API and render them in the habits view.
+ * Appends rule habit cards to the given container element.
+ * When "Include in success rate" is enabled, also renders an aggregate
+ * success rate summary that combines chit habits and rule habits.
+ * Runs asynchronously — does not block the initial chit habits render.
+ *
+ * @param {HTMLElement} container - The parent element to append rule habit cards into
+ */
+async function _fetchAndRenderRuleHabits(container) {
+  if (typeof fetchHabitRules !== 'function') return;
+  var rules = await fetchHabitRules();
+  if (!rules || rules.length === 0) return;
+
+  // If the container only has the empty message, clear it first
+  var emptyMsg = container.querySelector('.cwoc-empty');
+  if (emptyMsg) emptyMsg.remove();
+
+  // Create a sub-container for rule habits
+  var rulesContainer = document.createElement('div');
+  rulesContainer.className = 'checklist-view';
+  _renderHabitRuleCards(rulesContainer, rules);
+  container.appendChild(rulesContainer);
+
+  // If "include rules in success rate" is enabled, render aggregate summary
+  var includeRules = localStorage.getItem('cwoc_habits_include_rules') === '1';
+  if (includeRules) {
+    _renderAggregateSuccessRate(container, rules);
+  }
+}
+
+/**
+ * Render an aggregate success rate summary bar at the top of the habits view.
+ * Combines chit habit success rates with rule habit success rates.
+ * Inserted at the top of the container (before habit cards).
+ *
+ * @param {HTMLElement} container - The habits view container
+ * @param {Array} ruleHabits - Array of rule objects with habit_summary
+ */
+function _renderAggregateSuccessRate(container, ruleHabits) {
+  // Remove any existing aggregate bar
+  var existing = container.querySelector('.habits-aggregate-bar');
+  if (existing) existing.remove();
+
+  // Gather chit habit success rates from the rendered cards
+  var chitCards = container.querySelectorAll('.habit-card[data-chit-id]');
+  var totalMet = 0;
+  var totalPeriods = 0;
+
+  chitCards.forEach(function(card) {
+    var badge = card.querySelector('.habit-success-badge');
+    if (badge) {
+      // Parse from title: "Completed X of Y cycles successfully"
+      var titleText = badge.title || '';
+      var match = titleText.match(/Completed (\d+) of (\d+)/);
+      if (match) {
+        totalMet += parseInt(match[1]) || 0;
+        totalPeriods += parseInt(match[2]) || 0;
+      }
+    }
+  });
+
+  // Add rule habit success rates
+  ruleHabits.forEach(function(rule) {
+    var summary = rule.habit_summary || {};
+    var ruleRate = summary.success_rate;
+    if (ruleRate != null) {
+      // Approximate: treat each rule as contributing 1 period entry
+      // with its success_rate as the proportion met
+      // For a more accurate merge, we'd need the raw counts from the backend
+      // But since habit_summary gives us a rate (0-1), we weight each rule equally
+      totalMet += Math.round(ruleRate * 100);
+      totalPeriods += 100;
+    }
+  });
+
+  if (totalPeriods === 0) return;
+
+  var aggregateRate = Math.round((totalMet / totalPeriods) * 100);
+
+  // Build the aggregate bar
+  var bar = document.createElement('div');
+  bar.className = 'habits-aggregate-bar';
+  bar.innerHTML = '<span class="habits-aggregate-label">📊 Combined Success Rate</span>' +
+    '<span class="habits-aggregate-value">' + aggregateRate + '%</span>' +
+    '<span class="habits-aggregate-hint">(chit habits + rule habits)</span>';
+
+  // Insert at the top of the container
+  container.insertBefore(bar, container.firstChild);
 }
 
 /**
@@ -838,6 +934,18 @@ function _initHabitsWindowDropdown() {
   // Also show/hide based on current mode
   var wrap = document.getElementById('habits-window-wrap');
   if (wrap) wrap.style.display = _tasksViewMode === 'habits' ? '' : 'none';
+  // Initialize the "include rules" checkbox from localStorage
+  var cb = document.getElementById('habits-include-rules-cb');
+  if (cb) cb.checked = localStorage.getItem('cwoc_habits_include_rules') === '1';
+}
+
+/**
+ * Handle toggle change for "Include rule habits in success rate".
+ * Stores preference in localStorage and re-renders the habits view.
+ */
+function _onHabitsIncludeRulesChange(checked) {
+  localStorage.setItem('cwoc_habits_include_rules', checked ? '1' : '0');
+  if (_tasksViewMode === 'habits') displayChits();
 }
 
 // Run init after settings are loaded

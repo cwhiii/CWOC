@@ -17,7 +17,7 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-        <script src="https://unpkg.com/openpgp@5.11.2/dist/openpgp.min.js"></script>
+        <script src="https://unpkg.com/openpgp@5.11.3/dist/openpgp.min.js"></script>
         <style>
             /* ══ Contact Editor Page-Specific Styles ══ */
 
@@ -252,6 +252,87 @@
                 box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             }
 
+            /* Camera capture modal */
+            .camera-modal-content {
+                background: #1a1208;
+                border-radius: 12px;
+                padding: 16px;
+                max-width: 500px;
+                width: 90vw;
+                cursor: default;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .camera-preview-wrap {
+                position: relative;
+                width: 100%;
+                aspect-ratio: 4/3;
+                background: #000;
+                border-radius: 8px;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .camera-preview-wrap video,
+            .camera-preview-wrap img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 8px;
+            }
+            .camera-controls {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                padding: 8px 0;
+            }
+            .camera-btn {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                border: 2px solid #8b5a2b;
+                background: #fffaf0;
+                color: #1a1208;
+                font-size: 1.1em;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: transform 0.1s;
+            }
+            .camera-btn:hover { transform: scale(1.1); }
+            .camera-btn-capture {
+                width: 56px;
+                height: 56px;
+                font-size: 1.6em;
+                background: #fff;
+                border: 3px solid #8b5a2b;
+            }
+            .camera-btn-use {
+                width: auto;
+                border-radius: 22px;
+                padding: 0 16px;
+                gap: 6px;
+                background: #2e7d32;
+                color: #fff;
+                border-color: #1b5e20;
+                font-size: 0.9em;
+            }
+            .camera-btn-cancel {
+                background: var(--danger-red, #b22222);
+                color: #fff;
+                border-color: #8b1a1a;
+            }
+            .camera-error-msg {
+                color: #fffaf0;
+                text-align: center;
+                font-size: 0.9em;
+                padding: 20px;
+            }
+
             /* QR Modal */
             .qr-modal {
                 display: none;
@@ -369,6 +450,9 @@
                     </div>
                     <input type="file" id="imageFileInput" accept="image/*" style="display:none;" />
                     <div style="display:flex;flex-direction:column;gap:2px;">
+                        <button type="button" class="profile-remove-img" id="cameraBtn" onclick="openCameraCapture()" style="background:var(--aged-brown-medium);">
+                            <i class="fas fa-camera"></i> Camera
+                        </button>
                         <button type="button" class="profile-remove-img" id="viewImageBtn" onclick="viewContactImage()" style="display:none;background:var(--accent-teal);">
                             <i class="fas fa-expand"></i> View
                         </button>
@@ -698,6 +782,34 @@
         </div>
 
 
+
+        <!-- ═══ Camera Capture Modal ═══ -->
+        <div class="image-modal" id="camera-modal" style="display:none;" onclick="closeCameraCapture()">
+            <div class="camera-modal-content" onclick="event.stopPropagation()">
+                <div class="camera-preview-wrap">
+                    <video id="cameraVideo" autoplay playsinline></video>
+                    <canvas id="cameraCanvas" style="display:none;"></canvas>
+                    <img id="cameraPreview" style="display:none;" alt="Captured photo" />
+                </div>
+                <div class="camera-controls">
+                    <button type="button" id="cameraSwitchBtn" class="camera-btn" onclick="switchCamera()" title="Switch camera">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button type="button" id="cameraCaptureBtn" class="camera-btn camera-btn-capture" onclick="capturePhoto()">
+                        <i class="fas fa-circle"></i>
+                    </button>
+                    <button type="button" id="cameraRetakeBtn" class="camera-btn" onclick="retakePhoto()" style="display:none;" title="Retake">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <button type="button" id="cameraUseBtn" class="camera-btn camera-btn-use" onclick="useCapturedPhoto()" style="display:none;">
+                        <i class="fas fa-check"></i> Use
+                    </button>
+                    <button type="button" id="cameraCancelBtn" class="camera-btn camera-btn-cancel" onclick="closeCameraCapture()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- ═══ Image Full-Size Modal ═══ -->
         <div class="image-modal" id="image-modal" onclick="this.style.display='none'">

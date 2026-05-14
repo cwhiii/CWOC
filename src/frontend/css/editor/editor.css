@@ -2517,8 +2517,13 @@ mark {
     visibility: hidden;
     user-select: none;
     padding: 0 4px;
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
+    color: #999;
+    font-weight: 300;
+}
+.trash-icon:hover {
+    color: #a33;
 }
 
 .checklist-item:has(.trash-icon:hover),
@@ -5625,6 +5630,38 @@ input.location {
 
 .mobile-actions-sidebar-close:active {
     background: #5a3f2a;
+}
+
+/* ── Save buttons in actions sidebar (highlighted when unsaved) ────────────── */
+.mobile-actions-sidebar-btn.mobile-actions-save-btn {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5a3f2a;
+    font-weight: bold;
+}
+.mobile-actions-sidebar-btn.mobile-actions-save-btn:active {
+    background: #5a3f2a;
+}
+
+/* ── Unsaved changes dot on mobile zone header ☰ button ───────────────────── */
+.mobile-unsaved-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    background: #d4af37;
+    border-radius: 50%;
+    border: 1px solid #8b5a2b;
+    pointer-events: none;
+    animation: mobileUnsavedPulse 2s ease-in-out infinite;
+}
+@keyframes mobileUnsavedPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+.mobile-zone-nav-prev {
+    position: relative;
 }
 
 /* ── Zone List Overlay (slide from right) ─────────────────────────────────── */

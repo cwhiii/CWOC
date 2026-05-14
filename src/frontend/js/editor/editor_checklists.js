@@ -145,6 +145,24 @@ class Checklist {
       if (typeof _printChecklist === 'function') _printChecklist(self);
     });
 
+    var menuPasteAsItems = document.createElement("button");
+    menuPasteAsItems.innerHTML = '<i class="fas fa-paste"></i> Paste as list items';
+    menuPasteAsItems.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      _pasteClipboardAsChecklistItems(self);
+    });
+
+    var menuCopyIncomplete = document.createElement("button");
+    menuCopyIncomplete.innerHTML = '<i class="fas fa-clipboard"></i> Copy incomplete to clipboard';
+    menuCopyIncomplete.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      _copyIncompleteToClipboard(self);
+    });
+
+    this._moreMenu.appendChild(menuPasteAsItems);
+    this._moreMenu.appendChild(menuCopyIncomplete);
     this._moreMenu.appendChild(menuClear);
     this._moreMenu.appendChild(menuDeleteUnchecked);
     this._moreMenu.appendChild(menuCleanEmpty);
@@ -496,7 +514,7 @@ class Checklist {
 
     var trash = document.createElement("span");
     trash.className = "trash-icon";
-    trash.textContent = "🗑️";
+    trash.textContent = "✕";
     trash.title = "Delete item";
     trash.style.visibility = "hidden";
     trash.addEventListener("click", (e) => { e.stopPropagation(); this.deleteItem(item, el); });
@@ -549,9 +567,11 @@ class Checklist {
                 // Swipe left = unindent
                 if (item.level > 0) {
                   self._pushUndoState();
+                  var oldParentId = item.parent;
                   subtree.forEach(function(si) { si.level = Math.max(0, si.level - 1); });
                   item.parent = null;
                   for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+                  self._reassignFollowingSiblings(item, oldParentId);
                   self.getChildren(item).forEach(function(child) { child.parent = item.id; });
                   self.render(); self._notifyChange();
                 }
@@ -610,6 +630,10 @@ class Checklist {
               self.draggedItem.parent = targetItem.parent;
               var ii = ti + 1; while (ii < self.items.length && self.items[ii].level > targetItem.level) ii++;
               self.items.splice(ii, 0, ...self.draggedSubtree);
+            }
+            // Update checked state when moving between zones (active ↔ completed)
+            if (targetItem.checked !== self.draggedItem.checked) {
+              self.draggedSubtree.forEach(function(si) { si.checked = targetItem.checked; });
             }
             self.draggedItem = null; self.draggedSubtree = []; self.dragOverItem = null; self.dragOverPosition = null;
             self.clearDropIndicator();
@@ -811,9 +835,11 @@ class Checklist {
         var subtree = self.getSubtree(item);
         if (isUnindent) {
           if (item.level > 0) {
+            var oldParentId = item.parent;
             subtree.forEach(function(si) { si.level = Math.max(0, si.level - 1); });
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            self._reassignFollowingSiblings(item, oldParentId);
             self.getChildren(item).forEach(function(child) { child.parent = item.id; });
             finishEditing(true); self.render(); self._notifyChange();
             setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
@@ -835,9 +861,11 @@ class Checklist {
         var idx = self.items.indexOf(item);
         if (e.key === "[") {
           if (item.level > 0) {
+            var oldParentId = item.parent;
             item.level = Math.max(0, item.level - 1);
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            self._reassignFollowingSiblings(item, oldParentId);
             finishEditing(true); self.render(); self._notifyChange();
             setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
           }
@@ -856,9 +884,11 @@ class Checklist {
         var idx = self.items.indexOf(item);
         if (e.shiftKey) {
           if (item.level > 0) {
+            var oldParentId = item.parent;
             item.level = Math.max(0, item.level - 1);
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            self._reassignFollowingSiblings(item, oldParentId);
             finishEditing(true); self.render(); self._notifyChange();
             setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
           }
@@ -902,6 +932,31 @@ class Checklist {
 
   getParent(item) { return this.items.find(i => i.id === item.parent); }
   getChildren(item) { return this.items.filter(i => i.parent === item.id); }
+
+  /**
+   * After promoting (unindenting) an item, reassign following former siblings
+   * to the promoted item. When a child is promoted to the same level as its
+   * old parent, the siblings that come after it in the list should become
+   * children of the newly promoted item (since it's now their structural parent).
+   * @param {object} item - The item that was just promoted
+   * @param {string|null} oldParentId - The parent ID the item had before promotion
+   */
+  _reassignFollowingSiblings(item, oldParentId) {
+    if (!oldParentId) return;
+    var idx = this.items.indexOf(item);
+    // Walk forward from the promoted item; reassign any former siblings
+    // (items that still point to the old parent) to the promoted item
+    for (var i = idx + 1; i < this.items.length; i++) {
+      var sibling = this.items[i];
+      // Stop if we hit an item at the same level or shallower than the promoted item
+      // (that means we've left the region that could be children)
+      if (sibling.level <= item.level) break;
+      // Reassign direct former siblings (one level deeper, still pointing to old parent)
+      if (sibling.parent === oldParentId && sibling.level === item.level + 1) {
+        sibling.parent = item.id;
+      }
+    }
+  }
 
   deleteItem(item, element) {
     var self = this;
@@ -976,6 +1031,11 @@ class Checklist {
       this.draggedItem.parent = item.parent;
       var ii = ti + 1; while (ii < this.items.length && this.items[ii].level > item.level) ii++;
       this.items.splice(ii, 0, ...this.draggedSubtree);
+    }
+    // Update checked state when moving between zones (active ↔ completed)
+    // If the target item's checked state differs from the dragged item, adopt the target's state
+    if (item.checked !== this.draggedItem.checked) {
+      this.draggedSubtree.forEach(function(si) { si.checked = item.checked; });
     }
     this.draggedItem = null; this.draggedSubtree = []; this.dragOverItem = null; this.dragOverPosition = null;
     this.render(); this._notifyChange();
@@ -1221,6 +1281,117 @@ function _copyChecklistToNote(checklist) {
       }
     }
   }, '📝 Moved checklist to notes');
+}
+
+// ── Paste Clipboard as Checklist Items ───────────────────────────────────────
+
+/**
+ * Read clipboard text and create each line as a checklist item.
+ * Uses the same parsing logic as _copyNoteToChecklist (markdown checkboxes,
+ * list markers, indent detection).
+ */
+async function _pasteClipboardAsChecklistItems(checklist) {
+  var text = '';
+  try {
+    text = await navigator.clipboard.readText();
+  } catch (err) {
+    console.error('[Checklist] Clipboard read failed:', err);
+    if (typeof _showDeleteUndoToast === 'function') {
+      _showDeleteUndoToast(null, null, null, null, '⚠️ Clipboard access denied');
+    }
+    return;
+  }
+  if (!text || !text.trim()) return;
+
+  var lines = text.split('\n');
+  var newItems = [];
+  lines.forEach(function(line) {
+    if (!line.trim()) return;
+    // Detect indent level
+    var indent = 0;
+    var stripped = line;
+    while (stripped.startsWith('    ') || stripped.startsWith('\t')) {
+      indent++;
+      stripped = stripped.startsWith('\t') ? stripped.slice(1) : stripped.slice(4);
+    }
+    if (stripped.startsWith('  ')) { indent++; stripped = stripped.slice(2); }
+    // Detect markdown checklist format: - [x] or - [ ] or * [x] or * [ ]
+    var isChecked = false;
+    var mdChecklistMatch = stripped.match(/^[-*]\s+\[([ xX])\]\s*/);
+    if (mdChecklistMatch) {
+      isChecked = mdChecklistMatch[1].toLowerCase() === 'x';
+      stripped = stripped.replace(/^[-*]\s+\[[ xX]\]\s*/, '');
+    } else {
+      // Strip list markers and standalone checkbox markers
+      stripped = stripped.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '');
+      // Check for standalone [x] or [ ] at start (legacy format)
+      var legacyCheck = stripped.match(/^\[([ xX])\]\s*/);
+      if (legacyCheck) {
+        isChecked = legacyCheck[1].toLowerCase() === 'x';
+        stripped = stripped.replace(/^\[[ xX]\]\s*/, '');
+      }
+    }
+    if (!stripped.trim()) return;
+    newItems.push({
+      id: checklist.generateId(),
+      text: stripped.trim(),
+      level: Math.min(indent, MAX_INDENT_LEVEL),
+      checked: isChecked,
+      parent: null
+    });
+  });
+  if (newItems.length === 0) return;
+
+  // Assign parents based on levels
+  for (var i = 1; i < newItems.length; i++) {
+    if (newItems[i].level > 0) {
+      for (var j = i - 1; j >= 0; j--) {
+        if (newItems[j].level === newItems[i].level - 1) { newItems[i].parent = newItems[j].id; break; }
+      }
+    }
+  }
+
+  // Snapshot for undo
+  var prevItems = JSON.parse(JSON.stringify(checklist.items));
+
+  checklist.items = checklist.items.concat(newItems);
+  checklist.render();
+  checklist._notifyChange();
+
+  // Show undo toast
+  _showDeleteUndoToast(null, null, null, function() {
+    checklist.items = prevItems;
+    checklist.render();
+    checklist._notifyChange();
+  }, '📋 Pasted ' + newItems.length + ' item' + (newItems.length === 1 ? '' : 's'));
+}
+
+// ── Copy Incomplete Items to Clipboard ───────────────────────────────────────
+
+/**
+ * Copy all unchecked checklist items to clipboard as markdown checklist lines.
+ * Format: `- [ ] text` with 2-space indentation per level.
+ */
+function _copyIncompleteToClipboard(checklist) {
+  var unchecked = checklist.items.filter(function(item) { return !item.checked; });
+  if (unchecked.length === 0) {
+    if (typeof _showDeleteUndoToast === 'function') {
+      _showDeleteUndoToast(null, null, null, null, '⚠️ No incomplete items to copy');
+    }
+    return;
+  }
+  var lines = unchecked.map(function(item) {
+    var indent = '  '.repeat(item.level);
+    return indent + '- [ ] ' + item.text;
+  });
+  var text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    if (typeof _showDeleteUndoToast === 'function') {
+      _showDeleteUndoToast(null, null, null, null, '📋 Copied ' + unchecked.length + ' item' + (unchecked.length === 1 ? '' : 's'));
+    }
+  }).catch(function(err) {
+    console.error('[Checklist] Clipboard write failed:', err);
+  });
 }
 
 // ── Checklist Auto-Complete / Auto-Archive ───────────────────────────────────

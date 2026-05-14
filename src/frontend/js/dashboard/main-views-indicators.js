@@ -211,7 +211,7 @@ async function _indPopulateGraphFilter() {
   } else {
     for (var i = 0; i < window._graphZoneObjects.length; i++) {
       var obj = window._graphZoneObjects[i];
-      html += '<label><input type="checkbox" data-ind="' + obj.id + '" onchange="_indSaveSelection();_indicatorsLoad()" /> ' + _escapeHtml(obj.name) + '</label>';
+      html += '<label><input type="checkbox" data-ind="' + obj.id + '" onchange="_indSaveSelection();_indicatorsLoad()" /> ' + _escHtml(obj.name) + '</label>';
     }
   }
   container.innerHTML = html;
@@ -269,7 +269,7 @@ function _indRestoreOneOffGraphs() {
       }
 
       var label = document.createElement('label');
-      label.innerHTML = '<input type="checkbox" data-ind="' + id + '" onchange="_indSaveSelection();_indicatorsLoad()" /> ' + _escapeHtml(name) + ' <span style="font-size:0.7em;opacity:0.6;">(one-off)</span>';
+      label.innerHTML = '<input type="checkbox" data-ind="' + id + '" onchange="_indSaveSelection();_indicatorsLoad()" /> ' + _escHtml(name) + ' <span style="font-size:0.7em;opacity:0.6;">(one-off)</span>';
       container.appendChild(label);
     }
   } catch (e) {}
@@ -370,15 +370,15 @@ function _indRenderAddGraphSection() {
 
     // Category header (collapsible)
     html += '<div class="ind-add-cat-header" data-cat-id="' + catId + '" style="padding:5px 10px;cursor:pointer;font-size:0.8em;font-weight:bold;color:#4a2c2a;background:#f0e6d3;border-bottom:1px solid #e8dcc8;user-select:none;">';
-    html += '<span class="filter-arrow" id="' + catId + '-arrow">▶</span> ' + _escapeHtml(catName) + ' <span style="opacity:0.5;font-weight:normal;">(' + items.length + ')</span>';
+    html += '<span class="filter-arrow" id="' + catId + '-arrow">▶</span> ' + _escHtml(catName) + ' <span style="opacity:0.5;font-weight:normal;">(' + items.length + ')</span>';
     html += '</div>';
     html += '<div id="' + catId + '-body" style="display:none;">';
 
     for (var j = 0; j < items.length; j++) {
       var item = items[j];
       html += '<div class="ind-add-item" data-obj-id="' + item.id + '" style="padding:6px 10px 6px 20px;cursor:pointer;font-size:0.8em;color:#1a1208;border-bottom:1px solid #f0e6d3;">';
-      html += _escapeHtml(item.name);
-      if (item.units) html += ' <span style="opacity:0.5;">(' + _escapeHtml(item.units) + ')</span>';
+      html += _escHtml(item.name);
+      if (item.units) html += ' <span style="opacity:0.5;">(' + _escHtml(item.units) + ')</span>';
       html += '</div>';
     }
 
@@ -445,7 +445,7 @@ function _indAddOneOffGraph(obj) {
   // Add checkbox if not already present
   if (!container.querySelector('input[data-ind="' + obj.id + '"]')) {
     var label = document.createElement('label');
-    label.innerHTML = '<input type="checkbox" data-ind="' + obj.id + '" onchange="_indSaveSelection();_indicatorsLoad()" checked /> ' + _escapeHtml(obj.name) + ' <span style="font-size:0.7em;opacity:0.6;">(one-off)</span>';
+    label.innerHTML = '<input type="checkbox" data-ind="' + obj.id + '" onchange="_indSaveSelection();_indicatorsLoad()" checked /> ' + _escHtml(obj.name) + ' <span style="font-size:0.7em;opacity:0.6;">(one-off)</span>';
     container.appendChild(label);
   } else {
     // Already exists — just check it
@@ -1314,8 +1314,8 @@ function _indicatorsRenderLog(data, objects) {
     html += '<div class="ind-log-entry" data-chit-id="' + chitId + '">';
     html += '<div class="ind-log-entry-date">' + displayDate + '</div>';
     html += '<div class="ind-log-entry-body">';
-    html += '<div class="ind-log-entry-title">' + _escapeHtml(chitTitle) + '</div>';
-    html += '<div class="ind-log-entry-summary">' + _escapeHtml(summary) + '</div>';
+    html += '<div class="ind-log-entry-title">' + _escHtml(chitTitle) + '</div>';
+    html += '<div class="ind-log-entry-summary">' + _escHtml(summary) + '</div>';
     html += '</div>';
     html += '</div>';
   }
@@ -1336,10 +1336,4 @@ function _indicatorsRenderLog(data, objects) {
   });
 }
 
-/**
- * Escape HTML special characters for safe insertion.
- */
-function _escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escapeHtml — now using shared _escHtml from shared-utils.js

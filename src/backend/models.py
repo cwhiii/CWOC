@@ -83,6 +83,12 @@ class Settings(BaseModel):
     omni_email_count: Optional[str] = "3"        # Number of emails to show per page in Omni View
     omni_normalize_colors: Optional[str] = "0"   # "1" = normalize chit colors by type in Omni View
     smart_actions_config: Optional[str] = None   # JSON string: {disabled: {}, disabledCategories: [], maxResults: 3, customDetectors: []}
+    custom_view_filters: Optional[str] = None    # JSON string: per-view custom filter/sort defaults {viewName: {statuses, tags, priorities, people, text, display, sort, project}}
+    email_block_tracking_pixels: Optional[str] = "1"   # "1" = strip 1x1/1x2 tracking images, "0" = allow
+    email_external_content: Optional[str] = "allow"    # "block", "allow", "known_senders"
+    email_read_receipts: Optional[str] = "never"       # "never", "always", "ask", "contacts_only"
+    email_undo_send_delay: Optional[str] = "5"         # Seconds before send fires (undo window)
+    email_group_by: Optional[str] = "date"             # "date" (Today/Yesterday/Last Week/Older) or "none"
 
 class Chit(BaseModel):
     class Config:
@@ -156,7 +162,9 @@ class Chit(BaseModel):
     nest_thread_id: Optional[str] = None          # ID of an email chit in the target thread
     snoozed_until: Optional[str] = None           # ISO 8601 datetime — chit hidden from views until this time
     prerequisites: Optional[List[str]] = None      # JSON array of chit IDs that must be Complete before this chit is unblocked
-    auto_complete_checklist: Optional[bool] = None   # When true, status auto-toggles based on checklist completion
+    auto_complete_checklist: Optional[bool] = True   # When true, status auto-toggles based on checklist completion (default ON)
+    email_send_at: Optional[str] = None              # ISO 8601 datetime — scheduled send time for Send Later
+    email_request_read_receipt: Optional[bool] = False  # Request read receipt when sending
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom
@@ -289,6 +297,8 @@ class RuleCreate(BaseModel):
     actions: Optional[list] = None         # Array of action objects
     confirm_before_apply: Optional[bool] = True
     schedule_config: Optional[dict] = None # For scheduled triggers
+    habit_mode: Optional[bool] = False     # Track as habit (show in Habits view)
+    habit_trigger_config: Optional[dict] = None  # For habit_achieved/missed/due triggers
 
 class RuleUpdate(BaseModel):
     name: Optional[str] = None
@@ -300,6 +310,9 @@ class RuleUpdate(BaseModel):
     actions: Optional[list] = None
     confirm_before_apply: Optional[bool] = None
     schedule_config: Optional[dict] = None
+    habit_mode: Optional[bool] = None      # Track as habit (show in Habits view)
+    habit_history: Optional[list] = None   # JSON array of habit execution entries (engine-managed)
+    habit_trigger_config: Optional[dict] = None  # For habit_achieved/missed/due triggers
 
 class RuleReorder(BaseModel):
     rule_ids: List[str]  # Ordered list of rule IDs

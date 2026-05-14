@@ -14,6 +14,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 
 from src.backend.db import DB_PATH, _update_lock, serialize_json_field
+from src.backend.cron_parser import parse_cron, matches
 
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,8 @@ def _get_chit_focus_date(chit):
 def _partition_eligible_chits(chits, now):
     """Partition chits into hourly (0-7 days) and daily (8-16 days) buckets.
     Filters: non-deleted, non-empty location, has a focus_date in range.
+    For recurring chits whose original date is in the past, uses today as the
+    focus date so they get fresh weather updates.
     Returns (hourly_chits, daily_chits)."""
     today = now.date() if hasattr(now, 'date') else now
     hourly_chits = []
@@ -209,6 +212,28 @@ def _partition_eligible_chits(chits, now):
         except (ValueError, TypeError):
             continue
         delta_days = (focus_date - today).days
+
+        # For recurring chits whose original date is in the past, use today
+        # so they get fresh weather data for the current occurrence
+        if delta_days < 0:
+            has_recurrence = False
+            recurrence_raw = chit.get("recurrence") if isinstance(chit, dict) else getattr(chit, "recurrence", None)
+            if recurrence_raw:
+                try:
+                    rec = json.loads(recurrence_raw) if isinstance(recurrence_raw, str) else recurrence_raw
+                    if rec and rec.get("freq"):
+                        has_recurrence = True
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    pass
+            if has_recurrence:
+                # Override focus date to today for weather fetching
+                if isinstance(chit, dict):
+                    chit["_weather_focus_date"] = today.isoformat()
+                hourly_chits.append(chit)
+                continue
+            # Non-recurring past chit — skip
+            continue
+
         if 0 <= delta_days <= 7:
             hourly_chits.append(chit)
         elif 8 <= delta_days <= 16:
@@ -378,7 +403,8 @@ async def weather_update():
                     continue
                 forecast_daily = location_forecasts[loc]
                 for chit in chits_for_loc:
-                    focus_date_str = _get_chit_focus_date(chit)
+                    # For recurring chits with past dates, use today's date (set by _partition_eligible_chits)
+                    focus_date_str = chit.get("_weather_focus_date") or _get_chit_focus_date(chit)
                     if not focus_date_str:
                         skipped += 1
                         continue
@@ -453,7 +479,8 @@ async def _weather_hourly_loop():
                         conn = sqlite3.connect(DB_PATH)
                         cursor = conn.cursor()
                         for chit in chits_for_loc:
-                            focus_date_str = _get_chit_focus_date(chit)
+                            # For recurring chits with past dates, use today's date
+                            focus_date_str = chit.get("_weather_focus_date") or _get_chit_focus_date(chit)
                             if not focus_date_str:
                                 continue
                             weather_data = _extract_weather_for_date(forecast_daily, focus_date_str)
@@ -519,7 +546,8 @@ async def _weather_daily_loop():
                         conn = sqlite3.connect(DB_PATH)
                         cursor = conn.cursor()
                         for chit in chits_for_loc:
-                            focus_date_str = _get_chit_focus_date(chit)
+                            # For recurring chits with past dates, use today's date
+                            focus_date_str = chit.get("_weather_focus_date") or _get_chit_focus_date(chit)
                             if not focus_date_str:
                                 continue
                             weather_data = _extract_weather_for_date(forecast_daily, focus_date_str)
@@ -537,6 +565,41 @@ async def _weather_daily_loop():
             break
         except Exception as e:
             logger.error(f"Weather daily loop unexpected error: {e}")
+
+
+def _get_habit_cycle_end(chit, now):
+    """Calculate the end-of-cycle datetime for a habit chit's current period.
+
+    Returns a datetime representing midnight at the end of the current cycle,
+    or None if the frequency can't be determined.
+    """
+    # Get frequency from recurrence_rule or habit_reset_period
+    recurrence_raw = chit.get("recurrence")
+    freq = None
+    if recurrence_raw:
+        try:
+            rec = json.loads(recurrence_raw) if isinstance(recurrence_raw, str) else recurrence_raw
+            if rec and rec.get("freq"):
+                freq = rec["freq"]
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+    if not freq:
+        freq = chit.get("habit_reset_period") or "DAILY"
+
+    if freq == "DAILY":
+        return datetime(now.year, now.month, now.day) + timedelta(days=1)
+    elif freq == "WEEKLY":
+        # End of week (next Monday midnight by default — matches JS wsd=1 default)
+        days_until_end = (7 - now.weekday()) % 7 or 7
+        return datetime(now.year, now.month, now.day) + timedelta(days=days_until_end)
+    elif freq == "MONTHLY":
+        # First of next month
+        if now.month == 12:
+            return datetime(now.year + 1, 1, 1)
+        return datetime(now.year, now.month + 1, 1)
+    elif freq == "YEARLY":
+        return datetime(now.year + 1, 1, 1)
+    return None
 
 
 async def _alert_push_loop():
@@ -750,6 +813,13 @@ async def _alert_push_loop():
                             if not wd:
                                 continue
 
+                            # For recurring chits, verify weather_data is for today
+                            # (not stale data from the original instance date)
+                            if has_recurrence and wd.get("focus_date"):
+                                if wd["focus_date"] != today_str:
+                                    # Stale weather data — skip notification until weather update refreshes it
+                                    continue
+
                             # Determine user's unit system
                             try:
                                 uconn = sqlite3.connect(DB_PATH)
@@ -769,25 +839,36 @@ async def _alert_push_loop():
                                     continue
                                 high_c = wd["high"]
                                 low_c = wd["low"]
-                                if user_metric:
-                                    high_display = round(high_c)
-                                    low_display = round(low_c)
-                                else:
-                                    high_display = round(high_c * 9 / 5 + 32)
-                                    low_display = round(low_c * 9 / 5 + 32)
-                                unit_label = "°C" if user_metric else "°F"
-                                if weather_condition == "high_above" and high_display > weather_threshold:
+                                # Threshold is stored in Celsius (canonical unit).
+                                # Compare directly against Celsius forecast values.
+                                threshold_c = weather_threshold
+                                if weather_condition == "high_above" and high_c > threshold_c:
                                     condition_met = True
-                                    body = f"high ({high_display}{unit_label}) above {weather_threshold}{unit_label}"
-                                elif weather_condition == "high_below" and high_display < weather_threshold:
+                                elif weather_condition == "high_below" and high_c < threshold_c:
                                     condition_met = True
-                                    body = f"high ({high_display}{unit_label}) below {weather_threshold}{unit_label}"
-                                elif weather_condition == "low_above" and low_display > weather_threshold:
+                                elif weather_condition == "low_above" and low_c > threshold_c:
                                     condition_met = True
-                                    body = f"low ({low_display}{unit_label}) above {weather_threshold}{unit_label}"
-                                elif weather_condition == "low_below" and low_display < weather_threshold:
+                                elif weather_condition == "low_below" and low_c < threshold_c:
                                     condition_met = True
-                                    body = f"low ({low_display}{unit_label}) below {weather_threshold}{unit_label}"
+                                # Format display values for notification text
+                                if condition_met:
+                                    if user_metric:
+                                        high_display = round(high_c)
+                                        low_display = round(low_c)
+                                        thresh_display = round(threshold_c)
+                                    else:
+                                        high_display = round(high_c * 9 / 5 + 32)
+                                        low_display = round(low_c * 9 / 5 + 32)
+                                        thresh_display = round(threshold_c * 9 / 5 + 32)
+                                    unit_label = "°C" if user_metric else "°F"
+                                    if weather_condition == "high_above":
+                                        body = f"high ({high_display}{unit_label}) above {thresh_display}{unit_label}"
+                                    elif weather_condition == "high_below":
+                                        body = f"high ({high_display}{unit_label}) below {thresh_display}{unit_label}"
+                                    elif weather_condition == "low_above":
+                                        body = f"low ({low_display}{unit_label}) above {thresh_display}{unit_label}"
+                                    elif weather_condition == "low_below":
+                                        body = f"low ({low_display}{unit_label}) below {thresh_display}{unit_label}"
 
                             elif weather_condition == "rain":
                                 wcode = wd.get("weather_code")
@@ -798,15 +879,19 @@ async def _alert_push_loop():
                                         continue
                                     rain_codes = (61, 63, 65, 66, 67, 80, 81, 82, 51, 53, 55, 56, 57)
                                     is_rain = wcode is not None and wcode in rain_codes
-                                    if user_metric:
-                                        precip_display = round(precip_mm, 1)
-                                        p_unit = "mm"
-                                    else:
-                                        precip_display = round(precip_mm / 25.4, 1)
-                                        p_unit = "in"
-                                    if is_rain and precip_display > weather_threshold:
+                                    # Threshold is stored in mm (canonical unit).
+                                    # Compare directly against mm forecast values.
+                                    if is_rain and precip_mm > weather_threshold:
                                         condition_met = True
-                                        body = f"rain ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                        if user_metric:
+                                            precip_display = round(precip_mm, 1)
+                                            thresh_display = round(weather_threshold, 1)
+                                            p_unit = "mm"
+                                        else:
+                                            precip_display = round(precip_mm / 25.4, 1)
+                                            thresh_display = round(weather_threshold / 25.4, 1)
+                                            p_unit = "in"
+                                        body = f"rain ({precip_display} {p_unit}) over {thresh_display} {p_unit}"
                                 else:
                                     if wcode is None:
                                         continue
@@ -823,15 +908,18 @@ async def _alert_push_loop():
                                         continue
                                     snow_codes = (71, 73, 75, 77, 85, 86)
                                     is_snow = wcode is not None and wcode in snow_codes
-                                    if user_metric:
-                                        precip_display = round(precip_mm, 1)
-                                        p_unit = "mm"
-                                    else:
-                                        precip_display = round(precip_mm / 25.4, 1)
-                                        p_unit = "in"
-                                    if is_snow and precip_display > weather_threshold:
+                                    # Threshold is stored in mm (canonical unit).
+                                    if is_snow and precip_mm > weather_threshold:
                                         condition_met = True
-                                        body = f"snow ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                        if user_metric:
+                                            precip_display = round(precip_mm, 1)
+                                            thresh_display = round(weather_threshold, 1)
+                                            p_unit = "mm"
+                                        else:
+                                            precip_display = round(precip_mm / 25.4, 1)
+                                            thresh_display = round(weather_threshold / 25.4, 1)
+                                            p_unit = "in"
+                                        body = f"snow ({precip_display} {p_unit}) over {thresh_display} {p_unit}"
                                 else:
                                     if wcode is None:
                                         continue
@@ -848,15 +936,18 @@ async def _alert_push_loop():
                                         continue
                                     hail_codes = (96, 99)
                                     is_hail = wcode is not None and wcode in hail_codes
-                                    if user_metric:
-                                        precip_display = round(precip_mm, 1)
-                                        p_unit = "mm"
-                                    else:
-                                        precip_display = round(precip_mm / 25.4, 1)
-                                        p_unit = "in"
-                                    if is_hail and precip_display > weather_threshold:
+                                    # Threshold is stored in mm (canonical unit).
+                                    if is_hail and precip_mm > weather_threshold:
                                         condition_met = True
-                                        body = f"hail ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                        if user_metric:
+                                            precip_display = round(precip_mm, 1)
+                                            thresh_display = round(weather_threshold, 1)
+                                            p_unit = "mm"
+                                        else:
+                                            precip_display = round(precip_mm / 25.4, 1)
+                                            thresh_display = round(weather_threshold / 25.4, 1)
+                                            p_unit = "in"
+                                        body = f"hail ({precip_display} {p_unit}) over {thresh_display} {p_unit}"
                                 else:
                                     if wcode is None:
                                         continue
@@ -871,15 +962,18 @@ async def _alert_push_loop():
                                     precip_mm = wd.get("precipitation")
                                     if precip_mm is None or weather_threshold is None:
                                         continue
-                                    if user_metric:
-                                        precip_display = round(precip_mm, 1)
-                                        p_unit = "mm"
-                                    else:
-                                        precip_display = round(precip_mm / 25.4, 1)
-                                        p_unit = "in"
-                                    if precip_display > weather_threshold:
+                                    # Threshold is stored in mm (canonical unit).
+                                    if precip_mm > weather_threshold:
                                         condition_met = True
-                                        body = f"precipitation ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                        if user_metric:
+                                            precip_display = round(precip_mm, 1)
+                                            thresh_display = round(weather_threshold, 1)
+                                            p_unit = "mm"
+                                        else:
+                                            precip_display = round(precip_mm / 25.4, 1)
+                                            thresh_display = round(weather_threshold / 25.4, 1)
+                                            p_unit = "in"
+                                        body = f"precipitation ({precip_display} {p_unit}) over {thresh_display} {p_unit}"
                                 else:
                                     if wcode is None:
                                         continue
@@ -901,46 +995,53 @@ async def _alert_push_loop():
                                     wind_max = wind_speed
                                 if wind_max is None or weather_threshold is None:
                                     continue
-                                if user_metric:
-                                    wind_display = round(wind_max)
-                                    wind_unit = "km/h"
-                                else:
-                                    wind_display = round(wind_max * 0.621371)
-                                    wind_unit = "mph"
-                                if wind_display > weather_threshold:
+                                # Threshold is stored in km/h (canonical unit).
+                                # Compare directly against km/h forecast values.
+                                if wind_max > weather_threshold:
                                     condition_met = True
-                                    body = f"wind ({wind_display} {wind_unit}) over {weather_threshold} {wind_unit}"
+                                    # Format display values for notification text
+                                    if user_metric:
+                                        wind_display = round(wind_max)
+                                        thresh_display = round(weather_threshold)
+                                        wind_unit = "km/h"
+                                    else:
+                                        wind_display = round(wind_max * 0.621371)
+                                        thresh_display = round(weather_threshold * 0.621371)
+                                        wind_unit = "mph"
+                                    body = f"wind ({wind_display} {wind_unit}) over {thresh_display} {wind_unit}"
 
                             if not condition_met:
                                 continue
 
                             # ── 5-unit shift threshold for numeric conditions ──
                             # For temp/wind/precip-more-than: only re-notify if value shifted by 5+ from last notification
+                            # Uses canonical units (°C, km/h, mm) for consistent tracking
                             weather_track_key = f"weather-{chit_id}-{idx}"
                             precip_mode_check = alert.get("weather_precip_mode", "any")
                             if weather_condition in ("high_above", "high_below", "low_above", "low_below", "wind_above"):
-                                # Determine the current relevant value
+                                # Determine the current relevant value in canonical units
                                 if weather_condition.startswith("high"):
-                                    current_val = high_display
+                                    current_val = high_c
                                 elif weather_condition.startswith("low"):
-                                    current_val = low_display
+                                    current_val = low_c
                                 else:
-                                    current_val = wind_display
-                                # Check if we've notified before and if shift is < 5
+                                    current_val = wind_max
+                                # Check if we've notified before and if shift is < 3 (in canonical units)
                                 if weather_track_key in _weather_last_notified:
                                     last_val = _weather_last_notified[weather_track_key]
-                                    if abs(current_val - last_val) < 5:
+                                    if abs(current_val - last_val) < 3:
                                         _fired_keys.add(key)
                                         continue
                                 _weather_last_notified[weather_track_key] = current_val
                             elif weather_condition in ("precipitation", "rain", "snow", "hail") and precip_mode_check == "more_than":
-                                # For precip "more than" mode, use 5-unit shift on the precip value
+                                # For precip "more than" mode, use shift on the mm value
+                                precip_mm = wd.get("precipitation", 0)
                                 if weather_track_key in _weather_last_notified:
                                     last_val = _weather_last_notified[weather_track_key]
-                                    if abs(precip_display - last_val) < 5:
+                                    if abs(precip_mm - last_val) < 3:
                                         _fired_keys.add(key)
                                         continue
-                                _weather_last_notified[weather_track_key] = precip_display
+                                _weather_last_notified[weather_track_key] = precip_mm
                             else:
                                 # Rain/snow/hail/precip "any" mode: just use daily dedup
                                 pass
@@ -984,21 +1085,43 @@ async def _alert_push_loop():
 
                         # Determine target datetime
                         target_type = alert.get("targetType", "start")
-                        if target_type == "due":
+                        if target_type == "cycle" and chit.get("habit"):
+                            # Habit cycle end — compute end of current period
+                            target_dt = _get_habit_cycle_end(chit, now)
+                            if not target_dt:
+                                continue
+                        elif target_type == "due":
                             target_str = due_dt or start_dt
+                            if not target_str:
+                                continue
+                            try:
+                                target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            except (ValueError, TypeError):
+                                continue
                         elif target_type == "end":
                             target_str = end_dt or start_dt
+                            if not target_str:
+                                continue
+                            try:
+                                target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            except (ValueError, TypeError):
+                                continue
                         elif target_type == "point":
                             target_str = point_in_time_dt
+                            if not target_str:
+                                continue
+                            try:
+                                target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            except (ValueError, TypeError):
+                                continue
                         else:
                             target_str = start_dt or due_dt
-                        if not target_str:
-                            continue
-
-                        try:
-                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                        except (ValueError, TypeError):
-                            continue
+                            if not target_str:
+                                continue
+                            try:
+                                target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            except (ValueError, TypeError):
+                                continue
 
                         # at = exactly at target, before = target - offset, after = target + offset
                         after_target = alert.get("afterTarget", False)
@@ -1015,7 +1138,9 @@ async def _alert_push_loop():
                             if key in _fired_keys:
                                 continue
                             _fired_keys.add(key)
-                            if at_target:
+                            if target_type == "cycle":
+                                body = f"will be missed within {value} {unit}"
+                            elif at_target:
                                 body = f"at {target_type}"
                             else:
                                 direction = "after" if after_target else "before"
@@ -1119,6 +1244,78 @@ async def _snooze_check_loop():
             await asyncio.sleep(60)
 
 
+# ── Email Send Later: background scheduler ───────────────────────────────
+
+async def _email_send_later_loop():
+    """Background task: send scheduled emails whose email_send_at time has passed.
+
+    Runs every 5 seconds. Checks for draft email chits where email_send_at <= now
+    and sends them via the email route's send logic.
+    """
+    # Wait for server to fully start
+    await asyncio.sleep(5)
+
+    while True:
+        try:
+            await asyncio.sleep(5)  # Check every 5 seconds for responsive undo-send
+            now = datetime.utcnow()
+            now_iso = now.isoformat() + "Z"
+
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                # Find all draft emails with a send_at time that has passed
+                cursor.execute(
+                    "SELECT id, owner_id, email_send_at FROM chits "
+                    "WHERE email_status = 'draft' "
+                    "AND email_send_at IS NOT NULL AND email_send_at != '' "
+                    "AND email_send_at <= ? "
+                    "AND (deleted = 0 OR deleted IS NULL)",
+                    (now_iso,)
+                )
+                rows = cursor.fetchall()
+                conn.close()
+
+                if not rows:
+                    continue
+
+                for row in rows:
+                    chit_id = row["id"]
+                    owner_id = row["owner_id"]
+                    try:
+                        # Import and call the send logic from email routes
+                        from src.backend.routes.email import _do_send_email_by_id
+                        result = _do_send_email_by_id(chit_id, owner_id)
+                        if result.get("status") == "sent":
+                            logger.info(f"[SendLater] Sent scheduled email {chit_id} for user {owner_id}")
+                        else:
+                            logger.warning(f"[SendLater] Send returned non-sent status for {chit_id}: {result}")
+                    except Exception as e:
+                        logger.error(f"[SendLater] Failed to send scheduled email {chit_id}: {e}")
+                        # Clear the send_at so it doesn't retry forever on permanent errors
+                        try:
+                            err_conn = sqlite3.connect(DB_PATH)
+                            err_cursor = err_conn.cursor()
+                            err_cursor.execute(
+                                "UPDATE chits SET email_send_at = NULL WHERE id = ?",
+                                (chit_id,)
+                            )
+                            err_conn.commit()
+                            err_conn.close()
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.error(f"[SendLater] DB query error: {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"[SendLater] Unexpected error: {e}")
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -1135,7 +1332,8 @@ async def start_weather_schedulers():
     asyncio.create_task(_weather_daily_loop())
     asyncio.create_task(_alert_push_loop())
     asyncio.create_task(_snooze_check_loop())
-    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check)")
+    asyncio.create_task(_email_send_later_loop())
+    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check + email send-later)")
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1145,14 +1343,173 @@ async def start_weather_schedulers():
 from src.backend.db import deserialize_json_field
 
 
+def _derive_period_from_cron(cron_expr: str) -> str:
+    """Derive the habit period from a cron expression.
+
+    Returns 'daily', 'weekly', or 'monthly' based on the cron pattern:
+    - If day-of-month is specific (not *) → monthly
+    - If day-of-week is specific (not *) and day-of-month is * → weekly
+    - Otherwise → daily (including sub-daily crons)
+    """
+    parsed = parse_cron(cron_expr)
+    if parsed is None:
+        return "daily"
+
+    all_dom = parsed["days_of_month"] == set(range(1, 32))
+    all_dow = parsed["days_of_week"] == set(range(0, 7))
+
+    if not all_dom:
+        # Specific day(s) of month → monthly period
+        return "monthly"
+    elif not all_dow:
+        # Specific day(s) of week → weekly period
+        return "weekly"
+    else:
+        # All days match → daily period
+        return "daily"
+
+
+def _get_previous_period_date(period: str, now: datetime) -> str:
+    """Get the date string (YYYY-MM-DD) for the previous period relative to now.
+
+    - daily: yesterday
+    - weekly: the start of last week (Monday of last week)
+    - monthly: the 1st of last month
+    """
+    if period == "daily":
+        prev = now - timedelta(days=1)
+        return prev.strftime("%Y-%m-%d")
+    elif period == "weekly":
+        # Go back to the start of the current week (Monday), then back 7 days
+        days_since_monday = now.weekday()  # Mon=0, Sun=6
+        this_monday = now - timedelta(days=days_since_monday)
+        last_monday = this_monday - timedelta(days=7)
+        return last_monday.strftime("%Y-%m-%d")
+    elif period == "monthly":
+        # 1st of last month
+        if now.month == 1:
+            prev_month_start = datetime(now.year - 1, 12, 1)
+        else:
+            prev_month_start = datetime(now.year, now.month - 1, 1)
+        return prev_month_start.strftime("%Y-%m-%d")
+    return (now - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _check_and_insert_missed_habit_entries(rule: dict, now: datetime, cursor) -> bool:
+    """Check if a habit_mode rule missed a previous period and insert a 'missed' entry.
+
+    Looks at the previous period (based on cron-derived period) and checks if
+    habit_history already has an entry for that date. If not, inserts a missed entry.
+
+    Returns True if a missed entry was inserted, False otherwise.
+    """
+    if not rule.get("habit_mode"):
+        return False
+
+    # Get the cron expression
+    config_raw = rule.get("schedule_config")
+    if not config_raw:
+        return False
+    if isinstance(config_raw, str):
+        try:
+            config = json.loads(config_raw)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    else:
+        config = config_raw
+
+    cron_expr = config.get("cron") if isinstance(config, dict) else None
+    if not cron_expr:
+        return False
+
+    # Derive period and get previous period date
+    period = _derive_period_from_cron(cron_expr)
+    prev_date = _get_previous_period_date(period, now)
+
+    # Load existing habit_history
+    history_raw = rule.get("habit_history")
+    if isinstance(history_raw, str) and history_raw.strip():
+        try:
+            habit_history = json.loads(history_raw)
+        except (json.JSONDecodeError, TypeError):
+            habit_history = []
+    else:
+        habit_history = []
+    if not isinstance(habit_history, list):
+        habit_history = []
+
+    # Check if an entry already exists for the previous period date
+    existing_dates = {entry.get("date") for entry in habit_history if isinstance(entry, dict)}
+    if prev_date in existing_dates:
+        return False
+
+    # Also skip if the rule was created after the previous period
+    # (don't mark periods before the rule existed as missed)
+    created_raw = rule.get("created_datetime")
+    if created_raw and isinstance(created_raw, str) and created_raw.strip():
+        try:
+            created_dt = datetime.fromisoformat(created_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+            prev_date_dt = datetime.strptime(prev_date, "%Y-%m-%d")
+            if created_dt > prev_date_dt + timedelta(days=1):
+                # Rule didn't exist during the previous period
+                return False
+        except (ValueError, TypeError):
+            pass
+
+    # Insert missed entry
+    missed_entry = {
+        "date": prev_date,
+        "status": "missed",
+        "entities_matched": 0,
+        "actions_applied": 0,
+        "executed_datetime": None,
+    }
+    habit_history.append(missed_entry)
+
+    # Trim to last 365 entries
+    if len(habit_history) > 365:
+        habit_history = habit_history[-365:]
+
+    # Write updated habit_history back to the rules table
+    rule_id = rule.get("id", "")
+    try:
+        cursor.execute(
+            "UPDATE rules SET habit_history = ? WHERE id = ?",
+            (json.dumps(habit_history), rule_id),
+        )
+        logger.info(
+            "Missed habit entry inserted for rule '%s' (period: %s, date: %s)",
+            rule.get("name", ""), period, prev_date,
+        )
+        # Update the in-memory rule so subsequent logic sees the new history
+        rule["habit_history"] = json.dumps(habit_history)
+
+        # Fire habit_missed trigger for other rules to react
+        _fire_habit_trigger(
+            "habit_missed", rule_id, rule.get("name", ""),
+            rule.get("owner_id", ""), habit_history, datetime.utcnow(),
+        )
+
+        return True
+    except Exception as e:
+        logger.error(
+            "Failed to insert missed habit entry for rule %s: %s", rule_id, e
+        )
+        return False
+
+
 def _is_scheduled_rule_due(rule: dict, now: datetime) -> bool:
     """Check whether a scheduled rule is due for execution based on its
     schedule_config and last_run_datetime.
 
     schedule_config JSON shape:
+        {"cron": "0 6 * * *"}  (takes precedence if present)
+        OR
         {"frequency": "daily"|"hourly", "interval": int, "time_of_day": "HH:MM"}
 
-    Returns True when enough time has elapsed since the last run.
+    Returns True when the cron expression matches the current minute (and hasn't
+    already run this minute), or when enough time has elapsed since the last run
+    for frequency-based configs.
     """
     config_raw = rule.get("schedule_config")
     if not config_raw:
@@ -1168,6 +1525,37 @@ def _is_scheduled_rule_due(rule: dict, now: datetime) -> bool:
 
     if not isinstance(config, dict):
         return False
+
+    # ── Cron-based scheduling (takes precedence) ────────────────────────
+    cron_expr = config.get("cron")
+    if cron_expr:
+        parsed = parse_cron(cron_expr)
+        if parsed is None:
+            logger.warning("Rule %s has invalid cron expression: %r — skipping",
+                           rule.get("id", "?"), cron_expr)
+            return False
+
+        if not matches(parsed, now):
+            return False
+
+        # Verify rule hasn't already run in this minute
+        last_run_raw = rule.get("last_run_datetime")
+        if last_run_raw and isinstance(last_run_raw, str) and last_run_raw.strip():
+            try:
+                last_run = datetime.fromisoformat(
+                    last_run_raw.replace("Z", "+00:00")
+                ).replace(tzinfo=None)
+                # Same year, month, day, hour, and minute = already ran this minute
+                if (last_run.year == now.year and last_run.month == now.month
+                        and last_run.day == now.day and last_run.hour == now.hour
+                        and last_run.minute == now.minute):
+                    return False
+            except (ValueError, TypeError):
+                pass  # Can't parse last_run — allow execution
+
+        return True
+
+    # ── Frequency/interval-based scheduling (backward compatibility) ────
 
     frequency = config.get("frequency", "daily")
     interval = int(config.get("interval", 1) or 1)
@@ -1276,6 +1664,18 @@ async def _rules_scheduled_loop():
 
                     if not owner_id:
                         continue
+
+                    # ── 1.5. Check for missed habit periods ──────
+                    # For habit_mode rules, detect if the previous period was
+                    # missed (server was down, etc.) and insert a missed entry.
+                    if rule.get("habit_mode"):
+                        try:
+                            _check_and_insert_missed_habit_entries(rule, now, cursor)
+                        except Exception as missed_err:
+                            logger.error(
+                                "Missed habit check failed for rule %s: %s",
+                                rule_id, missed_err,
+                            )
 
                     # ── 2. Check if rule is due ──────────────────
                     if not _is_scheduled_rule_due(rule, now):
@@ -1474,6 +1874,54 @@ async def _rules_scheduled_loop():
                             rule_id, meta_err,
                         )
 
+                    # ── 10. Record habit history (if habit_mode) ─
+                    if rule.get("habit_mode"):
+                        try:
+                            # Load existing habit_history
+                            history_raw = rule.get("habit_history")
+                            if isinstance(history_raw, str) and history_raw.strip():
+                                habit_history = json.loads(history_raw)
+                            else:
+                                habit_history = []
+                            if not isinstance(habit_history, list):
+                                habit_history = []
+
+                            # Append new entry — status is always "achieved"
+                            # when the rule ran (maintenance rules succeed by running)
+                            habit_entry = {
+                                "date": now.strftime("%Y-%m-%d"),
+                                "status": "achieved",
+                                "entities_matched": entities_matched,
+                                "actions_applied": total_actions_executed,
+                                "executed_datetime": current_time,
+                            }
+                            habit_history.append(habit_entry)
+
+                            # Trim to last 365 entries to prevent unbounded growth
+                            if len(habit_history) > 365:
+                                habit_history = habit_history[-365:]
+
+                            # Write updated habit_history back to the rules table
+                            cursor.execute(
+                                "UPDATE rules SET habit_history = ? WHERE id = ?",
+                                (json.dumps(habit_history), rule_id),
+                            )
+                            logger.info(
+                                "Habit history recorded for rule '%s': %s",
+                                rule_name, habit_entry,
+                            )
+
+                            # Fire habit_achieved trigger for other rules to react
+                            _fire_habit_trigger(
+                                "habit_achieved", rule_id, rule_name,
+                                owner_id, habit_history, now,
+                            )
+                        except Exception as habit_err:
+                            logger.error(
+                                "Failed to record habit history for rule %s: %s",
+                                rule_id, habit_err,
+                            )
+
                     logger.info(
                         "Scheduled rule '%s' complete: %s", rule_name, result_summary
                     )
@@ -1492,7 +1940,386 @@ async def _rules_scheduled_loop():
             logger.error("Rules scheduler unexpected error: %s", e)
 
 
+# ── Habit Trigger Helpers ────────────────────────────────────────────
+
+def _fire_habit_trigger(
+    trigger_type: str,
+    source_rule_id: str,
+    source_rule_name: str,
+    owner_id: str,
+    habit_history: list,
+    now: datetime,
+):
+    """Fire a habit_achieved or habit_missed trigger in a background thread.
+
+    Builds a synthetic entity dict with habit metadata and dispatches it
+    to the rules engine for any rules listening on that trigger type.
+    """
+    import threading
+    from src.backend.rules_engine import dispatch_trigger
+
+    # Compute streak from history
+    streak = 0
+    for entry in reversed(habit_history):
+        if entry.get("status") == "achieved":
+            streak += 1
+        else:
+            break
+
+    # Build synthetic entity for condition evaluation
+    entity = {
+        "id": source_rule_id,
+        "source_rule_id": source_rule_id,
+        "source_rule_name": source_rule_name,
+        "source_type": "rule",
+        "source_chit_id": None,
+        "habit_event": trigger_type.replace("habit_", ""),  # "achieved" or "missed"
+        "streak": streak,
+        "total_entries": len(habit_history),
+        "last_status": habit_history[-1].get("status") if habit_history else None,
+        "timestamp": now.isoformat(),
+    }
+
+    logger.info(
+        "Firing %s trigger for habit rule '%s' (streak=%d, owner=%s)",
+        trigger_type, source_rule_name, streak, owner_id,
+    )
+
+    threading.Thread(
+        target=dispatch_trigger,
+        args=(trigger_type, "habit", entity, owner_id),
+        daemon=True,
+    ).start()
+
+
+def _fire_chit_habit_trigger(
+    trigger_type: str,
+    chit: dict,
+    owner_id: str,
+):
+    """Fire a habit trigger for a chit-based habit (achieved/missed/due).
+
+    Merges the full chit data with habit-specific metadata so condition
+    trees can evaluate against any chit field (title, tags, location, etc.)
+    as well as habit-specific fields (streak, habit_event, etc.).
+    """
+    import threading
+    from src.backend.rules_engine import dispatch_trigger
+
+    # Start with the full chit data so all fields are available for conditions
+    entity = dict(chit)
+    # Overlay habit-specific metadata
+    entity.update({
+        "source_rule_id": None,
+        "source_rule_name": None,
+        "source_type": "chit",
+        "source_chit_id": chit.get("id", ""),
+        "source_chit_title": chit.get("title", ""),
+        "habit_event": trigger_type.replace("habit_", ""),
+        "habit_goal": chit.get("habit_goal", 1),
+        "habit_success": chit.get("habit_success", 0),
+        "streak": 0,  # Would need recurrence_exceptions to compute
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+
+    logger.info(
+        "Firing %s trigger for chit habit '%s' (chit_id=%s, owner=%s)",
+        trigger_type, chit.get("title", ""), chit.get("id", ""), owner_id,
+    )
+
+    threading.Thread(
+        target=dispatch_trigger,
+        args=(trigger_type, "habit", entity, owner_id),
+        daemon=True,
+    ).start()
+
+
+async def _habit_due_loop():
+    """Background task: check for habit_due triggers with time offsets.
+
+    Runs every 60 seconds. For each rule with trigger_type='habit_due',
+    checks if the offset window matches the current time relative to the
+    source habit's scheduled execution time.
+
+    habit_trigger_config for habit_due:
+    {
+        "source_rule_id": "uuid" or "*",
+        "source_type": "rule" | "chit",
+        "source_chit_id": "uuid" or "*",
+        "offset_minutes": int  # negative = before due, positive = after due
+    }
+
+    For rule-based habits: "due" means the cron is about to fire (offset before)
+    or has passed without being achieved (offset after).
+
+    For chit-based habits: "due" is relative to the chit's recurrence schedule.
+    """
+    from src.backend.rules_engine import dispatch_trigger
+    from src.backend.cron_parser import parse_cron, matches
+
+    first_run = True
+
+    while True:
+        try:
+            if first_run:
+                await asyncio.sleep(10)
+                first_run = False
+            else:
+                await asyncio.sleep(60)
+
+            now = datetime.utcnow()
+            conn = None
+
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+
+                # Load all enabled rules with habit_due trigger type
+                cursor.execute(
+                    "SELECT * FROM rules WHERE trigger_type = 'habit_due' AND enabled = 1"
+                )
+                columns = [col[0] for col in cursor.description]
+                due_rules = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+                if not due_rules:
+                    continue
+
+                for due_rule in due_rules:
+                    try:
+                        _check_habit_due_rule(due_rule, now, cursor, conn)
+                    except Exception as rule_err:
+                        logger.error(
+                            "habit_due check failed for rule %s: %s",
+                            due_rule.get("id", "?"), rule_err,
+                        )
+
+                conn.commit()
+
+            except Exception as db_err:
+                logger.error("Habit due loop DB error: %s", db_err)
+            finally:
+                if conn:
+                    conn.close()
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Habit due loop unexpected error: %s", e)
+
+
+def _check_habit_due_rule(due_rule: dict, now: datetime, cursor, conn):
+    """Check if a habit_due rule should fire based on its offset config.
+
+    Compares the current time against the source habit's next scheduled time
+    plus/minus the offset. Fires the trigger if within the 60-second window
+    and hasn't already fired this period.
+    """
+    import threading
+    from src.backend.rules_engine import dispatch_trigger
+    from src.backend.cron_parser import parse_cron, matches
+
+    rule_id = due_rule.get("id", "")
+    owner_id = due_rule.get("owner_id", "")
+
+    # Parse habit_trigger_config
+    config_raw = due_rule.get("habit_trigger_config")
+    if not config_raw:
+        return
+    if isinstance(config_raw, str):
+        try:
+            config = json.loads(config_raw)
+        except (json.JSONDecodeError, TypeError):
+            return
+    else:
+        config = config_raw
+
+    if not isinstance(config, dict):
+        return
+
+    offset_minutes = config.get("offset_minutes", 0)
+    source_type = config.get("source_type", "rule")
+    source_rule_id = config.get("source_rule_id", "*")
+    source_chit_id = config.get("source_chit_id", "*")
+
+    # Check if this rule already fired this minute (prevent double-fire)
+    last_run_raw = due_rule.get("last_run_datetime")
+    if last_run_raw and isinstance(last_run_raw, str) and last_run_raw.strip():
+        try:
+            last_run = datetime.fromisoformat(last_run_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+            if (last_run.year == now.year and last_run.month == now.month
+                    and last_run.day == now.day and last_run.hour == now.hour
+                    and last_run.minute == now.minute):
+                return
+        except (ValueError, TypeError):
+            pass
+
+    # Determine if we should fire based on source habit's schedule
+    should_fire = False
+    entity = None
+
+    if source_type == "rule":
+        # Load the source habit rule to get its cron schedule
+        if source_rule_id == "*":
+            # Watch all habit rules — check each one
+            cursor.execute(
+                "SELECT * FROM rules WHERE owner_id = ? AND habit_mode = 1 AND enabled = 1",
+                (owner_id,),
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM rules WHERE id = ? AND owner_id = ?",
+                (source_rule_id, owner_id),
+            )
+        src_columns = [col[0] for col in cursor.description]
+        source_rules = [dict(zip(src_columns, row)) for row in cursor.fetchall()]
+
+        for src_rule in source_rules:
+            src_config_raw = src_rule.get("schedule_config")
+            if not src_config_raw:
+                continue
+            if isinstance(src_config_raw, str):
+                try:
+                    src_config = json.loads(src_config_raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            else:
+                src_config = src_config_raw
+
+            cron_expr = src_config.get("cron") if isinstance(src_config, dict) else None
+            if not cron_expr:
+                continue
+
+            # Calculate the target time: habit's scheduled time + offset
+            # Check if (now - offset_minutes) matches the cron
+            check_time = now - timedelta(minutes=offset_minutes)
+            parsed = parse_cron(cron_expr)
+            if parsed and matches(parsed, check_time):
+                should_fire = True
+                # Build entity
+                history_raw = src_rule.get("habit_history")
+                if isinstance(history_raw, str) and history_raw.strip():
+                    try:
+                        habit_history = json.loads(history_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        habit_history = []
+                else:
+                    habit_history = []
+
+                streak = 0
+                for entry in reversed(habit_history if isinstance(habit_history, list) else []):
+                    if entry.get("status") == "achieved":
+                        streak += 1
+                    else:
+                        break
+
+                entity = {
+                    "id": src_rule.get("id", ""),
+                    "source_rule_id": src_rule.get("id", ""),
+                    "source_rule_name": src_rule.get("name", ""),
+                    "source_type": "rule",
+                    "source_chit_id": None,
+                    "habit_event": "due",
+                    "offset_minutes": offset_minutes,
+                    "streak": streak,
+                    "timestamp": now.isoformat(),
+                }
+                break  # Fire for the first matching source
+
+    elif source_type == "chit":
+        # For chit-based habits, check if the chit's recurrence schedule
+        # plus offset matches now. This is more complex — simplified approach:
+        # check if a habit chit is "due" today and the offset window matches.
+        if source_chit_id == "*":
+            cursor.execute(
+                "SELECT id, title, habit, habit_goal, habit_success, "
+                "       recurrence_rule, start_datetime, owner_id "
+                "FROM chits WHERE owner_id = ? AND habit = 1 "
+                "AND (deleted = 0 OR deleted IS NULL)",
+                (owner_id,),
+            )
+        else:
+            cursor.execute(
+                "SELECT id, title, habit, habit_goal, habit_success, "
+                "       recurrence_rule, start_datetime, owner_id "
+                "FROM chits WHERE id = ? AND owner_id = ?",
+                (source_chit_id, owner_id),
+            )
+        chit_rows = cursor.fetchall()
+        chit_cols = [col[0] for col in cursor.description]
+        chits = [dict(zip(chit_cols, row)) for row in chit_rows]
+
+        for chit in chits:
+            if not chit.get("habit"):
+                continue
+            # For chit habits, "due" is relative to start_datetime each day
+            # Use start_datetime's time component as the "scheduled time"
+            start_raw = chit.get("start_datetime")
+            if not start_raw:
+                # Default to midnight
+                scheduled_hour, scheduled_minute = 0, 0
+            else:
+                try:
+                    start_dt = datetime.fromisoformat(str(start_raw).replace("Z", "+00:00")).replace(tzinfo=None)
+                    scheduled_hour = start_dt.hour
+                    scheduled_minute = start_dt.minute
+                except (ValueError, TypeError):
+                    scheduled_hour, scheduled_minute = 0, 0
+
+            # Build the scheduled time for today
+            scheduled_today = now.replace(hour=scheduled_hour, minute=scheduled_minute, second=0, microsecond=0)
+            # Apply offset
+            target_time = scheduled_today + timedelta(minutes=offset_minutes)
+
+            # Check if we're within the 60-second window of the target
+            diff_seconds = abs((now - target_time).total_seconds())
+            if diff_seconds <= 90:  # 90s grace for scheduler jitter
+                should_fire = True
+                entity = {
+                    "id": chit.get("id", ""),
+                    "source_rule_id": None,
+                    "source_rule_name": None,
+                    "source_type": "chit",
+                    "source_chit_id": chit.get("id", ""),
+                    "source_chit_title": chit.get("title", ""),
+                    "habit_event": "due",
+                    "offset_minutes": offset_minutes,
+                    "habit_goal": chit.get("habit_goal", 1),
+                    "habit_success": chit.get("habit_success", 0),
+                    "streak": 0,
+                    "timestamp": now.isoformat(),
+                }
+                break
+
+    if should_fire and entity:
+        logger.info(
+            "habit_due rule '%s' firing (offset=%d min, source=%s)",
+            due_rule.get("name", ""), offset_minutes,
+            entity.get("source_rule_name") or entity.get("source_chit_title", "?"),
+        )
+
+        # Update last_run_datetime to prevent re-firing this minute
+        current_time = now.isoformat()
+        try:
+            run_count = (due_rule.get("run_count") or 0) + 1
+            cursor.execute(
+                "UPDATE rules SET last_run_datetime = ?, run_count = ? WHERE id = ?",
+                (current_time, run_count, rule_id),
+            )
+        except Exception:
+            pass
+
+        # Dispatch the trigger
+        threading.Thread(
+            target=dispatch_trigger,
+            args=("habit_due", "habit", entity, owner_id),
+            daemon=True,
+        ).start()
+
+
+
 async def start_rules_scheduler():
-    """Register the background rules scheduler task. Called from main.py on startup."""
+    """Register background rules engine tasks. Called from main.py on startup."""
     asyncio.create_task(_rules_scheduled_loop())
+    asyncio.create_task(_habit_due_loop())
     logger.info("Rules scheduler task started (60-second polling loop)")
+    logger.info("Habit due trigger loop started (60-second polling loop)")

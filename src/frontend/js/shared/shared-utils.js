@@ -702,7 +702,7 @@ function cwocExtractSearchTerms(query) {
   var terms = [];
   var i = 0;
   var q = query.toLowerCase();
-  // Known field prefixes for field:value syntax
+  // Known field prefixes for field::value syntax
   var _fieldNames = ['title','note','notes','location','loc','status','priority','severity',
     'color','people','person','assigned','assigned_to','checklist','subject','sender',
     'from','to','cc','bcc','body','child','start','end','due','created','modified'];
@@ -710,6 +710,18 @@ function cwocExtractSearchTerms(query) {
     if (q[i] === ' ' || q[i] === '\t') { i++; continue; }
     if (q[i] === '(' || q[i] === ')') { i++; continue; }
     if (q.substring(i, i + 2) === '&&' || q.substring(i, i + 2) === '||') { i += 2; continue; }
+    if ((q[i] === '&' || q[i] === '|') && q.substring(i, i + 2) !== '&&' && q.substring(i, i + 2) !== '||') {
+      // Lone & or | (not && or ||) — treat as literal text, read until next delimiter
+      var start3 = i;
+      i++;
+      while (i < q.length && ' \t()!#'.indexOf(q[i]) === -1) {
+        if (q.substring(i, i + 2) === '&&' || q.substring(i, i + 2) === '||') break;
+        i++;
+      }
+      var loneWord = q.substring(start3, i);
+      if (loneWord.length > 0) terms.push(loneWord);
+      continue;
+    }
     if (q[i] === '!') {
       i++;
       while (i < q.length && (q[i] === ' ' || q[i] === '\t')) i++;
@@ -731,18 +743,18 @@ function cwocExtractSearchTerms(query) {
       if (i > start) terms.push(q.substring(start, i));
       continue;
     }
-    // Read a word (may be field:value)
+    // Read a word (may be field::value)
     var start2 = i;
     while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
     var word = q.substring(start2, i);
-    // Check for field:value syntax
-    var colonPos = word.indexOf(':');
+    // Check for field::value syntax
+    var colonPos = word.indexOf('::');
     if (colonPos > 0) {
       var fieldPart = word.substring(0, colonPos);
       if (_fieldNames.indexOf(fieldPart) !== -1) {
-        var valuePart = word.substring(colonPos + 1);
+        var valuePart = word.substring(colonPos + 2);
         if (!valuePart && i < q.length && q[i] === '(') {
-          // field:(multi word value) — extract the parenthesized content
+          // field::(multi word value) — extract the parenthesized content
           i++; // skip (
           var valStart = i;
           var d = 1;
@@ -774,8 +786,10 @@ function cwocHighlightTerms(text, terms) {
   if (!text) return '';
   var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   if (!terms || terms.length === 0) return escaped;
+  // HTML-escape each term so it matches against the escaped text
   var parts = terms.map(function(t) {
-    return t.replace(/[.*+?^${}()|[\]\\]/g, '\\' + '$&');
+    var htmlTerm = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return htmlTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\' + '$&');
   });
   var regex = new RegExp('(' + parts.join('|') + ')', 'gi');
   return escaped.replace(regex, '<mark>$1</mark>');
@@ -1186,4 +1200,284 @@ async function cwocChitPickerModal(options) {
     cwocToast('Failed to load chits.', 'error');
     _close();
   }
+}
+
+// ── Shared HTML Escape ───────────────────────────────────────────────────────
+
+/**
+ * Escape HTML special characters for safe insertion into the DOM.
+ * Single source of truth — all pages use this instead of local copies.
+ */
+function _escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── Shared Weather Utilities ─────────────────────────────────────────────────
+
+/** WMO weather code → emoji icon map. Single source of truth. */
+var _cwocWeatherIcons = {
+  0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+  45: '🌫️', 48: '🌫️',
+  51: '🌦️', 53: '🌦️', 55: '🌦️',
+  56: '🌧️', 57: '🌧️',
+  61: '🌧️', 63: '🌧️', 65: '🌧️',
+  66: '🌧️', 67: '🌧️',
+  71: '🌨️', 73: '🌨️', 75: '🌨️', 77: '🌨️',
+  80: '🌧️', 81: '🌧️', 82: '🌧️',
+  85: '🌨️', 86: '🌨️',
+  95: '⛈️', 96: '⛈️', 99: '⛈️'
+};
+
+/** Get weather emoji icon for a WMO weather code. */
+function _cwocGetWeatherIcon(code) {
+  return _cwocWeatherIcons[code] || '❓';
+}
+
+/** Get precipitation type string from a WMO weather code. */
+function _cwocGetPrecipType(code) {
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+  if ([95, 96, 99].includes(code)) return 'thunder';
+  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
+  return '';
+}
+
+/**
+ * Format precipitation amount with type for display.
+ * @param {number} precipMm - precipitation in millimeters
+ * @param {number} weatherCode - WMO weather code
+ * @param {string} [emptyVal=''] - what to return when there's no precipitation
+ * @returns {string} formatted precipitation string
+ */
+function _cwocFormatPrecip(precipMm, weatherCode, emptyVal) {
+  if (emptyVal === undefined) emptyVal = '';
+  if (!precipMm || precipMm <= 0) return emptyVal;
+  var pType = _cwocGetPrecipType(weatherCode);
+  var cm = precipMm / 10;
+  if (cm < 0.5) return pType || emptyVal;
+  return Math.round(cm) + 'cm ' + pType;
+}
+
+// ── Shared Date Display ──────────────────────────────────────────────────────
+
+/**
+ * Convert a UTC ISO date string to a local display date (YYYY-Mon-DD).
+ * Single source of truth — used by editor.js and main-modals.js.
+ */
+function _convertDBDateToDisplayDate(dateString) {
+  if (!dateString) return '';
+  var date = _utcToLocalDate(dateString);
+  if (!date || isNaN(date.getTime())) return '';
+  return formatDate(date);
+}
+
+// ── Shared Contact Filter ────────────────────────────────────────────────────
+
+/**
+ * Check if a contact matches a search query across all fields.
+ * Case-insensitive substring match against name, email, phone, address, org, etc.
+ * Single source of truth — used by editor-people.js and maps.js.
+ */
+function cwocContactMatchesFilter(contact, query) {
+  if (!query) return true;
+  var q = query.toLowerCase();
+  var c = contact;
+  var fields = [
+    c.display_name || '',
+    c.given_name || '',
+    c.surname || '',
+    c.middle_names || '',
+    c.nickname || '',
+    c.organization || '',
+    c.social_context || '',
+    c.notes || ''
+  ];
+  // Multi-value fields
+  var mvFields = ['emails', 'phones', 'addresses', 'call_signs', 'x_handles', 'websites'];
+  for (var i = 0; i < mvFields.length; i++) {
+    var arr = c[mvFields[i]];
+    if (Array.isArray(arr)) {
+      for (var j = 0; j < arr.length; j++) {
+        if (arr[j] && arr[j].value) fields.push(arr[j].value);
+        if (arr[j] && arr[j].label) fields.push(arr[j].label);
+      }
+    }
+  }
+  // Tags
+  if (Array.isArray(c.tags)) {
+    for (var k = 0; k < c.tags.length; k++) {
+      if (c.tags[k] && c.tags[k].name) fields.push(c.tags[k].name);
+      else if (typeof c.tags[k] === 'string') fields.push(c.tags[k]);
+    }
+  }
+  for (var f = 0; f < fields.length; f++) {
+    if (fields[f] && fields[f].toLowerCase().indexOf(q) !== -1) return true;
+  }
+  return false;
+}
+
+// ── Shared Habit Cycle End ───────────────────────────────────────────────────
+
+/**
+ * Calculate the end-of-cycle datetime for a habit based on its recurrence frequency.
+ * @param {string} freq - Recurrence frequency (DAILY, WEEKLY, MONTHLY, YEARLY)
+ * @returns {Date} End of the current cycle period
+ */
+function _cwocGetHabitCycleEnd(freq) {
+  var now = new Date();
+  var end = new Date(now);
+  switch ((freq || 'DAILY').toUpperCase()) {
+    case 'WEEKLY':
+      end.setDate(end.getDate() + (7 - end.getDay()));
+      end.setHours(0, 0, 0, 0);
+      break;
+    case 'MONTHLY':
+      end.setMonth(end.getMonth() + 1, 1);
+      end.setHours(0, 0, 0, 0);
+      break;
+    case 'YEARLY':
+      end.setFullYear(end.getFullYear() + 1, 0, 1);
+      end.setHours(0, 0, 0, 0);
+      break;
+    default: // DAILY
+      end.setDate(end.getDate() + 1);
+      end.setHours(0, 0, 0, 0);
+      break;
+  }
+  return end;
+}
+
+// ── Shared Highlight Match ───────────────────────────────────────────────────
+
+/**
+ * HTML-escape text and highlight matching query substrings with <mark> tags.
+ * @param {string} text - raw text to display
+ * @param {string} query - search query to highlight
+ * @returns {string} HTML string with matches wrapped in <mark>
+ */
+function cwocHighlightMatch(text, query) {
+  if (!text) return '';
+  var escaped = _escHtml(text);
+  if (!query) return escaped;
+  var regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+
+// ── Attachment Preview Modal ─────────────────────────────────────────────────
+
+/**
+ * Show an attachment in a preview modal. Supports images, PDFs, text, and audio/video.
+ * For unsupported types, shows filename with a download button.
+ *
+ * @param {string} url — the attachment download URL
+ * @param {string} filename — display name
+ * @param {string} mimeType — MIME type (e.g., "image/png", "application/pdf")
+ */
+function cwocAttachmentPreview(url, filename, mimeType) {
+  // Remove any existing preview modal
+  var existing = document.getElementById('cwocAttachmentPreviewModal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwocAttachmentPreviewModal';
+  overlay.className = 'cwoc-attachment-preview-overlay';
+
+  var modal = document.createElement('div');
+  modal.className = 'cwoc-attachment-preview-modal';
+
+  // Header with filename and close button
+  var header = document.createElement('div');
+  header.className = 'cwoc-attachment-preview-header';
+  var titleEl = document.createElement('span');
+  titleEl.className = 'cwoc-attachment-preview-title';
+  titleEl.textContent = filename || 'Attachment';
+  header.appendChild(titleEl);
+
+  var btnRow = document.createElement('div');
+  btnRow.className = 'cwoc-attachment-preview-btns';
+  var downloadBtn = document.createElement('a');
+  downloadBtn.href = url;
+  downloadBtn.download = filename || 'attachment';
+  downloadBtn.className = 'cwoc-attachment-preview-dl';
+  downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
+  downloadBtn.addEventListener('click', function(e) { e.stopPropagation(); });
+  btnRow.appendChild(downloadBtn);
+
+  var closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'cwoc-attachment-preview-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.onclick = function() { overlay.remove(); };
+  btnRow.appendChild(closeBtn);
+  header.appendChild(btnRow);
+  modal.appendChild(header);
+
+  // Content area
+  var content = document.createElement('div');
+  content.className = 'cwoc-attachment-preview-content';
+
+  var mime = (mimeType || '').toLowerCase();
+
+  if (mime.startsWith('image/')) {
+    var img = document.createElement('img');
+    img.src = url;
+    img.alt = filename;
+    img.style.cssText = 'max-width:100%;max-height:75vh;object-fit:contain;border-radius:4px;';
+    content.appendChild(img);
+  } else if (mime === 'application/pdf') {
+    var iframe = document.createElement('iframe');
+    iframe.src = url;
+    iframe.style.cssText = 'width:100%;height:75vh;border:1px solid #c4a882;border-radius:4px;';
+    content.appendChild(iframe);
+  } else if (mime.startsWith('text/') || mime === 'application/json') {
+    var pre = document.createElement('pre');
+    pre.style.cssText = 'max-height:75vh;overflow:auto;padding:16px;background:#fff;border:1px solid #c4a882;border-radius:4px;font-size:0.85em;white-space:pre-wrap;word-break:break-word;';
+    pre.textContent = 'Loading...';
+    content.appendChild(pre);
+    fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+      pre.textContent = text;
+    }).catch(function() { pre.textContent = 'Failed to load file content.'; });
+  } else if (mime.startsWith('audio/')) {
+    var audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = url;
+    audio.style.cssText = 'width:100%;margin-top:20px;';
+    content.appendChild(audio);
+  } else if (mime.startsWith('video/')) {
+    var video = document.createElement('video');
+    video.controls = true;
+    video.src = url;
+    video.style.cssText = 'max-width:100%;max-height:75vh;border-radius:4px;';
+    content.appendChild(video);
+  } else {
+    // Unsupported type — show icon and download prompt
+    var noPreview = document.createElement('div');
+    noPreview.style.cssText = 'text-align:center;padding:40px 20px;color:#6b4e31;';
+    noPreview.innerHTML = '<div style="font-size:3em;margin-bottom:16px;">📄</div>' +
+      '<p style="margin:0 0 16px;">Preview not available for this file type.</p>' +
+      '<a href="' + url + '" download="' + (filename || 'attachment') + '" class="zone-button" style="display:inline-block;"><i class="fas fa-download"></i> Download File</a>';
+    content.appendChild(noPreview);
+  }
+
+  modal.appendChild(content);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Close on overlay click (outside modal)
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  // Close on ESC
+  function _escHandler(e) {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      overlay.remove();
+      document.removeEventListener('keydown', _escHandler, true);
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
 }

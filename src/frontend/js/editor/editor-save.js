@@ -784,17 +784,18 @@ function setSaveButtonSaved() {
   if (window._cwocSave) window._cwocSave.markSaved();
 }
 
-function cancelOrExit() {
+async function cancelOrExit() {
   // If there's text in the checklist input box or active editing, commit it
   if (window.checklist && window.checklist.hasPendingContent()) {
     window.checklist.commitPendingContent();
   }
 
-  // If checklist autosave is active, force an immediate save before leaving
-  if (_isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
-    // Cancel any pending debounced autosave and do it immediately
+  // If checklist autosave is active (and full auto-save is NOT handling checklist),
+  // force an immediate save before leaving and await it
+  if (_isChecklistAutosaveActive() && !(window._autoSave && window._autoSave.isEnabled())
+      && window.currentChitId && !window.isNewChit) {
     if (_checklistAutosaveTimer) { clearTimeout(_checklistAutosaveTimer); _checklistAutosaveTimer = null; }
-    _doChecklistAutosave();
+    await _doChecklistAutosave();
   }
 
   // Auto-save exit handling — takes precedence when auto-save is enabled
@@ -1014,7 +1015,10 @@ window.addEventListener('beforeunload', function(e) {
   if (window.checklist && window.checklist.hasPendingContent()) {
     window.checklist.commitPendingContent();
   }
-  if (typeof _isChecklistAutosaveActive === 'function' && _isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
+  // Only use checklist-specific autosave if full auto-save is NOT handling it
+  if (typeof _isChecklistAutosaveActive === 'function' && _isChecklistAutosaveActive()
+      && !(window._autoSave && window._autoSave.isEnabled())
+      && window.currentChitId && !window.isNewChit) {
     if (_checklistAutosaveTimer) { clearTimeout(_checklistAutosaveTimer); _checklistAutosaveTimer = null; }
     _doChecklistAutosave();
   }
@@ -1151,6 +1155,11 @@ function _optQR() {
 function _optEmail() {
   _closeOptionsMenu();
   if (typeof _activateEmailZone === 'function') _activateEmailZone();
+}
+
+function _optPrintChit() {
+  _closeOptionsMenu();
+  if (typeof _printChit === 'function') _printChit();
 }
 
 function _optArchive() {

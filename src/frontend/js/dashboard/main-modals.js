@@ -198,20 +198,9 @@ function _closeClockModal() {
 
 // ── Weather Modal (Shift+W hotkey) ───────────────────────────────────────────
 
-const _weatherIcons = {
-  0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
-  45: '🌫️', 48: '🌫️',
-  51: '🌦️', 53: '🌦️', 55: '🌦️', 56: '🌦️', 57: '🌦️',
-  61: '🌧️', 63: '🌧️', 65: '🌧️', 66: '🌧️', 67: '🌧️',
-  71: '🌨️', 73: '🌨️', 75: '🌨️', 77: '🌨️',
-  80: '🌧️', 81: '🌧️', 82: '🌧️',
-  85: '🌨️', 86: '🌨️',
-  95: '⛈️', 96: '⛈️', 99: '⛈️'
-};
+// _weatherIcons — now in shared-utils.js as _cwocWeatherIcons
 
-function _getWeatherIcon(code) {
-  return _weatherIcons[code] || '❓';
-}
+function _getWeatherIcon(code) { return _cwocGetWeatherIcon(code); }
 
 /** Build the temperature bar gradient style matching the editor's gradient. */
 function _buildTempBarGradient() {
@@ -236,39 +225,14 @@ function _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit) {
     ticks +
     '</div>';
 }
-function _escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// _escHtml — now in shared-utils.js (single source of truth)
 
-function _getPrecipLabel(code) {
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
-  if ([95, 96, 99].includes(code)) return 'thunder';
-  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
-  return '';
-}
-
-/**
- * Format precipitation for display. Returns '' if no precip.
- * precipMm: precipitation in mm, weatherCode: WMO code for type.
- * Rounds to nearest cm. If > 0 but < 0.5cm, just says the type word.
- */
-function _formatPrecip(precipMm, weatherCode) {
-  if (!precipMm || precipMm <= 0) return '';
-  var pType = _getPrecipLabel(weatherCode);
-  if (!pType) pType = 'precip';
-  var cm = Math.round(precipMm / 10);
-  if (cm < 1) return pType;
-  return cm + 'cm ' + pType;
-}
+// _getPrecipLabel — now in shared-utils.js as _cwocGetPrecipType
+// _formatPrecip — now in shared-utils.js as _cwocFormatPrecip
 
 // ── Weather Utility Functions ─────────────────────────────────────────────────
 
-/** Convert Celsius to display temperature, respecting unit_system setting. */
-function _celsiusToFahrenheit(c) {
-  return _convertTemp(c);
-}
+// _celsiusToFahrenheit — removed, use _convertTemp directly
 
 /** Returns true if the given ISO timestamp is older than 24 hours from now. */
 function _isWeatherStale(updatedTime) {
@@ -361,7 +325,7 @@ async function _fetchAndApplyChitWeather(address, spans) {
   var wind = _convertWind(windKmh);
   var minT = _convertTemp(minC), maxT = _convertTemp(maxC);
   var icon = _getWeatherIcon(weatherCode);
-  var precipText = _formatPrecip(precipMm, weatherCode);
+  var precipText = _cwocFormatPrecip(precipMm, weatherCode);
   var windText = wind.value >= (_isMetricUnits() ? 32 : 20) ? ' · 💨' + wind.value + wind.unit : '';
   var tooltip = maxT + '°/' + minT + '°';
   if (precipText) tooltip += ' · ' + precipText;
@@ -549,6 +513,29 @@ function _prefetchChitWeather(chitList) {
   });
 }
 
+/** Pre-fetch weather for a location and store in localStorage (background). */
+async function _fetchWeatherForCache(address, cacheKey) {
+  // Check if already cached and fresh (1 hour TTL)
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey));
+    if (cached && cached.html && (Date.now() - cached.ts < 3600000)) return;
+  } catch (e) {}
+
+  try {
+    var wx = await getWeatherForLocation(address);
+    if (!wx) return;
+    var weatherHtml =
+      '<div class="weather-modal-icon">' + wx.icon + ' <span class="weather-modal-desc">' + wx.fullDesc + '</span></div>' +
+      '<div class="weather-modal-temps" title="' + wx.lowAlt + ' – ' + wx.highAlt + '"><span class="temp-low">' + wx.minT + wx.tUnit + '</span> – <span class="temp-high">' + wx.maxT + wx.tUnit + '</span></div>' +
+      (wx.precipText ? '<div class="weather-modal-precip"' + (wx.precipAlt ? ' title="' + wx.precipAlt + '"' : '') + '>' + wx.precipText + '</div>' : '') +
+      (wx.windText ? '<div class="weather-modal-precip" style="margin-top:2px;"' + (wx.windAlt ? ' title="' + wx.windAlt + '"' : '') + '>' + wx.windText + '</div>' : '') +
+      wx.tempBarHtml;
+    localStorage.setItem(cacheKey, JSON.stringify({ html: weatherHtml, ts: Date.now() }));
+  } catch (e) {
+    // Silently fail — this is a background pre-fetch
+  }
+}
+
 /* ── Misc view helpers ───────────────────────────────────────────────────── */
 
 function changeView() {
@@ -587,12 +574,7 @@ function setColor(color, name) {
 
 // _utcToLocalDate, _parseISOTime moved to shared.js
 
-function _convertDBDateToDisplayDate(dateString) {
-  if (!dateString) return "";
-  const date = _utcToLocalDate(dateString);
-  if (isNaN(date.getTime())) return "";
-  return formatDate(date);
-}
+// _convertDBDateToDisplayDate — now in shared-utils.js (single source of truth)
 
 /* ── Legacy editor form population is in main.js coordinator ─────────────── */
 

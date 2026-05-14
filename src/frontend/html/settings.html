@@ -27,6 +27,51 @@
                     padding: 1em;
                 }
 
+                /* ── Settings Tab Bar ── */
+                .settings-tab-bar {
+                    display: flex;
+                    gap: 0;
+                    border-bottom: 2px solid #8b5a2b;
+                    margin-bottom: 20px;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .settings-tab-bar button {
+                    background: transparent;
+                    border: none;
+                    border-bottom: 3px solid transparent;
+                    padding: 10px 18px;
+                    font-family: 'Lora', Georgia, serif;
+                    font-size: 1em;
+                    font-weight: bold;
+                    color: #6b4e31;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    transition: color 0.2s, border-color 0.2s, background 0.2s;
+                    margin-bottom: -2px;
+                }
+                .settings-tab-bar button:hover {
+                    color: #4a2c2a;
+                    background: rgba(139, 90, 43, 0.06);
+                }
+                .settings-tab-bar button.active {
+                    color: #2b1e0f;
+                    border-bottom-color: #8b5a2b;
+                    background: rgba(139, 90, 43, 0.08);
+                }
+                .settings-tab-content {
+                    display: none;
+                }
+                .settings-tab-content.active {
+                    display: block;
+                }
+                @media (max-width: 480px) {
+                    .settings-tab-bar button {
+                        padding: 8px 12px;
+                        font-size: 0.9em;
+                    }
+                }
+
                 .filter-display {
                     position: absolute; pointer-events: none; left: 8px; right: 8px; top: 5px; bottom: 5px;
                     overflow: hidden; white-space: nowrap; display: none;
@@ -852,6 +897,15 @@
                     padding: 10px;
                     min-height: 80px;
                 }
+                .omni-layout-columns-row {
+                    display: flex;
+                    gap: 10px;
+                    align-items: flex-start;
+                }
+                .omni-layout-column-wrapper {
+                    flex: 1;
+                    min-width: 0;
+                }
                 .omni-layout-col-label {
                     font-size: 0.8em;
                     font-weight: bold;
@@ -865,12 +919,16 @@
                     display: flex;
                     flex-direction: column;
                     gap: 6px;
-                    min-height: 40px;
+                    min-height: 50px;
                     padding: 6px;
                     background: rgba(139, 90, 43, 0.03);
                     border: 1px dashed rgba(139, 90, 43, 0.3);
                     border-radius: 5px;
-                    transition: background 0.15s;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .omni-layout-col-list.omni-drop-highlight {
+                    background: rgba(139, 90, 43, 0.1);
+                    border-color: #8b5a2b;
                 }
                 .omni-layout-empty-hint {
                     font-style: italic;
@@ -899,6 +957,11 @@
                     border: 1px dashed #8b5a2b;
                     border-radius: 5px;
                     margin-top: 4px;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .omni-layout-unused-zone.omni-drop-highlight {
+                    background: rgba(139, 90, 43, 0.12);
+                    border-color: #5c4033;
                 }
                 .omni-layout-card {
                     display: flex;
@@ -941,9 +1004,7 @@
                     flex-shrink: 0;
                 }
                 .omni-layout-card .omni-card-controls button {
-                    background: #8b5a2b;
-                    color: #fff8e1;
-                    border: 1px solid #5c4033;
+                    border: none;
                     border-radius: 4px;
                     padding: 2px 5px;
                     cursor: pointer;
@@ -953,10 +1014,7 @@
                 }
                 .omni-layout-card .omni-card-controls button:hover {
                     background: #5c4033;
-                }
-                .omni-layout-card .omni-card-controls button.active-width {
-                    background: #5c4033;
-                    font-weight: bold;
+                    color: #fff8e1;
                 }
                 .omni-layout-card .omni-card-controls .omni-vis-btn {
                     font-size: 1em;
@@ -968,6 +1026,25 @@
                 .omni-layout-card .omni-card-controls .omni-vis-btn.hidden-state {
                     opacity: 0.4;
                 }
+                .omni-layout-card .omni-card-controls .omni-hide-toggle {
+                    font-size: 0.85em;
+                    padding: 2px 6px;
+                    background: transparent;
+                    border: 1px solid #8b5a2b;
+                    color: #8b5a2b;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    margin-right: 4px;
+                    transition: background 0.15s, color 0.15s;
+                }
+                .omni-layout-card .omni-card-controls .omni-hide-toggle.hide-active {
+                    background: #8b5a2b;
+                    color: #fff8e1;
+                }
+                .omni-layout-card .omni-card-controls .omni-hide-toggle:hover {
+                    background: #5c4033;
+                    color: #fff8e1;
+                }
                 .omni-layout-card .omni-drag-handle {
                     color: #8b5a2b;
                     font-size: 1em;
@@ -975,6 +1052,9 @@
                     flex-shrink: 0;
                 }
                 @media (max-width: 480px) {
+                    .omni-layout-columns-row {
+                        flex-direction: column;
+                    }
                     .omni-layout-card {
                         flex-wrap: wrap;
                     }
@@ -982,6 +1062,163 @@
                         width: 100%;
                         justify-content: flex-end;
                     }
+                }
+
+                /* ── Custom Filters & Sorting ── */
+                .custom-filters-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+                .custom-filter-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .custom-filter-btn {
+                    flex: 1;
+                    text-align: left;
+                    padding: 10px 14px;
+                    font-size: 0.95em;
+                }
+                .custom-filter-btn.custom-filter-active {
+                    border-color: #4a7c3f;
+                    background: #f0f8ec;
+                }
+                .custom-filter-icon-img {
+                    display: inline-block;
+                    width: 20px;
+                    height: 20px;
+                    vertical-align: middle;
+                    object-fit: contain;
+                }
+                .custom-filter-icon-fa {
+                    display: inline-block;
+                    width: 20px;
+                    text-align: center;
+                    font-size: 1.1em;
+                    vertical-align: middle;
+                    color: #5c3317;
+                }
+                .custom-filter-status {
+                    font-size: 0.8em;
+                    white-space: nowrap;
+                    min-width: 80px;
+                }
+
+                /* Custom Filter Modal */
+                .custom-filter-modal {
+                    max-width: 480px;
+                    width: 90vw;
+                    max-height: 85vh;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .custom-filter-modal-body {
+                    overflow-y: auto;
+                    padding: 16px 20px;
+                    flex: 1;
+                }
+                .custom-filter-modal-body .filter-group {
+                    margin-bottom: 12px;
+                    border-bottom: 1px dashed #d4b896;
+                    padding-bottom: 10px;
+                }
+                .custom-filter-modal-body .filter-group:last-child {
+                    border-bottom: none;
+                }
+                .custom-filter-modal-body .filter-label,
+                .custom-filter-modal-body .cf-filter-label {
+                    font-weight: 600;
+                    font-size: 0.9em;
+                    color: #5c3317;
+                    cursor: pointer;
+                    display: block;
+                    margin-bottom: 6px;
+                    user-select: none;
+                }
+                .custom-filter-modal-body .section-toggle {
+                    display: inline-block;
+                    width: 1em;
+                    font-size: 0.8em;
+                }
+                .custom-filter-modal-body .multi-select {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    padding: 6px 0;
+                }
+                .custom-filter-modal-body .multi-select label {
+                    font-size: 0.85em;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .cwoc-modal-overlay {
+                    position: fixed;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 9999;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .cwoc-modal {
+                    background: #fffaf0;
+                    border: 2px solid #6b4e31;
+                    border-radius: 8px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    font-family: 'Lora', Georgia, serif;
+                }
+                .cwoc-modal-header {
+                    padding: 14px 20px;
+                    border-bottom: 1px solid #d4b896;
+                }
+                .cwoc-modal-header h3 {
+                    margin: 0;
+                    font-size: 1.1em;
+                    color: #2b1e0f;
+                }
+                .cwoc-modal-footer {
+                    padding: 12px 20px;
+                    border-top: 1px solid #d4b896;
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .cf-done-btn {
+                    background: #4a7c3f !important;
+                    color: #fff !important;
+                    border-color: #3a6230 !important;
+                }
+
+                @media (max-width: 480px) {
+                    .custom-filter-modal {
+                        max-width: 100vw;
+                        width: 95vw;
+                        max-height: 90vh;
+                    }
+                    .custom-filter-row {
+                        gap: 8px;
+                    }
+                    .custom-filter-status {
+                        font-size: 0.7em;
+                        min-width: 60px;
+                    }
+                }
+
+                /* ── Calendar Export Help Tabs ── */
+                .cal-export-tab {
+                    font-size: 0.9em;
+                    padding: 6px 14px;
+                    opacity: 0.6;
+                }
+                .cal-export-tab.active {
+                    opacity: 1;
+                    background: #6b4e31;
+                    color: #fdf5e6;
+                    border-color: #4a3520;
                 }
             </style>
         </head>
@@ -995,6 +1232,17 @@
                     <button onclick="cancelSettings()" class="standard-button cancel-settings"><i class="fas fa-times"></i> Exit</button>
                 </div>
 
+                <!-- Settings Tab Bar -->
+                <div class="settings-tab-bar" id="settings-tab-bar">
+                    <button class="active" data-tab="general" onclick="_switchSettingsTab('general')">⚙️ General</button>
+                    <button data-tab="views" onclick="_switchSettingsTab('views')">👁️ Views</button>
+                    <button data-tab="collections" onclick="_switchSettingsTab('collections')">📦 Collections</button>
+                    <button data-tab="email" onclick="_switchSettingsTab('email')">✉️ Email</button>
+                    <button data-tab="admin" onclick="_switchSettingsTab('admin')" id="admin-tab-btn" style="display:none;">🔒 Administration</button>
+                </div>
+
+                <!-- ═══ General Tab ═══ -->
+                <div class="settings-tab-content active" id="tab-general">
                 <div class="settings-grid">
                     <div class="setting-group">
                         <h3>General Settings</h3>
@@ -1069,7 +1317,132 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>📅 Time Periods</h3>
+                        <h3>🎯 Display Options</h3>
+
+                        <label class="setting-subheader">Visual Indicators</label>
+                        <div class="indicator-list">
+                            <label class="cwoc-checkbox-label" style="margin-bottom:8px;">
+                                <input type="checkbox" id="combine-alerts-toggle" onchange="_toggleCombineAlerts()" /> Combine Alerts
+                            </label>
+                            <div id="individual-alert-rows">
+                                <div class="indicator-item"><span>🔔 Alarm</span><select name="alarm_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>📢 Notification</span><select name="notification_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>⏱️ Timer</span><select name="timer_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>⏲️ Stopwatch</span><select name="stopwatch_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            </div>
+                            <div id="combined-alert-row" style="display:none;">
+                                <div class="indicator-item"><span>🛎️ Combined Alerts</span><select name="combined_alert_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            </div>
+                            <div class="indicator-item"><span>🌤️ Weather</span><select name="weather_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                        </div>
+
+                        <label class="setting-subheader">Chit Options</label>
+                        <div class="checkbox-list">
+                            <label><input type="checkbox" id="checklist-autosave-toggle" name="checklist_autosave" checked /> ⚡ Checklist Auto-Save</label>
+                            <label><input type="checkbox" id="autosave-desktop-toggle" name="autosave_desktop" /> 💾 Auto-save on Desktop</label>
+                            <label><input type="checkbox" id="autosave-mobile-toggle" name="autosave_mobile" /> 💾 Auto-save on Mobile</label>
+                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
+                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
+                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
+                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
+                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
+                            <label><input type="checkbox" id="show-map-thumbnails" name="show_map_thumbnails" checked /> 📍 Show Map Thumbnails</label>
+                            <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
+                        </div>
+
+                        <label class="setting-subheader">View Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
+                        <p class="setting-hint">Drag to reorder the tab bar on the dashboard.</p>
+
+                        <label class="setting-subheader">Sort Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
+                        <p class="setting-hint">Clears saved sort preferences and manual item ordering for all views.</p>
+                    </div>
+                    <div class="setting-group">
+                        <h3>Custom Filters &amp; Sorting</h3>
+                        <p style="font-size:0.85em;color:#5c3317;margin:0 0 12px 0;">Set default filters and sort for each view. These apply automatically when you switch to that view.</p>
+                        <div id="custom-filters-buttons" class="custom-filters-list"></div>
+                    </div>
+                    <div class="setting-group" id="pwa-cert-section">
+                        <h3>📱 Install as App</h3>
+                        <p class="setting-hint">CWOC can be installed as a standalone app on your phone, tablet, or desktop.</p>
+                        <button id="pwa-install-btn" class="standard-button" style="width:100%;display:none;" onclick="handleInstallClick()">📲 Install CWOC App</button>
+                        <p id="pwa-install-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Your browser supports direct install — click the button above.</p>
+                        <button id="pwa-open-in-chrome" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="_openInChromeForInstall()">🌐 Open in Chrome to Install</button>
+                        <p id="pwa-chrome-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Firefox can't install standalone apps. This opens CWOC in Chrome where you can tap ⋮ → "Add to Home Screen" for a real app experience.</p>
+                        <p id="pwa-install-manual" class="setting-hint" style="margin-top:4px;font-size:0.8em;">
+                            <strong>To install:</strong> Use your browser's menu (⋮) → "Add to Home Screen" or "Install app." On Firefox Android, use the "Open in Chrome" button above for standalone app mode.
+                        </p>
+                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
+                        <p class="setting-hint">If your browser shows a certificate warning, download and install the server certificate on your device first.</p>
+                        <button id="download-cert-btn" class="standard-button" style="width:100%;" onclick="_downloadSslCert()">📜 Download Server Certificate</button>
+                        <p class="setting-hint" style="margin-top:8px;font-size:0.8em;line-height:1.4;">
+                            <strong>Android:</strong> Open the downloaded file → Settings → Security → Install a certificate → CA certificate.<br>
+                            <strong>iOS:</strong> Open the file → Settings → Profile Downloaded → Install → then Settings → General → About → Certificate Trust Settings → enable trust.<br>
+                            After installing the cert, revisit CWOC in your browser and use the menu to "Add to Home Screen."
+                        </p>
+                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
+                        <label class="setting-subheader">🔔 Notifications</label>
+                        <p class="setting-hint">Send a test notification to your phone via Ntfy. Requires Ntfy to be enabled in Network Access and the Ntfy app installed on your phone.</p>
+                        <button class="standard-button" style="width:100%;" onclick="_testNtfyFromInstallSection()">🔔 Test Phone Notification</button>
+                        <p id="pwa-notif-status" class="setting-hint" style="margin-top:6px;font-size:0.8em;"></p>
+                    </div>
+                </div>
+                </div><!-- /tab-general -->
+
+                <!-- ═══ Views Tab ═══ -->
+                <div class="settings-tab-content" id="tab-views">
+                <div class="settings-grid">
+                    <div class="setting-group" id="omni-view-settings">
+                        <h3>🔮 Omni View</h3>
+
+                        <div class="setting-inline" style="margin-bottom:12px;">
+                            <label for="omni-hst-clock-mode">🕐 HST Bar Clock</label>
+                            <select id="omni-hst-clock-mode" onchange="setSaveButtonUnsaved();">
+                                <option value="both">Both (System + HST)</option>
+                                <option value="hst">HST Only</option>
+                                <option value="system">System Time Only</option>
+                            </select>
+                        </div>
+
+                        <label class="setting-subheader">📐 Layout</label>
+                        <p class="setting-hint">Configure section order, width, and visibility.</p>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_openOmniLayoutModal()">🔮 Arrange Omni Layout</button>
+
+                        <label class="setting-subheader">📧 Bundle Omni View Toggles</label>
+                        <p class="setting-hint">Select which email bundles appear in the Omni View email section.</p>
+                        <div id="omni-bundle-toggles" class="checkbox-list"></div>
+
+                        <div class="setting-inline" style="margin-top:12px;">
+                            <label for="omni-email-count">📧 Emails to show</label>
+                            <select id="omni-email-count" onchange="setSaveButtonUnsaved();">
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Number of unread emails displayed per page in the Omni View.</p>
+
+                        <label class="setting-subheader">🎨 Colors</label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <input type="checkbox" id="omni-normalize-colors" onchange="setSaveButtonUnsaved();" />
+                            Normalize colors
+                        </label>
+                        <p class="setting-hint">Override chit colors with consistent type-based tones (events, tasks, notes, checklists, birthdays).</p>
+
+                        <label class="setting-subheader">🔒 Locked Filter Defaults</label>
+                        <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>
+                        <div id="omni-locked-filters-display" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;font-style:italic;">No locked filters set.</div>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_clearOmniLockedFilters()">🗑️ Clear Defaults</button>
+                        <button type="button" class="standard-button" style="width:100%;margin-top:8px;" onclick="_resetOmniViewDefaults()">↩️ Reset Omni View to Defaults</button>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📅 Calendar</h3>
 
                         <label class="setting-subheader">Calendar Settings</label>
 
@@ -1162,108 +1535,6 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>Default Filters</h3>
-                        <div class="filter-inputs">
-                            <div class="filter-item"><span>📅 Calendar</span><input type="text" id="filter-calendar" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>✓ Checklists</span><input type="text" id="filter-checklists" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>⏰ Alarms</span><input type="text" id="filter-alarms" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📊 Projects</span><input type="text" id="filter-projects" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📋 Tasks</span><input type="text" id="filter-tasks" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>⚕️ Indicators</span><input type="text" id="filter-indicators" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📝 Notes</span><input type="text" id="filter-notes" placeholder="Filter text" class="filter-input" /></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>🎯 Display Options</h3>
-
-                        <label class="setting-subheader">Visual Indicators</label>
-                        <div class="indicator-list">
-                            <label class="cwoc-checkbox-label" style="margin-bottom:8px;">
-                                <input type="checkbox" id="combine-alerts-toggle" onchange="_toggleCombineAlerts()" /> Combine Alerts
-                            </label>
-                            <div id="individual-alert-rows">
-                                <div class="indicator-item"><span>🔔 Alarm</span><select name="alarm_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                                <div class="indicator-item"><span>📢 Notification</span><select name="notification_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                                <div class="indicator-item"><span>⏱️ Timer</span><select name="timer_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                                <div class="indicator-item"><span>⏲️ Stopwatch</span><select name="stopwatch_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            </div>
-                            <div id="combined-alert-row" style="display:none;">
-                                <div class="indicator-item"><span>🛎️ Combined Alerts</span><select name="combined_alert_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            </div>
-                            <div class="indicator-item"><span>🌤️ Weather</span><select name="weather_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                        </div>
-
-                        <label class="setting-subheader">Chit Options</label>
-                        <div class="checkbox-list">
-                            <label><input type="checkbox" id="checklist-autosave-toggle" name="checklist_autosave" checked /> ⚡ Checklist Auto-Save</label>
-                            <label><input type="checkbox" id="autosave-desktop-toggle" name="autosave_desktop" /> 💾 Auto-save on Desktop</label>
-                            <label><input type="checkbox" id="autosave-mobile-toggle" name="autosave_mobile" /> 💾 Auto-save on Mobile</label>
-                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
-                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
-                            <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
-                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
-                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
-                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
-                            <label><input type="checkbox" id="show-map-thumbnails" name="show_map_thumbnails" checked /> 📍 Show Map Thumbnails</label>
-                            <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
-                        </div>
-
-                        <label class="setting-subheader">View Order</label>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
-                        <p class="setting-hint">Drag to reorder the tab bar on the dashboard.</p>
-
-                        <label class="setting-subheader">Sort Order</label>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
-                        <p class="setting-hint">Clears saved sort preferences and manual item ordering for all views.</p>
-                    </div>
-                    <div class="setting-group" id="omni-view-settings">
-                        <h3>🔮 Omni View</h3>
-
-                        <div class="setting-inline" style="margin-bottom:12px;">
-                            <label for="omni-hst-clock-mode">🕐 HST Bar Clock</label>
-                            <select id="omni-hst-clock-mode" onchange="setSaveButtonUnsaved();">
-                                <option value="both">Both (System + HST)</option>
-                                <option value="hst">HST Only</option>
-                                <option value="system">System Time Only</option>
-                            </select>
-                        </div>
-
-                        <label class="setting-subheader">📐 Layout</label>
-                        <p class="setting-hint">Configure section order, width, and visibility.</p>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_openOmniLayoutModal()">🔮 Arrange Omni Layout</button>
-
-                        <label class="setting-subheader">📧 Bundle Omni View Toggles</label>
-                        <p class="setting-hint">Select which email bundles appear in the Omni View email section.</p>
-                        <div id="omni-bundle-toggles" class="checkbox-list"></div>
-
-                        <div class="setting-inline" style="margin-top:12px;">
-                            <label for="omni-email-count">📧 Emails to show</label>
-                            <select id="omni-email-count" onchange="setSaveButtonUnsaved();">
-                                <option value="3">3</option>
-                                <option value="5">5</option>
-                                <option value="10">10</option>
-                                <option value="15">15</option>
-                                <option value="20">20</option>
-                            </select>
-                        </div>
-                        <p class="setting-hint">Number of unread emails displayed per page in the Omni View.</p>
-
-                        <label class="setting-subheader">🎨 Colors</label>
-                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                            <input type="checkbox" id="omni-normalize-colors" onchange="setSaveButtonUnsaved();" />
-                            Normalize colors
-                        </label>
-                        <p class="setting-hint">Override chit colors with consistent type-based tones (events, tasks, notes, checklists, birthdays).</p>
-
-                        <label class="setting-subheader">🔒 Locked Filter Defaults</label>
-                        <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>
-                        <div id="omni-locked-filters-display" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;font-style:italic;">No locked filters set.</div>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_clearOmniLockedFilters()">🗑️ Clear Defaults</button>
-                        <button type="button" class="standard-button" style="width:100%;margin-top:8px;" onclick="_resetOmniViewDefaults()">↩️ Reset Omni View to Defaults</button>
-                    </div>
-                    <div class="setting-group">
                         <h3>🔁 Habits</h3>
 
                         <div class="setting-inline">
@@ -1293,9 +1564,8 @@
                         <p class="setting-hint">Controls the progress counters displayed on project master headers in the dashboard.</p>
                     </div>
                     <div class="setting-group">
-                        <h3>🌍 Geography</h3>
+                        <h3>🗺️ Maps</h3>
 
-                        <label class="setting-subheader">🗺️ Map Settings</label>
                         <div class="setting-inline">
                             <label class="cwoc-checkbox-label"><input type="checkbox" id="map-auto-zoom" checked onchange="_toggleMapAutoZoom(); setSaveButtonUnsaved();" /> Auto-zoom to markers on load</label>
                         </div>
@@ -1313,22 +1583,21 @@
                                 <input type="number" id="map-default-zoom" min="1" max="18" placeholder="4" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
                             </div>
                         </div>
-
-                        <label class="setting-subheader">📍 Saved Locations</label>
-                        <div id="locations-list"></div>
-                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
                     </div>
+                </div>
+                </div><!-- /tab-views -->
+
+                <!-- ═══ Collections Tab ═══ -->
+                <div class="settings-tab-content" id="tab-collections">
+                <div class="settings-grid">
                     <div class="setting-group">
-                        <h3>🔔 Default Notifications</h3>
-                        <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
-
-                        <label class="setting-subheader">📅 Start Time Notifications</label>
-                        <div id="default-notif-start-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
-
-                        <label class="setting-subheader">⏰ Due Time Notifications</label>
-                        <div id="default-notif-due-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
+                        <h3>🏷️ Tag Editor</h3>
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
+                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
+                        </div>
+                        <div id="settings-tag-tree" class="tag-container" style="max-height:70vh;"></div>
+                        <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
                     <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>
@@ -1350,40 +1619,30 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>🏷️ Tag Editor</h3>
-                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
-                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
-                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
-                        </div>
-                        <div id="settings-tag-tree" class="tag-container" style="max-height:70vh;"></div>
-                        <div id="tag-editor-hidden" style="display:none;"></div>
-                    </div>
-                    <div class="setting-group" id="pwa-cert-section">
-                        <h3>📱 Install as App</h3>
-                        <p class="setting-hint">CWOC can be installed as a standalone app on your phone, tablet, or desktop.</p>
-                        <button id="pwa-install-btn" class="standard-button" style="width:100%;display:none;" onclick="handleInstallClick()">📲 Install CWOC App</button>
-                        <p id="pwa-install-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Your browser supports direct install — click the button above.</p>
-                        <button id="pwa-open-in-chrome" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="_openInChromeForInstall()">🌐 Open in Chrome to Install</button>
-                        <p id="pwa-chrome-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Firefox can't install standalone apps. This opens CWOC in Chrome where you can tap ⋮ → "Add to Home Screen" for a real app experience.</p>
-                        <p id="pwa-install-manual" class="setting-hint" style="margin-top:4px;font-size:0.8em;">
-                            <strong>To install:</strong> Use your browser's menu (⋮) → "Add to Home Screen" or "Install app." On Firefox Android, use the "Open in Chrome" button above for standalone app mode.
-                        </p>
-                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
-                        <p class="setting-hint">If your browser shows a certificate warning, download and install the server certificate on your device first.</p>
-                        <button id="download-cert-btn" class="standard-button" style="width:100%;" onclick="_downloadSslCert()">📜 Download Server Certificate</button>
-                        <p class="setting-hint" style="margin-top:8px;font-size:0.8em;line-height:1.4;">
-                            <strong>Android:</strong> Open the downloaded file → Settings → Security → Install a certificate → CA certificate.<br>
-                            <strong>iOS:</strong> Open the file → Settings → Profile Downloaded → Install → then Settings → General → About → Certificate Trust Settings → enable trust.<br>
-                            After installing the cert, revisit CWOC in your browser and use the menu to "Add to Home Screen."
-                        </p>
-                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
-                        <label class="setting-subheader">🔔 Notifications</label>
-                        <p class="setting-hint">Send a test notification to your phone via Ntfy. Requires Ntfy to be enabled in Network Access and the Ntfy app installed on your phone.</p>
-                        <button class="standard-button" style="width:100%;" onclick="_testNtfyFromInstallSection()">🔔 Test Phone Notification</button>
-                        <p id="pwa-notif-status" class="setting-hint" style="margin-top:6px;font-size:0.8em;"></p>
+                        <h3>📍 Saved Locations</h3>
+                        <div id="locations-list"></div>
+                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
                     </div>
                     <div class="setting-group">
-                        <h3><img src="/static/email.png" style="height:1.2em;vertical-align:middle;margin-right:4px;" alt="Email" /> Email</h3>
+                        <h3>🔔 Default Notifications</h3>
+                        <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
+
+                        <label class="setting-subheader">📅 Start Time Notifications</label>
+                        <div id="default-notif-start-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
+
+                        <label class="setting-subheader">⏰ Due Time Notifications</label>
+                        <div id="default-notif-due-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
+                    </div>
+                </div>
+                </div><!-- /tab-collections -->
+
+                <!-- ═══ Email Tab ═══ -->
+                <div class="settings-tab-content" id="tab-email">
+                <div class="settings-grid">
+                    <div class="setting-group">
+                        <h3>📧 Accounts &amp; Syncing</h3>
 
                         <label class="setting-subheader">📧 Accounts</label>
                         <div id="emailAccountsSummary" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;"></div>
@@ -1412,23 +1671,35 @@
                             <button type="button" id="emailBackfillBtn" class="standard-button" onclick="emailBackfill()">📥 Backfill</button>
                             <span id="emailBackfillResult" style="font-size:0.85em;"></span>
                         </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📄 Display &amp; Bundles</h3>
 
-                        <label class="setting-subheader">📄 Display</label>
+                        <div class="setting-inline">
+                            <label for="emailGroupBy">Group Emails By</label>
+                            <select id="emailGroupBy">
+                                <option value="date">Date (Today, Yesterday, Last Week, Older)</option>
+                                <option value="none">None</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Insert date headers between email groups in the inbox</p>
                         <div class="setting-inline">
                             <label for="emailPaginate">Paginate Emails</label>
                             <input type="checkbox" id="emailPaginate" />
                             <span class="setting-hint" style="margin:0;font-size:0.8em;">Load 50 at a time with "Load More" button</span>
                         </div>
-                        <div class="setting-inline">
-                            <label for="bundlesMultiPlacement">Allow Multi-Placement</label>
-                            <input type="checkbox" id="bundlesMultiPlacement" />
-                        </div>
-                        <p class="setting-hint">When enabled, emails can appear in multiple bundles. When disabled, each email goes to the first matching bundle (left to right).</p>
+
+                        <label class="setting-subheader">📦 Bundles</label>
                         <div class="setting-inline">
                             <label for="bundlesEnabled">Enable Email Bundles</label>
                             <input type="checkbox" id="bundlesEnabled" />
                         </div>
                         <p class="setting-hint">Show bundle tabs in the Email view for categorizing emails</p>
+                        <div class="setting-inline">
+                            <label for="bundlesMultiPlacement">Allow Multi-Placement</label>
+                            <input type="checkbox" id="bundlesMultiPlacement" />
+                        </div>
+                        <p class="setting-hint">When enabled, emails can appear in multiple bundles. When disabled, each email goes to the first matching bundle (left to right).</p>
                         <div class="setting-inline">
                             <label for="bundlesShowCount">Bundle Count Display</label>
                             <select id="bundlesShowCount">
@@ -1439,19 +1710,54 @@
                             </select>
                         </div>
                         <p class="setting-hint">What count to show on bundle tabs</p>
+                    </div>
+                    <div class="setting-group">
+                        <h3>🛡️ Privacy &amp; Sending</h3>
+
+                        <div class="setting-inline">
+                            <label for="emailBlockTrackingPixels">Block Tracking Pixels</label>
+                            <input type="checkbox" id="emailBlockTrackingPixels" checked />
+                        </div>
+                        <p class="setting-hint">Strip 1x1/1x2 pixel tracking images from received emails</p>
+                        <div class="setting-inline">
+                            <label for="emailExternalContent">External Content</label>
+                            <select id="emailExternalContent">
+                                <option value="allow">Allow all</option>
+                                <option value="block">Block all</option>
+                                <option value="known_senders">Allow from contacts</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Block remote images/resources in emails (prevents sender tracking)</p>
+                        <div class="setting-inline">
+                            <label for="emailReadReceipts">Read Receipts</label>
+                            <select id="emailReadReceipts">
+                                <option value="never">Never send</option>
+                                <option value="always">Always send</option>
+                                <option value="ask">Ask each time</option>
+                                <option value="contacts_only">Contacts only</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Whether to honor incoming read receipt requests</p>
+                        <div class="setting-inline">
+                            <label for="emailUndoSendDelay">Undo Send Delay</label>
+                            <select id="emailUndoSendDelay">
+                                <option value="5">5 seconds</option>
+                                <option value="10">10 seconds</option>
+                                <option value="15">15 seconds</option>
+                                <option value="30">30 seconds</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Time window to cancel a sent email before it actually sends</p>
 
                         <label class="setting-subheader">✍️ Signature</label>
-                        <div class="setting-subsection-body">
                         <p class="setting-hint">Appended to outgoing emails. Supports Markdown (Ctrl+B bold, Ctrl+I italic, Ctrl+K link).</p>
                         <div id="emailSignatureInlinePreview" style="padding:8px;background:rgba(139,90,43,0.05);border:1px solid rgba(139,90,43,0.15);border-radius:6px;min-height:1.5em;font-size:0.9em;color:#5a4a3a;cursor:pointer;margin-bottom:6px;" onclick="openSignatureModal()" title="Click to edit signature"><em style="opacity:0.5;">No signature set</em></div>
                         <button type="button" class="standard-button" style="font-size:0.85em;" onclick="openSignatureModal()">✏️ Edit Signature</button>
                         <textarea id="emailSignature" style="display:none;"></textarea>
-                        </div>
 
                         <label class="setting-subheader">📎 Attachments</label>
                         <p class="setting-hint">Attachment limits are configured in Administration → Data Management.</p>
                         <button class="standard-button" onclick="window.location.href='/attachments'" style="margin-top:6px;">📎 View All Attachments</button>
-
                     </div>
 
                     <!-- ═══ Badges (Smart Actions) ═══ -->
@@ -1480,6 +1786,8 @@
                         <button type="button" class="standard-button" style="width:100%;margin-top:8px;" id="smart-actions-add-custom">+ Add Custom Detector</button>
                     </div>
                 </div>
+
+                </div><!-- /tab-email -->
 
                 <!-- Badges: Custom Detector Modal -->
                 <div id="badge-custom-modal-overlay" class="modal-overlay" style="display:none;">
@@ -1541,9 +1849,8 @@
                     </div>
                 </div>
 
-                <!-- ═══ Administration (admin-only, hidden by default) ═══ -->
-                <div id="admin-section" style="display:none;">
-                    <h2 style="margin-top:24px;padding-top:16px;border-top:2px solid rgba(139,90,43,0.3);">🔒 Administration</h2>
+                <!-- ═══ Administration Tab ═══ -->
+                <div class="settings-tab-content" id="tab-admin">
                     <div class="settings-grid">
                         <div class="setting-group">
                             <h3>Admin</h3>
@@ -1607,7 +1914,7 @@
                             </div>
 
                             <label class="setting-subheader">📅 Calendar Import</label>
-                            <p class="setting-hint">Import events and tasks from Google Calendar, Apple Calendar, or Outlook.</p>
+                            <p class="setting-hint">Import events and tasks from Google Calendar, Apple Calendar, or Outlook. <a href="#" onclick="showCalendarExportHelp(); return false;" style="color:#6b4e31;text-decoration:underline;">How to export →</a></p>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
                                 <button id="icsImportBtn" onclick="triggerIcsImport()" class="standard-button" style="flex:1;">📅 Import Calendar (.ics)</button>
                                 <input type="file" id="icsImportFile" accept=".ics" style="display:none" />
@@ -1949,6 +2256,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /tab-admin -->
                 <div class="loader" id="loader" style="display: none"></div>
             </div>
 
@@ -2043,7 +2351,7 @@
             <div class="modal" id="release-notes-modal" style="display:none;">
                 <div class="modal-content" style="max-width:95vw;width:700px;min-height:400px;display:flex;flex-direction:column;">
                     <h3 style="text-align:left;margin-bottom:4px;">📋 Release Notes</h3>
-                    <div id="release-notes-version" style="text-align:left;font-weight:bold;font-size:1.1em;color:#4a2c2a;margin-bottom:8px;"></div>
+                    <div id="release-notes-date" style="text-align:left;font-weight:bold;font-size:1.1em;color:#4a2c2a;margin-bottom:8px;"></div>
                     <div id="release-notes-content" style="flex:1;min-height:200px;max-height:60vh;overflow-y:auto;padding:10px;background:#fffaf0;border:1px solid #d4c5a9;border-radius:5px;font-size:0.95em;line-height:1.5;text-align:left;"></div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
                         <button id="release-notes-prev" class="standard-button" style="min-width:90px;" onclick="releaseNotesPrev()">◀ Older</button>
@@ -2108,6 +2416,49 @@
                     </div>
                 </div>
             </div>
+            <!-- Calendar Export Help Modal -->
+            <div class="modal" id="calendar-export-help-modal">
+                <div class="modal-content" style="max-width:520px;max-height:80vh;overflow-y:auto;">
+                    <h3>📅 How to Export Your Calendar</h3>
+                    <div id="cal-export-tabs" style="display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;">
+                        <button class="standard-button cal-export-tab active" data-tab="google" onclick="switchCalExportTab('google')">Google</button>
+                        <button class="standard-button cal-export-tab" data-tab="apple" onclick="switchCalExportTab('apple')">Apple</button>
+                        <button class="standard-button cal-export-tab" data-tab="outlook" onclick="switchCalExportTab('outlook')">Outlook</button>
+                    </div>
+                    <div id="cal-export-google" class="cal-export-panel">
+                        <ol style="padding-left:20px;margin:0 0 12px 0;line-height:1.7;">
+                            <li>Open <a href="https://calendar.google.com/calendar/r/settings/export" target="_blank" rel="noopener" style="color:#6b4e31;">Google Calendar Settings → Export</a></li>
+                            <li>Click <strong>Export</strong> — this downloads a .zip file</li>
+                            <li>Unzip the file — you'll find one or more <code>.ics</code> files (one per calendar)</li>
+                            <li>Come back here and click <strong>📅 Import Calendar (.ics)</strong></li>
+                            <li>Select the <code>.ics</code> file(s) you want to import</li>
+                        </ol>
+                        <p style="font-size:0.9em;color:#5a4025;margin:0;"><strong>Tip:</strong> To export a single calendar, go to that calendar's settings (⋮ → Settings) and scroll to "Export calendar."</p>
+                    </div>
+                    <div id="cal-export-apple" class="cal-export-panel" style="display:none;">
+                        <ol style="padding-left:20px;margin:0 0 12px 0;line-height:1.7;">
+                            <li>Open the <strong>Calendar</strong> app on your Mac</li>
+                            <li>In the sidebar, select the calendar you want to export</li>
+                            <li>Go to <strong>File → Export → Export…</strong></li>
+                            <li>Save the <code>.ics</code> file to your computer</li>
+                            <li>Come back here and click <strong>📅 Import Calendar (.ics)</strong></li>
+                        </ol>
+                        <p style="font-size:0.9em;color:#5a4025;margin:0;"><strong>Tip:</strong> On iPhone/iPad, use iCloud.com → Calendar → Share → Public Calendar to get a link, then download the .ics from that URL.</p>
+                    </div>
+                    <div id="cal-export-outlook" class="cal-export-panel" style="display:none;">
+                        <ol style="padding-left:20px;margin:0 0 12px 0;line-height:1.7;">
+                            <li>Open <strong>Outlook</strong> (desktop or web)</li>
+                            <li><strong>Desktop:</strong> Go to File → Open & Export → Import/Export → Export to a file → iCalendar (.ics)</li>
+                            <li><strong>Web:</strong> Go to Settings ⚙️ → Calendar → Shared calendars → Publish a calendar → Download the ICS link</li>
+                            <li>Save the <code>.ics</code> file</li>
+                            <li>Come back here and click <strong>📅 Import Calendar (.ics)</strong></li>
+                        </ol>
+                    </div>
+                    <div style="margin-top:16px;text-align:right;">
+                        <button class="standard-button" onclick="closeCalendarExportHelp()">Got it</button>
+                    </div>
+                </div>
+            </div>
             <!-- Replace Confirmation Dialog -->
             <div class="modal" id="replace-confirm-modal">
                 <div class="modal-content">
@@ -2136,7 +2487,7 @@
             </div>
             <!-- Omni Layout Modal -->
             <div class="modal" id="omni-layout-modal" style="display:none;">
-                <div class="modal-content" style="max-width:95vw;width:auto;text-align:center;overflow:hidden;">
+                <div class="modal-content" style="max-width:95vw;width:600px;text-align:center;overflow:hidden;">
                     <h3 style="margin-bottom:12px;">🔮 Arrange Omni Layout</h3>
                     <p class="setting-hint" style="margin-bottom:12px;">Drag cards between zones to arrange. Drop into Full Width, Left, or Right columns.</p>
                     <div id="omni-layout-grid" class="omni-layout-grid"></div>
@@ -2176,15 +2527,21 @@
             <script src="/frontend/js/pages/settings-version.js"></script>
             <script src="/frontend/js/pages/settings-views.js"></script>
             <script src="/frontend/js/pages/settings-badges.js"></script>
+            <script src="/frontend/js/pages/settings-custom-filters.js"></script>
             <script src="/frontend/js/pages/settings.js"></script>
             <script>
-            /* Show admin-only section if user is admin */
+            /* Show admin tab button if user is admin */
             (function() {
               function _showAdminSection() {
                 var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
                 if (user && user.is_admin) {
-                  var sec = document.getElementById('admin-section');
-                  if (sec) sec.style.display = '';
+                  var btn = document.getElementById('admin-tab-btn');
+                  if (btn) btn.style.display = '';
+                  // Restore admin tab if it was the last active tab
+                  try {
+                    var saved = localStorage.getItem('cwoc_settings_active_tab');
+                    if (saved === 'admin') _switchSettingsTab('admin');
+                  } catch (e) { /* ignore */ }
                 }
               }
               if (typeof waitForAuth === 'function') {
@@ -2241,8 +2598,11 @@
                   }
                   group.appendChild(body);
 
-                  /* Restore collapsed state */
-                  if (state[key]) {
+                  /* Restore collapsed state — on mobile, default to collapsed */
+                  var isMobile = window.innerWidth <= 768;
+                  if (state.hasOwnProperty(key)) {
+                    if (state[key]) group.classList.add('collapsed');
+                  } else if (isMobile) {
                     group.classList.add('collapsed');
                   }
 

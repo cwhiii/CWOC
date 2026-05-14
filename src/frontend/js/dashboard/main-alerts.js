@@ -85,7 +85,7 @@ function _globalPlayAlarm() {
 }
 
 function _globalStopAlarm() {
-  if (_globalAlarmAudio) { _globalAlarmAudio.pause(); _globalAlarmAudio.currentTime = 0; }
+  if (_globalAlarmAudio) cwocStopAudio(_globalAlarmAudio);
   if (_globalAlarmTimeout) { clearTimeout(_globalAlarmTimeout); _globalAlarmTimeout = null; }
   if ('vibrate' in navigator) { try { navigator.vibrate(0); } catch (e) {} }
 }
@@ -97,7 +97,7 @@ function _globalPlayTimer() {
 }
 
 function _globalStopTimer() {
-  if (_globalTimerAudio) { _globalTimerAudio.pause(); _globalTimerAudio.currentTime = 0; _globalTimerAudio.loop = false; }
+  if (_globalTimerAudio) { cwocStopAudio(_globalTimerAudio); _globalTimerAudio.loop = false; }
 }
 
 function _globalDayAbbr(date) {
@@ -358,21 +358,22 @@ function _showTimerDoneModal(timerName, onDismiss) {
 
 function _sendBrowserNotification(title, body, chitId, playSound) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  var targetUrl = chitId
+    ? '/frontend/html/editor.html?id=' + chitId
+    : '/?tab=Alarms&view=independent';
   var opts = {
     body: body,
     icon: "/static/cwod_logo-favicon.png",
     tag: 'cwoc-alert-' + (chitId || 'independent'),
     renotify: true,
     requireInteraction: true,
-    silent: true
+    silent: true,
+    data: { url: targetUrl }
   };
   // Vibrate pattern for Android/mobile (200ms on, 100ms off, 200ms on)
   if ('vibrate' in navigator) {
     opts.vibrate = [200, 100, 200, 100, 300];
   }
-  var targetUrl = chitId
-    ? '/frontend/html/editor.html?id=' + chitId
-    : '/?tab=Alarms&view=independent';
   try {
     var n = new Notification(title, opts);
     n.onclick = function() {
@@ -382,7 +383,6 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
   } catch (e) {
     // Fallback for environments where Notification constructor fails (some Android browsers)
     if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
-      opts.data = { url: targetUrl };
       navigator.serviceWorker.ready.then(function(reg) {
         reg.showNotification(title, opts).catch(function() {});
       });
@@ -612,7 +612,7 @@ function _globalCheckNotifications() {
 
         const dir = alert.afterTarget ? "after" : "before";
         const label = alert.targetType === "cycle"
-          ? `${alert.value} ${alert.unit} before end of cycle`
+          ? `will be missed within ${alert.value} ${alert.unit}`
           : `${alert.value} ${alert.unit} ${dir} ${alert.targetType || "start"}`;
         const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
         _showGlobalToast("📢", label, toastTitle, chit.id, null);
@@ -635,7 +635,7 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
   if (typeof wd === 'string') { try { wd = JSON.parse(wd); } catch (e) { return; } }
   if (!wd) return;
 
-  var threshold = alert.weather_threshold;
+  var threshold = alert.weather_threshold; // Stored in canonical units (°C, km/h, mm)
   var precipMode = alert.weather_precip_mode || 'any';
   var conditionMet = false;
   var condLabel = '';
@@ -650,20 +650,34 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
     case 'low_above':
     case 'low_below': {
       if (wd.high == null || wd.low == null || threshold == null) return;
-      var high = (typeof _convertTemp === 'function') ? _convertTemp(wd.high) : wd.high;
-      var low = (typeof _convertTemp === 'function') ? _convertTemp(wd.low) : wd.low;
-      if (condition === 'high_above') { conditionMet = high > threshold; condLabel = 'high (' + high + unitLabel + ') above ' + threshold + unitLabel; }
-      else if (condition === 'high_below') { conditionMet = high < threshold; condLabel = 'high (' + high + unitLabel + ') below ' + threshold + unitLabel; }
-      else if (condition === 'low_above') { conditionMet = low > threshold; condLabel = 'low (' + low + unitLabel + ') above ' + threshold + unitLabel; }
-      else if (condition === 'low_below') { conditionMet = low < threshold; condLabel = 'low (' + low + unitLabel + ') below ' + threshold + unitLabel; }
+      // Compare in Celsius (canonical). wd.high/low are in Celsius from Open-Meteo.
+      var highC = wd.high;
+      var lowC = wd.low;
+      if (condition === 'high_above') conditionMet = highC > threshold;
+      else if (condition === 'high_below') conditionMet = highC < threshold;
+      else if (condition === 'low_above') conditionMet = lowC > threshold;
+      else if (condition === 'low_below') conditionMet = lowC < threshold;
+      if (conditionMet) {
+        var highDisp = isMetric ? Math.round(highC) : Math.round(highC * 9 / 5 + 32);
+        var lowDisp = isMetric ? Math.round(lowC) : Math.round(lowC * 9 / 5 + 32);
+        var threshDisp = isMetric ? Math.round(threshold) : Math.round(threshold * 9 / 5 + 32);
+        if (condition === 'high_above') condLabel = 'high (' + highDisp + unitLabel + ') above ' + threshDisp + unitLabel;
+        else if (condition === 'high_below') condLabel = 'high (' + highDisp + unitLabel + ') below ' + threshDisp + unitLabel;
+        else if (condition === 'low_above') condLabel = 'low (' + lowDisp + unitLabel + ') above ' + threshDisp + unitLabel;
+        else if (condition === 'low_below') condLabel = 'low (' + lowDisp + unitLabel + ') below ' + threshDisp + unitLabel;
+      }
       break;
     }
     case 'precipitation': {
       if (precipMode === 'more_than') {
         if (wd.precipitation == null || threshold == null) return;
-        var pDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = pDisp > threshold;
-        condLabel = 'precipitation (' + pDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        // Compare in mm (canonical)
+        conditionMet = wd.precipitation > threshold;
+        if (conditionMet) {
+          var pDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var pThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'precipitation (' + pDisp + ' ' + precipUnit + ') over ' + pThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(wd.weather_code);
@@ -676,9 +690,12 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
         if (wd.precipitation == null || threshold == null) return;
         var rCodes = [61,63,65,66,67,80,81,82,51,53,55,56,57];
         var isRain = wd.weather_code != null && rCodes.includes(wd.weather_code);
-        var rDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isRain && rDisp > threshold;
-        condLabel = 'rain (' + rDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isRain && wd.precipitation > threshold;
+        if (conditionMet) {
+          var rDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var rThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'rain (' + rDisp + ' ' + precipUnit + ') over ' + rThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [61,63,65,66,67,80,81,82,51,53,55,56,57].includes(wd.weather_code);
@@ -691,9 +708,12 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
         if (wd.precipitation == null || threshold == null) return;
         var sCodes = [71,73,75,77,85,86];
         var isSnow = wd.weather_code != null && sCodes.includes(wd.weather_code);
-        var sDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isSnow && sDisp > threshold;
-        condLabel = 'snow (' + sDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isSnow && wd.precipitation > threshold;
+        if (conditionMet) {
+          var sDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var sThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'snow (' + sDisp + ' ' + precipUnit + ') over ' + sThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [71,73,75,77,85,86].includes(wd.weather_code);
@@ -706,9 +726,12 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
         if (wd.precipitation == null || threshold == null) return;
         var hCodes = [96,99];
         var isHail = wd.weather_code != null && hCodes.includes(wd.weather_code);
-        var hDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isHail && hDisp > threshold;
-        condLabel = 'hail (' + hDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isHail && wd.precipitation > threshold;
+        if (conditionMet) {
+          var hDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var hThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'hail (' + hDisp + ' ' + precipUnit + ') over ' + hThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [96,99].includes(wd.weather_code);
@@ -725,9 +748,13 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
       else if (wGusts != null) wMax = wGusts;
       else if (wSpeed != null) wMax = wSpeed;
       if (wMax == null || threshold == null) return;
-      var windVal = isMetric ? Math.round(wMax) : Math.round(wMax * 0.621371);
-      conditionMet = windVal > threshold;
-      condLabel = 'wind (' + windVal + ' ' + windUnit + ') over ' + threshold + ' ' + windUnit;
+      // Compare in km/h (canonical). wMax is in km/h from Open-Meteo.
+      conditionMet = wMax > threshold;
+      if (conditionMet) {
+        var windDisp = isMetric ? Math.round(wMax) : Math.round(wMax * 0.621371);
+        var windThresh = isMetric ? Math.round(threshold) : Math.round(threshold * 0.621371);
+        condLabel = 'wind (' + windDisp + ' ' + windUnit + ') over ' + windThresh + ' ' + windUnit;
+      }
       break;
     }
   }
@@ -748,25 +775,8 @@ function _globalCheckWeatherNotification(chit, alert, alertIdx) {
  * Uses the chit's recurrence_rule.freq to determine the period.
  */
 function _globalGetHabitCycleEnd(chit) {
-  const freq = (chit.recurrence_rule && chit.recurrence_rule.freq) || 'DAILY';
-  const now = new Date();
-  switch (freq) {
-    case 'DAILY':
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-    case 'WEEKLY': {
-      const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined)
-        ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
-      const dayOfWeek = now.getDay();
-      const daysUntilEnd = (7 - dayOfWeek + wsd) % 7 || 7;
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilEnd, 0, 0, 0);
-    }
-    case 'MONTHLY':
-      return new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
-    case 'YEARLY':
-      return new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
-    default:
-      return null;
-  }
+  var freq = (chit.recurrence_rule && chit.recurrence_rule.freq) || 'DAILY';
+  return _cwocGetHabitCycleEnd(freq);
 }
 
 function _getSnoozeMs() {

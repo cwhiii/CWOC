@@ -1,0 +1,1 @@
+Improved email account filter pill button styling to make active/inactive state clearly distinguishable. Active pills are now solid brown with a shadow, inactive pills are faded at 60% opacity. Success (green) and error (red) states now show as border colors rather than overriding the entire pill, so you can always tell which accounts are selected regardless of sync status.

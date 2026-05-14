@@ -71,11 +71,11 @@ function displayNotesView(chitsToDisplay) {
           if (typeof _nwWd === 'string') { try { _nwWd = JSON.parse(_nwWd); } catch (e) { _nwWd = null; } }
           if (_nwWd && _nwWd.weather_code !== undefined && _nwWd.high !== undefined && _nwWd.low !== undefined) {
             var _nwIcon = _getWeatherIcon(_nwWd.weather_code);
-            var _nwHighF = _celsiusToFahrenheit(_nwWd.high);
-            var _nwLowF = _celsiusToFahrenheit(_nwWd.low);
+            var _nwHighF = _convertTemp(_nwWd.high);
+            var _nwLowF = _convertTemp(_nwWd.low);
             var _nwStale = _isWeatherStale(_nwWd.updated_time) ? '⏳' : '';
             var _nwTooltip = _nwHighF + '°/' + _nwLowF + '°';
-            var _nwPrecipText = _formatPrecip(_nwWd.precipitation, _nwWd.weather_code);
+            var _nwPrecipText = _cwocFormatPrecip(_nwWd.precipitation, _nwWd.weather_code);
             if (_nwPrecipText) _nwTooltip += ' · ' + _nwPrecipText;
             if (_nwStale) _nwTooltip += ' (stale)';
             wxSpan.textContent = _nwStale + _nwIcon;

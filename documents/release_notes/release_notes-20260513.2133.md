@@ -1,0 +1,1 @@
+Fixed ampersand (`&`) in titles/content breaking global search. A lone `&` in the query caused an infinite loop in the frontend term extractor, and the highlight function failed to match terms containing `&` against HTML-escaped text.

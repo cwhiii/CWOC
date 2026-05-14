@@ -10,6 +10,7 @@ No database or HTTP dependencies — this module is independently testable.
 import logging
 import re
 import signal
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.backend.db import deserialize_json_field
@@ -315,12 +316,351 @@ def evaluate_leaf(
                 return field_str > value_str
             return field_str < value_str
 
+    # ── Date age operators (days since a datetime field) ─────────
+    if operator in ("days_ago_greater_than", "days_ago_less_than"):
+        try:
+            raw = str(field_value).strip()
+            if not raw:
+                return False
+            # Strip timezone suffix for naive UTC comparison
+            # Handle: "2026-05-13T06:00:12+00:00", "2026-05-13T06:00:12Z",
+            #         "2026-05-13T06:00:12", "2026-05-13 06:00:12", "2026-05-13"
+            clean = raw
+            if clean.endswith("Z"):
+                clean = clean[:-1]
+            # Strip +HH:MM or -HH:MM timezone offset at end
+            if len(clean) > 19 and (clean[-6] == "+" or clean[-6] == "-"):
+                clean = clean[:-6]
+            elif len(clean) > 16 and (clean[-3] == "+" or clean[-3] == "-"):
+                clean = clean[:-3]
+
+            field_dt = None
+            for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S",
+                        "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S",
+                        "%Y-%m-%d"):
+                try:
+                    field_dt = datetime.strptime(clean, fmt)
+                    break
+                except ValueError:
+                    continue
+            if field_dt is None:
+                return False
+            age_days = (datetime.utcnow() - field_dt).days
+            threshold = int(value)
+            if operator == "days_ago_greater_than":
+                return age_days > threshold
+            return age_days < threshold
+        except (ValueError, TypeError):
+            return False
+
     # ── Regex operator ───────────────────────────────────────────
     if operator == "regex_match":
         return _regex_match_with_timeout(str(value), str(field_value))
 
+    # ── Weather condition operators ──────────────────────────────
+    if operator.startswith("weather_"):
+        # Weather operators: current weather or forecast window checks
+        # Value format: "threshold|days|location" or "threshold|days" or just "threshold"
+        try:
+            parts = str(value).split("|")
+            threshold = float(parts[0])
+            days = int(parts[1]) if len(parts) > 1 else 1
+            location_ref = parts[2] if len(parts) > 2 else "_default"
+            
+            owner_id = entity.get("owner_id")
+            
+            # Get weather data (current or forecast)
+            if operator.startswith("weather_forecast_contains_") or days > 1:
+                weather_data_list = _get_weather_forecast_for_location(owner_id, days, location_ref)
+                if not weather_data_list:
+                    return False
+                # Check if ANY day in the forecast meets the criteria
+                for weather_data in weather_data_list:
+                    if _check_weather_condition(operator, weather_data, threshold):
+                        return True
+                return False
+            else:
+                # Current weather only
+                weather_data = _get_current_weather_for_location(owner_id, location_ref)
+                if not weather_data:
+                    return False
+                return _check_weather_condition(operator, weather_data, threshold)
+        except (ValueError, TypeError):
+            return False
+
     logger.warning("Unknown leaf operator: %r", operator)
     return False
+
+
+# ── Weather Helper Functions ─────────────────────────────────────────
+
+def _get_current_weather_for_default_location(owner_id: str) -> Optional[Dict]:
+    """Get current weather data for the user's default location. Convenience wrapper."""
+    return _get_current_weather_for_location(owner_id, "_default")
+
+
+def _get_current_weather_for_location(owner_id: str, location_ref: str = "_default") -> Optional[Dict]:
+    """Get current weather data for a specific location.
+
+    location_ref can be:
+      - "_default" — use the user's default saved location
+      - A saved location label (e.g., "Home")
+      - Manual coordinates as "lat,lon" (e.g., "42.3,-71.1")
+
+    Returns weather dict or None.
+    """
+    coords = _resolve_location_coords(owner_id, location_ref)
+    if not coords:
+        return None
+
+    try:
+        from src.backend.schedulers import _sync_weather_fetch
+
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={coords['lat']}&longitude={coords['lon']}"
+            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,showers_sum,wind_gusts_10m_max,wind_speed_10m_max"
+            f"&timezone=auto&forecast_days=1"
+        )
+
+        forecast_data = _sync_weather_fetch(url)
+        if not forecast_data or "daily" not in forecast_data:
+            return None
+
+        daily = forecast_data["daily"]
+        if not daily.get("time") or len(daily["time"]) == 0:
+            return None
+
+        idx = 0
+        return {
+            "high": daily.get("temperature_2m_max", [])[idx] if idx < len(daily.get("temperature_2m_max", [])) else None,
+            "low": daily.get("temperature_2m_min", [])[idx] if idx < len(daily.get("temperature_2m_min", [])) else None,
+            "precipitation": daily.get("precipitation_sum", [])[idx] if idx < len(daily.get("precipitation_sum", [])) else None,
+            "rain": daily.get("rain_sum", [])[idx] if idx < len(daily.get("rain_sum", [])) else None,
+            "snowfall": daily.get("snowfall_sum", [])[idx] if idx < len(daily.get("snowfall_sum", [])) else None,
+            "showers": daily.get("showers_sum", [])[idx] if idx < len(daily.get("showers_sum", [])) else None,
+            "wind_speed": daily.get("wind_speed_10m_max", [])[idx] if idx < len(daily.get("wind_speed_10m_max", [])) else None,
+            "wind_gusts": daily.get("wind_gusts_10m_max", [])[idx] if idx < len(daily.get("wind_gusts_10m_max", [])) else None,
+            "weather_code": daily.get("weathercode", [])[idx] if idx < len(daily.get("weathercode", [])) else None,
+        }
+
+    except Exception as e:
+        logger.warning("Failed to get current weather for user %s location %s: %s", owner_id, location_ref, e)
+        return None
+
+
+def _get_weather_forecast_for_location(owner_id: str, days: int, location_ref: str = "_default") -> Optional[List[Dict]]:
+    """Get weather forecast for a specific location for the next N days."""
+    if days <= 0:
+        return None
+
+    coords = _resolve_location_coords(owner_id, location_ref)
+    if not coords:
+        return None
+
+    try:
+        from src.backend.schedulers import _sync_weather_fetch
+
+        forecast_days = min(days, 16)
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={coords['lat']}&longitude={coords['lon']}"
+            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,rain_sum,snowfall_sum,showers_sum,wind_gusts_10m_max,wind_speed_10m_max"
+            f"&timezone=auto&forecast_days={forecast_days}"
+        )
+
+        forecast_data = _sync_weather_fetch(url)
+        if not forecast_data or "daily" not in forecast_data:
+            return None
+
+        daily = forecast_data["daily"]
+        if not daily.get("time"):
+            return None
+
+        weather_list = []
+        for i in range(min(days, len(daily["time"]))):
+            weather_list.append({
+                "date": daily["time"][i],
+                "high": daily.get("temperature_2m_max", [])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
+                "low": daily.get("temperature_2m_min", [])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
+                "precipitation": daily.get("precipitation_sum", [])[i] if i < len(daily.get("precipitation_sum", [])) else None,
+                "rain": daily.get("rain_sum", [])[i] if i < len(daily.get("rain_sum", [])) else None,
+                "snowfall": daily.get("snowfall_sum", [])[i] if i < len(daily.get("snowfall_sum", [])) else None,
+                "showers": daily.get("showers_sum", [])[i] if i < len(daily.get("showers_sum", [])) else None,
+                "wind_speed": daily.get("wind_speed_10m_max", [])[i] if i < len(daily.get("wind_speed_10m_max", [])) else None,
+                "wind_gusts": daily.get("wind_gusts_10m_max", [])[i] if i < len(daily.get("wind_gusts_10m_max", [])) else None,
+                "weather_code": daily.get("weathercode", [])[i] if i < len(daily.get("weathercode", [])) else None,
+            })
+
+        return weather_list
+
+    except Exception as e:
+        logger.warning("Failed to get weather forecast for user %s location %s: %s", owner_id, location_ref, e)
+        return None
+
+
+def _resolve_location_coords(owner_id: str, location_ref: str) -> Optional[Dict]:
+    """Resolve a location reference to lat/lon coordinates.
+
+    location_ref can be "_default", a saved location label, "_manual:lat,lon",
+    "_manual:City Name", or raw "lat,lon".
+    Returns {"lat": float, "lon": float} or None.
+    """
+    if not owner_id and location_ref == "_default":
+        return None
+
+    # Handle "_manual:..." format from the weather condition builder
+    if location_ref and location_ref.startswith("_manual:"):
+        coords_str = location_ref[8:]  # strip "_manual:"
+        if not coords_str:
+            return None
+        # Try parsing as lat,lon first
+        if "," in coords_str:
+            try:
+                parts = coords_str.split(",", 1)
+                lat = float(parts[0].strip())
+                lon = float(parts[1].strip())
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    return {"lat": lat, "lon": lon}
+            except (ValueError, IndexError):
+                pass  # Not valid coords, try geocoding
+        # Geocode as address/city name
+        return _sync_geocode_location(coords_str)
+
+    # Handle bare "_manual" (no coords entered yet)
+    if location_ref == "_manual":
+        return None
+
+    # Try parsing as raw manual coordinates (legacy: "lat,lon")
+    if location_ref and "," in location_ref and location_ref not in ("_default",):
+        try:
+            parts = location_ref.split(",")
+            lat = float(parts[0].strip())
+            lon = float(parts[1].strip())
+            return {"lat": lat, "lon": lon}
+        except (ValueError, IndexError):
+            pass
+
+    # Look up from saved locations
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT saved_locations FROM settings WHERE user_id = ?",
+            (owner_id,)
+        )
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            return None
+
+        saved_locations = deserialize_json_field(row[0])
+        if not isinstance(saved_locations, list):
+            return None
+
+        target_loc = None
+        if location_ref == "_default":
+            for loc in saved_locations:
+                if isinstance(loc, dict) and loc.get("is_default"):
+                    target_loc = loc
+                    break
+            if not target_loc and saved_locations:
+                for loc in saved_locations:
+                    if isinstance(loc, dict) and loc.get("lat") and loc.get("lon"):
+                        target_loc = loc
+                        break
+        else:
+            for loc in saved_locations:
+                if isinstance(loc, dict) and loc.get("label") == location_ref:
+                    target_loc = loc
+                    break
+
+        if target_loc and target_loc.get("lat") and target_loc.get("lon"):
+            return {"lat": target_loc["lat"], "lon": target_loc["lon"]}
+
+        return None
+
+    except Exception as e:
+        logger.warning("Failed to resolve location %s for user %s: %s", location_ref, owner_id, e)
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
+def _sync_geocode_location(address: str) -> Optional[Dict]:
+    """Synchronously geocode an address/city name to lat/lon using Nominatim.
+
+    Returns {"lat": float, "lon": float} or None.
+    """
+    import urllib.request
+    import urllib.parse
+
+    if not address or not address.strip():
+        return None
+
+    url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + urllib.parse.quote(address.strip())
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CWOC-Weather/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        if data and len(data) > 0:
+            return {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"])}
+        return None
+    except Exception as e:
+        logger.warning("Geocode failed for '%s': %s", address, e)
+        return None
+
+
+def _check_weather_condition(operator: str, weather_data: Dict, threshold: float) -> bool:
+    """Check if weather data meets the specified condition.
+
+    Uses a generic approach: extract metric and comparison from the operator name,
+    then look up the corresponding field in weather_data.
+    """
+    if not weather_data:
+        return False
+
+    # Strip prefixes to get the core metric_comparison
+    core = operator.replace("weather_forecast_contains_", "").replace("weather_", "")
+
+    # Determine comparison direction
+    if core.endswith("_above"):
+        comparison = "above"
+        metric = core[:-6]  # strip "_above"
+    elif core.endswith("_below"):
+        comparison = "below"
+        metric = core[:-6]  # strip "_below"
+    else:
+        logger.warning("Unknown weather operator format: %r", operator)
+        return False
+
+    # Map metric name to weather_data key
+    metric_key_map = {
+        "temp_low": "low",
+        "temp_high": "high",
+        "precipitation": "precipitation",
+        "rain": "rain",
+        "snowfall": "snowfall",
+        "showers": "showers",
+        "wind_speed": "wind_speed",
+        "wind_gusts": "wind_gusts",
+    }
+
+    data_key = metric_key_map.get(metric)
+    if not data_key:
+        logger.warning("Unknown weather metric: %r (from operator %r)", metric, operator)
+        return False
+
+    value = weather_data.get(data_key)
+    if value is None:
+        return False
+
+    if comparison == "above":
+        return value > threshold
+    else:
+        return value < threshold
 
 
 # ── Condition Tree Evaluator ─────────────────────────────────────────
@@ -378,7 +718,6 @@ def evaluate_condition_tree(
 
 import json
 import sqlite3
-from datetime import datetime
 from uuid import uuid4
 
 from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags, ensure_tags_in_settings
@@ -587,6 +926,19 @@ def execute_action(
                     (location, current_time, entity_id),
                 )
 
+            elif action_type == "set_show_on_calendar":
+                show = params.get("show", True)
+                # Normalize to int for SQLite (1 = show, 0 = hide)
+                # Handle string "true"/"false" from frontend select
+                if isinstance(show, str):
+                    show = show.lower() not in ("false", "0", "no", "")
+                show_int = 1 if show else 0
+                chit["show_on_calendar"] = show_int
+                cursor.execute(
+                    "UPDATE chits SET show_on_calendar = ?, modified_datetime = ? WHERE id = ?",
+                    (show_int, current_time, entity_id),
+                )
+
             elif action_type == "add_person":
                 person = params.get("person", "")
                 people = deserialize_json_field(chit.get("people")) or []
@@ -733,6 +1085,134 @@ def execute_action(
                 conn.commit()
                 return {"success": True, "message": f"Notification sent: {message}"}
 
+            # ── Create Chit action ───────────────────────────────
+            elif action_type == "create_chit":
+                # Create a new chit based on action parameters
+                new_chit_id = str(uuid4())
+                
+                # Build chit data from params with template substitution
+                chit_data = {
+                    "id": new_chit_id,
+                    "owner_id": owner_id,
+                    "created_datetime": current_time,
+                    "modified_datetime": current_time,
+                    "title": _substitute_templates(params.get("title", ""), chit),
+                    "note": _substitute_templates(params.get("note", ""), chit),
+                    "status": params.get("status", "ToDo"),
+                    "priority": params.get("priority", "Medium"),
+                    "severity": params.get("severity", "Medium"),
+                    "color": params.get("color", ""),
+                    "location": _substitute_templates(params.get("location", ""), chit),
+                    "start_datetime": _substitute_templates(params.get("start_datetime", ""), chit),
+                    "due_datetime": _substitute_templates(params.get("due_datetime", ""), chit),
+                    "point_in_time": _substitute_templates(params.get("point_in_time", ""), chit),
+                    "tags": serialize_json_field(params.get("tags", [])),
+                    "people": serialize_json_field(params.get("people", [])),
+                    "alerts": serialize_json_field(_substitute_alert_templates(params.get("alerts", []), chit)),
+                    "checklist": serialize_json_field(params.get("checklist", [])),
+                    "child_chits": serialize_json_field([]),
+                    "recurrence_rule": serialize_json_field({}),
+                    "recurrence_exceptions": serialize_json_field([]),
+                    "shares": serialize_json_field([]),
+                    "archived": False,
+                    "deleted": False,
+                    "pinned": False,
+                    "all_day": params.get("all_day", False),
+                    "show_on_calendar": params.get("show_on_calendar", True),
+                    "habit": False,
+                }
+                
+                # Get owner info for the new chit
+                cursor.execute(
+                    "SELECT username, display_name FROM users WHERE id = ?", 
+                    (owner_id,)
+                )
+                user_row = cursor.fetchone()
+                if user_row:
+                    chit_data["owner_username"] = user_row[0]
+                    chit_data["owner_display_name"] = user_row[1]
+                
+                # Insert the new chit
+                columns = list(chit_data.keys())
+                placeholders = ", ".join(["?" for _ in columns])
+                values = [chit_data[col] for col in columns]
+                
+                cursor.execute(
+                    f"INSERT INTO chits ({', '.join(columns)}) VALUES ({placeholders})",
+                    values
+                )
+                
+                conn.commit()
+                return {"success": True, "message": f"Created chit: {chit_data['title']}", "chit_id": new_chit_id}
+
+            # ── Create Reminder action ───────────────────────────
+            elif action_type == "create_reminder":
+                # Create a reminder chit (notification + point_in_time)
+                new_chit_id = str(uuid4())
+                
+                title = _substitute_templates(params.get("title", "Reminder"), chit)
+                note = _substitute_templates(params.get("note", ""), chit)
+                reminder_time = _substitute_templates(params.get("reminder_time", ""), chit)
+                
+                # If reminder_time is just HH:MM, prepend today's date
+                if reminder_time and len(reminder_time) <= 5 and ":" in reminder_time:
+                    reminder_time = datetime.utcnow().strftime("%Y-%m-%d") + "T" + reminder_time + ":00"
+                
+                chit_data = {
+                    "id": new_chit_id,
+                    "owner_id": owner_id,
+                    "created_datetime": current_time,
+                    "modified_datetime": current_time,
+                    "title": title,
+                    "note": note,
+                    "status": "ToDo",
+                    "priority": "Medium",
+                    "severity": "Medium",
+                    "color": "",
+                    "location": "",
+                    "start_datetime": None,
+                    "due_datetime": None,
+                    "point_in_time": reminder_time or None,
+                    "notification": 1,
+                    "alarm": 0,
+                    "tags": serialize_json_field(["CWOC_System/Reminders"]),
+                    "people": serialize_json_field([]),
+                    "alerts": serialize_json_field([{"datetime": reminder_time, "type": "notification"}] if reminder_time else []),
+                    "checklist": serialize_json_field([]),
+                    "child_chits": serialize_json_field([]),
+                    "recurrence_rule": serialize_json_field({}),
+                    "recurrence_exceptions": serialize_json_field([]),
+                    "shares": serialize_json_field([]),
+                    "archived": False,
+                    "deleted": False,
+                    "pinned": False,
+                    "all_day": False,
+                    "show_on_calendar": True,
+                    "habit": False,
+                }
+                
+                # Get owner info
+                cursor.execute(
+                    "SELECT username, display_name FROM users WHERE id = ?",
+                    (owner_id,)
+                )
+                user_row = cursor.fetchone()
+                if user_row:
+                    chit_data["owner_username"] = user_row[0]
+                    chit_data["owner_display_name"] = user_row[1]
+                
+                columns = list(chit_data.keys())
+                placeholders = ", ".join(["?" for _ in columns])
+                values = [chit_data[col] for col in columns]
+                
+                cursor.execute(
+                    f"INSERT INTO chits ({', '.join(columns)}) VALUES ({placeholders})",
+                    values
+                )
+                
+                conn.commit()
+                return {"success": True, "message": f"Created reminder: {title}", "chit_id": new_chit_id}
+
             # ── Contact cross-reference action ───────────────────
             elif action_type == "add_matching_contacts_as_people":
                 match_field = params.get("match_field", "city")
@@ -818,6 +1298,68 @@ def execute_action(
             # Contact actions can be extended here in the future
             return {"success": False, "message": f"Action {action_type} not supported for contacts"}
 
+        # ── Habit trigger actions (standalone, no entity mutation) ─
+        elif entity_type == "habit":
+            # Habit triggers fire with a synthetic entity — actions that
+            # don't require a real chit/contact are supported directly.
+            if action_type == "send_notification":
+                message = params.get("message", "")
+                # Template substitution for habit-specific placeholders
+                source_name = params.get("_entity_title") or entity_id
+                message = message.replace("{rule_name}", rule_name)
+                message = message.replace("{habit_name}", source_name)
+                message = message.replace("{chit_title}", source_name)
+                _send_rule_notification(owner_id, entity_id, source_name, message)
+                conn.commit()
+                return {"success": True, "message": f"Notification sent: {message}"}
+            elif action_type == "call_ha_service":
+                try:
+                    from src.backend import ha_bridge
+                    domain = params.get("domain", "")
+                    service = params.get("service", "")
+                    ha_entity_id = params.get("entity_id", "")
+                    service_data = params.get("service_data") or {}
+                    if isinstance(service_data, str):
+                        service_data = json.loads(service_data)
+                    result = ha_bridge.call_ha_service(domain, service, ha_entity_id, service_data)
+                    conn.commit()
+                    return result
+                except ImportError:
+                    conn.commit()
+                    return {"success": False, "message": "HA bridge not available"}
+                except Exception as ha_err:
+                    conn.commit()
+                    return {"success": False, "message": f"HA service call failed: {ha_err}"}
+            elif action_type == "fire_ha_event":
+                try:
+                    from src.backend import ha_bridge
+                    event_type = params.get("event_type", "")
+                    event_data = params.get("event_data") or {}
+                    if isinstance(event_data, str):
+                        event_data = json.loads(event_data)
+                    event_data["habit_source_id"] = entity_id
+                    event_data["habit_rule_name"] = rule_name
+                    result = ha_bridge.fire_ha_event(event_type, event_data)
+                    conn.commit()
+                    return result
+                except ImportError:
+                    conn.commit()
+                    return {"success": False, "message": "HA bridge not available"}
+                except Exception as ha_err:
+                    conn.commit()
+                    return {"success": False, "message": f"HA event fire failed: {ha_err}"}
+            else:
+                # For actions that need a real chit (add_tag, set_status, etc.),
+                # try to use the source chit if available
+                chit = _read_chit(cursor, entity_id)
+                if chit:
+                    # Re-dispatch as a chit action
+                    conn.close()
+                    return execute_action(action, "chit", entity_id, owner_id, rule_name, rule_id)
+                else:
+                    conn.commit()
+                    return {"success": False, "message": f"Action '{action_type}' requires a chit target but habit entity '{entity_id}' is not a chit. Use send_notification or HA actions for habit triggers."}
+
         else:
             return {"success": False, "message": f"Unknown entity type: {entity_type}"}
 
@@ -876,6 +1418,60 @@ def _send_rule_notification(owner_id: str, chit_id: str, chit_title: str, messag
         logger.warning("Ntfy notification failed for rule action: %s", exc)
 
 
+# ── Habit Trigger Matching ────────────────────────────────────────────
+
+def _match_habit_trigger(rule: dict, entity: dict) -> bool:
+    """Check if a habit trigger rule matches the incoming habit event entity.
+
+    The rule's habit_trigger_config specifies which habit source to watch.
+    The entity dict (synthetic, built by the scheduler) contains:
+      - source_rule_id: the habit rule that fired
+      - source_chit_id: the habit chit that changed
+      - source_type: "rule" or "chit"
+      - habit_event: "achieved", "missed", or "due"
+
+    Matching logic:
+      - If habit_trigger_config.source_rule_id == "*" or source_chit_id == "*",
+        match any habit of that type.
+      - Otherwise, match on exact source ID.
+    """
+    config_raw = rule.get("habit_trigger_config")
+    if not config_raw:
+        # No config = match all habit events of this trigger type
+        return True
+
+    if isinstance(config_raw, str):
+        try:
+            config = json.loads(config_raw)
+        except (json.JSONDecodeError, TypeError):
+            return True  # Can't parse config, default to match
+    else:
+        config = config_raw
+
+    if not isinstance(config, dict):
+        return True
+
+    source_type = config.get("source_type", "rule")
+    entity_source_type = entity.get("source_type", "rule")
+
+    # Must match source type (rule vs chit)
+    if source_type != entity_source_type and source_type != "any":
+        return False
+
+    # Check source ID matching
+    if source_type == "rule" or source_type == "any":
+        config_rule_id = config.get("source_rule_id", "*")
+        if config_rule_id != "*" and config_rule_id != entity.get("source_rule_id"):
+            return False
+
+    if source_type == "chit" or source_type == "any":
+        config_chit_id = config.get("source_chit_id", "*")
+        if config_chit_id != "*" and config_chit_id != entity.get("source_chit_id"):
+            return False
+
+    return True
+
+
 # ── Trigger Dispatcher ───────────────────────────────────────────────
 
 def dispatch_trigger(
@@ -896,9 +1492,12 @@ def dispatch_trigger(
     Args:
         trigger_type: One of chit_created, chit_updated, email_received,
                       contact_created, contact_updated, scheduled,
-                      ha_state_change, ha_webhook.
-        entity_type: ``"chit"`` or ``"contact"``.
-        entity: The triggering entity as a flat dict.
+                      ha_state_change, ha_webhook, habit_achieved,
+                      habit_missed, habit_due.
+        entity_type: ``"chit"``, ``"contact"``, or ``"habit"``.
+        entity: The triggering entity as a flat dict. For habit triggers,
+                this is a synthetic dict with habit metadata (rule_id,
+                rule_name, habit_status, streak, period, etc.).
         owner_id: UUID of the entity owner.
     """
     from src.backend.routes.audit import insert_audit_entry
@@ -975,7 +1574,13 @@ def dispatch_trigger(
             # Evaluate condition tree
             matched = False
             try:
-                if conditions and isinstance(conditions, dict):
+                # For habit triggers, first check source matching
+                if trigger_type in ("habit_achieved", "habit_missed", "habit_due"):
+                    matched = _match_habit_trigger(rule, entity)
+                    # If source matched and conditions exist, also evaluate them
+                    if matched and conditions and isinstance(conditions, dict):
+                        matched = evaluate_condition_tree(conditions, entity, contacts)
+                elif conditions and isinstance(conditions, dict):
                     matched = evaluate_condition_tree(conditions, entity, contacts)
                 logger.info(
                     "dispatch_trigger: rule '%s' (%s) conditions_matched=%s",
@@ -1092,6 +1697,73 @@ def dispatch_trigger(
             conn.close()
 
 
+# ── Helper: template substitution ───────────────────────────────────
+
+def _substitute_alert_templates(alerts: list, entity: dict) -> list:
+    """Apply template substitution to alert datetime fields."""
+    if not alerts or not isinstance(alerts, list):
+        return alerts
+    result = []
+    for alert in alerts:
+        if isinstance(alert, dict):
+            new_alert = dict(alert)
+            if "datetime" in new_alert:
+                new_alert["datetime"] = _substitute_templates(new_alert["datetime"], entity)
+            result.append(new_alert)
+        else:
+            result.append(alert)
+    return result
+
+
+def _substitute_templates(text: str, entity: dict) -> str:
+    """Substitute template placeholders in text with entity values.
+    
+    Supports placeholders like {{title}}, {{status}}, {{today}}, {{weather_low}}, etc.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+        
+    # Common template substitutions
+    substitutions = {
+        "{{title}}": str(entity.get("title", "")),
+        "{{note}}": str(entity.get("note", "")),
+        "{{status}}": str(entity.get("status", "")),
+        "{{priority}}": str(entity.get("priority", "")),
+        "{{severity}}": str(entity.get("severity", "")),
+        "{{location}}": str(entity.get("location", "")),
+        "{{color}}": str(entity.get("color", "")),
+        "{{today}}": datetime.utcnow().strftime("%Y-%m-%d"),
+        "{{now}}": datetime.utcnow().isoformat(),
+        "{{owner_id}}": str(entity.get("owner_id", "")),
+    }
+    
+    # Weather template variables — fetch on demand if any weather placeholder is present
+    if "{{weather_" in text:
+        owner_id = entity.get("owner_id", "")
+        weather = _get_current_weather_for_default_location(owner_id) if owner_id else None
+        if weather:
+            substitutions["{{weather_low}}"] = str(weather.get("low", "?"))
+            substitutions["{{weather_high}}"] = str(weather.get("high", "?"))
+            substitutions["{{weather_precipitation}}"] = str(weather.get("precipitation", "?"))
+            substitutions["{{weather_wind_speed}}"] = str(weather.get("wind_speed", "?"))
+            substitutions["{{weather_wind_gusts}}"] = str(weather.get("wind_gusts", "?"))
+            substitutions["{{weather_code}}"] = str(weather.get("weather_code", "?"))
+        else:
+            substitutions["{{weather_low}}"] = "?"
+            substitutions["{{weather_high}}"] = "?"
+            substitutions["{{weather_precipitation}}"] = "?"
+            substitutions["{{weather_wind_speed}}"] = "?"
+            substitutions["{{weather_wind_gusts}}"] = "?"
+            substitutions["{{weather_code}}"] = "?"
+    
+    # Apply substitutions
+    result = text
+    for placeholder, value in substitutions.items():
+        result = result.replace(placeholder, value)
+        
+    return result
+
+
 # ── Helper: human-readable action description ────────────────────────
 
 def _build_action_description(action_type: str, params: dict, entity: dict) -> str:
@@ -1121,5 +1793,7 @@ def _build_action_description(action_type: str, params: dict, entity: dict) -> s
         "add_matching_contacts_as_people": f"Add matching contacts as people on '{entity_title}'",
         "call_ha_service": f"Call HA service {params.get('domain', '')}.{params.get('service', '')} on {params.get('entity_id', '')}",
         "fire_ha_event": f"Fire Home Assistant event '{params.get('event_type', '')}' with {len(params.get('event_data', {}) or {})} data fields",
+        "create_chit": f"Create new chit: {params.get('title', 'Untitled')}",
+        "create_reminder": f"Create reminder: {params.get('title', 'Reminder')} at {params.get('reminder_time', '?')}",
     }
     return descriptions.get(action_type, f"Execute {action_type} on '{entity_title}'")

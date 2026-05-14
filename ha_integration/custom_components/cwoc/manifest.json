@@ -1,7 +1,7 @@
 {
   "domain": "cwoc",
   "name": "C.W.'s Omni Chits",
-  "version": "1.0.0",
+  "version": "20260514.0633",
   "config_flow": true,
   "documentation": "https://github.com/cwhiii/cwoc-ha-integration",
   "requirements": [],

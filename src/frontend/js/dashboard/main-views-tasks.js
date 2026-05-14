@@ -340,6 +340,7 @@ function displayAssignedToMeView(chitsToDisplay) {
 function _setTasksMode(mode) {
   _tasksViewMode = mode;
   localStorage.setItem('cwoc_tasksViewMode', mode);
+  _updateUrlHash();
   var tasksBtn = document.getElementById('tasks-mode-tasks');
   var habitsBtn = document.getElementById('tasks-mode-habits');
   var assignedBtn = document.getElementById('tasks-mode-assigned');

@@ -264,10 +264,19 @@ async function loadLastLog() {
 var _releaseNotes = [];
 var _releaseNotesIndex = 0;
 
+function _formatReleaseDate(dateStr) {
+  // dateStr is YYYYMMDD — format as "May 14, 2026"
+  var y = dateStr.substring(0, 4);
+  var m = parseInt(dateStr.substring(4, 6), 10) - 1;
+  var d = parseInt(dateStr.substring(6, 8), 10);
+  var dt = new Date(y, m, d);
+  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 async function showReleaseNotes() {
   var modal = document.getElementById('release-notes-modal');
   var content = document.getElementById('release-notes-content');
-  var header = document.getElementById('release-notes-version');
+  var header = document.getElementById('release-notes-date');
   content.innerHTML = '<em>Loading...</em>';
   if (header) header.textContent = '';
   modal.style.display = 'flex';
@@ -292,7 +301,7 @@ async function showReleaseNotes() {
 
 function _renderCurrentReleaseNote() {
   var content = document.getElementById('release-notes-content');
-  var header = document.getElementById('release-notes-version');
+  var header = document.getElementById('release-notes-date');
   if (!content) return;
 
   var note = _releaseNotes[_releaseNotesIndex];
@@ -303,7 +312,7 @@ function _renderCurrentReleaseNote() {
     return;
   }
 
-  if (header) header.textContent = 'v' + note.version;
+  if (header) header.textContent = _formatReleaseDate(note.date);
 
   if (typeof marked !== 'undefined') {
     content.innerHTML = marked.parse(note.content, { breaks: true });

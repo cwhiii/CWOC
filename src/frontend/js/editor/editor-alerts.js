@@ -55,7 +55,7 @@ function _playAlarmSound() {
 }
 
 function _stopAlarmSound() {
-  if (_alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+  if (_alarmAudio) cwocStopAudio(_alarmAudio);
 }
 
 function _playTimerSound() {
@@ -259,7 +259,7 @@ function _checkWeatherNotification(n, idx, title) {
   if (!wd) return;
 
   var condition = n.weather_condition;
-  var threshold = n.weather_threshold;
+  var threshold = n.weather_threshold; // Stored in canonical units (°C, km/h, mm)
   if (!condition) return;
 
   var conditionMet = false;
@@ -268,6 +268,7 @@ function _checkWeatherNotification(n, idx, title) {
   var windUnit = _isMetricUnits() ? 'km/h' : 'mph';
   var precipUnit = _isMetricUnits() ? 'mm' : 'in';
   var precipMode = n.weather_precip_mode || 'any';
+  var isMetric = _isMetricUnits();
 
   switch (condition) {
     case 'high_above':
@@ -275,21 +276,35 @@ function _checkWeatherNotification(n, idx, title) {
     case 'low_above':
     case 'low_below': {
       if (wd.high == null || wd.low == null || threshold == null) return;
-      var high = (typeof _convertTemp === 'function') ? _convertTemp(wd.high) : wd.high;
-      var low = (typeof _convertTemp === 'function') ? _convertTemp(wd.low) : wd.low;
-      if (condition === 'high_above') { conditionMet = high > threshold; condLabel = 'high (' + high + unitLabel + ') above ' + threshold + unitLabel; }
-      else if (condition === 'high_below') { conditionMet = high < threshold; condLabel = 'high (' + high + unitLabel + ') below ' + threshold + unitLabel; }
-      else if (condition === 'low_above') { conditionMet = low > threshold; condLabel = 'low (' + low + unitLabel + ') above ' + threshold + unitLabel; }
-      else if (condition === 'low_below') { conditionMet = low < threshold; condLabel = 'low (' + low + unitLabel + ') below ' + threshold + unitLabel; }
+      // Compare in Celsius (canonical). wd.high/low are in Celsius from Open-Meteo.
+      var highC = wd.high;
+      var lowC = wd.low;
+      if (condition === 'high_above') conditionMet = highC > threshold;
+      else if (condition === 'high_below') conditionMet = highC < threshold;
+      else if (condition === 'low_above') conditionMet = lowC > threshold;
+      else if (condition === 'low_below') conditionMet = lowC < threshold;
+      if (conditionMet) {
+        // Format in display units for the label
+        var highDisp = isMetric ? Math.round(highC) : Math.round(highC * 9 / 5 + 32);
+        var lowDisp = isMetric ? Math.round(lowC) : Math.round(lowC * 9 / 5 + 32);
+        var threshDisp = isMetric ? Math.round(threshold) : Math.round(threshold * 9 / 5 + 32);
+        if (condition === 'high_above') condLabel = 'high (' + highDisp + unitLabel + ') above ' + threshDisp + unitLabel;
+        else if (condition === 'high_below') condLabel = 'high (' + highDisp + unitLabel + ') below ' + threshDisp + unitLabel;
+        else if (condition === 'low_above') condLabel = 'low (' + lowDisp + unitLabel + ') above ' + threshDisp + unitLabel;
+        else if (condition === 'low_below') condLabel = 'low (' + lowDisp + unitLabel + ') below ' + threshDisp + unitLabel;
+      }
       break;
     }
     case 'precipitation': {
-      // Any type of precipitation
       if (precipMode === 'more_than') {
         if (wd.precipitation == null || threshold == null) return;
-        var pDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = pDisplay > threshold;
-        condLabel = 'precipitation (' + pDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        // Compare in mm (canonical)
+        conditionMet = wd.precipitation > threshold;
+        if (conditionMet) {
+          var pDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var pThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'precipitation (' + pDisp + ' ' + precipUnit + ') over ' + pThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(wd.weather_code);
@@ -302,9 +317,12 @@ function _checkWeatherNotification(n, idx, title) {
         if (wd.precipitation == null || threshold == null) return;
         var rCodes = [61,63,65,66,67,80,81,82,51,53,55,56,57];
         var isRain = wd.weather_code != null && rCodes.includes(wd.weather_code);
-        var rDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isRain && rDisplay > threshold;
-        condLabel = 'rain (' + rDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isRain && wd.precipitation > threshold;
+        if (conditionMet) {
+          var rDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var rThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'rain (' + rDisp + ' ' + precipUnit + ') over ' + rThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [61,63,65,66,67,80,81,82,51,53,55,56,57].includes(wd.weather_code);
@@ -317,9 +335,12 @@ function _checkWeatherNotification(n, idx, title) {
         if (wd.precipitation == null || threshold == null) return;
         var sCodes = [71,73,75,77,85,86];
         var isSnow = wd.weather_code != null && sCodes.includes(wd.weather_code);
-        var sDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isSnow && sDisplay > threshold;
-        condLabel = 'snow (' + sDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isSnow && wd.precipitation > threshold;
+        if (conditionMet) {
+          var sDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var sThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'snow (' + sDisp + ' ' + precipUnit + ') over ' + sThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [71,73,75,77,85,86].includes(wd.weather_code);
@@ -332,9 +353,12 @@ function _checkWeatherNotification(n, idx, title) {
         if (wd.precipitation == null || threshold == null) return;
         var hCodes = [96,99];
         var isHail = wd.weather_code != null && hCodes.includes(wd.weather_code);
-        var hDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
-        conditionMet = isHail && hDisplay > threshold;
-        condLabel = 'hail (' + hDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+        conditionMet = isHail && wd.precipitation > threshold;
+        if (conditionMet) {
+          var hDisp = isMetric ? wd.precipitation.toFixed(1) : (wd.precipitation / 25.4).toFixed(1);
+          var hThresh = isMetric ? threshold.toFixed(1) : (threshold / 25.4).toFixed(1);
+          condLabel = 'hail (' + hDisp + ' ' + precipUnit + ') over ' + hThresh + ' ' + precipUnit;
+        }
       } else {
         if (wd.weather_code == null) return;
         conditionMet = [96,99].includes(wd.weather_code);
@@ -345,9 +369,13 @@ function _checkWeatherNotification(n, idx, title) {
     case 'wind_above': {
       var wMax = (typeof _getWindMax === 'function') ? _getWindMax(wd) : wd.wind_gusts;
       if (wMax == null || threshold == null) return;
-      var windVal = _isMetricUnits() ? Math.round(wMax) : Math.round(wMax * 0.621371);
-      conditionMet = windVal > threshold;
-      condLabel = 'wind (' + windVal + ' ' + windUnit + ') over ' + threshold + ' ' + windUnit;
+      // Compare in km/h (canonical). wMax is in km/h from Open-Meteo.
+      conditionMet = wMax > threshold;
+      if (conditionMet) {
+        var windDisp = isMetric ? Math.round(wMax) : Math.round(wMax * 0.621371);
+        var windThresh = isMetric ? Math.round(threshold) : Math.round(threshold * 0.621371);
+        condLabel = 'wind (' + windDisp + ' ' + windUnit + ') over ' + windThresh + ' ' + windUnit;
+      }
       break;
     }
   }
@@ -367,43 +395,14 @@ function _checkWeatherNotification(n, idx, title) {
  * Returns a Date representing midnight at the end of the current cycle.
  */
 function _getHabitCycleEnd() {
-  const habitFreqSel = document.getElementById('habitFrequency');
-  const freq = habitFreqSel ? habitFreqSel.value : 'DAILY';
-  const now = new Date();
-
-  switch (freq) {
-    case 'DAILY': {
-      // End of today (midnight tonight)
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-      return end;
-    }
-    case 'WEEKLY': {
-      // End of this week (next Sunday midnight, or next week-start-day)
-      const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined)
-        ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
-      const dayOfWeek = now.getDay();
-      const daysUntilEnd = (7 - dayOfWeek + wsd) % 7 || 7;
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilEnd, 0, 0, 0);
-      return end;
-    }
-    case 'MONTHLY': {
-      // End of this month (first of next month midnight)
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
-      return end;
-    }
-    case 'YEARLY': {
-      // End of this year (Jan 1 next year midnight)
-      const end = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
-      return end;
-    }
-    default:
-      return null;
-  }
+  var habitFreqSel = document.getElementById('habitFrequency');
+  var freq = habitFreqSel ? habitFreqSel.value : 'DAILY';
+  return _cwocGetHabitCycleEnd(freq);
 }
 
 function _notifTimingLabel(n) {
   if (n.targetType === "cycle") {
-    return "before end of " + (typeof _habitPeriodLabel === 'function' ? _habitPeriodLabel() : "cycle");
+    return "— will be missed";
   }
   const hasStart = !!document.getElementById("start_datetime")?.value;
   const hasDue = !!document.getElementById("due_datetime")?.value;
@@ -476,180 +475,53 @@ function renderAlarmsContainer() {
 
   const header = document.createElement("h4");
   header.style.cssText = "margin:0.5em 0 0.25em;font-size:0.9em;opacity:0.7;";
-  header.textContent = "🔔 Alarms";
+  header.textContent = "\uD83D\uDD14 Alarms";
   c.appendChild(header);
 
   window._alertsData.alarms.forEach((alarm, idx) => {
-    const wrap = document.createElement("div");
-    wrap.style.cssText = `border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;${!alarm.enabled ? "background:rgba(0,0,0,0.04);" : ""}`;
+    var _chitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+    var _snKey = _chitId ? (_chitId + '-' + idx) : null;
 
-    const row1 = document.createElement("div");
-    row1.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;";
-
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.value = alarm.name || "";
-    nameInput.placeholder = "Alarm name";
-    nameInput.style.cssText = `flex:1;font-size:0.9em;padding:2px 4px;${!alarm.enabled ? "opacity:0.45;" : ""}`;
-    nameInput.addEventListener("input", () => { window._alertsData.alarms[idx].name = nameInput.value; setSaveButtonUnsaved(); });
-
-    const timeInput = document.createElement("input");
-    timeInput.type = "text";
-    timeInput.value = _fmtAlarmTime(alarm.time || "") || "";
-    timeInput.placeholder = window._editorTimeFormat === '24hour' ? "HH:MM" : "H:MM AM";
-    timeInput.readOnly = true;
-    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;width:7em;cursor:pointer;text-align:center;${!alarm.enabled ? "opacity:0.45;" : ""}`;
-
-    timeInput.addEventListener("mousedown", (e) => { e.preventDefault(); });
-    timeInput.addEventListener("click", () => {
-      // Set value to 24h for the picker to read
-      var raw24 = alarm.time || "12:00";
-      var origVal = timeInput.value;
-      timeInput.value = raw24;
-      cwocTimePicker.open(timeInput);
-      // After picker closes, the value will be in 24h format — convert for display
-      timeInput.addEventListener("change", function _onPickerDone() {
-        timeInput.removeEventListener("change", _onPickerDone);
-        var newVal = timeInput.value.trim();
-        var match24 = newVal.match(/^(\d{1,2}):(\d{2})$/);
-        if (match24) {
-          var h = parseInt(match24[1]), m = parseInt(match24[2]);
-          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            var parsed = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-            window._alertsData.alarms[idx].time = parsed;
-            timeInput.value = _fmtAlarmTime(parsed);
-            if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
-              window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
-              renderAlarmsContainer();
-            }
-            setSaveButtonUnsaved();
-            return;
-          }
+    var card = cwocBuildAlarmCard({
+      alarm: alarm,
+      onNameChange: function(name) {
+        window._alertsData.alarms[idx].name = name;
+        setSaveButtonUnsaved();
+      },
+      onTimeChange: function(time24) {
+        window._alertsData.alarms[idx].time = time24;
+        if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
+          window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
+          renderAlarmsContainer();
         }
-        timeInput.value = origVal;
-      }, { once: true });
-    });
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.textContent = alarm.enabled ? "On" : "Off";
-    toggleBtn.style.cssText = "padding:1px 6px;";
-    toggleBtn.onclick = () => toggleAlarmEnabled(idx);
-
-    const delBtn = document.createElement("button");
-    delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
-    delBtn.onclick = () => deleteAlarmItem(idx);
-
-    row1.appendChild(nameInput);
-    row1.appendChild(timeInput);
-    row1.appendChild(toggleBtn);
-    row1.appendChild(delBtn);
-    wrap.appendChild(row1);
-
-    // Days row — order honors week_start_day setting
-    const daysRow = document.createElement("div");
-    daysRow.style.cssText = `display:flex;gap:0.3em;flex-wrap:wrap;font-size:0.8em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
-    const allDays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined) ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
-    const orderedDays = [];
-    for (let d = 0; d < 7; d++) orderedDays.push(allDays[(wsd + d) % 7]);
-    orderedDays.forEach((day) => {
-      const lbl = document.createElement("label");
-      lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = (alarm.days || []).includes(day);
-      cb.addEventListener("change", () => {
-        const days = window._alertsData.alarms[idx].days || [];
-        if (cb.checked) { if (!days.includes(day)) days.push(day); }
-        else { const i = days.indexOf(day); if (i !== -1) days.splice(i, 1); }
+        setSaveButtonUnsaved();
+      },
+      onDaysChange: function(days) {
         window._alertsData.alarms[idx].days = days;
         setSaveButtonUnsaved();
-      });
-      lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(day));
-      daysRow.appendChild(lbl);
-    });
-    wrap.appendChild(daysRow);
-
-    // Delete after dismissal checkbox
-    const dadRow = document.createElement("div");
-    dadRow.style.cssText = `display:flex;align-items:center;gap:4px;font-size:0.8em;margin-top:0.2em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
-    const dadLbl = document.createElement("label");
-    dadLbl.style.cssText = "display:flex;align-items:center;gap:3px;cursor:pointer;";
-    const dadCb = document.createElement("input");
-    dadCb.type = "checkbox";
-    dadCb.checked = !!alarm.delete_after_dismiss;
-    dadCb.addEventListener("change", () => {
-      window._alertsData.alarms[idx].delete_after_dismiss = dadCb.checked;
-      setSaveButtonUnsaved();
-    });
-    dadLbl.appendChild(dadCb);
-    dadLbl.appendChild(document.createTextNode("Delete chit after dismissal"));
-    dadRow.appendChild(dadLbl);
-    wrap.appendChild(dadRow);
-
-    // Snooze countdown bar — show if this alarm is currently snoozed
-    var _chitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
-    if (_chitId) {
-      var _snKey = _chitId + '-' + idx;
-      var _snEnd = (window._sharedSnoozeRegistry || {})[_snKey];
-      if (_snEnd && Date.now() < _snEnd) {
-        var snzBar = document.createElement('div');
-        snzBar.style.cssText = 'position:relative;width:100%;height:2em;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;margin-top:0.3em;cursor:pointer;';
-        snzBar.title = 'Click to restart snooze · Shift+click to cancel';
-        var snzFill = document.createElement('div');
-        snzFill.style.cssText = 'position:absolute;top:2px;left:2px;bottom:2px;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);border-radius:4px;';
-        var snzText = document.createElement('div');
-        snzText.style.cssText = "position:relative;width:100%;text-align:center;font-family:monospace;font-size:1em;font-weight:bold;color:#4a2c2a;line-height:2em;text-shadow:0 0 4px #fff8e1;z-index:1;";
-        snzBar.appendChild(snzFill); snzBar.appendChild(snzText);
-        wrap.appendChild(snzBar);
-        var _snzMs = (typeof _sharedGetSnoozeMs === 'function') ? _sharedGetSnoozeMs() : 300000;
-        var _snEndLocal = _snEnd;
-        var _snzInt = setInterval(function() {
-          var remain = Math.max(0, _snEndLocal - Date.now());
-          var secs = Math.ceil(remain / 1000);
-          var pct = Math.max(0, (remain / _snzMs) * 100);
-          snzFill.style.width = pct + '%';
-          var m = Math.floor(secs / 60), s = secs % 60;
-          snzText.textContent = '💤 ' + m + ':' + String(s).padStart(2, '0');
-          if (remain <= 0) { clearInterval(_snzInt); snzBar.remove(); }
-        }, 200);
-
-        // Click = restart snooze, Shift+click = cancel
-        snzBar.addEventListener('click', function(e) {
-          if (e.shiftKey) {
-            clearInterval(_snzInt);
-            delete (window._sharedSnoozeRegistry || {})[_snKey];
-            if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
-            if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
-            snzBar.remove();
-          } else {
-            var newEnd = Date.now() + _snzMs;
-            _snEndLocal = newEnd;
-            if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[_snKey] = newEnd;
-            if (typeof _sharedPersistSnooze === 'function') _sharedPersistSnooze(_snKey, newEnd);
-            if (typeof syncSend === 'function') syncSend('alert_snoozed', { snoozeKey: _snKey, snoozeUntil: newEnd });
-          }
-        });
-
-        // Long press on mobile = cancel
-        var _lpT = null;
-        snzBar.addEventListener('touchstart', function() {
-          _lpT = setTimeout(function() {
-            clearInterval(_snzInt);
-            delete (window._sharedSnoozeRegistry || {})[_snKey];
-            if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
-            if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
-            snzBar.remove();
-          }, 600);
-        }, { passive: true });
-        snzBar.addEventListener('touchend', function() { if (_lpT) { clearTimeout(_lpT); _lpT = null; } }, { passive: true });
-        snzBar.addEventListener('touchmove', function() { if (_lpT) { clearTimeout(_lpT); _lpT = null; } }, { passive: true });
+      },
+      onToggle: function() { toggleAlarmEnabled(idx); },
+      onDelete: function() { deleteAlarmItem(idx); },
+      onDeleteAfterDismissChange: function(val) {
+        window._alertsData.alarms[idx].delete_after_dismiss = val;
+        setSaveButtonUnsaved();
+      },
+      snoozeKey: _snKey,
+      snoozeRegistry: window._sharedSnoozeRegistry || {},
+      getSnoozeMs: (typeof _sharedGetSnoozeMs === 'function') ? _sharedGetSnoozeMs : function() { return 300000; },
+      onSnoozeRestart: function(newEnd) {
+        if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[_snKey] = newEnd;
+        if (typeof _sharedPersistSnooze === 'function') _sharedPersistSnooze(_snKey, newEnd);
+        if (typeof syncSend === 'function') syncSend('alert_snoozed', { snoozeKey: _snKey, snoozeUntil: newEnd });
+      },
+      onSnoozeDismiss: function() {
+        delete (window._sharedSnoozeRegistry || {})[_snKey];
+        if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
+        if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
       }
-    }
+    });
 
-    c.appendChild(wrap);
+    c.appendChild(card);
   });
 }
 
@@ -741,6 +613,7 @@ function renderNotificationsContainer() {
     // Determine current direction
     let curDir = "unset";
     if (isUnset) curDir = "unset";
+    else if (n.targetType === "cycle" && isHabit) curDir = "habit";
     else if (isWeatherMode) curDir = "weather";
     else if (isDesktopMode) curDir = "desktop";
     else if (n.atTarget) curDir = "at";
@@ -770,6 +643,7 @@ function renderNotificationsContainer() {
       }
     } else if (isHabit) {
       dirOptions = [
+        { value: "habit",   label: "Habit Will Be Missed Within" },
         { value: "before",  label: "Before" },
         { value: "desktop", label: "Next Time on Desktop" }
       ];
@@ -801,7 +675,21 @@ function renderNotificationsContainer() {
       if (dir === "unset") return; // ignore placeholder re-selection
       // Clear the unset marker
       delete window._alertsData.notifications[idx]._direction;
-      if (dir === "weather") {
+      if (dir === "habit") {
+        window._alertsData.notifications[idx].unit = window._alertsData.notifications[idx].unit || "hours";
+        if (window._alertsData.notifications[idx].unit === "on_desktop" || window._alertsData.notifications[idx].unit === "weather") {
+          window._alertsData.notifications[idx].unit = "hours";
+        }
+        window._alertsData.notifications[idx].targetType = "cycle";
+        window._alertsData.notifications[idx].only_if_undone = true;
+        window._alertsData.notifications[idx].atTarget = false;
+        window._alertsData.notifications[idx].afterTarget = false;
+        delete window._alertsData.notifications[idx].delivery_target;
+        delete window._alertsData.notifications[idx].triggered;
+        delete window._alertsData.notifications[idx].weather_condition;
+        delete window._alertsData.notifications[idx].weather_threshold;
+        delete window._alertsData.notifications[idx].weather_precip_mode;
+      } else if (dir === "weather") {
         window._alertsData.notifications[idx].unit = "weather";
         window._alertsData.notifications[idx].value = 0;
         window._alertsData.notifications[idx].atTarget = false;
@@ -871,13 +759,13 @@ function renderNotificationsContainer() {
     let targetOptions = [];
     let targetEl = null; // will be a <select> or <span>
 
-    if (isHabit && !isDesktopMode && !isWeatherMode && !isUnset) {
+    if (isHabit && curDir !== "habit" && !isDesktopMode && !isWeatherMode && !isUnset) {
       const cycleLabel = _habitPeriodLabel();
       targetEl = document.createElement("span");
       targetEl.style.cssText = "font-size:0.9em;font-style:italic;opacity:0.8;";
       targetEl.textContent = "end of " + cycleLabel;
       if (!n.targetType) window._alertsData.notifications[idx].targetType = "cycle";
-    } else if (!isDesktopMode && !isWeatherMode && !isUnset) {
+    } else if (!isDesktopMode && !isWeatherMode && !isUnset && curDir !== "habit") {
       if (dateMode2 === 'startend') {
         targetOptions = [{ value: "start", label: "start" }, { value: "end", label: "end" }];
       } else if (dateMode2 === 'due') {
@@ -932,6 +820,14 @@ function renderNotificationsContainer() {
       // Weather mode: "Notify [Weather ▾] [type controls...]"
       row.appendChild(dirSel);
       _appendWeatherControls(row, n, idx);
+    } else if (curDir === "habit") {
+      // Habit mode: "Notify [Will Be Missed Within ▾] [#] [units]"
+      row.appendChild(dirSel);
+      if (!n.value) {
+        valInput.style.cssText += "border:2px solid #d4af37;background:#fff8e1;";
+      }
+      row.appendChild(valInput);
+      if (n.value) row.appendChild(unitSel);
     } else if (!isDesktopMode && !n.atTarget) {
       // "before" or "after": "Notify [value] [unit] [direction] [target]"
       if (!n.value) {
@@ -962,8 +858,8 @@ function renderNotificationsContainer() {
       }
     }
 
-    // Habit mode: "Disable if complete for [period]" checkbox
-    if (isHabit && !isDesktopMode && !isWeatherMode && !isUnset) {
+    // Habit mode: "Disable if complete for [period]" checkbox (not for "habit" direction — always implied)
+    if (isHabit && curDir !== "habit" && !isDesktopMode && !isWeatherMode && !isUnset) {
       const disableLbl = document.createElement("label");
       disableLbl.style.cssText = "display:flex;align-items:center;gap:3px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
       disableLbl.title = "Skip this notification if the habit goal is already met for the current " + _habitPeriodLabel();
@@ -1023,14 +919,14 @@ function _appendWeatherControls(row, n, idx) {
   condSel.addEventListener("change", function() {
     if (!condSel.value) return;
     window._alertsData.notifications[idx].weather_condition = condSel.value;
-    // Set sensible defaults
+    // Set sensible defaults in canonical units (°C for temp, km/h for wind, mm for precip)
     if (['high_above','high_below','low_above','low_below'].includes(condSel.value)) {
       if (!window._alertsData.notifications[idx].weather_threshold) {
-        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 32 : 90;
+        window._alertsData.notifications[idx].weather_threshold = 32; // 32°C = ~90°F
       }
     } else if (condSel.value === 'wind_above') {
       if (!window._alertsData.notifications[idx].weather_threshold) {
-        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 50 : 30;
+        window._alertsData.notifications[idx].weather_threshold = 50; // 50 km/h = ~31 mph
       }
     } else if (['precipitation','rain','snow','hail'].includes(condSel.value)) {
       if (!window._alertsData.notifications[idx].weather_precip_mode) {
@@ -1060,7 +956,8 @@ function _appendWeatherControls(row, n, idx) {
     modeSel.addEventListener("change", function() {
       window._alertsData.notifications[idx].weather_precip_mode = modeSel.value;
       if (modeSel.value === "more_than" && !window._alertsData.notifications[idx].weather_threshold) {
-        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 5 : 0.2;
+        // Default threshold in mm (canonical unit)
+        window._alertsData.notifications[idx].weather_threshold = 5;
       }
       setSaveButtonUnsaved();
       renderNotificationsContainer();
@@ -1068,15 +965,21 @@ function _appendWeatherControls(row, n, idx) {
     row.appendChild(modeSel);
 
     // Show threshold input only if "more than" mode
+    // Threshold is stored in mm (canonical). Convert to/from display units.
     if (precipMode === "more_than") {
       var precipInput = document.createElement("input");
       precipInput.type = "number";
       precipInput.step = _isMetricUnits() ? "1" : "0.1";
       precipInput.min = "0";
-      precipInput.value = n.weather_threshold != null ? n.weather_threshold : (_isMetricUnits() ? 5 : 0.2);
+      var storedPrecipMm = n.weather_threshold != null ? n.weather_threshold : 5;
+      var precipDisplayVal = _isMetricUnits() ? storedPrecipMm : Math.round(storedPrecipMm / 25.4 * 10) / 10;
+      precipInput.value = precipDisplayVal;
       precipInput.style.cssText = "width:60px;font-size:0.9em;padding:2px 4px;";
       precipInput.addEventListener("change", function() {
-        window._alertsData.notifications[idx].weather_threshold = parseFloat(precipInput.value) || 0;
+        var inputVal = parseFloat(precipInput.value) || 0;
+        // Convert display units back to mm for storage
+        var canonicalMm = _isMetricUnits() ? inputVal : Math.round(inputVal * 25.4 * 10) / 10;
+        window._alertsData.notifications[idx].weather_threshold = canonicalMm;
         setSaveButtonUnsaved();
       });
       row.appendChild(precipInput);
@@ -1088,22 +991,39 @@ function _appendWeatherControls(row, n, idx) {
   }
 
   // ── Threshold input (temp and wind conditions) ──
+  // Thresholds are stored in canonical units (°C for temp, km/h for wind).
+  // Convert to/from display units for the UI.
   var needsThreshold = ['high_above','high_below','low_above','low_below','wind_above'].includes(n.weather_condition);
   if (needsThreshold) {
     var threshInput = document.createElement("input");
     threshInput.type = "number";
-    var defaultThresh = (n.weather_condition === 'wind_above')
-      ? (_isMetricUnits() ? 50 : 30)
-      : (_isMetricUnits() ? 32 : 90);
-    threshInput.value = n.weather_threshold != null ? n.weather_threshold : defaultThresh;
+    var isWind = (n.weather_condition === 'wind_above');
+    var defaultThreshCanonical = isWind ? 50 : 32; // km/h or °C
+    var storedCanonical = n.weather_threshold != null ? n.weather_threshold : defaultThreshCanonical;
+    // Convert canonical to display units for the input
+    var displayValue;
+    if (isWind) {
+      displayValue = _isMetricUnits() ? Math.round(storedCanonical) : Math.round(storedCanonical * 0.621371);
+    } else {
+      displayValue = _isMetricUnits() ? Math.round(storedCanonical) : Math.round(storedCanonical * 9 / 5 + 32);
+    }
+    threshInput.value = displayValue;
     threshInput.style.cssText = "width:60px;font-size:0.9em;padding:2px 4px;";
     threshInput.addEventListener("change", function() {
-      window._alertsData.notifications[idx].weather_threshold = parseInt(threshInput.value) || 0;
+      var inputVal = parseInt(threshInput.value) || 0;
+      // Convert display units back to canonical for storage
+      var canonical;
+      if (isWind) {
+        canonical = _isMetricUnits() ? inputVal : Math.round(inputVal / 0.621371);
+      } else {
+        canonical = _isMetricUnits() ? inputVal : Math.round((inputVal - 32) * 5 / 9);
+      }
+      window._alertsData.notifications[idx].weather_threshold = canonical;
       setSaveButtonUnsaved();
     });
     row.appendChild(threshInput);
 
-    var threshUnit = (n.weather_condition === 'wind_above') ? windUnit : unitLabel;
+    var threshUnit = isWind ? windUnit : unitLabel;
     var unitSpan = document.createElement("span");
     unitSpan.style.cssText = "font-size:0.9em;";
     unitSpan.textContent = threshUnit;

@@ -939,3 +939,92 @@ input:checked + .slider:before {
     opacity: 1 !important;
     pointer-events: auto !important;
 }
+
+/* ── Shared Alarm Card (cwocBuildAlarmCard) ─────────────────────────────── */
+/* Used by both the chit editor and the independent alerts board */
+
+.cwoc-alarm-card {
+    border: 1px solid #e0d4b5;
+    border-radius: 4px;
+    padding: 0.4em 0.6em;
+    margin-bottom: 0.4em;
+}
+
+.cwoc-alarm-card.cwoc-alarm-disabled {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.cwoc-alarm-card-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-bottom: 0.3em;
+    flex-wrap: wrap;
+}
+
+.cwoc-alarm-name {
+    flex: 1;
+    min-width: 60px;
+    font-size: 0.9em;
+    padding: 3px 5px;
+    border: 1px solid #d4c4a0;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.5);
+    font-family: 'Lora', Georgia, serif;
+}
+
+.cwoc-alarm-time {
+    font-size: 1.1em;
+    padding: 3px 6px;
+    font-weight: bold;
+    width: 7em;
+    cursor: pointer;
+    text-align: center;
+    border: 1px solid #d4c4a0;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.5);
+    font-family: 'Lora', Georgia, serif;
+}
+
+.cwoc-alarm-toggle,
+.cwoc-alarm-del {
+    padding: 2px 8px;
+    cursor: pointer;
+    border: 1px solid #d4c4a0;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.4);
+    font-size: 0.85em;
+}
+
+.cwoc-alarm-toggle:hover,
+.cwoc-alarm-del:hover {
+    background: rgba(139, 90, 43, 0.12);
+}
+
+.cwoc-alarm-days {
+    display: flex;
+    gap: 0.3em;
+    flex-wrap: wrap;
+    font-size: 0.8em;
+    margin-top: 0.15em;
+}
+
+.cwoc-alarm-day-label {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    color: #1a1208;
+}
+
+.cwoc-alarm-dad-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8em;
+    margin-top: 0.2em;
+}
+
+.cwoc-alarm-snooze-bar {
+    margin-top: 0.3em;
+}

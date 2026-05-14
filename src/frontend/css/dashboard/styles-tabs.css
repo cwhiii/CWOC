@@ -48,12 +48,15 @@
 
 .tab-label {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ── Icon-only mode ─────────────────────────────────────────────────────── */
 .tabs.icon-only .tab-label,
-.tabs.icon-only .tab-count {
-    display: none;
+.tabs.icon-only .tab-count,
+.tabs.icon-only .email-unread-badge {
+    display: none !important;
 }
 .tabs.icon-only .tab {
     padding: 10px 6px;

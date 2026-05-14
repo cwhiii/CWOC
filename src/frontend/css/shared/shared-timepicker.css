@@ -9,7 +9,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 9999;
+  z-index: 999999;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -116,7 +116,7 @@
   justify-content: center;
   gap: 2px;
   z-index: 10;
-  pointer-events: auto;
+  pointer-events: none;
 }
 .cwoc-tp-num-input {
   width: 2.2em;
@@ -132,6 +132,7 @@
   outline: none;
   caret-color: #6b4e31;
   transition: border-color 0.15s;
+  pointer-events: auto;
 }
 .cwoc-tp-num-input:focus {
   border-bottom-color: #6b4e31;
@@ -148,6 +149,7 @@
   font-weight: 700;
   color: #1a1208;
   user-select: none;
+  pointer-events: none;
 }
 
 /* ── Separator (colon) ────────────────────────────────────────────────────── */

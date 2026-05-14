@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.backend.auth_utils import hash_password
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, utcnow_iso, require_admin
 from src.backend.models import UserCreate, UserResponse
 
 
@@ -26,43 +26,6 @@ class PasswordReset(BaseModel):
 logger = logging.getLogger(__name__)
 
 users_router = APIRouter(prefix="/api/users")
-
-
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO 8601 string with Z suffix."""
-    return datetime.utcnow().isoformat() + "Z"
-
-
-def _require_admin(request: Request) -> str:
-    """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if row is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        if not row["is_admin"]:
-            raise HTTPException(status_code=403, detail="Admin access required")
-
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Admin check error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-    finally:
-        if conn:
-            conn.close()
 
 
 def _user_row_to_response(row: sqlite3.Row) -> dict:
@@ -84,7 +47,7 @@ def _user_row_to_response(row: sqlite3.Row) -> dict:
 @users_router.get("")
 def list_users(request: Request):
     """List all users (admin only). Returns a list of UserResponse objects."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -111,7 +74,7 @@ def list_users(request: Request):
 @users_router.post("")
 def create_user(body: UserCreate, request: Request):
     """Create a new user (admin only). Requires username, display_name, password."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -128,7 +91,7 @@ def create_user(body: UserCreate, request: Request):
             raise HTTPException(status_code=409, detail="Username already exists")
 
         user_id = str(uuid.uuid4())
-        now = _utcnow_iso()
+        now = utcnow_iso()
         password_hash = hash_password(body.password)
 
         conn.execute(
@@ -174,7 +137,7 @@ def create_user(body: UserCreate, request: Request):
 def deactivate_user(user_id: str, request: Request):
     """Deactivate a user (admin only). Invalidates all their sessions.
     Prevents deactivation of the last active admin."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -203,7 +166,7 @@ def deactivate_user(user_id: str, request: Request):
                 )
 
         # Deactivate the user
-        now = _utcnow_iso()
+        now = utcnow_iso()
         conn.execute(
             "UPDATE users SET is_active = 0, modified_datetime = ? WHERE id = ?",
             (now, user_id),
@@ -233,7 +196,7 @@ def deactivate_user(user_id: str, request: Request):
 @users_router.put("/{user_id}/reactivate")
 def reactivate_user(user_id: str, request: Request):
     """Reactivate a user (admin only). Sets is_active=True."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -249,7 +212,7 @@ def reactivate_user(user_id: str, request: Request):
         if target is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        now = _utcnow_iso()
+        now = utcnow_iso()
         conn.execute(
             "UPDATE users SET is_active = 1, modified_datetime = ? WHERE id = ?",
             (now, user_id),
@@ -273,7 +236,7 @@ def reactivate_user(user_id: str, request: Request):
 @users_router.put("/{user_id}/reset-password")
 def reset_password(user_id: str, body: PasswordReset, request: Request):
     """Reset a user's password (admin only). Hashes the new password and updates the record."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -289,7 +252,7 @@ def reset_password(user_id: str, body: PasswordReset, request: Request):
         if target is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        now = _utcnow_iso()
+        now = utcnow_iso()
         password_hash = hash_password(body.new_password)
         conn.execute(
             "UPDATE users SET password_hash = ?, modified_datetime = ? WHERE id = ?",
@@ -328,7 +291,7 @@ class UserUpdate(BaseModel):
 @users_router.put("/{user_id}")
 def update_user(user_id: str, body: UserUpdate, request: Request):
     """Update a user's profile fields (admin only). Can change username, display_name, email, is_admin."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -383,7 +346,7 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
         if not updates:
             return _user_row_to_response(target)
 
-        now = _utcnow_iso()
+        now = utcnow_iso()
         updates.append("modified_datetime = ?")
         params.append(now)
         params.append(user_id)

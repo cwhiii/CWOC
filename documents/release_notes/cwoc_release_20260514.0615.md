@@ -1,0 +1,1 @@
+Fixed sidebar tag filter toggle — clicking a tag row now properly toggles selection on/off using live checkbox state instead of a stale closure. Badge styling updates immediately on click. Also fixed "Clear" button and "Clear All Filters" to properly reset `_sidebarTagSelection`, preventing ghost filters from persisting.

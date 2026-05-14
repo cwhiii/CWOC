@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-timepicker.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-rules.css" />
@@ -40,28 +41,103 @@
             <label for="rule-trigger">When should this rule fire? <span style="color:var(--danger-red);">*</span></label>
             <select id="rule-trigger">
                 <option value="">— Select trigger —</option>
-                <option value="chit_created">Chit Created</option>
-                <option value="chit_updated">Chit Updated</option>
-                <option value="email_received">Email Received</option>
-                <option value="contact_created">Contact Created</option>
-                <option value="contact_updated">Contact Updated</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="ha_state_change">🏠 HA State Change</option>
-                <option value="ha_webhook">🏠 HA Webhook</option>
+                <optgroup label="Chits">
+                    <option value="chit_created">Chit Created</option>
+                    <option value="chit_updated">Chit Updated</option>
+                </optgroup>
+                <optgroup label="Email">
+                    <option value="email_received">Email Received</option>
+                </optgroup>
+                <optgroup label="Contacts">
+                    <option value="contact_created">Contact Created</option>
+                    <option value="contact_updated">Contact Updated</option>
+                </optgroup>
+                <optgroup label="Scheduling">
+                    <option value="scheduled">Scheduled (Cron / Interval)</option>
+                </optgroup>
+                <optgroup label="Habits">
+                    <option value="habit_achieved">🎯 Habit Achieved</option>
+                    <option value="habit_missed">🎯 Habit Missed</option>
+                    <option value="habit_due">🎯 Habit Due (with offset)</option>
+                </optgroup>
+                <optgroup label="Home Assistant">
+                    <option value="ha_state_change">🏠 HA State Change</option>
+                    <option value="ha_webhook">🏠 HA Webhook</option>
+                </optgroup>
             </select>
             <div class="schedule-config" id="schedule-config">
-                <label for="schedule-frequency">Frequency</label>
-                <select id="schedule-frequency">
-                    <option value="daily">Daily</option>
-                    <option value="hourly">Every N Hours</option>
-                </select>
-                <div id="schedule-interval-wrap" style="margin-top:8px;display:none;">
-                    <label for="schedule-interval">Every how many hours?</label>
-                    <input type="number" id="schedule-interval" min="1" max="168" value="1" style="width:80px;" />
+                <!-- Schedule Mode Toggle -->
+                <label>Schedule Mode</label>
+                <div class="cwoc-2val-toggle" id="schedule-mode-pill">
+                    <input type="hidden" id="schedule-mode-toggle" value="simple" />
+                    <span data-val="simple" class="active">Simple</span>
+                    <span data-val="cron">Cron</span>
                 </div>
-                <div style="margin-top:8px;">
-                    <label for="schedule-time">Time of Day</label>
-                    <input type="text" id="schedule-time" value="09:00" readonly style="cursor:pointer;text-align:center;" />
+
+                <!-- Simple Mode (existing daily/hourly UI) -->
+                <div id="schedule-simple-config">
+                    <label for="schedule-frequency">Frequency</label>
+                    <select id="schedule-frequency">
+                        <option value="daily">Daily</option>
+                        <option value="hourly">Every N Hours</option>
+                    </select>
+                    <div id="schedule-interval-wrap" style="margin-top:8px;display:none;">
+                        <label for="schedule-interval">Every how many hours?</label>
+                        <input type="number" id="schedule-interval" min="1" max="168" value="1" style="width:80px;" />
+                    </div>
+                    <div style="margin-top:8px;">
+                        <label for="schedule-time">Time of Day</label>
+                        <input type="text" id="schedule-time" value="09:00" readonly style="cursor:pointer;text-align:center;" />
+                    </div>
+                </div>
+
+                <!-- Cron Mode (new cron expression builder) -->
+                <div id="schedule-cron-config" class="cron-builder hidden">
+                    <div class="cron-fields-grid">
+                        <div class="cron-field">
+                            <label for="cron-minute">Minute</label>
+                            <input type="text" id="cron-minute" value="*" placeholder="0-59" />
+                        </div>
+                        <div class="cron-field">
+                            <label for="cron-hour">Hour</label>
+                            <input type="text" id="cron-hour" value="*" placeholder="0-23" />
+                        </div>
+                        <div class="cron-field">
+                            <label for="cron-dom">Day of Month</label>
+                            <input type="text" id="cron-dom" value="*" placeholder="1-31" />
+                        </div>
+                        <div class="cron-field">
+                            <label for="cron-month">Month</label>
+                            <input type="text" id="cron-month" value="*" placeholder="1-12" />
+                        </div>
+                        <div class="cron-field">
+                            <label for="cron-dow">Day of Week</label>
+                            <input type="text" id="cron-dow" value="*" placeholder="0-6 or MON-SUN" />
+                        </div>
+                    </div>
+                    <div class="cron-preview" id="cron-preview">
+                        <i class="fa-solid fa-clock"></i> <span id="cron-preview-text">Every minute</span>
+                    </div>
+                    <div class="cron-presets">
+                        <label>Presets</label>
+                        <div class="cron-preset-buttons">
+                            <button type="button" class="zone-button" data-cron="0 9 * * *">Every morning</button>
+                            <button type="button" class="zone-button" data-cron="0 * * * *">Every hour</button>
+                            <button type="button" class="zone-button" data-cron="0 9 * * 1-5">Weekdays 9am</button>
+                            <button type="button" class="zone-button" data-cron="0 0 1 * *">1st of month</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Track as Habit -->
+                <div class="rule-toggle-row" id="habit-mode-row">
+                    <label class="rule-enabled-toggle">
+                        <input type="checkbox" id="rule-habit-mode" />
+                        <span class="rule-enabled-slider"></span>
+                    </label>
+                    <label for="rule-habit-mode" style="font-weight:normal;margin:0;cursor:pointer;">
+                        Track as Habit <span class="habit-hint">(Track whether this rule fires on schedule — shows in Habits view with streak/success rate)</span>
+                    </label>
                 </div>
             </div>
             <div class="schedule-config" id="ha-state-change-config">
@@ -82,6 +158,39 @@
                     This rule triggers when an HA automation sends a webhook with <code>action: trigger_rule</code>.
                     Configure the webhook URL in Settings → Home Assistant.
                 </p>
+            </div>
+            <div class="schedule-config" id="habit-trigger-config">
+                <label for="habit-source-type">Habit Source</label>
+                <select id="habit-source-type">
+                    <option value="rule">Rule-based Habit</option>
+                    <option value="chit">Chit-based Habit</option>
+                    <option value="any">Any Habit</option>
+                </select>
+                <div id="habit-source-rule-row" style="margin-top:8px;">
+                    <label for="habit-source-rule">Which Habit Rule?</label>
+                    <select id="habit-source-rule">
+                        <option value="*">Any habit rule</option>
+                    </select>
+                </div>
+                <div id="habit-source-chit-row" style="margin-top:8px;display:none;">
+                    <label for="habit-source-chit">Which Habit Chit?</label>
+                    <select id="habit-source-chit">
+                        <option value="*">Any habit chit</option>
+                    </select>
+                </div>
+                <div id="habit-offset-row" style="margin-top:8px;display:none;">
+                    <label for="habit-offset-minutes">Time Offset (minutes)</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" id="habit-offset-minutes" value="0" style="width:80px;" />
+                        <span class="ha-trigger-hint" style="margin:0;font-size:0.85em;">
+                            Negative = before due, Positive = after due
+                        </span>
+                    </div>
+                    <p class="ha-trigger-hint" style="margin-top:4px;">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Examples: <strong>-60</strong> = 1 hour before due, <strong>73</strong> = 73 minutes after due
+                    </p>
+                </div>
             </div>
         </div>
 

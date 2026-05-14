@@ -48,6 +48,9 @@ let _snoozeRegistry = {};
 /* ── Default search filters per tab (loaded from settings) ───────────────── */
 let _defaultFilters = {};
 
+/* ── Custom view filters per tab (loaded from settings) ──────────────────── */
+let _customViewFilters = {};
+
 /* ── Global Search state ─────────────────────────────────────────────────── */
 let _globalSearchResults = [];
 let _globalSearchQuery = '';

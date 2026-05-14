@@ -1,0 +1,33 @@
+# Keyboard Shortcuts
+
+CWOC provides extensive keyboard shortcuts for fast navigation and actions. Press `?` on the dashboard to see the full hotkey overlay.
+
+## Dashboard Navigation
+
+- `O` — Omni View
+- `S` — Sort/Order submenu
+- `G` — Global Search
+- `L` — Clocks modal
+- `W` — Weather page (Shift+W for quick modal)
+- `V` — Navigate panel
+- `.` — Period selector
+- `?` — Hotkey reference overlay
+- `F4` — Calculator
+- `F9` — Settings
+- `Shift+R` — Help page
+
+## View Switching
+
+Use the C CAPTN tab bar or hotkeys to switch between Calendar, Checklists, Alerts, Projects, Tasks, and Notes views.
+
+## Editor Shortcuts
+
+- `Ctrl+S` / `Cmd+S` — Save
+- `Escape` — Exit (with save check)
+- `Ctrl+B` / `Cmd+B` — Bold (in notes/email)
+- `Ctrl+I` / `Cmd+I` — Italic (in notes/email)
+- `Ctrl+K` / `Cmd+K` — Link (in notes/email)
+
+---
+
+**See also:** [Views](views.md) · [Mouse Interactions](mouse.md) · [Chit Editor](editor.md)

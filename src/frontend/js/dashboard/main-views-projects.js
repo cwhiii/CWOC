@@ -20,6 +20,7 @@ let _projectsViewMode = 'kanban';
 function _setProjectsMode(mode) {
   _projectsViewMode = mode;
   localStorage.setItem('cwoc_projectsViewMode', mode);
+  _updateUrlHash();
   // Update button styles
   const listBtn = document.getElementById('projects-mode-list');
   const kanbanBtn = document.getElementById('projects-mode-kanban');

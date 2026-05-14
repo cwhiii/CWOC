@@ -1,0 +1,1 @@
+Changed field-scoped search syntax from single colon (field:value) to double colon (field::value) to avoid ambiguity with colons in search terms. Examples: `title::email`, `checklist::thing`, `location::(central park)`.

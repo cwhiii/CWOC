@@ -12,44 +12,12 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from src.backend.db import DB_PATH, deserialize_json_field, serialize_json_field
+from src.backend.db import DB_PATH, deserialize_json_field, serialize_json_field, require_admin
 from src.backend.routes.chits_search import _search_filter_chits
 
 logger = logging.getLogger(__name__)
 
 admin_router = APIRouter(prefix="/api/admin")
-
-
-def _require_admin(request: Request) -> str:
-    """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        if row is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-        if not row["is_admin"]:
-            raise HTTPException(status_code=403, detail="Admin access required")
-
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Admin check error: {e}")
-        raise HTTPException(status_code=500, detail="Internal error")
-    finally:
-        if conn:
-            conn.close()
 
 
 @admin_router.get("/chits")
@@ -64,7 +32,7 @@ def admin_search_chits(request: Request, q: Optional[str] = None, owner_id: Opti
       - no_owner: if true, show chits with NULL/empty owner_id
       - limit: max results (default 500)
     """
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -124,7 +92,7 @@ def admin_search_chits(request: Request, q: Optional[str] = None, owner_id: Opti
 @admin_router.get("/users")
 def admin_list_users(request: Request):
     """List all users (id, username, display_name). Admin only."""
-    _require_admin(request)
+    require_admin(request)
 
     conn = None
     try:
@@ -154,7 +122,7 @@ def admin_bulk_update(body: BulkUpdateRequest, request: Request):
     Allowed fields: owner_id, owner_display_name, owner_username, status,
     priority, deleted, archived, pinned, tags.
     """
-    _require_admin(request)
+    require_admin(request)
 
     allowed_fields = {
         "owner_id", "owner_display_name", "owner_username",

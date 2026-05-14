@@ -1,0 +1,1 @@
+Fixed calendar navigation (prev/next period buttons) for SevenDay, Work, and Itinerary views which previously did nothing when clicked. Also fixed SevenDay view always showing today instead of respecting the navigated date, and Itinerary view now anchors to the navigated week.

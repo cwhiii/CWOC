@@ -208,7 +208,7 @@
             Object.keys(typeGroups[type]).forEach(function(st) { typeCount += typeGroups[type][st].length; });
             var header = document.createElement('div');
             header.className = 'co-type-group-header';
-            header.innerHTML = '<span>' + _coEscape(type) + '</span>'
+            header.innerHTML = '<span>' + _escHtml(type) + '</span>'
                 + '<span class="co-type-count">(' + typeCount + ')</span>';
             groupEl.appendChild(header);
 
@@ -226,7 +226,7 @@
                 if (subType) {
                     var subHeader = document.createElement('div');
                     subHeader.style.cssText = 'padding:6px 14px 4px 24px;font-size:0.85em;font-weight:600;color:#6b4e31;border-bottom:1px solid #e8dcc8;background:rgba(212,196,160,0.15);';
-                    subHeader.innerHTML = _coEscape(subType) + ' <span style="opacity:0.5;font-weight:400;">(' + items.length + ')</span>';
+                    subHeader.innerHTML = _escHtml(subType) + ' <span style="opacity:0.5;font-weight:400;">(' + items.length + ')</span>';
                     groupEl.appendChild(subHeader);
                 }
 
@@ -1863,7 +1863,7 @@
                     // Type header (collapsible)
                     var typeHeader = document.createElement('div');
                     typeHeader.className = 'co-picker-type-header';
-                    typeHeader.innerHTML = '<span class="co-picker-arrow">▼</span> ' + _coEscape(typeName) + ' <span class="co-picker-count">(' + typeCount + ')</span>';
+                    typeHeader.innerHTML = '<span class="co-picker-arrow">▼</span> ' + _escHtml(typeName) + ' <span class="co-picker-count">(' + typeCount + ')</span>';
                     list.appendChild(typeHeader);
 
                     var typeBody = document.createElement('div');
@@ -1890,7 +1890,7 @@
                         if (stName) {
                             var stHeader = document.createElement('div');
                             stHeader.className = 'co-picker-subtype-header';
-                            stHeader.innerHTML = '<span class="co-picker-arrow">' + (isSearching ? '▼' : '▶') + '</span> ' + _coEscape(stName) + ' <span class="co-picker-count">(' + stItems.length + ')</span>';
+                            stHeader.innerHTML = '<span class="co-picker-arrow">' + (isSearching ? '▼' : '▶') + '</span> ' + _escHtml(stName) + ' <span class="co-picker-count">(' + stItems.length + ')</span>';
                             typeBody.appendChild(stHeader);
 
                             var stBody = document.createElement('div');
@@ -2761,7 +2761,7 @@
             // Section header
             var sectionHeader = document.createElement('div');
             sectionHeader.className = 'indicator-section-header';
-            sectionHeader.innerHTML = '<span class="indicator-section-arrow">▼</span> ' + _coEscape(groupName);
+            sectionHeader.innerHTML = '<span class="indicator-section-arrow">▼</span> ' + _escHtml(groupName);
             body.appendChild(sectionHeader);
 
             // Section body (3-column grid)
@@ -2897,11 +2897,6 @@
 
     // ── Utilities ───────────────────────────────────────────────────────
 
-    function _coEscape(str) {
-        if (!str) return '';
-        var div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
+    // _coEscape — now using shared _escHtml from shared-utils.js
 
 })();

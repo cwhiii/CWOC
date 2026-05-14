@@ -1,0 +1,1 @@
+Simplified tag filter: default state (nothing selected) shows all chits. Selecting tags filters to only those tags. Replaced "Any Tag" / "Tagless" buttons with a single "Select All / None" toggle button. Shift+Click a tag to select only that one.

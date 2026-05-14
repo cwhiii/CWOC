@@ -146,13 +146,8 @@ function _applyMultiSelectFilters(chitList) {
     result = result.filter(c => c.status && statuses.includes(c.status));
   }
 
-  const labels = _getSelectedLabels();
-  if (labels.length > 0) {
-    result = result.filter(c => {
-      const tags = c.tags || [];
-      return labels.some(l => matchesTagFilter(tags, l));
-    });
-  }
+  // Tag filter — uses the shared function for all cases
+  result = result.filter(c => cwocChitPassesTagFilter(c.tags));
 
   const priorities = _getSelectedPriorities();
   if (priorities.length > 0) {
@@ -315,14 +310,14 @@ function storePreviousState() {
     sortDir: currentSortDir,
     search: document.getElementById('search')?.value || '',
     statusFilters: Array.from(document.querySelectorAll('#status-multi input:checked')).map(cb => cb.value),
-    labelFilters: Array.from(document.querySelectorAll('#label-multi input:checked')).map(cb => cb.value),
+    labelFilters: (window._sidebarTagSelection || []).slice(),
     priorityFilters: Array.from(document.querySelectorAll('#priority-multi input:checked')).map(cb => cb.value),
     showPinned: document.getElementById('show-pinned')?.checked ?? true,
     showArchived: document.getElementById('show-archived')?.checked ?? false,
     showUnmarked: document.getElementById('show-unmarked')?.checked ?? true,
-    hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
-    hideComplete: document.getElementById('hide-complete')?.checked ?? false,
-    hideDeclined: document.getElementById('hide-declined')?.checked ?? false,
+    showPastDue: document.getElementById('show-past-due')?.checked ?? true,
+    showComplete: document.getElementById('show-complete')?.checked ?? true,
+    showDeclined: document.getElementById('show-declined')?.checked ?? true,
     hideEmailReceived: document.getElementById('show-email-received')?.checked ?? false,
     hideEmailSent: document.getElementById('show-email-sent')?.checked ?? false,
     highlightOverdue: document.getElementById('highlight-overdue')?.checked ?? true,
@@ -423,12 +418,12 @@ function _restoreUIState() {
       if (sp) sp.checked = state.showPinned ?? true;
       if (sa) sa.checked = state.showArchived ?? false;
       if (su) su.checked = state.showUnmarked ?? true;
-      const hpd = document.getElementById('hide-past-due');
-      if (hpd) hpd.checked = state.hidePastDue ?? false;
-      const hc = document.getElementById('hide-complete');
-      if (hc) hc.checked = state.hideComplete ?? false;
-      const hd = document.getElementById('hide-declined');
-      if (hd) hd.checked = state.hideDeclined ?? false;
+      const hpd = document.getElementById('show-past-due');
+      if (hpd) hpd.checked = state.showPastDue ?? true;
+      const hc = document.getElementById('show-complete');
+      if (hc) hc.checked = state.showComplete ?? true;
+      const hd = document.getElementById('show-declined');
+      if (hd) hd.checked = state.showDeclined ?? true;
       const her = document.getElementById('show-email-received');
       if (her) her.checked = state.hideEmailReceived ?? false;
       const hes = document.getElementById('show-email-sent');
@@ -453,7 +448,7 @@ function _restoreUIState() {
       if (state.labelFilters && state.labelFilters.length > 0) {
         expandFilterGroup('filter-label');
       }
-      if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete || state.hideDeclined || state.hideEmailReceived === false || state.hideEmailSent === false || state.highlightOverdue === false || state.highlightBlocked === false) {
+      if (state.showArchived || !state.showPinned || !state.showUnmarked || state.showPastDue === false || state.showComplete === false || state.showDeclined === false || state.hideEmailReceived === false || state.hideEmailSent === false || state.highlightOverdue === false || state.highlightBlocked === false) {
         expandFilterGroup('filter-archive');
       }
     }
@@ -639,9 +634,9 @@ function displayChits() {
     });
   }
 
-  // Apply hide-past-due filter
-  const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
-  if (hidePastDue) {
+  // Apply show-past-due filter (unchecked = hide past-due items)
+  const showPastDue = document.getElementById('show-past-due')?.checked ?? true;
+  if (!showPastDue) {
     const now = new Date();
     filteredChits = filteredChits.filter(c => {
       if (!c.due_datetime || c.status === 'Complete' || c.status === 'Rejected') return true;
@@ -649,21 +644,21 @@ function displayChits() {
     });
   }
 
-  // Apply hide-complete filter
-  const hideComplete = document.getElementById('hide-complete')?.checked ?? false;
-  if (hideComplete) {
+  // Apply show-complete filter (unchecked = hide complete items)
+  const showComplete = document.getElementById('show-complete')?.checked ?? true;
+  if (!showComplete) {
     filteredChits = filteredChits.filter(c => c.status !== 'Complete' && c.status !== 'Rejected');
   }
 
-  // Apply hide-declined filter
-  var _hideDeclinedCb = document.getElementById('hide-declined');
-  if (_hideDeclinedCb && _hideDeclinedCb.checked && typeof _isDeclinedByCurrentUser === 'function') {
+  // Apply show-declined filter (unchecked = hide declined items)
+  var _showDeclinedCb = document.getElementById('show-declined');
+  if (_showDeclinedCb && !_showDeclinedCb.checked && typeof _isDeclinedByCurrentUser === 'function') {
     filteredChits = filteredChits.filter(function(c) { return !_isDeclinedByCurrentUser(c); });
   }
 
-  // Apply hide-habits filter
-  var _hideHabitsCb = document.getElementById('hide-habits');
-  if (_hideHabitsCb && _hideHabitsCb.checked) {
+  // Apply show-habits filter (unchecked = hide habits)
+  var _showHabitsCb = document.getElementById('show-habits');
+  if (_showHabitsCb && !_showHabitsCb.checked) {
     filteredChits = filteredChits.filter(function(c) { return !c.habit; });
   }
 
@@ -1034,9 +1029,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         initSmartLinkRegistry(sac || {});
     }
-    // Initialize hide-declined checkbox from saved setting
-    var _hdCb = document.getElementById('hide-declined');
-    if (_hdCb && s.hide_declined === '1') _hdCb.checked = true;
+    // Initialize show-declined checkbox from saved setting
+    var _hdCb = document.getElementById('show-declined');
+    if (_hdCb && s.hide_declined === '1') _hdCb.checked = false;
     // Initialize highlight checkboxes from chit_options
     var _hlOverdue = document.getElementById('highlight-overdue');
     if (_hlOverdue) _hlOverdue.checked = !!_chitOptions.highlight_overdue_chits;
@@ -1046,6 +1041,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const df = s.default_filters;
     if (df && typeof df === 'object' && !Array.isArray(df)) {
       _defaultFilters = df;
+    }
+    // Load custom view filters per tab
+    if (s.custom_view_filters) {
+      try {
+        var cvf = typeof s.custom_view_filters === 'string' ? JSON.parse(s.custom_view_filters) : s.custom_view_filters;
+        if (cvf && typeof cvf === 'object') _customViewFilters = cvf;
+      } catch (e) { console.error('[CustomFilters] Failed to parse:', e); }
     }
     // Apply custom view/tab order
     _applyViewOrder(s.view_order);
@@ -1090,6 +1092,13 @@ document.addEventListener("DOMContentLoaded", function () {
             if (toggle) toggle.value = 'independent';
           }
         }
+        // Handle email sub-filter from URL (e.g., ?tab=Email&sub=scheduled)
+        if (urlTab === 'Email') {
+          var urlSub = urlParams.get('sub');
+          if (urlSub && typeof _emailSubFilter !== 'undefined') {
+            _emailSubFilter = urlSub;
+          }
+        }
         // Update tab highlight
         document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
         if (currentTab === 'Omni') {
@@ -1098,10 +1107,81 @@ document.addEventListener("DOMContentLoaded", function () {
           var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
           if (activeTab) activeTab.classList.add('active');
         }
-        // Clean URL without reloading
-        history.replaceState(null, '', '/');
+        // Convert ?tab= to hash URL and clean query string
+        _updateUrlHash();
+        history.replaceState(null, '', window.location.pathname + window.location.hash);
       }
     } catch(e) {}
+
+    // Check for #tab/mode hash routing (bookmarks, pinned apps)
+    try {
+      var hashState = _parseUrlHash();
+      if (hashState) {
+        currentTab = hashState.tab;
+        // Apply mode if specified
+        if (hashState.mode) {
+          if (hashState.tab === 'Calendar') {
+            var calModeMap = { 'itinerary': 'Itinerary', 'day': 'Day', 'week': 'Week', 'work': 'Work', 'sevenday': 'SevenDay', 'month': 'Month', 'year': 'Year' };
+            var calMode = calModeMap[hashState.mode];
+            if (calMode && typeof currentView !== 'undefined') {
+              currentView = calMode;
+              var periodSel = document.getElementById('period-select');
+              if (periodSel) periodSel.value = calMode;
+            }
+          } else if (hashState.tab === 'Tasks' && typeof _tasksViewMode !== 'undefined') {
+            _tasksViewMode = hashState.mode;
+            localStorage.setItem('cwoc_tasksViewMode', hashState.mode);
+          } else if (hashState.tab === 'Alarms' && typeof _alarmsViewMode !== 'undefined') {
+            _alarmsViewMode = hashState.mode;
+            localStorage.setItem('cwoc_alarmsViewMode', hashState.mode);
+          } else if (hashState.tab === 'Projects' && typeof _projectsViewMode !== 'undefined') {
+            _projectsViewMode = hashState.mode;
+            localStorage.setItem('cwoc_projectsViewMode', hashState.mode);
+          }
+        }
+        // Update tab highlight
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        if (currentTab === 'Omni') {
+          _omniViewActive = true;
+        } else {
+          var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+          if (activeTab) activeTab.classList.add('active');
+        }
+      }
+    } catch(e) {}
+
+    // If no hash is set yet, set one from the current tab
+    if (!window.location.hash || window.location.hash === '#') {
+      _updateUrlHash();
+    }
+
+    // Listen for hash changes (browser back/forward, manual URL edits)
+    window.addEventListener('hashchange', function() {
+      var hashState = _parseUrlHash();
+      if (!hashState) return;
+      if (hashState.tab !== currentTab) {
+        filterChits(hashState.tab);
+      }
+      if (hashState.mode) {
+        if (hashState.tab === 'Calendar') {
+          var calModeMap = { 'itinerary': 'Itinerary', 'day': 'Day', 'week': 'Week', 'work': 'Work', 'sevenday': 'SevenDay', 'month': 'Month', 'year': 'Year' };
+          var calMode = calModeMap[hashState.mode];
+          if (calMode && currentView !== calMode) {
+            currentView = calMode;
+            var periodSel = document.getElementById('period-select');
+            if (periodSel) periodSel.value = calMode;
+            updateDateRange();
+            displayChits();
+          }
+        } else if (hashState.tab === 'Tasks' && typeof _setTasksMode === 'function') {
+          if (_tasksViewMode !== hashState.mode) _setTasksMode(hashState.mode);
+        } else if (hashState.tab === 'Alarms' && typeof _setAlarmsMode === 'function') {
+          if (_alarmsViewMode !== hashState.mode) _setAlarmsMode(hashState.mode);
+        } else if (hashState.tab === 'Projects' && typeof _setProjectsMode === 'function') {
+          if (_projectsViewMode !== hashState.mode) _setProjectsMode(hashState.mode);
+        }
+      }
+    });
 
     fetchChits();
     updateDateRange();
@@ -1390,6 +1470,7 @@ document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
         document.querySelectorAll('#label-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
         document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        cwocClearTagFilter();
         const sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
         const sa = document.getElementById('show-archived'); if (sa) sa.checked = true;
         const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
@@ -1533,8 +1614,8 @@ document.addEventListener("DOMContentLoaded", function () {
       if (key === 'Backspace' || key === 'Delete') {
         e.preventDefault();
         if (_hotkeyMode === 'FILTER_LABEL') {
-          // Clear tag selection
-          if (window._sidebarTagSelection) window._sidebarTagSelection.length = 0;
+          // Clear tag selection — reset to "Any Tag" via shared function
+          cwocClearTagFilter();
           _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
           onFilterChange();
           _buildTagFilterPanel();

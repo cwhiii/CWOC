@@ -1,4 +1,4 @@
-# Implementation Plan: HACS Distribution for CWOC HA Integration
+t # Implementation Plan: HACS Distribution for CWOC HA Integration
 
 ## Overview
 
@@ -71,7 +71,7 @@ This plan implements the HACS distribution layer: metadata files for the public 
 
   - [x] 3.5 Implement HA sync phase (--ha flag) in the release script
     - Copy all files from `ha_integration/custom_components/cwoc/` to `<PUBLIC_REPO>/custom_components/cwoc/` (overwrite existing)
-    - Copy `ha_integration/hacs.json` to `<PUBLIC_REPO>/hacs.json`
+    - Copy `ha_intgration/hacs.json` to `<PUBLIC_REPO>/hacs.json`
     - Copy `ha_integration/info.md` to `<PUBLIC_REPO>/info.md`
     - Copy `ha_integration/README.md` to `<PUBLIC_REPO>/README.md`
     - Prompt for new semver version (or use `--version X.Y.Z` if provided)
@@ -100,7 +100,7 @@ This plan implements the HACS distribution layer: metadata files for the public 
     - Script checks: hacs.json fields, manifest.json required fields, directory structure, no backend code present
     - _Requirements: 1.1, 1.2, 1.3, 7.1_
 
-- [ ] 6. Final checkpoint
+- [x] 6. Final checkpoint
   - Ensure all files are complete and consistent. Ask the user if questions arise.
 
 ## Notes

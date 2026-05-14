@@ -184,13 +184,19 @@ There is an index. It contains a complete map of where every function is, and wh
 CWOC is broken up into a bunch of code files. Each one is very tight and directed. Ensure that code that you ad gets put in the correct file for the applicable functionality. If there is not a good file to place a new functionality into, find the best place to put a new file based on the structure and index, and then make the new file. The point of these is to keep each file relatively small and more maintainable. If you ever create new files, ensure you update the index file. if you are running a series of tasks, only do this one time, at the end of the seies, just before updating the version number. DO NOT do this for each change as you make them.
 
 ## Release Notes
-Every time you complete a new version, update a file called "release_notes-[version#].md". In extremely brief summary of what you did. Most of these should be one sentence. Replace the entire contents of the file with your new version update description.
+Release notes are collated into **daily files** named `release_notes-YYYYMMDD.md` in `documents/release_notes/`.
 
-On some super long and complex new feature additions, it may be as much as a paragraph. But it should basically never exceed that.
+**Format:** Each entry within a daily file uses a `## YYYYMMDD.HHMM` header (the version number), followed by a brief description. Entries are ordered reverse-chronologically (newest at top).
 
-In the settings page should be a button in the "🔄 Version & Updates" section, which you can click to bring up a model just like the upgrade one. It should show the HTML converted markdown from the file. It should have a simple dismiss button.
+**When completing a version:**
+1. Determine today's date. If `release_notes-YYYYMMDD.md` already exists for today, prepend the new entry at the top.
+2. If this is the **first release of the day** (the file doesn't exist yet):
+   - Create the new daily file with the entry.
+   - Open the **previous day's** release notes file and add a bullet-point summary at the very top listing only the *radically* new or significantly updated features from that day (e.g., "- Added email client functionality", "- Built a rules engine"). Minor fixes and tweaks don't qualify — only major new capabilities or substantial feature additions.
+3. Each entry should be one sentence (occasionally a short paragraph for complex features).
+4. The file is never cleared — it accumulates all entries for that day.
 
-Ensure that the release notes file is cleared, and rebuilt a the completion of every new feature.
+**Settings modal:** The "📋 Release Notes" button in the settings page shows the full daily file (all entries for that day) with Older/Newer navigation between days. The API endpoint is `GET /api/release-notes` which returns `{notes: [{date, content}, ...]}` sorted newest-first.
 
 ## Configurator Script (`install/configurinator.sh`)
 - **Always CONFIRM with the user** before modifying the configurator script. Never edit it silently.

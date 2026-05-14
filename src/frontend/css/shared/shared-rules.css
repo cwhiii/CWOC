@@ -285,7 +285,7 @@
 /* Leaf condition row */
 .condition-leaf {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
     margin-bottom: 6px;
     flex-wrap: wrap;
@@ -303,6 +303,20 @@
     min-width: 100px;
     flex: 1;
     max-width: 220px;
+}
+
+/* Condition field wrapper with label */
+.condition-field-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.condition-field-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--aged-brown-light, #8b7355);
+    font-weight: 600;
 }
 
 /* Remove node button */
@@ -924,4 +938,238 @@
     .ha-action-panel {
         padding: 10px;
     }
+}
+
+/* ── Cron Builder ───────────────────────────────────────────────────────── */
+.cron-builder {
+    margin-top: 12px;
+}
+.cron-builder.hidden {
+    display: none;
+}
+#schedule-simple-config.hidden {
+    display: none;
+}
+
+.cron-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.cron-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.cron-field label {
+    font-size: 0.82em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    white-space: nowrap;
+}
+.cron-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    font-size: 0.9em;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    background: #f5e6cc;
+    color: #1a1208;
+    text-align: center;
+}
+.cron-field input:focus {
+    outline: none;
+    border-color: #4a2c2a;
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+}
+
+.cron-preview {
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: rgba(70, 130, 180, 0.08);
+    border: 1px solid rgba(70, 130, 180, 0.25);
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #1a1208;
+}
+.cron-preview i {
+    color: #4a90d9;
+    margin-right: 4px;
+}
+
+.cron-presets {
+    margin-bottom: 0;
+}
+.cron-presets label {
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    margin-bottom: 6px;
+    display: block;
+}
+.cron-preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.cron-preset-buttons .zone-button {
+    font-size: 0.82em;
+    padding: 5px 10px;
+}
+
+.habit-hint {
+    font-size: 0.85em;
+    color: var(--aged-brown-light, #a0522d);
+}
+
+#habit-mode-row {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #d4c5a9;
+}
+
+/* Cron builder responsive — tablet */
+@media (max-width: 768px) {
+    .cron-fields-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Cron builder responsive — mobile */
+@media (max-width: 480px) {
+    .cron-fields-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .cron-preset-buttons {
+        flex-direction: column;
+    }
+    .cron-preset-buttons .zone-button {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ── Create Chit Action Panel ─────────────────────────────────────────── */
+.create-chit-action-panel {
+    background: #fffaf0;
+    border: 1px solid #d4af37;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+    font-family: var(--font-family);
+}
+
+.create-chit-field-label {
+    display: block;
+    font-weight: bold;
+    color: var(--aged-brown-dark);
+    margin: 8px 0 4px 0;
+    font-size: 0.9em;
+}
+
+.create-chit-field-label:first-child {
+    margin-top: 0;
+}
+
+.create-chit-field-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: var(--font-family);
+    font-size: 0.9em;
+    background: white;
+    box-sizing: border-box;
+}
+
+.create-chit-field-input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
+}
+
+.create-chit-field-input::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+.create-chit-help {
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: var(--aged-brown-dark);
+}
+
+.create-chit-help strong {
+    color: var(--aged-brown-darker);
+}
+
+
+/* ── Smart Input (Searchable Dropdown) ────────────────────────────────── */
+.smart-input-wrapper {
+    position: relative;
+    display: inline-block;
+    min-width: 140px;
+}
+
+.smart-input-field {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: var(--font-family);
+    font-size: 0.9em;
+    background: white;
+    box-sizing: border-box;
+}
+
+.smart-input-field:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
+}
+
+.smart-input-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    z-index: 100;
+}
+
+.smart-input-option {
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--aged-brown-dark);
+}
+
+.smart-input-option:hover {
+    background: rgba(212, 175, 55, 0.15);
+}
+
+/* ── Optgroup styling for grouped selects ─────────────────────────────── */
+.condition-leaf select optgroup,
+.action-row select optgroup {
+    font-style: normal;
+    font-weight: bold;
+    color: var(--aged-brown-darker);
+}
+
+.condition-leaf select option,
+.action-row select option {
+    font-weight: normal;
+    padding-left: 8px;
 }

@@ -1,0 +1,1 @@
+Added "Print Chit" button to the editor's Options menu that prints all populated zones (dates, status, location, tags, people, notes, checklist, alerts, color, flags) in a nicely formatted layout via the browser print dialog.

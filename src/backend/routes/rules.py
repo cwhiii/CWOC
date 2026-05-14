@@ -8,16 +8,18 @@ confirmations, and querying execution logs.
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field
+from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field, row_to_dict
 from src.backend.models import RuleCreate, RuleUpdate, RuleReorder
 from src.backend.routes.audit import get_actor_from_request, insert_audit_entry, compute_audit_diff
 from src.backend.rules_engine import execute_action
+from src.backend.cron_parser import parse_cron
+from src.backend.schedulers import _derive_period_from_cron
 
 
 logger = logging.getLogger(__name__)
@@ -26,13 +28,207 @@ router = APIRouter(prefix="/api/rules")
 
 # ── Helper: deserialize JSON fields on a rule row dict ────────────────
 
+
+def _compute_habit_summary(rule: dict) -> dict:
+    """Compute the habit_summary object for a habit rule.
+
+    Returns: {
+        "current_status": "due" | "achieved" | "missed",
+        "streak": int (consecutive achieved periods),
+        "success_rate": float (achieved / total in window),
+        "last_achieved_datetime": str or None,
+        "period": "daily" | "weekly" | "monthly"
+    }
+    """
+    now = datetime.utcnow()
+
+    # Derive period from cron expression
+    schedule_config = rule.get("schedule_config")
+    if isinstance(schedule_config, str):
+        try:
+            schedule_config = json.loads(schedule_config)
+        except (json.JSONDecodeError, TypeError):
+            schedule_config = {}
+    schedule_config = schedule_config or {}
+    cron_expr = schedule_config.get("cron", "")
+    period = _derive_period_from_cron(cron_expr) if cron_expr else "daily"
+
+    # Parse habit_history
+    history_raw = rule.get("habit_history")
+    if isinstance(history_raw, str) and history_raw.strip():
+        try:
+            habit_history = json.loads(history_raw)
+        except (json.JSONDecodeError, TypeError):
+            habit_history = []
+    else:
+        habit_history = history_raw if isinstance(history_raw, list) else []
+
+    if not isinstance(habit_history, list):
+        habit_history = []
+
+    # Determine current period boundaries
+    period_start = _get_period_start(now, period)
+    period_end = _get_period_end(now, period)
+
+    # Current status: check if there's an "achieved" entry in the current period
+    current_status = "due"
+    for entry in habit_history:
+        entry_date_str = entry.get("date", "")
+        try:
+            entry_date = datetime.strptime(entry_date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            continue
+        if period_start <= entry_date < period_end:
+            if entry.get("status") == "achieved":
+                current_status = "achieved"
+                break
+            elif entry.get("status") == "missed":
+                current_status = "missed"
+
+    # If still "due", check if the period has passed without execution
+    # (only relevant if we're past the scheduled time in the current period)
+    # For now, "due" means no entry yet for this period
+
+    # Compute streak (consecutive achieved periods, counting backward from most recent)
+    streak = _compute_streak(habit_history, period, now)
+
+    # Compute success_rate (achieved / total periods in the history window)
+    success_rate = _compute_success_rate(habit_history)
+
+    # Find last_achieved_datetime
+    last_achieved_datetime = None
+    for entry in reversed(habit_history):
+        if entry.get("status") == "achieved":
+            last_achieved_datetime = entry.get("executed_datetime")
+            break
+
+    return {
+        "current_status": current_status,
+        "streak": streak,
+        "success_rate": success_rate,
+        "last_achieved_datetime": last_achieved_datetime,
+        "period": period,
+    }
+
+
+def _get_period_start(now: datetime, period: str) -> datetime:
+    """Get the start of the current period (midnight UTC)."""
+    if period == "daily":
+        return datetime(now.year, now.month, now.day)
+    elif period == "weekly":
+        # Start of week (Monday)
+        days_since_monday = now.weekday()  # Mon=0
+        start = now - timedelta(days=days_since_monday)
+        return datetime(start.year, start.month, start.day)
+    elif period == "monthly":
+        return datetime(now.year, now.month, 1)
+    return datetime(now.year, now.month, now.day)
+
+
+def _get_period_end(now: datetime, period: str) -> datetime:
+    """Get the end of the current period (start of next period)."""
+    if period == "daily":
+        return datetime(now.year, now.month, now.day) + timedelta(days=1)
+    elif period == "weekly":
+        days_since_monday = now.weekday()
+        start = now - timedelta(days=days_since_monday)
+        end = start + timedelta(days=7)
+        return datetime(end.year, end.month, end.day)
+    elif period == "monthly":
+        if now.month == 12:
+            return datetime(now.year + 1, 1, 1)
+        return datetime(now.year, now.month + 1, 1)
+    return datetime(now.year, now.month, now.day) + timedelta(days=1)
+
+
+def _compute_streak(habit_history: list, period: str, now: datetime) -> int:
+    """Compute consecutive achieved periods counting backward from the most recent."""
+    if not habit_history:
+        return 0
+
+    # Group entries by period and check if each period was achieved
+    # Work backward from the current period
+    streak = 0
+    check_date = now
+
+    # Look back up to 365 periods max
+    for _ in range(365):
+        period_start = _get_period_start(check_date, period)
+        period_end = _get_period_end(check_date, period)
+
+        # Check if any entry in this period is "achieved"
+        achieved_in_period = False
+        for entry in habit_history:
+            entry_date_str = entry.get("date", "")
+            try:
+                entry_date = datetime.strptime(entry_date_str, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            if period_start <= entry_date < period_end:
+                if entry.get("status") == "achieved":
+                    achieved_in_period = True
+                    break
+
+        if achieved_in_period:
+            streak += 1
+        else:
+            # If this is the current period and it's still "due" (not yet missed),
+            # skip it and continue checking previous periods
+            if period_start <= now < period_end and streak == 0:
+                # Current period hasn't ended yet — don't break streak
+                pass
+            else:
+                break
+
+        # Move to previous period
+        if period == "daily":
+            check_date = period_start - timedelta(days=1)
+        elif period == "weekly":
+            check_date = period_start - timedelta(days=1)
+        elif period == "monthly":
+            check_date = period_start - timedelta(days=1)
+        else:
+            check_date = period_start - timedelta(days=1)
+
+    return streak
+
+
+def _compute_success_rate(habit_history: list) -> float:
+    """Compute success rate as achieved / total entries in history."""
+    if not habit_history:
+        return 0.0
+
+    total = len(habit_history)
+    achieved = sum(1 for entry in habit_history if entry.get("status") == "achieved")
+
+    if total == 0:
+        return 0.0
+
+    return round(achieved / total, 2)
+
+
 def _deserialize_rule(rule: dict) -> dict:
     """Deserialize JSON-stored fields on a rule dict for API responses."""
     rule["conditions"] = deserialize_json_field(rule.get("conditions"))
     rule["actions"] = deserialize_json_field(rule.get("actions"))
     rule["schedule_config"] = deserialize_json_field(rule.get("schedule_config"))
+    rule["habit_trigger_config"] = deserialize_json_field(rule.get("habit_trigger_config"))
     rule["enabled"] = bool(rule.get("enabled", 1))
     rule["confirm_before_apply"] = bool(rule.get("confirm_before_apply", 1))
+
+    # Compute habit_summary for habit rules
+    if rule.get("habit_mode"):
+        rule["habit_summary"] = _compute_habit_summary(rule)
+        # Also deserialize habit_history for the response
+        history_raw = rule.get("habit_history")
+        if isinstance(history_raw, str) and history_raw.strip():
+            try:
+                rule["habit_history"] = json.loads(history_raw)
+            except (json.JSONDecodeError, TypeError):
+                rule["habit_history"] = []
+        elif not isinstance(history_raw, list):
+            rule["habit_history"] = []
+
     return rule
 
 
@@ -42,17 +238,15 @@ def _deserialize_confirmation(conf: dict) -> dict:
     return conf
 
 
-def _row_to_dict(cursor, row) -> dict:
-    """Convert a sqlite3 row tuple to a dict using cursor.description."""
-    columns = [col[0] for col in cursor.description]
-    return dict(zip(columns, row))
-
-
 # ── Rules CRUD ────────────────────────────────────────────────────────
 
 @router.get("")
-def list_rules(request: Request):
-    """List all rules for the authenticated user, sorted by priority ASC."""
+def list_rules(request: Request, habit: Optional[str] = Query(None)):
+    """List all rules for the authenticated user, sorted by priority ASC.
+
+    Query params:
+        habit=true — filter to only habit-mode rules
+    """
     conn = None
     try:
         user_id = request.state.user_id
@@ -64,7 +258,11 @@ def list_rules(request: Request):
         )
         rules = []
         for row in cursor.fetchall():
-            rule = _row_to_dict(cursor, row)
+            rule = row_to_dict(cursor, row)
+            # Filter to habit rules if ?habit=true
+            if habit and habit.lower() == "true":
+                if not rule.get("habit_mode"):
+                    continue
             rules.append(_deserialize_rule(rule))
         return rules
     except Exception as e:
@@ -120,7 +318,7 @@ def get_all_execution_logs(
         )
         entries = []
         for row in cursor.fetchall():
-            entries.append(_row_to_dict(cursor, row))
+            entries.append(row_to_dict(cursor, row))
 
         return {"entries": entries, "total": total}
     except Exception as e:
@@ -145,7 +343,7 @@ def list_confirmations(request: Request):
         )
         confirmations = []
         for row in cursor.fetchall():
-            conf = _row_to_dict(cursor, row)
+            conf = row_to_dict(cursor, row)
             confirmations.append(_deserialize_confirmation(conf))
         return confirmations
     except Exception as e:
@@ -171,7 +369,7 @@ def get_rule(rule_id: str, request: Request):
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Rule not found")
-        rule = _row_to_dict(cursor, row)
+        rule = row_to_dict(cursor, row)
         return _deserialize_rule(rule)
     except HTTPException:
         raise
@@ -201,8 +399,9 @@ def create_rule(rule: RuleCreate, request: Request):
                 id, owner_id, name, description, enabled, priority,
                 trigger_type, conditions, actions, confirm_before_apply,
                 schedule_config, created_datetime, modified_datetime,
-                last_run_datetime, run_count, last_run_result
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_run_datetime, run_count, last_run_result,
+                habit_mode, habit_trigger_config
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 rule_id,
@@ -221,6 +420,8 @@ def create_rule(rule: RuleCreate, request: Request):
                 None,
                 0,
                 None,
+                1 if rule.habit_mode else 0,
+                serialize_json_field(rule.habit_trigger_config),
             ),
         )
         conn.commit()
@@ -238,6 +439,7 @@ def create_rule(rule: RuleCreate, request: Request):
             "actions": rule.actions,
             "confirm_before_apply": bool(rule.confirm_before_apply),
             "schedule_config": rule.schedule_config,
+            "habit_trigger_config": rule.habit_trigger_config,
             "created_datetime": current_time,
             "modified_datetime": current_time,
             "last_run_datetime": None,
@@ -296,7 +498,7 @@ def update_rule(rule_id: str, rule: RuleUpdate, request: Request):
         if not existing:
             raise HTTPException(status_code=404, detail="Rule not found")
 
-        existing_dict = _row_to_dict(cursor, existing)
+        existing_dict = row_to_dict(cursor, existing)
         current_time = datetime.utcnow().isoformat()
 
         # Build update fields — only update fields that were provided (not None)
@@ -330,6 +532,9 @@ def update_rule(rule_id: str, rule: RuleUpdate, request: Request):
         if rule.schedule_config is not None:
             updates.append("schedule_config = ?")
             params.append(serialize_json_field(rule.schedule_config))
+        if rule.habit_trigger_config is not None:
+            updates.append("habit_trigger_config = ?")
+            params.append(serialize_json_field(rule.habit_trigger_config))
 
         # Always update modified_datetime
         updates.append("modified_datetime = ?")
@@ -366,7 +571,7 @@ def update_rule(rule_id: str, rule: RuleUpdate, request: Request):
             (rule_id, user_id),
         )
         updated_row = cursor.fetchone()
-        updated = _row_to_dict(cursor, updated_row)
+        updated = row_to_dict(cursor, updated_row)
         return _deserialize_rule(updated)
     except HTTPException:
         raise
@@ -468,7 +673,7 @@ def accept_confirmation(confirmation_id: str, request: Request):
         if not row:
             raise HTTPException(status_code=404, detail="Confirmation not found")
 
-        conf = _row_to_dict(cursor, row)
+        conf = row_to_dict(cursor, row)
         action_data = deserialize_json_field(conf.get("action_data"))
         entity_type = conf.get("target_entity_type", "chit")
         entity_id = conf.get("target_entity_id", "")
@@ -584,7 +789,7 @@ def get_rule_execution_log(
         )
         entries = []
         for row in cursor.fetchall():
-            entries.append(_row_to_dict(cursor, row))
+            entries.append(row_to_dict(cursor, row))
 
         return {"entries": entries, "total": total}
     except HTTPException:

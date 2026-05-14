@@ -191,6 +191,12 @@ function _buildAndShow() {
         document.activeElement.blur();
       }
     });
+    scroller.addEventListener('wheel', function() {
+      _suppressSync = false;
+      if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+        document.activeElement.blur();
+      }
+    });
   });
 
   // Wire input typing → overwrite mode (type replaces char at cursor, then advances)
