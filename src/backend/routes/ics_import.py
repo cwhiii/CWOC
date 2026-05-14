@@ -3,8 +3,12 @@
 Provides POST /api/import/ics endpoint that parses .ics file content,
 maps VEVENT/VTODO components to chits, handles recurrence translation
 and duplicate detection, and inserts chits in a single transaction.
+
+Also provides GET /api/import/ics/batches and DELETE /api/import/ics/batches
+for managing import batches (bulk view and delete).
 """
 
+import json
 import logging
 import sqlite3
 from datetime import datetime, timedelta
@@ -12,8 +16,9 @@ from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
-from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags, ensure_tags_in_settings
+from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags, ensure_tags_in_settings
 from src.backend.models import ICSImportRequest, ICSImportResponse, Chit
 from src.backend.ics_serializer import ics_parse
 
@@ -54,14 +59,20 @@ def map_component_to_chit(
     user_id: str,
     display_name: str,
     username: str,
+    batch_tag: Optional[str] = None,
+    calendar_name: Optional[str] = None,
 ) -> dict:
     """Map a parsed ICS component to a CWOC chit dict ready for DB insert."""
     current_time = datetime.utcnow().isoformat()
     chit_id = str(uuid4())
 
-    # Base tags: CATEGORIES + system import tag
+    # Base tags: CATEGORIES + system import tag + batch tag + calendar tag
     tags = list(component.get("categories") or [])
     tags.append("cwoc_system/imported")
+    if batch_tag:
+        tags.append(batch_tag)
+    if calendar_name:
+        tags.append(f"calendar/imported/{calendar_name}")
 
     chit: Dict[str, Any] = {
         "id": chit_id,
@@ -139,6 +150,9 @@ def map_component_to_chit(
         # Ensure cwoc_system/imported is still present
         if "cwoc_system/imported" not in chit["tags"]:
             chit["tags"].append("cwoc_system/imported")
+        # Ensure batch tag is still present
+        if batch_tag and batch_tag not in chit["tags"]:
+            chit["tags"].append(batch_tag)
     except Exception:
         pass  # Keep manually built tags if Chit construction fails
 
@@ -264,6 +278,11 @@ async def import_ics(body: ICSImportRequest, request: Request):
     if not components and not parse_errors:
         raise HTTPException(status_code=400, detail="No valid components found in the ICS file")
 
+    # Build batch tag: cwoc_system/imported/[calendar_name]/YYYY-MM-DD
+    calendar_name = parsed.get("calendar_name") or "Unknown Calendar"
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    batch_tag = f"cwoc_system/imported/{calendar_name}/{today_str}"
+
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -281,7 +300,7 @@ async def import_ics(body: ICSImportRequest, request: Request):
 
         for i, comp in enumerate(components):
             try:
-                chit = map_component_to_chit(comp, user_id, display_name, username)
+                chit = map_component_to_chit(comp, user_id, display_name, username, batch_tag, calendar_name)
                 mapped_chits.append(chit)
             except Exception as e:
                 mapping_errors.append(f"Component {i + 1}: {str(e)}")
@@ -393,6 +412,179 @@ async def import_ics(body: ICSImportRequest, request: Request):
             conn.rollback()
         logger.error(f"ICS import failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Import Batch Management ──────────────────────────────────────────────
+
+BATCH_TAG_PREFIX = "cwoc_system/imported/"
+
+
+def _is_admin(conn, user_id: str) -> bool:
+    """Check if the given user has admin privileges."""
+    row = conn.execute(
+        "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return bool(row and row[0])
+
+
+@router.get("/api/import/ics/batches")
+async def get_import_batches(request: Request):
+    """List all ICS import batches.
+
+    Regular users see only their own batches.
+    Admins see all batches across all users (with owner info).
+
+    Scans non-deleted chits for tags matching cwoc_system/imported/[name]/[date]
+    and returns a summary of each batch with its count.
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        is_admin = _is_admin(conn, user_id)
+
+        if is_admin:
+            cursor.execute(
+                "SELECT tags, owner_username FROM chits WHERE (deleted = 0 OR deleted IS NULL)",
+            )
+        else:
+            cursor.execute(
+                "SELECT tags, owner_username FROM chits WHERE owner_id = ? AND (deleted = 0 OR deleted IS NULL)",
+                (user_id,),
+            )
+
+        # Count chits per batch tag (and track owners for admin view)
+        # Key: (tag, owner_username) for admin, (tag, "") for regular users
+        batch_counts: Dict[str, Dict[str, Any]] = {}
+        for row in cursor.fetchall():
+            tags_raw = row[0]
+            owner = row[1] or ""
+            if not tags_raw:
+                continue
+            try:
+                tags = json.loads(tags_raw) if isinstance(tags_raw, str) else tags_raw
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(tags, list):
+                continue
+            for tag in tags:
+                if isinstance(tag, str) and tag.startswith(BATCH_TAG_PREFIX):
+                    remainder = tag[len(BATCH_TAG_PREFIX):]
+                    if "/" in remainder:
+                        key = tag
+                        if key not in batch_counts:
+                            batch_counts[key] = {"count": 0, "owners": set()}
+                        batch_counts[key]["count"] += 1
+                        batch_counts[key]["owners"].add(owner)
+
+        # Parse into structured response
+        batches = []
+        for tag in sorted(batch_counts.keys(), reverse=True):
+            info = batch_counts[tag]
+            remainder = tag[len(BATCH_TAG_PREFIX):]
+            parts = remainder.rsplit("/", 1)
+            if len(parts) == 2:
+                cal_name, date_str = parts
+            else:
+                cal_name = remainder
+                date_str = ""
+            batch_entry = {
+                "tag": tag,
+                "calendar_name": cal_name,
+                "date": date_str,
+                "count": info["count"],
+            }
+            if is_admin:
+                batch_entry["owners"] = sorted(info["owners"])
+            batches.append(batch_entry)
+
+        return {"batches": batches}
+
+    except Exception as e:
+        logger.error(f"Error fetching import batches: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+class BatchDeleteRequest(BaseModel):
+    tag: str
+
+
+@router.post("/api/import/ics/batches/delete")
+async def delete_import_batch(body: BatchDeleteRequest, request: Request):
+    """Soft-delete all chits in a specific import batch.
+
+    Matches chits by the batch tag (cwoc_system/imported/[name]/[date]).
+    Regular users can only delete their own chits.
+    Admins can delete any user's chits in the batch.
+    """
+    user_id = request.state.user_id
+
+    if not body.tag.startswith(BATCH_TAG_PREFIX):
+        raise HTTPException(status_code=400, detail="Invalid batch tag")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        is_admin = _is_admin(conn, user_id)
+        current_time = datetime.utcnow().isoformat()
+
+        # Find all non-deleted chits with this batch tag
+        # Tags are stored as JSON arrays, so we use LIKE for the search
+        search_pattern = f'%{json.dumps(body.tag)[1:-1]}%'  # Strip quotes for LIKE
+
+        if is_admin:
+            cursor.execute(
+                """SELECT id, tags FROM chits
+                   WHERE (deleted = 0 OR deleted IS NULL)
+                   AND tags LIKE ?""",
+                (search_pattern,),
+            )
+        else:
+            cursor.execute(
+                """SELECT id, tags FROM chits
+                   WHERE owner_id = ? AND (deleted = 0 OR deleted IS NULL)
+                   AND tags LIKE ?""",
+                (user_id, search_pattern),
+            )
+
+        rows = cursor.fetchall()
+        deleted_count = 0
+
+        for chit_id, tags_raw in rows:
+            # Verify the tag is actually in the list (LIKE can have false positives)
+            try:
+                tags = json.loads(tags_raw) if isinstance(tags_raw, str) else (tags_raw or [])
+            except (ValueError, TypeError):
+                continue
+            if body.tag not in tags:
+                continue
+
+            cursor.execute(
+                "UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
+                (current_time, chit_id),
+            )
+            deleted_count += 1
+
+        conn.commit()
+        return {"deleted": deleted_count, "message": f"Soft-deleted {deleted_count} chits from batch"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error deleting import batch: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()

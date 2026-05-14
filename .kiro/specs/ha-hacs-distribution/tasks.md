@@ -96,12 +96,12 @@ This plan implements the HACS distribution layer: metadata files for the public 
     - Confirm hacs.json does NOT contain `zip_release` or `filename`
     - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.1–3.6_
 
-  - [ ]* 5.2 Write a validation script to check public repo structure
+  - [x]* 5.2 Write a validation script to check public repo structure
     - Script checks: hacs.json fields, manifest.json required fields, directory structure, no backend code present
     - _Requirements: 1.1, 1.2, 1.3, 7.1_
 
 - [x] 6. Final checkpoint
-  - Ensure all files are complete and consistent. Ask the user if questions arise.
+  - All files are complete and consistent. Layout verified.
 
 ## Notes
 

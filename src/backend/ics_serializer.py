@@ -205,6 +205,20 @@ def ics_parse(ics_text: str) -> dict:
     if not found_vcalendar:
         return {"error": "Invalid iCalendar file: does not begin with BEGIN:VCALENDAR"}
 
+    # Extract calendar-level properties (before first component)
+    calendar_name: Optional[str] = None
+    in_component = False
+    for line in lines:
+        stripped = line.strip()
+        upper = stripped.upper()
+        if upper.startswith("BEGIN:V") and upper != "BEGIN:VCALENDAR":
+            in_component = True
+            break
+        if not in_component:
+            prop_name, params, value = _parse_property_line(stripped)
+            if prop_name == "X-WR-CALNAME":
+                calendar_name = value.strip()
+
     # Extract VEVENT and VTODO blocks
     components: List[dict] = []
     errors: List[str] = []
@@ -255,7 +269,10 @@ def ics_parse(ics_text: str) -> dict:
     if not components and not errors:
         return {"error": "Invalid iCalendar file: no VEVENT or VTODO components found"}
 
-    return {"components": components, "errors": errors}
+    result = {"components": components, "errors": errors}
+    if calendar_name:
+        result["calendar_name"] = calendar_name
+    return result
 
 
 def ics_print(components: List[dict]) -> str:

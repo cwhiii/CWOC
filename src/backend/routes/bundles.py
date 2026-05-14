@@ -1241,6 +1241,7 @@ _FINANCE_SENDER_DOMAINS = [
     "fidelity.com", "vanguard.com", "schwab.com", "etrade.com",
     "robinhood.com", "wealthfront.com", "betterment.com",
     "sofi.com", "marcus.com", "lending", "mortgage",
+    "monarchmoney.com", "monarch.com",
 ]
 
 # noreply-style sender patterns

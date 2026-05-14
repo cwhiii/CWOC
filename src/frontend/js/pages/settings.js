@@ -1958,6 +1958,7 @@ class SettingsManager {
     _loadMapSettings(this.settings);
     _loadEmailAccountSettings(this.settings);
     _loadEmailPrivacySettings(this.settings);
+    _renderAutoBundleToggles(this.settings);
     _updateSignatureInlinePreview();
 
     var defaultShareContactsCb = document.getElementById('default-share-contacts');
@@ -2266,6 +2267,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.settingsManager = new SettingsManager();
   loadVersionInfo();
   refreshDiskUsage();
+  loadImportBatches();
 
   _loadTagSharingData();
 

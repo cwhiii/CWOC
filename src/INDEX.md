@@ -542,6 +542,8 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `POST /api/import/ics` | `import_ics(body, request)` | Import iCalendar (.ics) file content as CWOC chits |
+| `GET /api/import/ics/batches` | `get_import_batches(request)` | List all ICS import batches for the current user |
+| `POST /api/import/ics/batches/delete` | `delete_import_batch(body, request)` | Soft-delete all chits in a specific import batch |
 
 **Internal helpers:**
 
@@ -549,7 +551,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 |----------|-------------|
 | `_map_priority(priority_val)` | Map RFC 5545 priority (1-9) to CWOC priority string (High/Medium/Low) |
 | `_map_vtodo_status(ics_status)` | Map iCalendar VTODO STATUS to CWOC chit status |
-| `map_component_to_chit(component, user_id, display_name, username)` | Map a parsed ICS component to a CWOC chit dict ready for DB insert |
+| `map_component_to_chit(component, user_id, display_name, username, batch_tag, calendar_name)` | Map a parsed ICS component to a CWOC chit dict ready for DB insert |
 | `map_rrule_to_recurrence(rrule, start_datetime)` | Translate ICS RRULE dict to CWOC recurrence_rule format |
 | `find_duplicates(cursor, user_id, chits)` | Check which mapped chits already exist in the DB (title + datetime match) |
 
@@ -3046,6 +3048,9 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `importChitData()` | Import chit data: open file picker, read JSON, validate, show mode dialog |
 | `importUserData()` | Import user data: open file picker, read JSON, validate, show mode dialog |
 | `triggerIcsImport()` | Import Calendar (.ics): open file picker, read ICS text, POST to /api/import/ics, display results |
+| `loadImportBatches()` | Load and display ICS import batches in the settings UI |
+| `_escHtml(str)` | Escape HTML for safe insertion |
+| `_deleteImportBatch(batch)` | Delete an import batch after confirmation (soft-delete all chits in batch) |
 | `importAllData()` | Import all data: open file picker, read JSON, validate type "all", show mode dialog |
 | `loadVersionInfo()` | Fetch and display the current version and install date from `/api/version` |
 | `refreshDiskUsage()` | Fetch and display disk usage (used/total/percent) from `/api/disk-usage` |

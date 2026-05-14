@@ -1,3 +1,43 @@
+## 20260514.1721
+
+Import batch management now supports admin mode. Admins see all import batches across all users (with owner usernames displayed) and can delete any user's batch. Regular users only see and can delete their own batches.
+
+## 20260514.1713
+
+ICS calendar import now tracks import batches. Each import tags chits with `cwoc_system/imported/[calendar name]/[date]` for batch identification and `calendar/imported/[calendar name]` for user-facing filtering. Calendar name is extracted from the ICS file's X-WR-CALNAME property. Added Import Batches UI in Settings showing all previous imports with a one-click Delete button to send an entire batch to trash. New API endpoints: GET /api/import/ics/batches and POST /api/import/ics/batches/delete.
+
+## 20260514.1700
+
+Fixed help doc links to point to actual app pages — "Settings" links to `/frontend/html/settings.html`, "Audit Log" links to `/frontend/html/audit-log.html`, "Maps" links to `/maps`, etc. Help-to-help cross-references use `help.html#slug` hash navigation. Links to real app pages navigate directly to those pages.
+
+## 20260514.1647
+
+Moved help documentation from `documentation/` to `src/help/` — now deploys automatically as part of `src/` without needing a separate configurinator entry. Updated backend path resolution to match.
+
+## 20260514.1639
+
+Fixed help page 500 errors — the `documentation/` directory wasn't being deployed to the server. Added it to the configurinator deploy script. Also added `/app/src/documentation` as a fallback path and improved error handling so missing docs return graceful JSON responses instead of 500s.
+
+## 20260514.1635
+
+Fixed help page 401 errors — excluded `/api/docs*` GET endpoints from auth middleware. The help page is served from `/frontend/` (which skips auth), so fetch calls from it don't reliably send the session cookie on self-signed cert setups. Documentation content isn't sensitive, so auth isn't needed.
+
+## 20260514.1626
+
+Fixed help page doc loading and search: renamed search endpoint to `/api/docs-search` to avoid route conflicts, changed doc fetch to use slug without `.md` extension in the URL path (avoids framework issues with dots in path params), added better error messages, and added `cwd` fallback for documentation directory resolution.
+
+## 20260514.1621
+
+Added full cross-linking across all help documentation files — references to other pages (Omni View, Chit Editor, Habits view, Custom Objects, Audit Log, Weather page, etc.) are now clickable links that navigate between docs. Help index page shows a categorized table of contents organized into 7 sections.
+
+## 20260514.1618
+
+Split the monolithic help page into 28 individual documentation files in `documentation/`. The help page now loads content dynamically with a categorized table of contents, breadcrumb navigation, and cross-file search. All "Settings →" references are cross-linked to their respective pages.
+
+## 20260514.1610
+
+Fixed release notes modal scroll position not resetting when navigating between days — content now scrolls to top on each Older/Newer click so it doesn't appear to append.
+
 ## 20260514.1557
 
 Added "How to Export" guide to the Calendar Import section in Settings. Clicking the link opens a tabbed modal with step-by-step instructions for exporting from Google Calendar, Apple Calendar, and Outlook. Also expanded the Help page calendar import documentation with detailed export instructions for all three platforms.

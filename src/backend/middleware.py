@@ -88,6 +88,11 @@ def _is_excluded(path: str, method: str) -> bool:
     if "/raw" in path and path.startswith("/api/email/") and method == "GET":
         return True
 
+    # Documentation API — help content is not sensitive, and browsers with
+    # self-signed certs sometimes don't send cookies for fetch() from static pages
+    if (path.startswith("/api/docs") and method == "GET"):
+        return True
+
     return False
 
 

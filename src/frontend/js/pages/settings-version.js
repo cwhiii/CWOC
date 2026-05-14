@@ -320,6 +320,9 @@ function _renderCurrentReleaseNote() {
     content.textContent = note.content;
   }
 
+  // Reset scroll to top so it doesn't look like content was appended
+  content.scrollTop = 0;
+
   _updateReleaseNotesNav();
 }
 

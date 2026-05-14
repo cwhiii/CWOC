@@ -273,6 +273,7 @@ function triggerIcsImport() {
         if (result.skipped > 0) msg += ', skipped ' + result.skipped + ' duplicates';
         if (result.errors && result.errors.length > 0) msg += ', ' + result.errors.length + ' errors';
         cwocToast(msg, 'success');
+        loadImportBatches();
       } catch (error) {
         console.error('ICS import failed:', error);
         cwocToast('Import failed: ' + error.message, 'error');
@@ -398,4 +399,100 @@ function switchCalExportTab(tab) {
   panels.forEach(function(p) { p.style.display = 'none'; });
   var target = document.getElementById('cal-export-' + tab);
   if (target) target.style.display = 'block';
+}
+
+
+// ── Import Batch Management ─────────────────────────────────────────────────
+
+/**
+ * Load and display ICS import batches.
+ * Shows the section only if there are batches to display.
+ */
+async function loadImportBatches() {
+  var section = document.getElementById('import-batches-section');
+  var list = document.getElementById('import-batches-list');
+  if (!section || !list) return;
+
+  try {
+    var response = await fetch('/api/import/ics/batches');
+    if (!response.ok) return;
+
+    var data = await response.json();
+    var batches = data.batches || [];
+
+    if (batches.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    list.innerHTML = '';
+
+    batches.forEach(function(batch) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #e0d5c8;';
+
+      var info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0;';
+      var ownerHtml = (batch.owners && batch.owners.length) ?
+        '<span style="color:#5a4025;font-size:0.85em;margin-left:8px;">👤 ' + _escHtml(batch.owners.join(', ')) + '</span>' : '';
+      info.innerHTML = '<strong style="color:#3d2b1f;">' + _escHtml(batch.calendar_name) + '</strong>' +
+        '<span style="color:#6b4e31;font-size:0.9em;margin-left:8px;">' + _escHtml(batch.date) + '</span>' +
+        '<span style="color:#8b7355;font-size:0.85em;margin-left:8px;">(' + batch.count + ' chit' + (batch.count !== 1 ? 's' : '') + ')</span>' +
+        ownerHtml;
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'standard-button';
+      deleteBtn.style.cssText = 'padding:4px 10px;font-size:0.85em;white-space:nowrap;';
+      deleteBtn.textContent = '🗑️ Delete';
+      deleteBtn.onclick = function() { _deleteImportBatch(batch); };
+
+      row.appendChild(info);
+      row.appendChild(deleteBtn);
+      list.appendChild(row);
+    });
+  } catch (error) {
+    console.error('Failed to load import batches:', error);
+  }
+}
+
+/**
+ * Escape HTML for safe insertion.
+ */
+function _escHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+/**
+ * Delete an import batch after confirmation.
+ */
+function _deleteImportBatch(batch) {
+  var label = batch.calendar_name + ' (' + batch.date + ', ' + batch.count + ' chits)';
+  cwocConfirm('This will send all ' + batch.count + ' chits from "' + batch.calendar_name + '" (imported ' + batch.date + ') to the trash.', {
+    title: '🗑️ Delete Import Batch?',
+    confirmLabel: '🗑️ Delete Batch',
+    cancelLabel: 'Cancel',
+    danger: true,
+  }).then(function(confirmed) {
+    if (!confirmed) return;
+
+    fetch('/api/import/ics/batches/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag: batch.tag }),
+    }).then(function(response) {
+      if (!response.ok) {
+        return response.json().then(function(err) { throw new Error(err.detail || 'Failed'); });
+      }
+      return response.json();
+    }).then(function(result) {
+      cwocToast('Deleted ' + result.deleted + ' chits from "' + batch.calendar_name + '"', 'success');
+      loadImportBatches();
+    }).catch(function(error) {
+      console.error('Batch delete failed:', error);
+      cwocToast('Delete failed: ' + error.message, 'error');
+    });
+  });
 }

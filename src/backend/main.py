@@ -356,6 +356,7 @@ from src.backend.routes.admin import admin_router
 from src.backend.routes.bundles import bundles_router
 from src.backend.routes.custom_objects import router as custom_objects_router
 from src.backend.routes.custom_zones import router as custom_zones_router
+from src.backend.routes.docs import router as docs_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -381,6 +382,7 @@ app.include_router(admin_router)
 app.include_router(bundles_router)
 app.include_router(custom_objects_router)
 app.include_router(custom_zones_router)
+app.include_router(docs_router)
 
 # ── Bundle reclassification is triggered by rule changes, not on startup ──
 # Triggers: rule update (PUT), rule association (POST), bundle delete (DELETE)

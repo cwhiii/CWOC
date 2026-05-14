@@ -550,3 +550,99 @@ async function emailBackfill() {
     if (btn) btn.disabled = false;
   }
 }
+
+
+// ── Auto-Bundle Toggles in Settings ──────────────────────────────────────────
+
+/**
+ * Render auto-bundle enable/disable checkboxes in the settings page.
+ * Called after settings are loaded.
+ * @param {object} [settings] — the settings object (with .bundles array)
+ */
+function _renderAutoBundleToggles(settings) {
+  var container = document.getElementById('autoBundleToggles');
+  if (!container) return;
+  container.innerHTML = '';
+
+  var src = settings || window._cwocSettings || {};
+  var bundles = src.bundles || [];
+  // Auto-bundles are non-removable and not "Everything Else"
+  var autoBundles = bundles.filter(function(b) {
+    var notRemovable = (b.removable === 0 || b.removable === false || b.removable === '0' || b.removable === null);
+    return notRemovable && b.name !== 'Everything Else';
+  });
+
+  if (autoBundles.length === 0) {
+    container.innerHTML = '<p style="font-size:0.85em;color:#6b4e31;opacity:0.7;">No auto-bundles configured yet. They will appear after your first email sync.</p>';
+    return;
+  }
+
+  autoBundles.forEach(function(bundle) {
+    var isEnabled = bundle.display_order !== -1;
+    var row = document.createElement('div');
+    row.style.cssText = 'margin-bottom:10px;';
+
+    var label = document.createElement('label');
+    label.className = 'cwoc-checkbox-label';
+    label.style.cssText = 'white-space:normal;cursor:pointer;display:block;';
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = isEnabled;
+    cb.dataset.bundleId = bundle.id;
+    cb.dataset.bundleName = bundle.name;
+    cb.addEventListener('change', function() {
+      _handleAutoBundleToggle(bundle, cb.checked);
+    });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + bundle.name));
+
+    // Description hint
+    if (bundle.description) {
+      var hint = document.createElement('span');
+      hint.style.cssText = 'display:block;font-size:0.8em;color:#6b4e31;opacity:0.7;margin-left:22px;margin-top:2px;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;';
+      hint.textContent = bundle.description;
+      label.appendChild(hint);
+    }
+
+    row.appendChild(label);
+    container.appendChild(row);
+  });
+}
+
+/**
+ * Handle toggling an auto-bundle on/off from settings.
+ * @param {object} bundle — the bundle object
+ * @param {boolean} enable — new state
+ */
+async function _handleAutoBundleToggle(bundle, enable) {
+  try {
+    if (enable) {
+      // Re-enable: PUT to update (restores display_order server-side)
+      var resp = await fetch('/api/bundles/' + encodeURIComponent(bundle.id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: bundle.name, description: bundle.description })
+      });
+      if (!resp.ok) throw new Error('Failed to enable');
+      cwocToast('"' + bundle.name + '" enabled.', 'success');
+      // Trigger reclassification
+      fetch('/api/bundles/reclassify', { method: 'POST' });
+    } else {
+      // Disable
+      var resp = await fetch('/api/bundles/' + encodeURIComponent(bundle.id) + '/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!resp.ok) throw new Error('Failed to disable');
+      cwocToast('"' + bundle.name + '" disabled. Emails will move to "Everything Else".', 'info');
+    }
+  } catch (err) {
+    console.error('[Settings] Auto-bundle toggle error:', err);
+    cwocToast('Failed to toggle bundle: ' + err.message, 'error');
+    // Revert checkbox
+    var cb = document.querySelector('#autoBundleToggles input[data-bundle-id="' + bundle.id + '"]');
+    if (cb) cb.checked = !enable;
+  }
+}
