@@ -355,8 +355,123 @@ var _smartLinkDetectors = [
         url: 'https://www.lyft.com/ride-history',
         label: 'View',
         priority: 2
+    },
+
+    // ─── Orders & Confirmations ──────────────────────────────────────────────
+
+    {
+        category: 'Order',
+        name: 'Amazon Order',
+        icon: '/static/tracking/order.svg',
+        keywords: [/\b(amazon|amzn)\b/i, /\b(order|confirmation|shipped|delivered)\b/i],
+        regex: /\b(\d{3}-\d{7}-\d{7})\b/,
+        url: 'https://www.amazon.com/gp/your-account/order-history?search={code}',
+        label: 'Order',
+        priority: 1
+    },
+    {
+        category: 'Order',
+        name: 'Apple Order',
+        icon: '/static/tracking/order.svg',
+        keywords: [/\b(apple)\b/i, /\b(order|receipt|purchase)\b/i],
+        regex: /\b(W\d{9,12})\b/i,
+        url: 'https://store.apple.com/xc/xc/viewOrderDetails?orderNumber={code}',
+        label: 'Order',
+        priority: 2
+    },
+    {
+        category: 'Order',
+        name: 'Best Buy Order',
+        icon: '/static/tracking/order.svg',
+        keywords: [/\b(best\s*buy|bestbuy)\b/i, /\b(order|confirmation|purchase)\b/i],
+        regex: /\b(BBY\d{2}-\d{8,12})\b/i,
+        url: 'https://www.bestbuy.com/profile/ss/orderlookup',
+        label: 'Order',
+        priority: 3
+    },
+    {
+        category: 'Order',
+        name: 'Walmart Order',
+        icon: '/static/tracking/order.svg',
+        keywords: [/\b(walmart)\b/i, /\b(order|confirmation|purchase)\b/i],
+        regex: /\b(\d{13,16})\b/,
+        url: 'https://www.walmart.com/orders',
+        label: 'Order',
+        priority: 4
+    },
+    {
+        category: 'Order',
+        name: 'Target Order',
+        icon: '/static/tracking/order.svg',
+        keywords: [/\b(target)\b/i, /\b(order|confirmation|purchase)\b/i],
+        regex: /\b(\d{9,15})\b/,
+        url: 'https://www.target.com/orders',
+        label: 'Order',
+        priority: 5
     }
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Configuration & Registry Initialization
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Module-level config — controls which detectors are active and max results.
+ * Defaults: all built-ins enabled, no custom detectors, max 3 results.
+ */
+var _smartLinkConfig = {
+    disabled: {},            // { "detectorName": true }
+    disabledCategories: [],  // ["Category"]
+    maxResults: 3,
+    customDetectors: []      // compiled custom detector objects
+};
+
+/**
+ * Initialize the detector registry with user preferences.
+ * Called once after settings are loaded on the dashboard.
+ *
+ * @param {Object} config - Smart action configuration from settings
+ * @param {Object} [config.disabled] - { detectorName: true } map of disabled detectors
+ * @param {Array}  [config.disabledCategories] - ["Category1", ...] disabled categories
+ * @param {Array}  [config.customDetectors] - Array of custom detector definitions (regex as string)
+ * @param {number} [config.maxResults] - Max buttons per email card (default 3)
+ */
+function initSmartLinkRegistry(config) {
+    config = config || {};
+    _smartLinkConfig.disabled = config.disabled || {};
+    _smartLinkConfig.disabledCategories = config.disabledCategories || [];
+    _smartLinkConfig.maxResults = config.maxResults || 3;
+
+    // Compile custom detectors from string definitions
+    _smartLinkConfig.customDetectors = [];
+    var customs = config.customDetectors || [];
+    for (var i = 0; i < customs.length; i++) {
+        var cd = customs[i];
+        if (!cd.enabled) continue;
+        try {
+            var compiledRegex = new RegExp(cd.regex);
+            var compiledKeywords = null;
+            if (cd.keywords && cd.keywords.length > 0) {
+                compiledKeywords = cd.keywords.map(function(kw) {
+                    return new RegExp(kw, 'i');
+                });
+            }
+            _smartLinkConfig.customDetectors.push({
+                category: cd.category || 'Custom',
+                name: cd.name,
+                icon: cd.icon || '/static/tracking/order.svg',
+                keywords: compiledKeywords,
+                regex: compiledRegex,
+                url: cd.url,
+                label: cd.label || 'View',
+                priority: cd.priority || 50,
+                _extract: null
+            });
+        } catch (e) {
+            console.error('[SmartLinks] Invalid custom detector "' + cd.name + '":', e.message);
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Detection Engine
@@ -365,15 +480,16 @@ var _smartLinkDetectors = [
 /**
  * Detect all smart links in an email chit.
  * Scans title + email_subject + email_body_text against all registered detectors.
+ * Respects user configuration (disabled detectors/categories, custom detectors).
  *
  * @param {Object} chit - The email chit object
  * @param {Object} [options] - Options
- * @param {number} [options.maxResults=3] - Maximum number of results to return
+ * @param {number} [options.maxResults] - Override max results (falls back to config, then 3)
  * @returns {Array} Array of { category, name, code, url, icon, label } objects
  */
 function detectSmartLinks(chit, options) {
     var opts = options || {};
-    var maxResults = opts.maxResults || 3;
+    var maxResults = opts.maxResults || _smartLinkConfig.maxResults || 3;
 
     var text = (chit.title || '') + ' ' + (chit.email_subject || '') + ' ' + (chit.email_body_text || '');
     if (!text.trim()) return [];
@@ -382,11 +498,14 @@ function detectSmartLinks(chit, options) {
     var senderText = (chit.email_from || '');
     var fullText = text + ' ' + senderText;
 
+    // Combine built-in and custom detectors
+    var allDetectors = _smartLinkDetectors.concat(_smartLinkConfig.customDetectors);
+
     var results = [];
     var usedCategories = {}; // Only one result per category to avoid clutter
 
     // Sort detectors by priority within category
-    var sorted = _smartLinkDetectors.slice().sort(function(a, b) {
+    var sorted = allDetectors.slice().sort(function(a, b) {
         if (a.category !== b.category) return a.category.localeCompare(b.category);
         return (a.priority || 10) - (b.priority || 10);
     });
@@ -394,6 +513,12 @@ function detectSmartLinks(chit, options) {
     for (var i = 0; i < sorted.length; i++) {
         if (results.length >= maxResults) break;
         var det = sorted[i];
+
+        // Skip disabled categories
+        if (_smartLinkConfig.disabledCategories.indexOf(det.category) !== -1) continue;
+
+        // Skip individually disabled detectors
+        if (_smartLinkConfig.disabled[det.name]) continue;
 
         // Skip if we already have a result for this category
         if (usedCategories[det.category]) continue;

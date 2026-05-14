@@ -39,7 +39,7 @@ This plan implements the HACS distribution layer: metadata files for the public 
     - "Updating" section explaining HACS update notifications
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 3. Create the release script
+- [x] 3. Create the release script
   - [x] 3.1 Create `ha_integration/cwoc-release.sh` with argument parsing and help
     - Parse `--ha`, `--push`, `--version X.Y.Z`, and `--help` flags
     - Implement `--help` output showing usage, flags, and environment info
@@ -80,13 +80,13 @@ This plan implements the HACS distribution layer: metadata files for the public 
     - Print progress: `[cwoc-release] Syncing HA integration...` and `[cwoc-release] ✓ HA sync complete (vX.Y.Z)`
     - _Requirements: 6.5, 6.7, 6.9, 6.14_
 
-  - [ ] 3.6 Implement git operations (--ha --push) and manual instructions in the release script
+  - [x] 3.6 Implement git operations (--ha --push) and manual instructions in the release script
     - If `--ha` without `--push`: print manual instructions (git add, commit, tag, push commands)
     - If `--ha --push`: auto-commit with message "Release vX.Y.Z", create tag `vX.Y.Z`, push to origin
     - On git push failure: exit with error, leave local changes committed so user can retry
     - _Requirements: 5.1, 5.2, 5.3, 6.6_
 
-- [ ] 4. Checkpoint
+- [x] 4. Checkpoint
   - Ensure all files are created and the release script is executable. Ask the user if questions arise.
 
 - [x] 5. Integration and wiring

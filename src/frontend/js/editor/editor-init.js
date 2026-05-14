@@ -84,6 +84,7 @@ function resetEditorForNewChit() {
   if (allDayInput) {
     allDayInput.checked = false;
   }
+  window._allDayAutoDefaulted = false;
 
   // Reset date mode to None
   _dateModeSuppressUnsaved = true;
@@ -95,9 +96,9 @@ function resetEditorForNewChit() {
 
   const dateTimeElements = [
     { id: "start_datetime", value: formatDate(now) },
-    { id: "start_time", value: formatTime(now) },
+    { id: "start_time", value: "" },
     { id: "end_datetime", value: formatDate(now) },
-    { id: "end_time", value: formatTime(oneHourLater) },
+    { id: "end_time", value: "" },
     { id: "due_datetime", value: "" },
     { id: "due_time", value: "" },
     { id: "point_in_time_date", value: "" },
@@ -108,6 +109,12 @@ function resetEditorForNewChit() {
     const element = document.getElementById(item.id);
     if (element) {
       element.value = item.value;
+      // Ensure button time inputs show placeholder when empty
+      if (element.tagName === 'BUTTON' && !item.value) {
+        element.dataset.time = '';
+        element.textContent = 'HH:MM';
+        element.classList.add('cwoc-time-btn-empty');
+      }
     }
   });
 
@@ -630,6 +637,7 @@ async function loadChitData(chitId) {
 
     const allDayCheckbox = document.getElementById("allDay");
     if (allDayCheckbox) {
+      window._allDayAutoDefaulted = false;
       allDayCheckbox.checked = !!(chit.all_day || chit.allDay);
       if (allDayCheckbox.checked) toggleAllDay();
     }
@@ -1208,6 +1216,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load snap setting
   _loadSnapSetting();
+
+  // Wire up auto-deselect of All Day when a time is picked
+  _wireAllDayAutoDeselect();
 
   // Auto-colon mask for time inputs (HH:MM format) + snap dropdown
   // Time inputs are now handled by cwocTimePicker drum roller (see above)

@@ -82,15 +82,25 @@ function onDateModeChange() {
 
   // Re-apply all-day visibility for the active mode
   const allDayCheckbox = document.getElementById("allDay");
-  if (allDayCheckbox && allDayCheckbox.checked) {
+  if (allDayCheckbox && allDayCheckbox.checked && !window._allDayAutoDefaulted) {
     toggleAllDay();
-  } else {
+  } else if (!allDayCheckbox || !allDayCheckbox.checked) {
     // Show all time inputs when not all-day
     document.querySelectorAll('#startEndFields .time-input').forEach(i => { i.style.display = ''; });
     const sep = document.querySelector('#startEndFields .date-mode-separator');
     if (sep) sep.style.display = '';
     const dueTime = document.getElementById('due_time');
     if (dueTime) dueTime.style.display = '';
+  }
+
+  // Auto-default to all-day when a date mode is first activated
+  if (!_dateModeSuppressUnsaved && (mode === 'due' || mode === 'startend' || mode === 'perpetual')) {
+    if (allDayCheckbox && !allDayCheckbox.checked) {
+      window._allDayAutoDefaulted = true;
+      allDayCheckbox.checked = true;
+      // Don't call toggleAllDay — keep time inputs visible
+      _updateAllDayBtnState();
+    }
   }
 
   // Update recurrence labels when date context changes
@@ -179,6 +189,9 @@ function toggleAllDay() {
   const allDayCheckbox = document.getElementById("allDay");
   if (!allDayCheckbox) return;
   const allDay = allDayCheckbox.checked;
+
+  // If all-day was auto-defaulted (initial creation), keep time inputs visible
+  if (window._allDayAutoDefaulted && allDay) return;
 
   // Hide/show time inputs for ALL date modes (All Day is global)
   const startEndTimes = document.querySelectorAll('#startEndFields .time-input');
@@ -742,6 +755,8 @@ function onHabitGoalChange() {
 function _toggleAllDayBtn() {
   var allDayCb = document.getElementById('allDay');
   if (!allDayCb || allDayCb.disabled) return;
+  // User explicitly toggled — clear auto-default flag
+  window._allDayAutoDefaulted = false;
   allDayCb.checked = !allDayCb.checked;
   toggleAllDay();
   _updateAllDayBtnState();
@@ -871,4 +886,29 @@ function clearPointInTime() {
     timeBtn.classList.toggle('cwoc-time-btn-empty', true);
   }
   setSaveButtonUnsaved();
+}
+
+// ── Auto-deselect All Day when a time is entered ─────────────────────────────
+
+/**
+ * Wire up change listeners on time inputs so that when the user picks a time,
+ * all-day is automatically deselected.
+ * Called once from editor-init.js after DOM is ready.
+ */
+function _wireAllDayAutoDeselect() {
+  var timeIds = ['start_time', 'end_time', 'due_time'];
+  timeIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', function() {
+        var allDayCb = document.getElementById('allDay');
+        if (allDayCb && allDayCb.checked && !allDayCb.disabled) {
+          window._allDayAutoDefaulted = false;
+          allDayCb.checked = false;
+          toggleAllDay();
+          _updateAllDayBtnState();
+        }
+      });
+    }
+  });
 }

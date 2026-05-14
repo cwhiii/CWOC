@@ -158,6 +158,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_create_sort_preferences_table()` | Create `sort_preferences` table (owner_id, view_tab, sort_field, sort_dir, modified_datetime) with composite PRIMARY KEY (owner_id, view_tab) for persisting sort field/direction per view tab |
 | `migrate_bundles_omni_view()` | Add `omni_view` (BOOLEAN DEFAULT 0) column to bundles table. Fully idempotent |
 | `migrate_omni_view_settings()` | Add `omni_layout` (TEXT) and `omni_locked_filters` (TEXT) columns to settings table for Omni View layout configuration and locked filter defaults. Fully idempotent |
+| `migrate_add_smart_actions_config()` | Add `smart_actions_config` (TEXT) column to settings table for badges/smart action preferences and custom detectors. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -1539,6 +1540,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_dispatchSyncMessage(msg)` | Dispatch a sync message to registered handlers |
 | `syncSend(type, data)` | Send a sync message via WebSocket or HTTP POST fallback |
 | `syncOn(type, callback)` | Register a handler for a sync message type |
+| `_pageHasUnsavedChanges()` | Check if the current page has unsaved changes (works across all page types) |
+| `_showAutoRefreshBanner()` | Show a banner warning that data was updated on another device |
+| `_handleRemoteDataChange(type)` | Handle a remote data change — auto-reload or show warning if unsaved |
 | `_sharedFmtTime(time24)` | Format a 24h time string respecting the user's time format setting |
 | `_sharedPlayAlarm()` | Play the alarm sound (looping, with 5-minute auto-stop) |
 | `_sharedStopAlarm()` | Stop the alarm sound and vibration |
@@ -1655,6 +1659,25 @@ Calculator Popover module — a floating, draggable arithmetic calculator availa
 **ESC Chain Integration:**
 - `editor-init.js`: Calculator check added at the very top of the ESC keydown handler — if `cwocIsCalculatorOpen()`, calls `cwocCloseCalculator()` and returns before all other ESC checks
 - `main-init.js`: Same pattern — calculator check before reference overlay, clock modal, and other ESC handlers
+
+#### shared-smart-links.js
+
+Generalized "smart link" detection for email chits — scans email text for recognizable patterns (tracking numbers, flights, hotels, rentals, events, restaurants, transit, orders) and returns actionable badge buttons. Supports user configuration (enable/disable detectors, custom detectors) via `initSmartLinkRegistry()`.
+
+**Public API:**
+
+| Function | Description |
+|----------|-------------|
+| `initSmartLinkRegistry(config)` | Initialize the detector registry with user preferences. Called once after settings are loaded. Accepts `{disabled, disabledCategories, maxResults, customDetectors}` |
+| `detectSmartLinks(chit, options)` | Detect all smart links in an email chit. Returns array of `{category, name, code, url, icon, label}`. Respects disabled detectors/categories from config |
+| `detectSmartLinkFirst(chit)` | Legacy wrapper — returns first match in old format `{carrier, number, url, logo}` or null |
+
+**Module-level State:**
+
+| Variable | Description |
+|----------|-------------|
+| `_smartLinkDetectors` | Array of built-in detector definitions (Package, Flight, Hotel, Rental, Event, Restaurant, Transit, Order) |
+| `_smartLinkConfig` | Current configuration: `{disabled, disabledCategories, maxResults, customDetectors}` |
 
 ### 2.2 Dashboard (`src/frontend/js/dashboard/`)
 
@@ -2531,7 +2554,7 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 
 #### editor-email-pgp.js
 
-PGP encryption for outgoing emails. Provides client-side PGP encryption using OpenPGP.js. When a recipient has a PGP public key stored in their contact record, the user can toggle PGP encryption on. The message body is encrypted in the browser before being sent. Depends on: `openpgp.min.js` (CDN), `editor-email.js` (`_emailContactsCache`, `_emailGetFieldValue`, `_emailCurrentChit`), `shared-utils.js` (`cwocToast`).
+PGP encryption and decryption for emails. Provides client-side PGP encryption using OpenPGP.js for outgoing emails, and in-place decryption for received PGP-encrypted messages. Depends on: `openpgp.min.js` (CDN), `editor-email.js` (`_emailContactsCache`, `_emailGetFieldValue`, `_emailCurrentChit`), `shared-utils.js` (`cwocToast`).
 
 | Symbol | Description |
 |--------|-------------|
@@ -2545,6 +2568,9 @@ PGP encryption for outgoing emails. Provides client-side PGP encryption using Op
 | `_pgpExtractEmails(fieldValue)` | Extract plain email addresses from "Name <email>" formatted string |
 | `_pgpFindKeyForEmail(emailAddr)` | Look up a PGP public key for an email address from the contacts cache |
 | `_pgpInitForDraft()` | Initialize PGP UI hooks — wire recipient change detection via MutationObserver |
+| `_pgpDecryptInPlace()` | Entry point for decrypting a received PGP message — shows password modal, then decrypts |
+| `_pgpShowPasswordModal(onConfirm)` | Show parchment-themed password modal; calls onConfirm(password) on submit |
+| `_pgpPerformDecrypt(password)` | Fetch private key via API, decrypt message with openpgp.js, display in-place (no save) |
 
 #### editor-attachments.js
 
@@ -2716,7 +2742,7 @@ Mobile swipe-based zone navigation for the chit editor. On mobile (≤768px), tr
 
 | Symbol | Description |
 |--------|-------------|
-| `_mobileZoneOrder` | Ordered array of zone definitions for mobile navigation (Date, Task, Note, Checklist, Tags, People, Location, Alerts, Projects, Color, Health, Attachments, Email, Habits) |
+| `_mobileZoneOrder` | Ordered array of zone definitions for mobile navigation (Overview, Date, Task, Note, Checklist, Tags, People, Location, Alerts, Projects, Color, Health, Attachments, Email, Habits) |
 | `_mobileCurrentZoneIdx` | Current zone index in mobile view |
 | `_mobileZoneModeActive` | Whether mobile zone mode is currently active |
 | `_mobileTabZoneMap` | Map of dashboard tab names to zone section IDs for determining start zone |
@@ -2728,6 +2754,9 @@ Mobile swipe-based zone navigation for the chit editor. On mobile (≤768px), tr
 | `_mobilePrevZone()` | Navigate to previous zone (wraps around) |
 | `_createMobileZoneHeader()` | Create the sticky mobile zone navigation header element |
 | `_updateMobileZoneHeader(zoneInfo, idx, total)` | Update the sticky header content (icon, label, counter) |
+| `_restoreMobileOverviewElements(container)` | Restore elements hidden by the overview panel when navigating away |
+| `_renderMobileOverview(container)` | Render the mobile Overview panel — compact read-only summary of populated fields with tap-to-navigate |
+| `_getOverviewDatesText()` | Get a compact text summary of the chit's dates/times for the overview |
 | `_createMobileZoneList()` | Create the zone list overlay (slide-in panel from right) |
 | `_openMobileZoneList()` | Open the zone list, refreshing items with empty state |
 | `_closeMobileZoneList()` | Close the zone list overlay |
@@ -2977,6 +3006,22 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_getViewItemAtPoint(grid, x, y, exclude)` | Find the view-tab-item element at a given point (excluding the dragged item) |
 | `_collectViewOrder()` | Collect the current view order for saving; returns null if matches default |
 | `_resetSortOrders()` | Reset all sort orders and preferences via confirmation modal; calls DELETE /api/sort-orders and clears localStorage |
+
+#### settings-badges.js
+
+Badges (Smart Actions) settings section — manages enable/disable toggles for built-in detectors, custom detector CRUD, and max results configuration.
+
+| Symbol | Description |
+|--------|-------------|
+| `_initBadgesSettings()` | Initialize the badges settings section: parse config, render categories, wire events |
+| `_renderBadgeCategories()` | Render all built-in detector categories with toggle checkboxes |
+| `_onBadgeCategoryToggle(e)` | Handle category-level toggle — enable/disable all detectors in a category |
+| `_onBadgeDetectorToggle(e)` | Handle individual detector toggle — add/remove from disabled map |
+| `_renderBadgeCustomList()` | Render the list of user-defined custom detectors with edit/delete buttons |
+| `_openBadgeCustomModal(existing)` | Open the custom detector form modal (empty for new, populated for edit) |
+| `_closeBadgeCustomModal()` | Close the custom detector form modal |
+| `_saveBadgeCustomDetector()` | Validate and save a custom detector (new or edited) |
+| `_gatherBadgesConfig()` | Serialize the current badges config to JSON string for settings save |
 
 #### people.js
 
@@ -4296,7 +4341,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-health.js      (health indicators zone)
                     editor-custom-zones.js (custom zones — depends on editor-health.js; provides _loadCustomZones, _gatherCustomZoneData)
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
-                    editor-email-pgp.js   (PGP encryption — depends on openpgp.min.js CDN, editor-email.js; provides _pgpPreSendEncrypt, _pgpInitForDraft)
+                    editor-email-pgp.js   (PGP encrypt/decrypt — depends on openpgp.min.js CDN, editor-email.js; provides _pgpPreSendEncrypt, _pgpInitForDraft, _pgpDecryptInPlace)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
                     editor-nest.js        (nest button + thread picker — depends on shared-utils, editor-save)
                     editor-snooze.js      (snooze modal + state — depends on shared.js; provides _initSnooze, _currentSnoozedUntil for editor-save)

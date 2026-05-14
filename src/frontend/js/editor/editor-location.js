@@ -15,35 +15,6 @@ async function _getCoordinates(address) {
   return _geocodeAddress(address);
 }
 
-async function _getWeather(lat, lon, targetDate) {
-  var dateParam = '';
-  var baseUrl = 'https://api.open-meteo.com/v1/forecast';
-
-  if (targetDate) {
-    // If target date is more than 5 days in the past, use the historical archive API
-    var today = new Date();
-    var target = new Date(targetDate + 'T12:00:00');
-    var diffDays = Math.floor((today - target) / (1000 * 60 * 60 * 24));
-    if (diffDays > 5) {
-      baseUrl = 'https://archive-api.open-meteo.com/v1/archive';
-    }
-    dateParam = `&start_date=${targetDate}&end_date=${targetDate}`;
-  } else {
-    dateParam = '&forecast_days=1';
-  }
-
-  const url = `${baseUrl}?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max&timezone=auto${dateParam}`;
-  const response = await fetch(url);
-  const data = await response.json();
-
-  // Normalize: archive API uses 'weather_code', forecast uses 'weathercode'
-  if (data && data.daily && data.daily.weather_code && !data.daily.weathercode) {
-    data.daily.weathercode = data.daily.weather_code;
-  }
-
-  return data;
-}
-
 async function _fetchWeatherData(address) {
   const compactWeatherSection = document.getElementById("compactWeatherSection");
   const cacheKey = 'cwoc_weather_editor_' + address.toLowerCase().trim();
@@ -53,7 +24,6 @@ async function _fetchWeatherData(address) {
     const cached = JSON.parse(localStorage.getItem(cacheKey));
     if (cached && cached.weather && compactWeatherSection) {
       _displayWeatherInCompactSection(cached.weather, address);
-      // Add stale indicator overlay
       const existing = compactWeatherSection.querySelector('.weather-stale-badge');
       if (!existing) {
         const badge = document.createElement('span');
@@ -68,8 +38,6 @@ async function _fetchWeatherData(address) {
   } catch (e) { /* no cache, that's fine */ }
 
   try {
-    const coords = await _getCoordinates(address);
-
     // Determine the chit's target date from date fields
     let targetDate = '';
     const startVal = document.getElementById('start_datetime')?.value;
@@ -85,28 +53,41 @@ async function _fetchWeatherData(address) {
       try { targetDate = new Date(convertMonthFormat(pitVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
     }
 
-    const weather = await _getWeather(coords.lat, coords.lon, targetDate);
+    // Use the shared weather function
+    var options = targetDate ? { targetDate: targetDate } : undefined;
+    var wx = await getWeatherForLocation(address, options);
+    if (!wx) throw new Error('Weather data unavailable');
 
+    // Also fetch raw data for _displayWeatherInCompactSection (needs the daily object)
+    var coords = await _getCoordinates(address);
     currentWeatherLat = coords.lat;
     currentWeatherLon = coords.lon;
+
+    // Build a weather object compatible with _displayWeatherInCompactSection
+    var weather = { daily: {
+      weathercode: [wx.weatherCode],
+      temperature_2m_max: [wx.maxC],
+      temperature_2m_min: [wx.minC],
+      precipitation_sum: [wx.precipMm],
+      wind_speed_10m_max: [wx.wind ? wx.wind.value : 0],
+      wind_gusts_10m_max: [wx.wind ? wx.wind.value : 0],
+      time: [targetDate || new Date().toISOString().split('T')[0]]
+    }};
     currentWeatherData = weather;
 
     _displayWeatherInCompactSection(weather, address);
 
-    // Update weather_data in memory for save payload (6.2)
-    if (weather && weather.daily) {
-      const today = weather.daily;
-      window._currentChitWeatherData = {
-        focus_date: targetDate || new Date().toISOString().split('T')[0],
-        updated_time: new Date().toISOString(),
-        high: today.temperature_2m_max[0],
-        low: today.temperature_2m_min[0],
-        precipitation: today.precipitation_sum[0],
-        weather_code: today.weathercode[0],
-        wind_gusts: today.wind_gusts_10m_max ? today.wind_gusts_10m_max[0] : null,
-        wind_speed: today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : null
-      };
-    }
+    // Update weather_data in memory for save payload
+    window._currentChitWeatherData = {
+      focus_date: targetDate || new Date().toISOString().split('T')[0],
+      updated_time: new Date().toISOString(),
+      high: wx.maxC,
+      low: wx.minC,
+      precipitation: wx.precipMm,
+      weather_code: wx.weatherCode,
+      wind_gusts: wx.wind ? wx.wind.value : null,
+      wind_speed: wx.wind ? wx.wind.value : null
+    };
 
     // Cache the result
     try { localStorage.setItem(cacheKey, JSON.stringify({ weather, ts: Date.now() })); } catch (e) { /* ignore */ }
@@ -120,12 +101,10 @@ async function _fetchWeatherData(address) {
     return weather;
   } catch (error) {
     console.error("Error fetching weather data:", error);
-    // Remove stale badge on error too
     if (compactWeatherSection) {
       const badge = compactWeatherSection.querySelector('.weather-stale-badge');
       if (badge) badge.remove();
     }
-    // Only show error if we didn't already show cached data
     const hadCache = compactWeatherSection && compactWeatherSection.querySelector('.compact-day-header');
     if (!hadCache && compactWeatherSection) {
       compactWeatherSection.classList.add('weather-placeholder');

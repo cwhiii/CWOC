@@ -1,0 +1,1 @@
+Added "HST Weather Strip" element to the Omni View. Renders the normal HST bar with a temperature color strip underneath — 100 segments (one per HST hour), each colored using the interpolated hourly forecast temperature mapped to the standard temperature gradient. Starts in the Unused section.

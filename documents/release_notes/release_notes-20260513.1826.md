@@ -1,0 +1,1 @@
+Converted settings save from INSERT OR REPLACE (full row replacement) to partial UPDATE — only fields present in the request body are now written to the database, preventing unrelated settings from being wiped by partial saves.

@@ -336,6 +336,7 @@ function showQuickEditModal(chit, onRefresh) {
           });
         }
         close();
+        if (typeof syncSend === 'function') syncSend('chits_changed', {});
         if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
       } catch (e) {
         console.error('Quick edit save failed:', e);
@@ -2151,6 +2152,93 @@ if (typeof document !== 'undefined') {
 }
 
 
+// ── Cross-Device Auto-Refresh ────────────────────────────────────────────────
+// When data is updated on another device, auto-refresh this page's data.
+// If the page has unsaved changes, show a warning banner instead of refreshing.
+
+window._cwocAutoRefreshBanner = null;
+
+/**
+ * Check if the current page has unsaved changes.
+ * Works across all page types (editor, settings, contact-editor, dashboard).
+ */
+function _pageHasUnsavedChanges() {
+  // CwocSaveSystem (editor, settings, contact-editor)
+  if (window._cwocSave && window._cwocSave.hasChanges()) return true;
+  // CwocEditorSaveSystem wrapper (contact-editor uses _saveSystem)
+  if (window._saveSystem && window._saveSystem.hasChanges()) return true;
+  return false;
+}
+
+/**
+ * Show a non-intrusive banner warning that data was updated on another device.
+ * Clicking the banner refreshes the page.
+ */
+function _showAutoRefreshBanner() {
+  // Don't stack multiple banners
+  if (window._cwocAutoRefreshBanner) return;
+
+  var banner = document.createElement('div');
+  banner.id = 'cwoc-sync-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+    'background:#6b4e31;color:#fdf5e6;padding:10px 16px;text-align:center;' +
+    'font-family:Lora,serif;font-size:14px;cursor:pointer;display:flex;' +
+    'align-items:center;justify-content:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+  banner.innerHTML = '<span>📡 Data updated on another device.</span>' +
+    '<button style="background:#fdf5e6;color:#6b4e31;border:none;padding:4px 12px;' +
+    'border-radius:4px;font-family:Lora,serif;font-size:13px;cursor:pointer;">Refresh Now</button>' +
+    '<button style="background:transparent;color:#fdf5e6;border:1px solid #fdf5e6;padding:4px 10px;' +
+    'border-radius:4px;font-family:Lora,serif;font-size:13px;cursor:pointer;">Dismiss</button>';
+
+  var refreshBtn = banner.querySelectorAll('button')[0];
+  var dismissBtn = banner.querySelectorAll('button')[1];
+
+  refreshBtn.onclick = function(e) {
+    e.stopPropagation();
+    window._cwocAutoRefreshBanner = null;
+    banner.remove();
+    window.location.reload();
+  };
+  dismissBtn.onclick = function(e) {
+    e.stopPropagation();
+    window._cwocAutoRefreshBanner = null;
+    banner.remove();
+  };
+
+  document.body.appendChild(banner);
+  window._cwocAutoRefreshBanner = banner;
+}
+
+/**
+ * Handle a remote data change. If the page has unsaved changes, show a warning.
+ * Otherwise, refresh the page data silently.
+ */
+function _handleRemoteDataChange(type) {
+  var isDashboard = window.location.pathname === '/' ||
+    window.location.pathname === '/frontend/html/index.html' ||
+    window.location.pathname.endsWith('/index.html');
+
+  // Dashboard handles chits_changed via its own syncOn handler in main-alerts.js
+  if (isDashboard && type === 'chits') return;
+  // Dashboard doesn't display contacts — no need to reload for contact changes
+  if (isDashboard && type === 'contacts') return;
+
+  if (_pageHasUnsavedChanges()) {
+    _showAutoRefreshBanner();
+  } else {
+    // No unsaved changes — safe to reload
+    window.location.reload();
+  }
+}
+
+// Register auto-refresh handlers for data change sync messages
+if (typeof syncOn === 'function') {
+  syncOn('chits_changed', function() { _handleRemoteDataChange('chits'); });
+  syncOn('settings_changed', function() { _handleRemoteDataChange('settings'); });
+  syncOn('contacts_changed', function() { _handleRemoteDataChange('contacts'); });
+}
+
+
 // Log version on every page load
 function _logCwocVersion() {
   fetch('/api/version').then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
@@ -2256,55 +2344,8 @@ function getWeatherFromCache(address) {
   return entry;
 }
 
-/**
- * Fetch 16-day forecast for a single address and store in cache.
- * @param {string} address
- * @returns {Promise<object|null>} cached entry or null on failure
- */
-async function fetchAndCacheWeather(address) {
-  if (!address) return null;
-  var key = address.toLowerCase().trim();
-  try {
-    var geo = await _geocodeAddress(address);
-    var url = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=' + geo.lat
-      + '&longitude=' + geo.lon
-      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max'
-      + '&timezone=auto&forecast_days=16';
-    var resp = await fetch(url);
-    if (!resp.ok) return null;
-    var data = await resp.json();
-    if (!data.daily || !data.daily.time) return null;
-    var entry = { daily: data.daily, lat: geo.lat, lon: geo.lon, ts: Date.now() };
-    window._weatherForecastCache[key] = entry;
-    _saveWeatherCacheToLS();
-    return entry;
-  } catch (e) {
-    console.warn('Weather fetch failed for "' + address + '":', e);
-    return null;
-  }
-}
+// fetchAndCacheWeather and prefetchSavedLocationWeather are defined in shared-weather.js
 
-/**
- * Prefetch weather for all saved locations. Call once on dashboard init.
- * Runs async — does not block page load.
- */
-async function prefetchSavedLocationWeather() {
-  try {
-    var locations = await loadSavedLocations();
-    if (!locations || locations.length === 0) return;
-    var promises = locations.map(function (loc) {
-      var addr = loc.address || loc.label || '';
-      if (!addr) return Promise.resolve(null);
-      // Skip if already cached and fresh
-      if (getWeatherFromCache(addr)) return Promise.resolve(null);
-      return fetchAndCacheWeather(addr);
-    });
-    await Promise.all(promises);
-  } catch (e) {
-    console.error('Error prefetching weather:', e);
-  }
-}
 /**
  * shared-mobile.js — Mobile UI behavior.
  *

@@ -1201,6 +1201,26 @@
     color: #2e7d32;
 }
 
+.email-pgp-decrypt-btn {
+    margin-left: auto;
+    font-size: 0.85em;
+    padding: 4px 10px;
+    background: #2e7d32;
+    color: #fff;
+    border: 1px solid #1b5e20;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.email-pgp-decrypt-btn:hover {
+    background: #256b29;
+}
+
 /* PGP button active state override — green lock */
 #emailPgpBtn.zone-button-active {
     background-color: #2e7d32;

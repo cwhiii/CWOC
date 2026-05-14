@@ -581,7 +581,7 @@ async def _alert_push_loop():
                 # Fetch all non-deleted chits with owner_id
                 cursor.execute(
                     "SELECT id, title, start_datetime, end_datetime, due_datetime, "
-                    "       point_in_time, owner_id, alerts, "
+                    "       point_in_time, owner_id, alerts, recurrence, "
                     "       status, habit, habit_goal, habit_success "
                     "FROM chits "
                     "WHERE (deleted = 0 OR deleted IS NULL) "
@@ -707,15 +707,30 @@ async def _alert_push_loop():
                             if not weather_condition:
                                 continue
 
-                            # Skip weather notifications for past chits
-                            chit_end = end_dt or due_dt or start_dt
-                            if chit_end:
-                                try:
-                                    chit_end_dt = datetime.fromisoformat(chit_end.replace("Z", "+00:00")).replace(tzinfo=None)
-                                    if chit_end_dt < now - timedelta(hours=1):
-                                        continue
-                                except (ValueError, TypeError):
-                                    pass
+                            # Skip weather notifications for past chits — NEVER notify for past dates
+                            # For recurring chits, check if TODAY is a valid occurrence
+                            chit_end = end_dt or due_dt or start_dt or point_in_time_dt
+                            if not chit_end:
+                                continue
+                            try:
+                                if len(chit_end) <= 10:
+                                    chit_end_dt = datetime.strptime(chit_end[:10], "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                                else:
+                                    chit_end_dt = datetime.fromisoformat(chit_end.replace("Z", "").split("+")[0])
+                                # For recurring chits: the stored date may be in the past but today is valid
+                                chit_recurrence = chit.get("recurrence")
+                                has_recurrence = False
+                                if chit_recurrence:
+                                    try:
+                                        rec = json.loads(chit_recurrence) if isinstance(chit_recurrence, str) else chit_recurrence
+                                        if rec and rec.get("freq"):
+                                            has_recurrence = True
+                                    except (json.JSONDecodeError, TypeError, AttributeError):
+                                        pass
+                                if not has_recurrence and chit_end_dt < now - timedelta(hours=1):
+                                    continue
+                            except (ValueError, TypeError):
+                                pass
 
                             key = f"weather-notif-{chit_id}-{idx}-{today_str}"
                             if key in _fired_keys:

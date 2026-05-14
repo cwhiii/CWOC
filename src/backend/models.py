@@ -80,6 +80,9 @@ class Settings(BaseModel):
     omni_layout: Optional[str] = None            # JSON string: layout config for Omni View sections
     omni_locked_filters: Optional[str] = None    # JSON string: locked filter defaults for Omni View
     omni_hst_clock_mode: Optional[str] = "both"  # HST bar clock mode: "hst", "system", or "both"
+    omni_email_count: Optional[str] = "3"        # Number of emails to show per page in Omni View
+    omni_normalize_colors: Optional[str] = "0"   # "1" = normalize chit colors by type in Omni View
+    smart_actions_config: Optional[str] = None   # JSON string: {disabled: {}, disabledCategories: [], maxResults: 3, customDetectors: []}
 
 class Chit(BaseModel):
     class Config:

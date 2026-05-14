@@ -12,6 +12,12 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.omni-view::-webkit-scrollbar {
+    display: none;
 }
 
 /* Override chit-list styling when Omni View is active */
@@ -32,6 +38,21 @@
     overflow: hidden;
     padding: 0 5px;
     box-sizing: border-box;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.omni-grid::-webkit-scrollbar {
+    display: none;
+}
+
+#chit-list[data-view="omni"] {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#chit-list[data-view="omni"]::-webkit-scrollbar {
+    display: none;
 }
 
 .omni-col {
@@ -41,6 +62,12 @@
     overflow-y: auto;
     min-height: 0;
     padding: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.omni-col::-webkit-scrollbar {
+    display: none;
 }
 
 .omni-col-left,
@@ -57,6 +84,8 @@
     width: 100%;
     margin-bottom: 2px;
     flex-shrink: 0;
+    padding: 0 10px;
+    box-sizing: border-box;
 }
 
 .omni-section-half {
@@ -93,6 +122,16 @@
     max-width: 100%;
 }
 
+/* Universal 4px vertical spacing for ALL card types in Omni View */
+.omni-section-content > *,
+.omni-section-content .chit-card,
+.omni-section-content .habit-card,
+.omni-section-content .itinerary-event,
+.omni-email-cards > * {
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+}
+
 .omni-section-content .habit-card {
     max-width: 100%;
     box-sizing: border-box;
@@ -104,8 +143,7 @@
 .omni-section-content .itinerary-event {
     max-width: 100%;
     box-sizing: border-box;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+    margin: 4px 0 !important;
     padding-left: 1.5em !important;
 }
 
@@ -423,7 +461,7 @@
 .omni-email-cards {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .omni-email-pagination {
@@ -565,4 +603,37 @@
         grid-template-columns: 1fr;
         gap: 4px;
     }
+}
+
+/* ── HST Weather Strip ───────────────────────────────────────────────────── */
+
+.omni-hst-bar-with-temp {
+    height: calc(2.4em + 16px);
+}
+
+.omni-hst-bar-with-temp .omni-hst-fill {
+    bottom: 18px;
+}
+
+.omni-hst-bar-with-temp .omni-hst-icons {
+    bottom: 16px;
+}
+
+.omni-hst-bar-with-temp .omni-hst-time-overlay {
+    bottom: 16px;
+}
+
+.omni-hst-bar-with-temp .omni-hst-chit-icon,
+.omni-hst-bar-with-temp .omni-hst-line {
+    top: calc((2.4em) / 2);
+}
+
+.omni-hst-temp-strip {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    right: 2px;
+    height: 16px;
+    border-radius: 0 0 4px 4px;
+    z-index: 0;
 }

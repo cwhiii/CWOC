@@ -193,6 +193,9 @@ from src.backend.migrations import (
     migrate_create_custom_zones_table,
     migrate_bundles_omni_view,
     migrate_omni_view_settings,
+    migrate_omni_email_count,
+    migrate_omni_normalize_colors,
+    migrate_add_smart_actions_config,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -271,6 +274,9 @@ migrate_add_private_pgp_key()
 migrate_create_custom_zones_table()
 migrate_bundles_omni_view()
 migrate_omni_view_settings()
+migrate_omni_email_count()
+migrate_omni_normalize_colors()
+migrate_add_smart_actions_config()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)

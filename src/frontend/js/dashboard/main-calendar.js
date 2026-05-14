@@ -878,6 +878,7 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
 
   const chitElement = document.createElement("div");
   chitElement.className = "itinerary-event";
+  chitElement.dataset.chitId = chit.id;
   chitElement.style.cssText = "display:flex;align-items:center;padding:8px 10px;border-radius:5px;margin:4px 20px;";
   // Ensure a visible background — default to parchment if no color
   var bgColor = (typeof chitColor === 'function') ? chitColor(chit) : '';

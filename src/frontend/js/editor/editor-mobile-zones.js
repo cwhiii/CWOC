@@ -29,7 +29,7 @@
  * Each entry: { id: sectionId, contentId: bodyId, label: display name, icon: emoji }
  */
 var _mobileZoneOrder = [
-  { id: 'titleZone',              contentId: 'titleWeatherContainer', label: 'Title',             icon: '✏️',  isTitle: true },
+  { id: 'titleZone',              contentId: 'titleWeatherContainer', label: 'Overview',          icon: '📋',  isTitle: true },
   { id: 'datesSection',            contentId: 'datesContent',            label: 'Dates & Times',     icon: '🗓️' },
   { id: 'taskSection',             contentId: 'taskContent',             label: 'Task',              icon: '📋' },
   { id: 'notesSection',            contentId: 'notesContent',            label: 'Notes',             icon: '📝' },
@@ -288,7 +288,11 @@ function _mobileShowZone(idx) {
 
   // Hide the title container
   var titleContainer = document.getElementById('titleWeatherContainer');
-  if (titleContainer) titleContainer.classList.remove('mobile-zone-active');
+  if (titleContainer) {
+    titleContainer.classList.remove('mobile-zone-active');
+    // Restore hidden elements from overview mode
+    _restoreMobileOverviewElements(titleContainer);
+  }
 
   // Hide all zone containers in both columns
   var allContainers = grid.querySelectorAll('.zone-container');
@@ -302,20 +306,10 @@ function _mobileShowZone(idx) {
   if (!activeZone) return;
 
   if (activeZone.isTitle) {
-    // Show the title container as the active zone
+    // Show the Overview panel — compact read-only summary of populated fields
     if (titleContainer) {
       titleContainer.classList.add('mobile-zone-active');
-      // Inject header controls into title zone if not already there
-      _injectTitleZoneControls(titleContainer);
-      // Ensure weather section visibility matches its state
-      var cws = document.getElementById('compactWeatherSection');
-      if (cws) {
-        if (cws.classList.contains('weather-placeholder')) {
-          cws.style.setProperty('display', 'none', 'important');
-        } else {
-          cws.style.setProperty('display', 'flex', 'important');
-        }
-      }
+      _renderMobileOverview(titleContainer);
     }
     // Hide both columns
     var colOne = grid.querySelector('.column-one');
@@ -571,6 +565,313 @@ function _injectTitleZoneControls(titleContainer) {
   });
 
   titleContainer.appendChild(controlsDiv);
+}
+
+/* ── Mobile Overview Panel ────────────────────────────────────────────────── */
+
+/**
+ * Restore elements hidden by the overview panel when navigating away.
+ */
+function _restoreMobileOverviewElements(container) {
+  var overviewPanel = container.querySelector('.mobile-overview-panel');
+  if (overviewPanel) overviewPanel.remove();
+  var titleField = container.querySelector('#titleField');
+  if (titleField) titleField.style.display = '';
+  var cws = document.getElementById('compactWeatherSection');
+  if (cws) cws.style.display = '';
+  var oldControls = container.querySelector('.mobile-title-zone-controls');
+  if (oldControls) oldControls.style.display = '';
+}
+
+/**
+ * Render the mobile Overview panel — compact read-only summary of populated fields.
+ * Tapping any row navigates to that zone for editing.
+ * Order: title, weather, time/dates, notes, checklist, location, indicators, custom zones.
+ */
+function _renderMobileOverview(container) {
+  // Remove previous overview if present
+  var existing = container.querySelector('.mobile-overview-panel');
+  if (existing) existing.remove();
+
+  // Also hide the original title field and weather section (overview replaces them)
+  var titleField = container.querySelector('#titleField');
+  if (titleField) titleField.style.display = 'none';
+  var cws = document.getElementById('compactWeatherSection');
+  if (cws) cws.style.setProperty('display', 'none', 'important');
+  // Hide old controls if present
+  var oldControls = container.querySelector('.mobile-title-zone-controls');
+  if (oldControls) oldControls.style.display = 'none';
+
+  var panel = document.createElement('div');
+  panel.className = 'mobile-overview-panel';
+
+  // Helper: navigate to a zone by its id
+  function goToZone(zoneId) {
+    var visibleZones = _getMobileVisibleZones();
+    for (var i = 0; i < visibleZones.length; i++) {
+      if (visibleZones[i].id === zoneId) {
+        _mobileShowZone(i);
+        return;
+      }
+    }
+  }
+
+  // Helper: create a tappable row
+  function makeRow(icon, text, zoneId) {
+    var row = document.createElement('div');
+    row.className = 'mobile-overview-row';
+    row.innerHTML = '<span class="mobile-overview-icon">' + icon + '</span>' +
+      '<span class="mobile-overview-text">' + text + '</span>' +
+      '<span class="mobile-overview-arrow">›</span>';
+    row.addEventListener('click', function() { goToZone(zoneId); });
+    return row;
+  }
+
+  // 1. Title (always shown — tapping focuses the title input for inline editing)
+  var titleInput = document.getElementById('title');
+  var titleVal = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : '';
+  if (titleVal) {
+    var titleRow = document.createElement('div');
+    titleRow.className = 'mobile-overview-row mobile-overview-title-row';
+    titleRow.innerHTML = '<span class="mobile-overview-icon">✏️</span>' +
+      '<span class="mobile-overview-text">' + _escHtml(titleVal) + '</span>' +
+      '<span class="mobile-overview-arrow">›</span>';
+    titleRow.addEventListener('click', function() {
+      // Show the title field, focus input
+      var tf = container.querySelector('#titleField');
+      if (tf) tf.style.display = '';
+      titleInput.focus();
+      titleInput.select();
+    });
+    panel.appendChild(titleRow);
+  } else {
+    // No title yet — show editable title input directly
+    var tf = container.querySelector('#titleField');
+    if (tf) tf.style.display = '';
+  }
+
+  // 2. Weather (only if real weather data loaded)
+  if (cws && !cws.classList.contains('weather-placeholder')) {
+    var weatherHeader = cws.querySelector('.compact-day-header');
+    if (weatherHeader) {
+      var weatherText = '';
+      var tempEl = cws.querySelector('.compact-temperature-track');
+      var descEl = cws.querySelector('.compact-description');
+      var iconEl = cws.querySelector('.compact-icon');
+      if (iconEl) weatherText += iconEl.textContent + ' ';
+      if (descEl) weatherText += descEl.textContent;
+      if (tempEl) {
+        var minEl = cws.querySelector('.compact-temp-min');
+        var maxEl = cws.querySelector('.compact-temp-max');
+        if (minEl && maxEl) weatherText += ' (' + minEl.textContent + '–' + maxEl.textContent + ')';
+      }
+      if (weatherText.trim()) {
+        panel.appendChild(makeRow('🌤️', _escHtml(weatherText.trim()), 'datesSection'));
+      }
+    }
+  }
+
+  // 3. Time/Dates
+  var datesText = _getOverviewDatesText();
+  if (datesText) {
+    panel.appendChild(makeRow('🗓️', _escHtml(datesText), 'datesSection'));
+  }
+
+  // 4. Notes (show preview of the note content)
+  var noteEl = document.getElementById('note');
+  if (noteEl && noteEl.value.trim()) {
+    var noteLines = noteEl.value.trim().split('\n').filter(function(l) { return l.trim(); });
+    var notePreview = noteLines.slice(0, 3).map(function(l) {
+      var trimmed = l.trim();
+      if (trimmed.length > 60) trimmed = trimmed.substring(0, 60) + '…';
+      return _escHtml(trimmed);
+    }).join('<br>');
+    if (noteLines.length > 3) notePreview += '<br><span style="opacity:0.5;">…' + (noteLines.length - 3) + ' more lines</span>';
+    var noteRow = document.createElement('div');
+    noteRow.className = 'mobile-overview-row mobile-overview-multiline';
+    noteRow.innerHTML = '<span class="mobile-overview-icon">📝</span>' +
+      '<span class="mobile-overview-text">' + notePreview + '</span>' +
+      '<span class="mobile-overview-arrow">›</span>';
+    noteRow.addEventListener('click', function() { goToZone('notesSection'); });
+    panel.appendChild(noteRow);
+  }
+
+  // 5. Checklist (show incomplete items)
+  var checkContainer = document.getElementById('checklist-container');
+  if (checkContainer) {
+    var allItems = checkContainer.querySelectorAll('.checklist-item');
+    if (allItems.length > 0) {
+      var incomplete = [];
+      allItems.forEach(function(item) {
+        var cb = item.querySelector('input[type="checkbox"]');
+        if (cb && !cb.checked) {
+          var textEl = item.querySelector('.checklist-item-text, span');
+          var text = textEl ? textEl.textContent.trim() : '';
+          if (text) incomplete.push(text);
+        }
+      });
+      if (incomplete.length > 0) {
+        var checkPreview = incomplete.slice(0, 4).map(function(t) {
+          if (t.length > 50) t = t.substring(0, 50) + '…';
+          return '☐ ' + _escHtml(t);
+        }).join('<br>');
+        if (incomplete.length > 4) checkPreview += '<br><span style="opacity:0.5;">…' + (incomplete.length - 4) + ' more</span>';
+        var totalChecked = allItems.length - incomplete.length;
+        if (totalChecked > 0) checkPreview += '<br><span style="opacity:0.5;">✓ ' + totalChecked + ' completed</span>';
+        var checkRow = document.createElement('div');
+        checkRow.className = 'mobile-overview-row mobile-overview-multiline';
+        checkRow.innerHTML = '<span class="mobile-overview-icon">☑️</span>' +
+          '<span class="mobile-overview-text">' + checkPreview + '</span>' +
+          '<span class="mobile-overview-arrow">›</span>';
+        checkRow.addEventListener('click', function() { goToZone('checklistSection'); });
+        panel.appendChild(checkRow);
+      } else {
+        // All complete
+        var doneRow = makeRow('☑️', '✓ All ' + allItems.length + ' items complete', 'checklistSection');
+        panel.appendChild(doneRow);
+      }
+    }
+  }
+
+  // 6. Location
+  var locEl = document.getElementById('location');
+  if (locEl && locEl.value.trim()) {
+    panel.appendChild(makeRow('📍', _escHtml(locEl.value.trim()), 'locationSection'));
+  }
+
+  // 7. Indicators (show count of populated indicators)
+  var healthContent = document.getElementById('healthIndicatorsContent');
+  if (healthContent) {
+    var entries = healthContent.querySelectorAll('.indicator-field');
+    if (entries.length > 0) {
+      var populatedCount = 0;
+      entries.forEach(function(entry) {
+        var input = entry.querySelector('input, select');
+        if (input) {
+          if (input.type === 'checkbox' && input.checked) populatedCount++;
+          else if (input.type !== 'checkbox' && input.value) populatedCount++;
+        }
+      });
+      if (populatedCount > 0) {
+        panel.appendChild(makeRow('❤️', populatedCount + ' indicator' + (populatedCount !== 1 ? 's' : '') + ' recorded', 'healthIndicatorsSection'));
+      }
+    }
+  }
+
+  // 8. Custom zones (only show if fields have actual values; display those values)
+  var visibleZones = _getMobileVisibleZones();
+  visibleZones.forEach(function(zone) {
+    if (!zone.isCustomZone) return;
+    var section = document.getElementById(zone.id);
+    if (!section) return;
+    // Find fields with values
+    var fields = section.querySelectorAll('.indicator-field');
+    var populatedFields = [];
+    fields.forEach(function(field) {
+      var input = field.querySelector('input, select');
+      if (!input) return;
+      var hasValue = false;
+      if (input.type === 'checkbox') {
+        hasValue = input.checked;
+      } else {
+        hasValue = !!(input.value && input.value.trim());
+      }
+      if (hasValue) {
+        var label = field.querySelector('label');
+        var labelText = label ? label.textContent.trim() : '';
+        var valText = input.type === 'checkbox' ? '✓' : input.value.trim();
+        populatedFields.push({ label: labelText, value: valText });
+      }
+    });
+    // Only show if there are fields with values
+    if (populatedFields.length === 0) return;
+    var titleEl = section.querySelector('.zone-title');
+    var zoneName = titleEl ? titleEl.textContent.replace(/^📦\s*/, '') : zone.label;
+    var czPreview = populatedFields.slice(0, 4).map(function(f) {
+      var line = f.label ? _escHtml(f.label) + ': ' : '';
+      var val = f.value.length > 40 ? f.value.substring(0, 40) + '…' : f.value;
+      line += _escHtml(val);
+      return line;
+    }).join('<br>');
+    if (populatedFields.length > 4) czPreview += '<br><span style="opacity:0.5;">…' + (populatedFields.length - 4) + ' more</span>';
+    var czRow = document.createElement('div');
+    czRow.className = 'mobile-overview-row mobile-overview-multiline';
+    czRow.innerHTML = '<span class="mobile-overview-icon">📦</span>' +
+      '<span class="mobile-overview-text"><strong>' + _escHtml(zoneName) + '</strong><br>' + czPreview + '</span>' +
+      '<span class="mobile-overview-arrow">›</span>';
+    czRow.addEventListener('click', function() { goToZone(zone.id); });
+    panel.appendChild(czRow);
+  });
+
+  // If nothing is populated at all (new chit), show a hint
+  if (panel.children.length === 0) {
+    var hint = document.createElement('div');
+    hint.className = 'mobile-overview-empty';
+    hint.textContent = 'New chit — swipe or tap a zone to start editing';
+    panel.appendChild(hint);
+  }
+
+  container.appendChild(panel);
+}
+
+/**
+ * Get a compact text summary of the chit's dates/times.
+ */
+function _getOverviewDatesText() {
+  var noneRadio = document.getElementById('dateModeNone');
+  if (noneRadio && noneRadio.checked) return '';
+
+  var parts = [];
+
+  // Check point-in-time
+  var pitDate = document.getElementById('point_in_time_date');
+  var pitTime = document.getElementById('point_in_time_time');
+  if (pitDate && pitDate.value) {
+    parts.push(pitDate.value);
+    if (pitTime && pitTime.value) parts[parts.length - 1] += ' ' + pitTime.value;
+    return parts.join('');
+  }
+
+  // Check start/end range
+  var startDate = document.getElementById('start_datetime');
+  var endDate = document.getElementById('end_datetime');
+  var startTime = document.getElementById('start_time');
+  var endTime = document.getElementById('end_time');
+
+  if (startDate && startDate.value) {
+    var s = startDate.value;
+    if (startTime && startTime.value) s += ' ' + startTime.value;
+    parts.push(s);
+  }
+  if (endDate && endDate.value) {
+    var sameDate = startDate && startDate.value === endDate.value;
+    if (sameDate) {
+      // Same date — only show the end time
+      var endPart = (endTime && endTime.value) ? endTime.value : '';
+      if (endPart && parts.length > 0) {
+        parts[0] += ' → ' + endPart;
+      }
+    } else {
+      var e = endDate.value;
+      if (endTime && endTime.value) e += ' ' + endTime.value;
+      if (parts.length > 0) {
+        parts[0] += ' → ' + e;
+      } else {
+        parts.push('→ ' + e);
+      }
+    }
+  }
+
+  // Check due date
+  var dueDate = document.getElementById('due_datetime');
+  var dueTime = document.getElementById('due_time');
+  if (dueDate && dueDate.value) {
+    var d = 'Due: ' + dueDate.value;
+    if (dueTime && dueTime.value) d += ' ' + dueTime.value;
+    parts.push(d);
+  }
+
+  return parts.join(' | ');
 }
 
 /* ── Zone List Overlay ────────────────────────────────────────────────────── */
@@ -1008,6 +1309,7 @@ function _deactivateMobileZoneMode() {
   var titleContainer = document.getElementById('titleWeatherContainer');
   if (titleContainer) {
     titleContainer.classList.remove('mobile-zone-active');
+    _restoreMobileOverviewElements(titleContainer);
     titleContainer.style.display = '';
   }
 

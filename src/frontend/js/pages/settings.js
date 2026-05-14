@@ -138,8 +138,18 @@ function _autoSelectSingleLocation() {
  */
 function collectLocationsData() {
   const container = document.getElementById("locations-list");
-  if (!container) return [];
+  if (!container) return undefined; // Container missing — don't overwrite
   const rows = container.querySelectorAll(".location-row");
+  if (rows.length === 0) {
+    // No rows rendered at all — DOM wasn't populated, preserve server data
+    if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.saved_locations) {
+      var orig = window.settingsManager.settings.saved_locations;
+      if (Array.isArray(orig) && orig.length > 0) {
+        return orig;
+      }
+    }
+    return undefined; // Signal to skip this field
+  }
   const all = [];
   rows.forEach(row => {
     const label = row.querySelector(".location-label-input")?.value?.trim() || "";
@@ -149,15 +159,7 @@ function collectLocationsData() {
   });
   const nonEmpty = all.filter(loc => loc.address !== "");
   if (nonEmpty.length === 0) {
-    // Safety: if the loaded settings had locations but the DOM is empty,
-    // preserve the original data rather than wiping it
-    if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.saved_locations) {
-      var orig = window.settingsManager.settings.saved_locations;
-      if (Array.isArray(orig) && orig.length > 0 && orig.some(function(l) { return l.address; })) {
-        console.warn('[Settings] collectLocationsData: DOM is empty but original settings had locations — preserving original');
-        return orig;
-      }
-    }
+    // All rows are empty — user intentionally cleared them
     return [{ label: "", address: "", is_default: false }];
   }
   return nonEmpty;
@@ -374,10 +376,11 @@ var _omniLayoutAreas = [
   { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true, column: null },
   { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true, column: null },
   { id: 'hst_weather', label: '📊🌤️ HST + Weather', width: 'full', visible: false, column: null },
+  { id: 'hst_temp_strip', label: '📊🌡️ HST Weather Strip', width: 'full', visible: false, column: null },
   { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true, column: 'left' },
   { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true, column: 'left' },
   { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true, column: 'left' },
-  { id: 'email', label: '📧 Unread Email', width: 'half', visible: true, column: 'left' },
+  { id: 'email', label: '📧 Email', width: 'half', visible: true, column: 'left' },
   { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true, column: 'right' },
   { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true, column: 'right' },
   { id: 'pinned_all', label: '📌 Pinned (Notes + Checklists)', width: 'half', visible: false, column: 'right' }
@@ -1604,6 +1607,7 @@ class SettingsManager {
       }
 
       this.updateForm();
+      if (typeof _initBadgesSettings === 'function') _initBadgesSettings();
       setSaveButtonSaved();
       monitorChanges();
       this.setupEventListeners();
@@ -1864,6 +1868,12 @@ class SettingsManager {
     var hstClockMode = document.getElementById('omni-hst-clock-mode');
     if (hstClockMode) hstClockMode.value = this.settings.omni_hst_clock_mode || 'both';
 
+    var omniEmailCount = document.getElementById('omni-email-count');
+    if (omniEmailCount) omniEmailCount.value = this.settings.omni_email_count || '3';
+
+    var omniNormColors = document.getElementById('omni-normalize-colors');
+    if (omniNormColors) omniNormColors.checked = (this.settings.omni_normalize_colors === '1');
+
     _loadOmniLayout(this.settings);
     _renderOmniLayoutGrid();
     _loadOmniBundleToggles();
@@ -1938,7 +1948,15 @@ class SettingsManager {
       bundles_multi_placement: document.getElementById("bundlesMultiPlacement")?.checked ? '1' : '0',
       bundles_enabled: document.getElementById("bundlesEnabled")?.checked ? '1' : '0',
       bundles_show_count: document.getElementById("bundlesShowCount")?.value || 'unread',
-      saved_locations: JSON.stringify(collectLocationsData()),
+      saved_locations: (() => {
+        var locData = collectLocationsData();
+        if (locData === undefined) {
+          // DOM not populated — preserve existing server value
+          var orig = (window.settingsManager && window.settingsManager.settings) ? window.settingsManager.settings.saved_locations : null;
+          return orig ? JSON.stringify(orig) : null;
+        }
+        return JSON.stringify(locData);
+      })(),
       audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       default_notifications: {
@@ -1962,8 +1980,11 @@ class SettingsManager {
       view_order: _collectViewOrder(),
       session_lifetime: (document.getElementById('session-lifetime-select') || {}).value || '24',
       omni_hst_clock_mode: (document.getElementById('omni-hst-clock-mode') || {}).value || 'both',
+      omni_email_count: (document.getElementById('omni-email-count') || {}).value || '3',
+      omni_normalize_colors: document.getElementById('omni-normalize-colors')?.checked ? '1' : '0',
       omni_layout: _collectOmniLayout(),
       omni_locked_filters: _omniLockedFiltersCleared ? '' : undefined,
+      smart_actions_config: (typeof _gatherBadgesConfig === 'function') ? _gatherBadgesConfig() : undefined,
     };
   }
 
@@ -2003,6 +2024,7 @@ class SettingsManager {
           typeof c === "string" ? { hex: c, name: colorMap[c] || "Custom" } : c,
         );
       }
+      if (typeof syncSend === 'function') syncSend('settings_changed', {});
       setSaveButtonSaved();
       document.getElementById("loader").style.display = "none";
       return true;

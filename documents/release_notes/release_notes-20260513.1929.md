@@ -1,0 +1,1 @@
+Mobile editor: Renamed "Title" zone to "Overview" — now shows a compact read-only summary of all populated chit fields (title, weather, dates, notes, checklist, location, indicators, custom zones). Tapping any row navigates directly to that zone for editing.

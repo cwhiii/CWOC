@@ -29,13 +29,14 @@ var _omniDefaultLayout = [
     { id: "hst", width: "full", visible: true, position: 0 },
     { id: "weather", width: "full", visible: true, position: 1 },
     { id: "hst_weather", width: "full", visible: false, position: 2 },
-    { id: "chrono", width: "half", visible: true, position: 3, column: "left" },
-    { id: "ondeck", width: "half", visible: true, position: 4, column: "left" },
-    { id: "soon", width: "half", visible: true, position: 5, column: "left" },
-    { id: "email", width: "half", visible: true, position: 6, column: "left" },
-    { id: "pinned_notes", width: "half", visible: true, position: 7, column: "right" },
-    { id: "pinned_checklists", width: "half", visible: true, position: 8, column: "right" },
-    { id: "pinned_all", width: "half", visible: false, position: 9, column: "right" }
+    { id: "hst_temp_strip", width: "full", visible: false, position: 3 },
+    { id: "chrono", width: "half", visible: true, position: 4, column: "left" },
+    { id: "ondeck", width: "half", visible: true, position: 5, column: "left" },
+    { id: "soon", width: "half", visible: true, position: 6, column: "left" },
+    { id: "email", width: "half", visible: true, position: 7, column: "left" },
+    { id: "pinned_notes", width: "half", visible: true, position: 8, column: "right" },
+    { id: "pinned_checklists", width: "half", visible: true, position: 9, column: "right" },
+    { id: "pinned_all", width: "half", visible: false, position: 10, column: "right" }
 ];
 
 /* ── Section display names and icons ─────────────────────────────────────── */
@@ -44,10 +45,11 @@ var _omniSectionMeta = {
     hst: { label: "HST Bar", icon: "" },
     weather: { label: "Weather", icon: "" },
     hst_weather: { label: "HST + Weather", icon: "📊🌤️" },
+    hst_temp_strip: { label: "HST Weather Strip", icon: "" },
     chrono: { label: "Chrono Anchored", icon: "⏰" },
     ondeck: { label: "On Deck", icon: "🔜" },
     soon: { label: "Soon", icon: "🗓️" },
-    email: { label: "Unread Email", icon: "📧" },
+    email: { label: "Email", icon: "📧" },
     pinned_notes: { label: "Pinned Notes", icon: "📝" },
     pinned_checklists: { label: "Pinned Checklists", icon: "☑️" },
     pinned_all: { label: "Pinned", icon: "📌" }
@@ -183,7 +185,7 @@ function _buildOmniSection(sectionConfig, widthClass) {
     section.dataset.omniSection = sectionConfig.id;
 
     // HST and Weather bars don't get a visible header (they are self-contained)
-    if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather") {
+    if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather" && sectionConfig.id !== "hst_temp_strip") {
         var header = document.createElement("div");
         header.className = "omni-section-header";
         header.innerHTML = (meta.icon ? '<span class="omni-section-icon">' + meta.icon + '</span> ' : '') + meta.label;
@@ -477,6 +479,10 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 // Combined HST + Weather side by side
                 _renderOmniHSTWeatherCombo(contentEl, categorized.chrono);
                 break;
+            case "hst_temp_strip":
+                // HST bar with temperature color strip underneath
+                _renderOmniHSTTempStrip(contentEl, categorized.chrono);
+                break;
             case "chrono":
                 // Chrono Anchored — implemented in task 6.1
                 if (typeof _renderOmniChrono === 'function') {
@@ -538,7 +544,7 @@ function _populateOmniSections(filteredChits, visibleSections) {
         }
 
         // Hide empty sections (Requirement 2.2)
-        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather") {
+        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather" && sectionConfig.id !== "hst_temp_strip") {
             var sectionEl = contentEl.parentElement;
             var items;
             if (sectionConfig.id === "pinned_all") {
@@ -554,6 +560,98 @@ function _populateOmniSections(filteredChits, visibleSections) {
             }
         }
     });
+
+    // ── Normalize colors if enabled ─────────────────────────────────────────
+    var settings = window._cwocSettings || {};
+    if (settings.omni_normalize_colors === '1') {
+        _applyOmniNormalizedColors();
+    }
+}
+
+/* ── Omni Normalized Colors ────────────────────────────────────────────────── */
+
+/** Fixed earthy tones for each chit type when normalize is enabled */
+var _omniNormalizedColorMap = {
+    event:     '#7ab87a',  // medium green (calendar events)
+    task:      '#c4a0d4',  // soft purple (tasks with status)
+    note:      '#d4956b',  // terracotta (notes)
+    checklist: '#9cc4d8',  // medium sky blue (has checklist items)
+    birthday:  '#d8a8d8',  // medium orchid (contact birthdays)
+    email:     '#a89070',  // dark mocha (email chits)
+    habit:     '#f0e87a',  // light yellow (habits)
+};
+
+/**
+ * Walk all .chit-card elements in the Omni View and override their background
+ * color based on chit type.
+ */
+function _applyOmniNormalizedColors() {
+    var omniView = document.querySelector('.omni-view');
+    if (!omniView) return;
+
+    var allChits = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits : [];
+
+    // Walk each section and apply colors based on SECTION type, not chit properties
+    var sections = omniView.querySelectorAll('.omni-section');
+    sections.forEach(function(section) {
+        var sectionId = section.dataset.omniSection;
+        var cards = section.querySelectorAll('[data-chit-id]');
+
+        cards.forEach(function(card) {
+            var chitId = card.dataset.chitId;
+            var chit = allChits.find(function(c) { return c.id === chitId; });
+            var color;
+
+            // Sections that always use a fixed color
+            if (sectionId === 'chrono' || sectionId === 'ondeck' || sectionId === 'soon') {
+                // Birthdays and habits get their own color
+                if (chit && chit._isBirthday) {
+                    color = _omniNormalizedColorMap.birthday;
+                } else if (chit && chit.habit) {
+                    color = _omniNormalizedColorMap.habit;
+                } else if (chit && chit.status && chit.status !== '') {
+                    color = _omniNormalizedColorMap.task;
+                } else {
+                    color = _omniNormalizedColorMap.event;
+                }
+            } else if (sectionId === 'pinned_notes' || (sectionId === 'pinned_all' && card.closest('.omni-pinned-all-notes'))) {
+                color = _omniNormalizedColorMap.note;
+            } else if (sectionId === 'pinned_checklists' || (sectionId === 'pinned_all' && !card.closest('.omni-pinned-all-notes'))) {
+                color = _omniNormalizedColorMap.checklist;
+            } else if (sectionId === 'email') {
+                color = _omniNormalizedColorMap.email;
+            } else if (chit) {
+                color = _omniGetNormalizedColor(chit);
+            } else {
+                return;
+            }
+
+            card.style.backgroundColor = color;
+            card.style.color = (typeof contrastColorForBg === 'function') ? contrastColorForBg(color) : '#1a1208';
+        });
+    });
+}
+
+/**
+ * Determine the normalized color for a chit based on its type.
+ */
+function _omniGetNormalizedColor(chit) {
+    // Email
+    if (chit.email_message_id || chit.email_status) return _omniNormalizedColorMap.email;
+    // Birthday (contact-generated birthday/anniversary chits)
+    if (chit._isBirthday) return _omniNormalizedColorMap.birthday;
+    // Habit
+    if (chit.habit) return _omniNormalizedColorMap.habit;
+    // Checklist
+    var cl = chit.checklist;
+    if (typeof cl === 'string') { try { cl = JSON.parse(cl); } catch(e) { cl = null; } }
+    if (Array.isArray(cl) && cl.length > 0) return _omniNormalizedColorMap.checklist;
+    // Task (has status)
+    if (chit.status && chit.status !== '') return _omniNormalizedColorMap.task;
+    // Event (has dates)
+    if (chit.start_datetime || chit.due_datetime) return _omniNormalizedColorMap.event;
+    // Note (everything else)
+    return _omniNormalizedColorMap.note;
 }
 
 /* ── Chrono Anchored Section ──────────────────────────────────────────────── */
@@ -1170,104 +1268,24 @@ function _renderOmniWeather(contentEl) {
     bar.innerHTML = '<span class="omni-weather-loading">⏳ Loading weather…</span>';
     contentEl.appendChild(bar);
 
-    // Populate weather data asynchronously
-    _populateOmniWeatherBar(bar);
-}
-
-/**
- * Populates the weather bar with data from the forecast cache or a fresh fetch.
- * @param {HTMLElement} bar - The weather bar container element
- */
-async function _populateOmniWeatherBar(bar) {
-    if (!bar) return;
-
-    // Get default location
+    // Get default location and fetch weather using the shared function
     var defaultLoc = (typeof getDefaultLocation === "function") ? getDefaultLocation() : null;
     if (!defaultLoc || !defaultLoc.address) {
         bar.innerHTML = '<span class="omni-weather-empty">No location configured</span>';
         return;
     }
 
-    var address = defaultLoc.address;
-    var locationLabel = defaultLoc.label || address;
-
-    // Try the shared weather forecast cache first
-    var cached = (typeof getWeatherFromCache === "function") ? getWeatherFromCache(address) : null;
-
-    if (cached && cached.daily) {
-        _buildWeatherBarContent(bar, cached.daily, locationLabel);
-        return;
-    }
-
-    // Fetch fresh weather data
-    try {
-        var entry = (typeof fetchAndCacheWeather === "function") ? await fetchAndCacheWeather(address) : null;
-        if (entry && entry.daily) {
-            _buildWeatherBarContent(bar, entry.daily, locationLabel);
-        } else {
+    getWeatherForLocation(defaultLoc.address).then(function(wx) {
+        if (!wx) {
             bar.innerHTML = '<span class="omni-weather-empty">Weather unavailable</span>';
+            return;
         }
-    } catch (e) {
-        console.error("[Omni Weather] Fetch failed:", e);
-        bar.innerHTML = '<span class="omni-weather-empty">Weather unavailable</span>';
-    }
-}
-
-/**
- * Builds the weather bar content from daily forecast data.
- * Shows: icon, current high/low temps, and location name.
- *
- * @param {HTMLElement} bar - The weather bar container
- * @param {Object} daily - Open-Meteo daily data (weathercode[], temperature_2m_max[], temperature_2m_min[], time[])
- * @param {string} locationLabel - Display name for the location
- */
-function _buildWeatherBarContent(bar, daily, locationLabel) {
-    if (!bar || !daily) return;
-
-    // Get today's index (first entry in the forecast)
-    var todayStr = new Date().toISOString().slice(0, 10);
-    var dayIndex = 0;
-    if (daily.time && Array.isArray(daily.time)) {
-        var idx = daily.time.indexOf(todayStr);
-        if (idx >= 0) dayIndex = idx;
-    }
-
-    var weatherCode = (daily.weathercode && daily.weathercode[dayIndex] !== undefined)
-        ? daily.weathercode[dayIndex] : null;
-    var maxC = (daily.temperature_2m_max && daily.temperature_2m_max[dayIndex] !== undefined)
-        ? daily.temperature_2m_max[dayIndex] : null;
-    var minC = (daily.temperature_2m_min && daily.temperature_2m_min[dayIndex] !== undefined)
-        ? daily.temperature_2m_min[dayIndex] : null;
-
-    if (weatherCode === null && maxC === null && minC === null) {
-        bar.innerHTML = '<span class="omni-weather-empty">Weather unavailable</span>';
-        return;
-    }
-
-    // Convert temperatures
-    var icon = (typeof _getWeatherIcon === "function") ? _getWeatherIcon(weatherCode) : "❓";
-    var highT = (maxC !== null) ? _celsiusToFahrenheit(maxC) : "--";
-    var lowT = (minC !== null) ? _celsiusToFahrenheit(minC) : "--";
-    var unit = (typeof _tempUnit === "function") ? _tempUnit() : "°F";
-
-    // Build temperature bar using the same function as the weather modal
-    var tempBarHtml = '';
-    if (maxC !== null && minC !== null && typeof _buildTempBarHTML === 'function' && typeof _tempBarRange === 'function') {
-        var barR = _tempBarRange();
-        var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
-        var minT = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? Math.round(minC) : Math.round(minC * 9 / 5 + 32);
-        var maxT = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? Math.round(maxC) : Math.round(maxC * 9 / 5 + 32);
-        var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
-        var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
-        var tUnit = (typeof _tempUnit === 'function') ? _tempUnit() : '°F';
-        tempBarHtml = _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
-    }
-
-    // Build the bar content (no high/low text — temp bar shows the range visually)
-    bar.innerHTML =
-        '<span class="omni-weather-icon">' + icon + '</span>' +
-        tempBarHtml +
-        '<span class="omni-weather-location">' + _escOmniHtml(locationLabel) + '</span>';
+        var locationLabel = defaultLoc.label || defaultLoc.address;
+        bar.innerHTML =
+            '<span class="omni-weather-icon">' + wx.icon + '</span>' +
+            wx.tempBarHtml +
+            '<span class="omni-weather-location">' + _escOmniHtml(locationLabel) + '</span>';
+    });
 }
 
 /**
@@ -1313,6 +1331,171 @@ function _renderOmniHSTWeatherCombo(contentEl, chronoItems) {
     comboWrapper.appendChild(weatherSide);
 
     contentEl.appendChild(comboWrapper);
+}
+
+/* ── HST Weather Strip Section ────────────────────────────────────────────── */
+
+/**
+ * Renders the HST Weather Strip: the normal HST bar with a temperature
+ * color strip inside it at the bottom, below the HST fill.
+ * Each of the 100 HST segments gets a color from the temperature gradient
+ * based on the interpolated hourly forecast.
+ *
+ * @param {HTMLElement} contentEl - The section content container
+ * @param {Array} chronoItems - Chrono items for the HST bar
+ */
+function _renderOmniHSTTempStrip(contentEl, chronoItems) {
+    if (!contentEl) return;
+    contentEl.innerHTML = "";
+
+    // Render the normal HST bar
+    _renderOmniHST(contentEl, chronoItems);
+
+    // Find the HST bar element that was just rendered and inject the temp strip inside it
+    var hstBar = contentEl.querySelector('.omni-hst-bar');
+    if (!hstBar) return;
+
+    // Make the bar taller to accommodate the strip
+    hstBar.classList.add('omni-hst-bar-with-temp');
+
+    // Create the temperature strip inside the bar at the bottom
+    var tempStrip = document.createElement("div");
+    tempStrip.className = "omni-hst-temp-strip";
+    hstBar.appendChild(tempStrip);
+
+    // Fetch hourly temperatures and render the strip
+    _populateHSTTempStrip(tempStrip);
+}
+
+/**
+ * Fetches hourly temperature data and renders 100 colored segments.
+ * Each segment's color is interpolated from the hourly forecast using _getTempColor.
+ *
+ * @param {HTMLElement} stripEl - The temperature strip container
+ */
+async function _populateHSTTempStrip(stripEl) {
+    if (!stripEl) return;
+
+    var defaultLoc = (typeof getDefaultLocation === "function") ? getDefaultLocation() : null;
+    if (!defaultLoc || !defaultLoc.address) return;
+
+    try {
+        var coords = await _geocodeAddress(defaultLoc.address);
+        var lat = coords.lat, lon = coords.lon;
+
+        // Use local date for the query
+        var now = new Date();
+        var today = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+
+        // Check cache
+        var cacheKey = 'cwoc_hst_temp_strip_' + today;
+        var cached = null;
+        try {
+            cached = JSON.parse(localStorage.getItem(cacheKey));
+            if (cached && cached.temps && (Date.now() - cached.ts < 3600000)) {
+                _renderTempStripSegments(stripEl, cached.temps);
+                return;
+            }
+        } catch (e) { /* no cache */ }
+
+        // Fetch hourly temperatures
+        var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
+            '&longitude=' + lon +
+            '&hourly=temperature_2m&timezone=auto&start_date=' + today +
+            '&end_date=' + today;
+
+        var resp = await fetch(url);
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (!data || !data.hourly || !data.hourly.temperature_2m) return;
+
+        var hourlyTemps = data.hourly.temperature_2m; // 24 values (one per hour, in Celsius)
+
+        // Cache it
+        try { localStorage.setItem(cacheKey, JSON.stringify({ temps: hourlyTemps, ts: Date.now() })); } catch (e) {}
+
+        _renderTempStripSegments(stripEl, hourlyTemps);
+    } catch (e) {
+        console.warn('[HSTTempStrip] Failed to fetch hourly temps:', e);
+    }
+}
+
+/**
+ * Renders 100 colored segments in the temperature strip.
+ * Interpolates between hourly temperature values to get a temp for each HST segment.
+ *
+ * @param {HTMLElement} stripEl - The strip container
+ * @param {Array} hourlyTemps - 24 hourly temperature values in Celsius
+ */
+function _renderTempStripSegments(stripEl, hourlyTemps) {
+    if (!stripEl || !hourlyTemps || hourlyTemps.length === 0) return;
+    stripEl.innerHTML = '';
+
+    // Store hourly temps on the element for tooltip access
+    stripEl._hourlyTemps = hourlyTemps;
+
+    // Build 100 color stops, each blending from previous to next
+    var colors = [];
+    for (var seg = 0; seg < 100; seg++) {
+        var dayFraction = seg / 100;
+        var hourFloat = dayFraction * 24;
+        var hourLow = Math.floor(hourFloat);
+        var hourHigh = Math.min(hourLow + 1, 23);
+        var frac = hourFloat - hourLow;
+        var tempLow = hourlyTemps[hourLow] !== undefined ? hourlyTemps[hourLow] : 15;
+        var tempHigh = hourlyTemps[hourHigh] !== undefined ? hourlyTemps[hourHigh] : tempLow;
+        var tempC = tempLow + frac * (tempHigh - tempLow);
+        colors.push((typeof _getTempColor === 'function') ? _getTempColor(tempC) : '#888');
+    }
+
+    // Build a smooth gradient: each segment's midpoint is its color,
+    // blending from the previous segment's color to the next
+    var stops = [];
+    for (var i = 0; i < colors.length; i++) {
+        var pct = ((i + 0.5) / 100 * 100).toFixed(2);
+        stops.push(colors[i] + ' ' + pct + '%');
+    }
+    stripEl.style.background = 'linear-gradient(to right, ' + stops.join(', ') + ')';
+
+    // Add hover tooltip
+    stripEl.style.cursor = 'crosshair';
+    stripEl.addEventListener('mousemove', function(e) {
+        var rect = stripEl.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var pctX = x / rect.width;
+        var hourFloat = pctX * 24;
+        var hourLow = Math.floor(hourFloat);
+        var hourHigh = Math.min(hourLow + 1, 23);
+        var frac = hourFloat - hourLow;
+        var tLow = hourlyTemps[hourLow] !== undefined ? hourlyTemps[hourLow] : 15;
+        var tHigh = hourlyTemps[hourHigh] !== undefined ? hourlyTemps[hourHigh] : tLow;
+        var tempC = tLow + frac * (tHigh - tLow);
+
+        var displayTemp = (typeof _convertTemp === 'function') ? _convertTemp(tempC) : Math.round(tempC);
+        var unit = (typeof _tempUnit === 'function') ? _tempUnit() : '°C';
+
+        // Format time
+        var totalMinutes = Math.round(pctX * 1440);
+        var h = Math.floor(totalMinutes / 60);
+        var m = totalMinutes % 60;
+        var timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        if (typeof _globalFmtTime === 'function') {
+            timeStr = _globalFmtTime(timeStr);
+        } else if (typeof _sharedFmtTime === 'function') {
+            timeStr = _sharedFmtTime(timeStr);
+        }
+
+        // HST value
+        var hstVal = (pctX * 100).toFixed(1) + ' sd';
+
+        stripEl.title = displayTemp + unit + ' at ' + timeStr + ' (' + hstVal + ')';
+    });
+
+    stripEl.addEventListener('mouseleave', function() {
+        stripEl.title = '';
+    });
 }
 
 /* ── Pinned Notes Section ─────────────────────────────────────────────────── */
@@ -1611,7 +1794,7 @@ function _renderOmniPinnedChecklists(contentEl, pinnedChecklists, viSettings) {
 
 /* ── Email Section ───────────────────────────────────────────────────────── */
 
-/** Page size for email pagination */
+/** Page size for email pagination (loaded from settings) */
 var _OMNI_EMAIL_PAGE_SIZE = 3;
 
 /**
@@ -1630,6 +1813,10 @@ function _renderOmniEmail(contentEl, allEmailChits) {
     console.log('[OmniEmail] allEmailChits:', allEmailChits ? allEmailChits.length : 'NULL/undefined');
     if (!contentEl) return;
     contentEl.innerHTML = "";
+
+    // Load page size from settings
+    var settings = window._cwocSettings || {};
+    _OMNI_EMAIL_PAGE_SIZE = parseInt(settings.omni_email_count, 10) || 3;
 
     var viSettings = (window._cwocSettings || {}).visual_indicators || {};
 

@@ -486,66 +486,29 @@ async function _fetchWeatherForModal(address, label) {
   var overlay = document.getElementById('weather-modal-overlay');
   if (!overlay) return;
 
-  // Show loading in body — but if we have cached data, show it with stale indicator
   var bodyEl = document.getElementById('weather-modal-body');
   var cacheKey = 'cwoc_weather_cache_' + address.toLowerCase().trim();
   var cached = null;
   try { cached = JSON.parse(localStorage.getItem(cacheKey)); } catch (e) { /* ignore */ }
 
   if (cached && cached.html && bodyEl) {
-    // Show cached data with hourglass stale indicator
     bodyEl.innerHTML = '<div style="text-align:right;font-size:0.75em;opacity:0.5;margin-bottom:4px;">⏳ Refreshing…</div>' + cached.html;
   } else if (bodyEl) {
     bodyEl.innerHTML = '<div style="opacity:0.6;">Loading weather…</div>';
   }
 
   try {
-    // Geocode with shared progressive fallback
-    var coords = await _geocodeAddress(address);
-    var lat = coords.lat, lon = coords.lon;
-
-    // Fetch weather
-    var wxUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1';
-    var wxResp = await fetch(wxUrl);
-    if (!wxResp.ok) throw new Error('weather_network');
-    var wxData = await wxResp.json();
-    if (!wxData || !wxData.daily) throw new Error('weather_empty');
-
-    var today = wxData.daily;
-    var weatherCode = today.weathercode[0];
-    var minC = today.temperature_2m_min[0];
-    var maxC = today.temperature_2m_max[0];
-    var precipMm = today.precipitation_sum[0];
-    var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
-    var wind = _convertWind(windKmh);
-
-    var minT = _convertTemp(minC);
-    var maxT = _convertTemp(maxC);
-    var tUnit = _tempUnit();
-
-    var icon = _getWeatherIcon(weatherCode);
-    var precipText = _formatPrecip(precipMm, weatherCode);
-    var windText = wind.value >= (_isMetricUnits() ? 24 : 15) ? '💨 ' + wind.value + ' ' + wind.unit + ' wind' : '';
-
-    var barR = _tempBarRange();
-    var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
-    var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
-    var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
+    var wx = await getWeatherForLocation(address);
+    if (!wx) throw new Error('weather_empty');
 
     if (bodyEl) {
-      var fullDesc = _getWeatherDescription(weatherCode, minC, maxC, windKmh);
-      var lowAltM = _tempAltUnit(minC);
-      var highAltM = _tempAltUnit(maxC);
-      var precipAltM = precipMm > 0 ? _precipAlt(precipMm) : '';
-      var windAltM = wind.value > 0 ? _windDisplayAlt(wind.value) : '';
       var weatherHtml =
-        '<div class="weather-modal-icon">' + icon + ' <span class="weather-modal-desc">' + fullDesc + '</span></div>' +
-        '<div class="weather-modal-temps" title="' + lowAltM + ' – ' + highAltM + '"><span class="temp-low">' + minT + tUnit + '</span> – <span class="temp-high">' + maxT + tUnit + '</span></div>' +
-        (precipText ? '<div class="weather-modal-precip"' + (precipAltM ? ' title="' + precipAltM + '"' : '') + '>' + precipText + '</div>' : '') +
-        (windText ? '<div class="weather-modal-precip" style="margin-top:2px;"' + (windAltM ? ' title="' + windAltM + '"' : '') + '>' + windText + '</div>' : '') +
-        _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
+        '<div class="weather-modal-icon">' + wx.icon + ' <span class="weather-modal-desc">' + wx.fullDesc + '</span></div>' +
+        '<div class="weather-modal-temps" title="' + wx.lowAlt + ' – ' + wx.highAlt + '"><span class="temp-low">' + wx.minT + wx.tUnit + '</span> – <span class="temp-high">' + wx.maxT + wx.tUnit + '</span></div>' +
+        (wx.precipText ? '<div class="weather-modal-precip"' + (wx.precipAlt ? ' title="' + wx.precipAlt + '"' : '') + '>' + wx.precipText + '</div>' : '') +
+        (wx.windText ? '<div class="weather-modal-precip" style="margin-top:2px;"' + (wx.windAlt ? ' title="' + wx.windAlt + '"' : '') + '>' + wx.windText + '</div>' : '') +
+        wx.tempBarHtml;
       bodyEl.innerHTML = weatherHtml;
-      // Cache the result
       try { localStorage.setItem(cacheKey, JSON.stringify({ html: weatherHtml, ts: Date.now() })); } catch (e) { /* ignore */ }
     }
   } catch (err) {
@@ -564,31 +527,6 @@ async function _fetchWeatherForModal(address, label) {
 function _closeWeatherModal() {
   const overlay = document.getElementById('weather-modal-overlay');
   if (overlay) overlay.remove();
-}
-
-/** Pre-fetch weather for a location and store in localStorage cache (background, no UI). */
-async function _fetchWeatherForCache(address, cacheKey) {
-  try {
-    var coords = await _geocodeAddress(address);
-    var lat = coords.lat, lon = coords.lon;
-    var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1');
-    if (!wxResp.ok) return;
-    var wxData = await wxResp.json();
-    if (!wxData || !wxData.daily) return;
-    var today = wxData.daily;
-    var weatherCode = today.weathercode[0];
-    var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
-    var minT = _convertTemp(minC), maxT = _convertTemp(maxC);
-    var tUnit = _tempUnit();
-    var icon = _getWeatherIcon(weatherCode);
-    var precipText = _formatPrecip(precipMm, weatherCode);
-    var barR = _tempBarRange();
-    var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
-    var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
-    var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
-    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
-    try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
-  } catch (e) { /* background fetch — silently fail */ }
 }
 
 /** Pre-fetch weather for all chits that have locations. Deduplicates by location. */
@@ -689,6 +627,7 @@ async function deleteChit() {
   });
   // Persist to server
   fetch(`/api/chits/${delId}`, { method: "DELETE" })
+    .then(function() { if (typeof syncSend === 'function') syncSend('chits_changed', {}); })
     .catch((err) => {
       console.error("Error deleting chit:", err);
     });

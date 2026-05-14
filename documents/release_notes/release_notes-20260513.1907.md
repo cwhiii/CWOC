@@ -1,0 +1,1 @@
+Added PGP decryption for incoming encrypted emails. When viewing a PGP-encrypted message, a Decrypt button appears on the banner. Clicking it prompts for your account password, fetches your private key, and decrypts the message in-place using OpenPGP.js. The decrypted content is display-only and never saved to the database.

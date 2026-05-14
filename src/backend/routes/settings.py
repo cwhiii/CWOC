@@ -14,7 +14,6 @@ from fastapi import APIRouter, HTTPException, Request
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
 )
-from src.backend.models import Settings
 from src.backend.routes.audit import (
     insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune,
 )
@@ -136,256 +135,164 @@ def get_settings(user_id: str, request: Request):
             conn.close()
 
 @router.post("/api/settings")
-def save_settings(settings: Settings, request: Request):
-    # Ensure the settings user_id matches the authenticated user
+async def save_settings(request: Request):
+    """Partial-update settings save. Only fields present in the request body are
+    updated — omitted fields are left untouched in the database. This prevents
+    partial saves from wiping unrelated settings."""
+    import json as _json
+
     authenticated_user_id = request.state.user_id
-    if settings.user_id != authenticated_user_id:
+
+    # Parse raw JSON body so we know exactly which keys were sent
+    body = await request.json()
+
+    # Validate user_id if provided
+    sent_user_id = body.get("user_id", authenticated_user_id)
+    if sent_user_id != authenticated_user_id:
         raise HTTPException(status_code=403, detail="Cannot modify another user's settings")
 
-    # Validate reserved tag namespace — reject any tag starting with CWOC_System/
+    # Validate reserved tag namespace
     RESERVED_TAG_PREFIX = "cwoc_system/"
-    if settings.tags:
-        for tag in settings.tags:
-            if tag.name.lower().startswith(RESERVED_TAG_PREFIX):
+    if "tags" in body and body["tags"]:
+        for tag in body["tags"]:
+            if isinstance(tag, dict) and tag.get("name", "").lower().startswith(RESERVED_TAG_PREFIX):
                 raise HTTPException(
                     status_code=400,
                     detail="Tags starting with 'CWOC_System/' are reserved for system use and cannot be created manually."
                 )
+
+    # Fields that need JSON serialization before storage
+    JSON_FIELDS = {
+        "tags", "default_filters", "custom_colors", "visual_indicators",
+        "chit_options", "default_notifications", "kiosk_users", "shared_tags",
+        "recent_tags",
+    }
+
+    # All valid settings columns (excluding user_id which is the key)
+    VALID_COLUMNS = {
+        "time_format", "sex", "snooze_length", "default_filters",
+        "alarm_orientation", "active_clocks", "saved_locations", "tags",
+        "custom_colors", "visual_indicators", "chit_options", "calendar_snap",
+        "week_start_day", "work_start_hour", "work_end_hour", "work_days",
+        "enabled_periods", "custom_days_count", "all_view_start_hour",
+        "all_view_end_hour", "day_scroll_to_hour", "username",
+        "audit_log_max_days", "audit_log_max_mb", "default_notifications",
+        "unit_system", "habits_success_window", "overdue_border_color",
+        "blocked_border_color", "shared_tags", "kiosk_users", "hide_declined",
+        "default_show_habits_on_calendar", "map_default_lat", "map_default_lon",
+        "map_default_zoom", "map_auto_zoom", "email_account", "email_accounts",
+        "attachment_max_size_mb", "attachment_max_storage_mb",
+        "default_share_contacts", "checklist_autosave", "autosave_desktop",
+        "autosave_mobile", "view_order", "recent_tags", "paginate_email",
+        "bundles_multi_placement", "bundles_enabled", "bundles_show_count",
+        "show_map_thumbnails", "session_lifetime", "omni_layout",
+        "omni_locked_filters", "omni_hst_clock_mode", "omni_email_count",
+        "omni_normalize_colors",
+    }
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # --- Audit: fetch old settings before overwrite ---
+        # --- Audit: fetch old settings before update ---
         old_settings_dict = None
         try:
-            cursor.execute("SELECT * FROM settings WHERE user_id = ?", (settings.user_id,))
+            cursor.execute("SELECT * FROM settings WHERE user_id = ?", (authenticated_user_id,))
             old_row = cursor.fetchone()
             if old_row:
                 old_settings_dict = dict(zip([col[0] for col in cursor.description], old_row))
         except Exception as e:
             logger.error(f"Audit: failed to fetch old settings: {str(e)}")
 
-        # Build the new settings dict using the same serialization as the INSERT
-        # Preserve shared_tags if not provided by the frontend (shared_tags are
-        # managed via the dedicated PUT /api/settings/shared-tags endpoint and
-        # the tag modal save flow — the main settings save should not overwrite them)
-        preserved_shared_tags = None
-        if settings.shared_tags is None and old_settings_dict:
-            preserved_shared_tags = old_settings_dict.get("shared_tags")
+        # Build the update dict from only the keys that were actually sent
+        update_dict = {}
+        for key, value in body.items():
+            if key == "user_id":
+                continue  # Not a settable column
+            if key not in VALID_COLUMNS:
+                continue  # Ignore unknown fields
 
-        # Preserve email_account if not provided by the frontend (email_account
-        # is managed via the Settings → Email Account section and should not be
-        # overwritten by a general settings save that omits it)
-        preserved_email_account = None
-        if settings.email_account is None and old_settings_dict:
-            preserved_email_account = old_settings_dict.get("email_account")
-
-        # Preserve email_accounts if not provided
-        preserved_email_accounts = None
-        if settings.email_accounts is None and old_settings_dict:
-            preserved_email_accounts = old_settings_dict.get("email_accounts")
-
-        # If email_account is provided, encrypt the password before storing
-        _final_email_account = preserved_email_account
-        if settings.email_account is not None:
-            try:
-                import json as _json
-                acct = _json.loads(settings.email_account) if isinstance(settings.email_account, str) else settings.email_account
-                if isinstance(acct, dict) and acct.get("password"):
-                    # Encrypt plaintext password → password_encrypted, remove plaintext
-                    acct["password_encrypted"] = _encrypt_password(acct["password"])
-                    del acct["password"]
-                elif isinstance(acct, dict) and not acct.get("password") and not acct.get("password_encrypted"):
-                    # No new password provided — preserve the old encrypted password
-                    if old_settings_dict and old_settings_dict.get("email_account"):
-                        old_acct = deserialize_json_field(old_settings_dict["email_account"])
-                        if isinstance(old_acct, dict) and old_acct.get("password_encrypted"):
-                            acct["password_encrypted"] = old_acct["password_encrypted"]
-                _final_email_account = serialize_json_field(acct) if isinstance(acct, dict) else settings.email_account
-            except Exception as e:
-                logger.error(f"Error processing email_account password: {str(e)}")
-                _final_email_account = settings.email_account
-
-        # If email_accounts (multi-account) is provided, encrypt passwords
-        _final_email_accounts = preserved_email_accounts
-        if settings.email_accounts is not None:
-            try:
-                import json as _json
-                accounts = _json.loads(settings.email_accounts) if isinstance(settings.email_accounts, str) else settings.email_accounts
-                if isinstance(accounts, list):
-                    # Build a lookup of old accounts by ID for password preservation
-                    old_accounts_by_id = {}
-                    if old_settings_dict and old_settings_dict.get("email_accounts"):
-                        old_list = deserialize_json_field(old_settings_dict["email_accounts"])
-                        if isinstance(old_list, list):
-                            for oa in old_list:
-                                if isinstance(oa, dict) and oa.get("id"):
-                                    old_accounts_by_id[oa["id"]] = oa
-
-                    for acct in accounts:
-                        if not isinstance(acct, dict):
-                            continue
-                        if acct.get("password"):
-                            acct["password_encrypted"] = _encrypt_password(acct["password"])
-                            del acct["password"]
-                        elif not acct.get("password_encrypted"):
-                            # Preserve old encrypted password by account ID
-                            old_acct = old_accounts_by_id.get(acct.get("id"))
-                            if old_acct and old_acct.get("password_encrypted"):
+            # Serialize JSON fields
+            if key == "tags" and value is not None:
+                # Tags come as list of dicts from frontend
+                if isinstance(value, list):
+                    update_dict[key] = serialize_json_field(value)
+                else:
+                    update_dict[key] = value
+            elif key in JSON_FIELDS and value is not None:
+                update_dict[key] = serialize_json_field(value)
+            elif key == "email_account" and value is not None:
+                # Encrypt email password before storing
+                try:
+                    acct = _json.loads(value) if isinstance(value, str) else value
+                    if isinstance(acct, dict) and acct.get("password"):
+                        acct["password_encrypted"] = _encrypt_password(acct["password"])
+                        del acct["password"]
+                    elif isinstance(acct, dict) and not acct.get("password") and not acct.get("password_encrypted"):
+                        # No new password — preserve old encrypted password
+                        if old_settings_dict and old_settings_dict.get("email_account"):
+                            old_acct = deserialize_json_field(old_settings_dict["email_account"])
+                            if isinstance(old_acct, dict) and old_acct.get("password_encrypted"):
                                 acct["password_encrypted"] = old_acct["password_encrypted"]
-                    _final_email_accounts = serialize_json_field(accounts)
-            except Exception as e:
-                logger.error(f"Error processing email_accounts passwords: {str(e)}")
-                _final_email_accounts = settings.email_accounts
+                    update_dict[key] = serialize_json_field(acct) if isinstance(acct, dict) else value
+                except Exception as e:
+                    logger.error(f"Error processing email_account password: {str(e)}")
+                    update_dict[key] = value
+            elif key == "email_accounts" and value is not None:
+                # Encrypt email passwords for multi-account
+                try:
+                    accounts = _json.loads(value) if isinstance(value, str) else value
+                    if isinstance(accounts, list):
+                        old_accounts_by_id = {}
+                        if old_settings_dict and old_settings_dict.get("email_accounts"):
+                            old_list = deserialize_json_field(old_settings_dict["email_accounts"])
+                            if isinstance(old_list, list):
+                                for oa in old_list:
+                                    if isinstance(oa, dict) and oa.get("id"):
+                                        old_accounts_by_id[oa["id"]] = oa
+                        for acct in accounts:
+                            if not isinstance(acct, dict):
+                                continue
+                            if acct.get("password"):
+                                acct["password_encrypted"] = _encrypt_password(acct["password"])
+                                del acct["password"]
+                            elif not acct.get("password_encrypted"):
+                                old_acct = old_accounts_by_id.get(acct.get("id"))
+                                if old_acct and old_acct.get("password_encrypted"):
+                                    acct["password_encrypted"] = old_acct["password_encrypted"]
+                        update_dict[key] = serialize_json_field(accounts)
+                    else:
+                        update_dict[key] = value
+                except Exception as e:
+                    logger.error(f"Error processing email_accounts passwords: {str(e)}")
+                    update_dict[key] = value
+            else:
+                update_dict[key] = value
 
-        new_settings_dict = {
-            "user_id": settings.user_id,
-            "time_format": settings.time_format,
-            "sex": settings.sex,
-            "snooze_length": settings.snooze_length,
-            "default_filters": serialize_json_field(settings.default_filters),
-            "alarm_orientation": settings.alarm_orientation,
-            "active_clocks": settings.active_clocks,
-            "saved_locations": settings.saved_locations,
-            "tags": serialize_json_field([t.dict() for t in settings.tags]) if settings.tags else None,
-            "custom_colors": serialize_json_field(settings.custom_colors),
-            "visual_indicators": serialize_json_field(settings.visual_indicators),
-            "chit_options": serialize_json_field(settings.chit_options),
-            "calendar_snap": settings.calendar_snap or "15",
-            "week_start_day": settings.week_start_day or "0",
-            "work_start_hour": settings.work_start_hour or "8",
-            "work_end_hour": settings.work_end_hour or "17",
-            "work_days": settings.work_days or "1,2,3,4,5",
-            "enabled_periods": settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year",
-            "custom_days_count": settings.custom_days_count or "7",
-            "all_view_start_hour": settings.all_view_start_hour or "0",
-            "all_view_end_hour": settings.all_view_end_hour or "24",
-            "day_scroll_to_hour": settings.day_scroll_to_hour or "5",
-            "username": settings.username,
-            "audit_log_max_days": settings.audit_log_max_days,
-            "audit_log_max_mb": settings.audit_log_max_mb,
-            "default_notifications": serialize_json_field(settings.default_notifications),
-            "unit_system": settings.unit_system or "imperial",
-            "habits_success_window": settings.habits_success_window or "30",
-            "overdue_border_color": settings.overdue_border_color or "#b22222",
-            "blocked_border_color": settings.blocked_border_color or "#DAA520",
-            "shared_tags": preserved_shared_tags if settings.shared_tags is None else serialize_json_field(settings.shared_tags),
-            "kiosk_users": serialize_json_field(settings.kiosk_users),
-            "hide_declined": settings.hide_declined or "0",
-            "default_show_habits_on_calendar": settings.default_show_habits_on_calendar or "1",
-            "map_default_lat": settings.map_default_lat,
-            "map_default_lon": settings.map_default_lon,
-            "map_default_zoom": settings.map_default_zoom,
-            "map_auto_zoom": settings.map_auto_zoom or "1",
-            "email_account": _final_email_account,
-            "email_accounts": _final_email_accounts,
-            "attachment_max_size_mb": settings.attachment_max_size_mb or "10",
-            "attachment_max_storage_mb": settings.attachment_max_storage_mb or "500",
-            "default_share_contacts": settings.default_share_contacts or "0",
-            "checklist_autosave": settings.checklist_autosave or "1",
-            "view_order": settings.view_order,
-            "recent_tags": serialize_json_field(settings.recent_tags),
-            "paginate_email": settings.paginate_email or "0",
-            "bundles_multi_placement": settings.bundles_multi_placement or "0",
-            "bundles_enabled": settings.bundles_enabled or "1",
-            "bundles_show_count": settings.bundles_show_count or "both",
-            "session_lifetime": settings.session_lifetime or "24",
-            "autosave_desktop": settings.autosave_desktop or "0",
-            "autosave_mobile": settings.autosave_mobile or "0",
-            "omni_layout": settings.omni_layout,
-            "omni_locked_filters": settings.omni_locked_filters,
-            "omni_hst_clock_mode": settings.omni_hst_clock_mode or "both",
-        }
+        if not update_dict:
+            return {"user_id": authenticated_user_id, "status": "no changes"}
 
+        # Ensure the row exists (INSERT if brand new user)
+        if not old_settings_dict:
+            cursor.execute("INSERT OR IGNORE INTO settings (user_id) VALUES (?)", (authenticated_user_id,))
+
+        # Build dynamic UPDATE statement with only the provided fields
+        set_clauses = [f"{col} = ?" for col in update_dict.keys()]
+        values = list(update_dict.values()) + [authenticated_user_id]
         cursor.execute(
-            """
-            INSERT OR REPLACE INTO settings (
-                user_id, time_format, sex, snooze_length, default_filters,
-                alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
-                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
-                all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
-                username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
-                habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
-                hide_declined, default_show_habits_on_calendar,
-                map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
-                email_account, email_accounts,
-                attachment_max_size_mb, attachment_max_storage_mb,
-                default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
-                bundles_multi_placement, bundles_enabled, bundles_show_count, session_lifetime,
-                autosave_desktop, autosave_mobile,
-                omni_layout, omni_locked_filters, omni_hst_clock_mode
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                new_settings_dict["user_id"],
-                new_settings_dict["time_format"],
-                new_settings_dict["sex"],
-                new_settings_dict["snooze_length"],
-                new_settings_dict["default_filters"],
-                new_settings_dict["alarm_orientation"],
-                new_settings_dict["active_clocks"],
-                new_settings_dict["saved_locations"],
-                new_settings_dict["tags"],
-                new_settings_dict["custom_colors"],
-                new_settings_dict["visual_indicators"],
-                new_settings_dict["chit_options"],
-                new_settings_dict["calendar_snap"],
-                new_settings_dict["week_start_day"],
-                new_settings_dict["work_start_hour"],
-                new_settings_dict["work_end_hour"],
-                new_settings_dict["work_days"],
-                new_settings_dict["enabled_periods"],
-                new_settings_dict["custom_days_count"],
-                new_settings_dict["all_view_start_hour"],
-                new_settings_dict["all_view_end_hour"],
-                new_settings_dict["day_scroll_to_hour"],
-                new_settings_dict["username"],
-                new_settings_dict["audit_log_max_days"],
-                new_settings_dict["audit_log_max_mb"],
-                new_settings_dict["default_notifications"],
-                new_settings_dict["unit_system"],
-                new_settings_dict["habits_success_window"],
-                new_settings_dict["overdue_border_color"],
-                new_settings_dict["blocked_border_color"],
-                new_settings_dict["shared_tags"],
-                new_settings_dict["kiosk_users"],
-                new_settings_dict["hide_declined"],
-                new_settings_dict["default_show_habits_on_calendar"],
-                new_settings_dict["map_default_lat"],
-                new_settings_dict["map_default_lon"],
-                new_settings_dict["map_default_zoom"],
-                new_settings_dict["map_auto_zoom"],
-                new_settings_dict["email_account"],
-                new_settings_dict["email_accounts"],
-                new_settings_dict["attachment_max_size_mb"],
-                new_settings_dict["attachment_max_storage_mb"],
-                new_settings_dict["default_share_contacts"],
-                new_settings_dict["checklist_autosave"],
-                new_settings_dict["view_order"],
-                new_settings_dict.get("recent_tags"),
-                new_settings_dict["paginate_email"],
-                new_settings_dict["bundles_multi_placement"],
-                new_settings_dict["bundles_enabled"],
-                new_settings_dict["bundles_show_count"],
-                new_settings_dict["session_lifetime"],
-                new_settings_dict["autosave_desktop"],
-                new_settings_dict["autosave_mobile"],
-                new_settings_dict["omni_layout"],
-                new_settings_dict["omni_locked_filters"],
-                new_settings_dict["omni_hst_clock_mode"],
-            )
+            f"UPDATE settings SET {', '.join(set_clauses)} WHERE user_id = ?",
+            values
         )
 
         # --- Audit: compute diff and insert entry if anything changed ---
         try:
             if old_settings_dict:
                 audit_exclude = {"modified_datetime", "created_datetime", "user_id"}
-                changes = compute_audit_diff(old_settings_dict, new_settings_dict, exclude_fields=audit_exclude)
+                changes = compute_audit_diff(old_settings_dict, update_dict, exclude_fields=audit_exclude)
                 if changes:
                     actor = get_actor_from_request(request)
-                    insert_audit_entry(conn, "settings", settings.user_id, "updated", actor, changes=changes)
+                    insert_audit_entry(conn, "settings", authenticated_user_id, "updated", actor, changes=changes)
         except Exception as e:
             logger.error(f"Audit: failed to log settings change: {str(e)}")
 
@@ -393,11 +300,12 @@ def save_settings(settings: Settings, request: Request):
 
         # Auto-prune audit log if limits changed
         try:
-            _run_auto_prune()
+            if "audit_log_max_days" in update_dict or "audit_log_max_mb" in update_dict:
+                _run_auto_prune()
         except Exception as e:
             logger.error(f"Auto-prune after settings save failed: {str(e)}")
 
-        return settings
+        return {"user_id": authenticated_user_id, "status": "ok"}
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")

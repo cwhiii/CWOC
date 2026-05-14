@@ -1104,7 +1104,7 @@ function _buildEmailCard(chit, viSettings) {
         content.appendChild(attRow);
     }
 
-    // Smart link buttons — detect tracking numbers, flights, hotels, etc.
+    // Smart link badges — detect tracking numbers, flights, hotels, etc.
     var smartLinks = (typeof detectSmartLinks === 'function') ? detectSmartLinks(chit) : [];
     if (smartLinks.length > 0) {
         var slWrap = document.createElement('div');
@@ -1118,8 +1118,16 @@ function _buildEmailCard(chit, viSettings) {
             btn.title = link.name + (link.code ? ': ' + link.code : '');
             btn.addEventListener('click', function(e) { e.stopPropagation(); });
             btn.addEventListener('dblclick', function(e) { e.stopPropagation(); });
-            btn.innerHTML = '<img src="' + link.icon + '" alt="' + link.name + '" class="email-track-logo">' +
-                '<span class="email-track-label">' + link.label + '</span>';
+            var img = document.createElement('img');
+            img.src = link.icon;
+            img.alt = link.name;
+            img.className = 'email-track-logo';
+            img.onerror = function() { this.style.display = 'none'; };
+            btn.appendChild(img);
+            var lbl = document.createElement('span');
+            lbl.className = 'email-track-label';
+            lbl.textContent = link.label;
+            btn.appendChild(lbl);
             slWrap.appendChild(btn);
         });
         content.appendChild(slWrap);

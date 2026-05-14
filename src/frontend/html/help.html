@@ -345,6 +345,7 @@
                 <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings → Email → Syncing (5, 15, 30, or 60 minutes)</li>
                 <li><strong>Deletion Sync</strong> — When you delete an email in Gmail (or any IMAP provider), the deletion propagates to CWOC on the next sync. The deleted email chit is soft-deleted and moved to Trash. This happens automatically during every mail check, whether manual or auto-check</li>
                 <li><strong>PGP Encryption</strong> — When composing an email to a contact who has a PGP public key stored in their contact record (Security zone), a PGP button appears in the email zone toolbar. Click it to enable encryption. The message body is encrypted client-side using the recipient's public key before sending. All recipients must have PGP keys on file to enable encryption. PGP-encrypted sent emails display a green lock banner</li>
+                <li><strong>PGP Decryption</strong> — When viewing a received PGP-encrypted email, a green banner with a "Decrypt" button appears above the message body. Click Decrypt, enter your account password to unlock your private PGP key, and the message is decrypted in-place for viewing. The decrypted text is never saved — it's display-only. If you navigate away, the message returns to its encrypted state. Your private PGP key must be configured in your profile's Security zone</li>
             </ul>
             <h4>Email Bundles</h4>
             <p>Bundles organize your inbox into categories, similar to Google Inbox. Emails are automatically sorted into bundles based on rules you define. Two default bundles are created automatically:</p>
@@ -387,6 +388,15 @@
                 <li><kbd>Ctrl+Shift+-</kbd> — Horizontal rule (inserts <code>---</code>)</li>
             </ul>
             <p>Bold, italic, strikethrough, link, code, and blockquote require selected text. Lists prefix the current line. Headings apply to the current line. Horizontal rule always inserts.</p>
+            <h4>Badges</h4>
+            <p>Badges are smart action buttons that appear on email cards when actionable content is detected. They scan email text for tracking numbers, flight numbers, hotel confirmations, rental car bookings, event tickets, restaurant reservations, rideshare receipts, and order confirmations — then show a shield-shaped button you can click to open the relevant service.</p>
+            <ul>
+                <li><strong>Automatic Detection</strong> — Badges detect patterns automatically using keyword gates and regex matching. No manual tagging needed</li>
+                <li><strong>Categories</strong> — Package (UPS, FedEx, USPS, DHL, Amazon, UniUni, OnTrac, LaserShip), Flight, Hotel (Marriott, Hilton, IHG, Hyatt, Airbnb, Booking.com, VRBO), Rental (Enterprise, Hertz, Avis/Budget, Turo), Event (Ticketmaster, Eventbrite, AXS, StubHub, SeatGeek), Restaurant (OpenTable, Resy), Transit (Uber, Lyft), Order (Amazon, Apple, Best Buy, Walmart, Target)</li>
+                <li><strong>One Per Category</strong> — At most one badge per category per email, up to the configured maximum (default 3)</li>
+                <li><strong>Configure in Settings</strong> — Go to Settings → Badges to enable/disable individual detectors or entire categories, change the max badges per email, or create custom detectors</li>
+                <li><strong>Custom Detectors</strong> — Define your own detection patterns with keywords, regex, and a URL template. Useful for services not covered by the built-in set (pharmacies, loyalty programs, etc.)</li>
+            </ul>
             <h3 id="global-search">Global Search</h3>
             <p>Press <kbd>G</kbd> or click the magnifying glass icon (last in the C CAPTN view bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which view they belong to.</p>
             <ul>

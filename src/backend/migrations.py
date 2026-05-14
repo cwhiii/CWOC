@@ -2999,3 +2999,61 @@ def migrate_omni_view_settings():
     finally:
         if conn:
             conn.close()
+
+def migrate_omni_email_count():
+    """Add omni_email_count column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "omni_email_count" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN omni_email_count TEXT DEFAULT '3'")
+            conn.commit()
+            logger.info("Added omni_email_count column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding omni_email_count column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_omni_normalize_colors():
+    """Add omni_normalize_colors column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "omni_normalize_colors" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN omni_normalize_colors TEXT DEFAULT '0'")
+            conn.commit()
+            logger.info("Added omni_normalize_colors column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding omni_normalize_colors column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Smart Actions Config: migration ──────────────────────────────────────
+
+def migrate_add_smart_actions_config():
+    """Add smart_actions_config column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "smart_actions_config" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN smart_actions_config TEXT")
+            conn.commit()
+            logger.info("Added smart_actions_config column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding smart_actions_config column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

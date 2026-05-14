@@ -1394,6 +1394,7 @@
             }
 
             if (_saveSystem) _saveSystem.markSaved();
+            if (typeof syncSend === 'function') syncSend('contacts_changed', {});
             _showBriefMessage('Saved');
             return saved;
         } catch (err) {
@@ -1746,6 +1747,7 @@
             }
 
             if (_saveSystem) _saveSystem.markSaved();
+            if (typeof syncSend === 'function') syncSend('settings_changed', {});
             _showBriefMessage('Saved');
             return saved;
         } catch (err) {

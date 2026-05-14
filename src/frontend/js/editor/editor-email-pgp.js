@@ -338,3 +338,231 @@ function _pgpInitForDraft() {
     });
   }
 }
+
+
+/* ── PGP Decryption (incoming messages) ───────────────────────────────────── */
+
+/**
+ * Prompt for password, fetch private PGP key, decrypt the email body in-place.
+ * Does NOT save the decrypted content — display only.
+ */
+function _pgpDecryptInPlace() {
+  if (typeof openpgp === 'undefined') {
+    cwocToast('PGP library not loaded. Check your connection.', 'error');
+    return;
+  }
+
+  // Show password modal
+  _pgpShowPasswordModal(function(password) {
+    _pgpPerformDecrypt(password);
+  });
+}
+
+/**
+ * Show a parchment-themed password modal for PGP decryption.
+ * @param {function} onConfirm — called with the entered password string
+ */
+function _pgpShowPasswordModal(onConfirm) {
+  // Remove any existing modal
+  var existing = document.getElementById('pgp-decrypt-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'pgp-decrypt-modal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:20px 28px;max-width:380px;width:90%;font-family:Lora,Georgia,serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+
+  var h3 = document.createElement('h3');
+  h3.style.cssText = 'margin:0 0 12px;font-size:1.1em;color:#4a2c2a;text-align:center;';
+  h3.innerHTML = '<i class="fas fa-key"></i> Decrypt PGP Message';
+  box.appendChild(h3);
+
+  var p = document.createElement('p');
+  p.style.cssText = 'margin:0 0 14px;font-size:0.9em;line-height:1.4;text-align:center;';
+  p.textContent = 'Enter your account password to unlock your private PGP key.';
+  box.appendChild(p);
+
+  var input = document.createElement('input');
+  input.type = 'password';
+  input.placeholder = 'Password';
+  input.autocomplete = 'current-password';
+  input.style.cssText = 'width:100%;padding:8px 10px;font-family:inherit;font-size:1em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;margin-bottom:16px;';
+  box.appendChild(input);
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'standard-button';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;';
+  cancelBtn.onclick = function() { overlay.remove(); };
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.className = 'standard-button';
+  confirmBtn.textContent = 'Decrypt';
+  confirmBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;background:#2e7d32;color:#fff;border-color:#1b5e20;';
+  confirmBtn.onclick = function() {
+    var pw = input.value;
+    if (!pw) {
+      input.style.borderColor = '#b22222';
+      input.focus();
+      return;
+    }
+    overlay.remove();
+    onConfirm(pw);
+  };
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(confirmBtn);
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Focus the input
+  setTimeout(function() { input.focus(); }, 50);
+
+  // ESC to close
+  var onKey = function(e) {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      overlay.remove();
+      document.removeEventListener('keydown', onKey, true);
+    }
+  };
+  document.addEventListener('keydown', onKey, true);
+
+  // Enter to confirm
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmBtn.click();
+    }
+  });
+}
+
+/**
+ * Perform the actual PGP decryption after password is provided.
+ * Fetches the private key from the server, decrypts the message body,
+ * and replaces the displayed content in-place (no save).
+ *
+ * @param {string} password — the user's account password
+ */
+async function _pgpPerformDecrypt(password) {
+  var bodyEl = document.getElementById('emailBody');
+  var renderedEl = document.getElementById('emailBodyRendered');
+  if (!bodyEl) return;
+
+  var ciphertext = bodyEl.value.trim();
+  if (!ciphertext.startsWith('-----BEGIN PGP MESSAGE-----')) {
+    cwocToast('No PGP-encrypted content found.', 'error');
+    return;
+  }
+
+  cwocToast('Fetching private key...', 'info');
+
+  // Step 1: Fetch the private PGP key (requires password verification)
+  var keyResponse;
+  try {
+    keyResponse = await fetch('/api/auth/private-pgp-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    });
+  } catch (e) {
+    console.error('[PGP Decrypt] Network error fetching key:', e);
+    cwocToast('Network error. Could not reach server.', 'error');
+    return;
+  }
+
+  if (keyResponse.status === 403) {
+    cwocToast('Incorrect password.', 'error');
+    return;
+  }
+  if (!keyResponse.ok) {
+    var errData = {};
+    try { errData = await keyResponse.json(); } catch(e) {}
+    cwocToast('Failed to retrieve key: ' + (errData.detail || 'Unknown error'), 'error');
+    return;
+  }
+
+  var keyData = await keyResponse.json();
+  var privateKeyArmor = keyData.private_pgp_key;
+  if (!privateKeyArmor) {
+    cwocToast('No private PGP key configured. Add one in Settings → Security.', 'error');
+    return;
+  }
+
+  // Step 2: Decrypt the message using openpgp.js
+  cwocToast('Decrypting message...', 'info');
+
+  try {
+    // Read the private key (may require a passphrase on the key itself)
+    var privateKey = await openpgp.readPrivateKey({ armoredKey: privateKeyArmor });
+
+    // If the key is encrypted with a passphrase, try decrypting with the account password
+    if (!privateKey.isDecrypted()) {
+      try {
+        privateKey = await openpgp.decryptKey({
+          privateKey: privateKey,
+          passphrase: password
+        });
+      } catch (e) {
+        console.error('[PGP Decrypt] Key passphrase error:', e);
+        cwocToast('Could not unlock PGP key. Key passphrase may differ from account password.', 'error');
+        return;
+      }
+    }
+
+    // Read the encrypted message
+    var message = await openpgp.readMessage({ armoredMessage: ciphertext });
+
+    // Decrypt
+    var decrypted = await openpgp.decrypt({
+      message: message,
+      decryptionKeys: privateKey
+    });
+
+    var plaintext = decrypted.data;
+
+    // Step 3: Display decrypted content in-place (no save)
+    bodyEl.value = plaintext;
+
+    // If the rendered view is visible, update it too
+    if (renderedEl && renderedEl.style.display !== 'none') {
+      if (typeof marked !== 'undefined') {
+        renderedEl.innerHTML = DOMPurify.sanitize(marked.parse(plaintext));
+      } else {
+        renderedEl.textContent = plaintext;
+      }
+    }
+
+    // Update the banner to show decrypted state
+    var banner = document.querySelector('.email-pgp-banner');
+    if (banner) {
+      banner.innerHTML = '<i class="fas fa-unlock" style="color:#2e7d32;"></i> Message decrypted (view only — not saved).';
+      banner.style.background = 'rgba(46, 125, 50, 0.08)';
+      banner.style.borderColor = 'rgba(46, 125, 50, 0.25)';
+    }
+
+    // Prevent the decrypted text from being saved — mark the email body
+    // as read-only and set a flag so getEmailData() returns the original
+    // encrypted text instead of the decrypted plaintext.
+    bodyEl.readOnly = true;
+    bodyEl.dataset.pgpDecrypted = 'true';
+    bodyEl.dataset.pgpOriginal = ciphertext;
+
+    // Also disable the input event listener from triggering dirty state
+    // (setting .value programmatically doesn't fire input events anyway,
+    // but this guards against accidental edits in the read-only field)
+
+    cwocToast('Message decrypted successfully.', 'success');
+
+  } catch (e) {
+    console.error('[PGP Decrypt] Decryption failed:', e);
+    cwocToast('Decryption failed: ' + e.message, 'error');
+  }
+}

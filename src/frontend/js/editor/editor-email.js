@@ -1136,12 +1136,14 @@ function initEmailZone(chit) {
     _setupHtmlEmailView(chit.email_body_html, bodyEl);
   }
 
-  // PGP indicator: show a banner if the body is PGP-encrypted
+  // PGP indicator: show a banner + decrypt button if the body is PGP-encrypted
   var bodyText = chit.email_body_text || '';
   if (bodyText.trim().startsWith('-----BEGIN PGP MESSAGE-----')) {
     var pgpBanner = document.createElement('div');
     pgpBanner.className = 'email-pgp-banner';
-    pgpBanner.innerHTML = '<i class="fas fa-lock"></i> This message was sent with PGP encryption.';
+    pgpBanner.innerHTML = '<i class="fas fa-lock"></i> This message is PGP encrypted.' +
+      ' <button type="button" class="zone-button email-pgp-decrypt-btn" onclick="_pgpDecryptInPlace()">' +
+      '<i class="fas fa-unlock"></i> Decrypt</button>';
     var emailContent = document.getElementById('emailContent');
     if (emailContent && bodyEl) {
       var bodyField = bodyEl.closest('.email-field');
@@ -1258,6 +1260,12 @@ function getEmailData() {
   var ccVal = _emailGetFieldValue(ccEl);
   var bccVal = _emailGetFieldValue(bccEl);
   var bodyVal = bodyEl ? bodyEl.value.trim() : '';
+
+  // If the body was PGP-decrypted in-place (view only), use the original
+  // encrypted text for save — never persist the decrypted plaintext.
+  if (bodyEl && bodyEl.dataset.pgpDecrypted === 'true' && bodyEl.dataset.pgpOriginal) {
+    bodyVal = bodyEl.dataset.pgpOriginal;
+  }
 
   // Only return data if there's some email content
   var hasContent = !!(toVal || ccVal || bccVal || bodyVal);

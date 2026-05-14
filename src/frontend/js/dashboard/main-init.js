@@ -1025,6 +1025,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (s.overdue_border_color) window._cwocSettings.overdue_border_color = s.overdue_border_color;
     if (s.blocked_border_color) window._cwocSettings.blocked_border_color = s.blocked_border_color;
     window._cwocSettings.show_map_thumbnails = s.show_map_thumbnails !== '0';
+    // Initialize smart link registry with user preferences
+    if (typeof initSmartLinkRegistry === 'function') {
+        var sacRaw = s.smart_actions_config;
+        var sac = null;
+        if (sacRaw) {
+            try { sac = (typeof sacRaw === 'string') ? JSON.parse(sacRaw) : sacRaw; } catch (e) { console.error('[SmartLinks] Bad config JSON:', e); }
+        }
+        initSmartLinkRegistry(sac || {});
+    }
     // Initialize hide-declined checkbox from saved setting
     var _hdCb = document.getElementById('hide-declined');
     if (_hdCb && s.hide_declined === '1') _hdCb.checked = true;

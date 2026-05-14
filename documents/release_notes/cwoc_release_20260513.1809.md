@@ -1,0 +1,1 @@
+Fixed saved locations being wiped on settings save. If the locations DOM has no rows (not yet rendered or JS error prevented population), the save now preserves the existing server-side location data instead of overwriting with empty.

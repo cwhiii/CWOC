@@ -1238,6 +1238,25 @@
                         <p class="setting-hint">Select which email bundles appear in the Omni View email section.</p>
                         <div id="omni-bundle-toggles" class="checkbox-list"></div>
 
+                        <div class="setting-inline" style="margin-top:12px;">
+                            <label for="omni-email-count">📧 Emails to show</label>
+                            <select id="omni-email-count" onchange="setSaveButtonUnsaved();">
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Number of unread emails displayed per page in the Omni View.</p>
+
+                        <label class="setting-subheader">🎨 Colors</label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <input type="checkbox" id="omni-normalize-colors" onchange="setSaveButtonUnsaved();" />
+                            Normalize colors
+                        </label>
+                        <p class="setting-hint">Override chit colors with consistent type-based tones (events, tasks, notes, checklists, birthdays).</p>
+
                         <label class="setting-subheader">🔒 Locked Filter Defaults</label>
                         <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>
                         <div id="omni-locked-filters-display" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;font-style:italic;">No locked filters set.</div>
@@ -1433,6 +1452,92 @@
                         <p class="setting-hint">Attachment limits are configured in Administration → Data Management.</p>
                         <button class="standard-button" onclick="window.location.href='/attachments'" style="margin-top:6px;">📎 View All Attachments</button>
 
+                    </div>
+
+                    <!-- ═══ Badges (Smart Actions) ═══ -->
+                    <div class="setting-group">
+                        <h3>🛡️ Badges</h3>
+                        <p class="setting-hint">Badges detect actionable items in emails (tracking numbers, flights, hotels, etc.) and show quick-action buttons on email cards.</p>
+
+                        <label class="setting-subheader">Display</label>
+                        <div class="setting-inline">
+                            <label for="smart-actions-max">Max badges per email</label>
+                            <select id="smart-actions-max">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+
+                        <label class="setting-subheader">Detectors</label>
+                        <p class="setting-hint">Toggle categories or individual detectors on/off.</p>
+                        <div id="smart-actions-categories"></div>
+
+                        <label class="setting-subheader" style="margin-top:12px;">Custom Detectors</label>
+                        <div id="smart-actions-custom-list"></div>
+                        <button type="button" class="standard-button" style="width:100%;margin-top:8px;" id="smart-actions-add-custom">+ Add Custom Detector</button>
+                    </div>
+                </div>
+
+                <!-- Badges: Custom Detector Modal -->
+                <div id="badge-custom-modal-overlay" class="modal-overlay" style="display:none;">
+                    <div class="modal-content" style="max-width:420px;">
+                        <h3 id="badge-custom-modal-title">Add Custom Detector</h3>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">Name</label>
+                                <input type="text" id="badge-custom-name" placeholder="e.g. My Pharmacy" style="width:100%;box-sizing:border-box;" />
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">Category</label>
+                                <select id="badge-custom-category" style="width:100%;">
+                                    <option value="Custom">Custom</option>
+                                    <option value="Package">Package</option>
+                                    <option value="Flight">Flight</option>
+                                    <option value="Hotel">Hotel</option>
+                                    <option value="Rental">Rental</option>
+                                    <option value="Event">Event</option>
+                                    <option value="Restaurant">Restaurant</option>
+                                    <option value="Transit">Transit</option>
+                                    <option value="Order">Order</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">Keywords</label>
+                                <input type="text" id="badge-custom-keywords" placeholder="comma-separated, e.g. cvs, prescription" style="width:100%;box-sizing:border-box;" />
+                                <span class="setting-hint" style="font-size:0.8em;">At least one must appear in the email text</span>
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">Regex Pattern</label>
+                                <input type="text" id="badge-custom-regex" placeholder="e.g. \\b(RX\\d{8,12})\\b" style="width:100%;box-sizing:border-box;font-family:monospace;" />
+                                <span class="setting-hint" style="font-size:0.8em;">Must have one capture group for the code</span>
+                                <span id="badge-custom-regex-error" style="color:#b22222;font-size:0.8em;display:none;"></span>
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">URL Template</label>
+                                <input type="text" id="badge-custom-url" placeholder="https://example.com/lookup?id={code}" style="width:100%;box-sizing:border-box;font-family:monospace;" />
+                                <span class="setting-hint" style="font-size:0.8em;">Use {code} where the matched value goes</span>
+                                <span id="badge-custom-url-error" style="color:#b22222;font-size:0.8em;display:none;"></span>
+                            </div>
+                            <div>
+                                <label style="font-weight:600;font-size:0.9em;">Button Label</label>
+                                <select id="badge-custom-label" style="width:100%;">
+                                    <option value="View">View</option>
+                                    <option value="Track">Track</option>
+                                    <option value="Manage">Manage</option>
+                                    <option value="Order">Order</option>
+                                    <option value="Tickets">Tickets</option>
+                                    <option value="Flight">Flight</option>
+                                    <option value="Open">Open</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-buttons" style="margin-top:14px;">
+                            <button type="button" class="standard-button" id="badge-custom-cancel">Cancel</button>
+                            <button type="button" class="standard-button" id="badge-custom-save" style="background:#6b4e31;color:#fdf5e6;">Save</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2061,6 +2166,7 @@
             <script src="/frontend/js/shared/shared-habits.js"></script>
             <script src="/frontend/js/shared/shared.js"></script>
             <script src="/frontend/js/shared/shared-calculator.js"></script>
+            <script src="/frontend/js/shared/shared-smart-links.js"></script>
             <script src="/frontend/js/pages/shared-page.js"></script>
             <script src="/frontend/js/pages/shared-editor.js"></script>
             <script src="/frontend/js/pages/settings-email.js"></script>
@@ -2069,6 +2175,7 @@
             <script src="/frontend/js/pages/settings-integrations.js"></script>
             <script src="/frontend/js/pages/settings-version.js"></script>
             <script src="/frontend/js/pages/settings-views.js"></script>
+            <script src="/frontend/js/pages/settings-badges.js"></script>
             <script src="/frontend/js/pages/settings.js"></script>
             <script>
             /* Show admin-only section if user is admin */

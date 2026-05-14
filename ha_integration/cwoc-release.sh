@@ -183,6 +183,36 @@ fi
 # ==============================================================================
 # Phase 5: Git operations (--ha --push)
 # ==============================================================================
-# TODO: Implement in task 3.6
-# - If --ha without --push: print manual git instructions
-# - If --ha --push: auto-commit, tag, push
+if [[ "$FLAG_HA" == true ]]; then
+    if [[ "$FLAG_PUSH" == true ]]; then
+        # --- Auto-commit, tag, and push to origin -----------------------------
+        echo "$LOG_PREFIX Committing and pushing to public repo..."
+        (cd "$PUBLIC_REPO_RESOLVED" && git add -A && git commit -m "Release v$HA_VERSION") || {
+            echo "$LOG_PREFIX ERROR: Git commit failed in $PUBLIC_REPO_RESOLVED"
+            exit 1
+        }
+        (cd "$PUBLIC_REPO_RESOLVED" && git tag "v$HA_VERSION") || {
+            echo "$LOG_PREFIX ERROR: Git tag v$HA_VERSION failed (tag may already exist)"
+            exit 1
+        }
+        (cd "$PUBLIC_REPO_RESOLVED" && git push origin && git push origin "v$HA_VERSION") || {
+            echo "$LOG_PREFIX ERROR: Git push failed — local changes are committed, retry with 'git push origin && git push origin v$HA_VERSION'"
+            exit 1
+        }
+        echo "$LOG_PREFIX ✓ Pushed v$HA_VERSION to origin"
+    else
+        # --- Print manual git instructions ------------------------------------
+        echo ""
+        echo "$LOG_PREFIX Files synced. To publish, run these commands manually:"
+        echo ""
+        echo "  cd $PUBLIC_REPO_RESOLVED"
+        echo "  git add -A"
+        echo "  git commit -m \"Release v$HA_VERSION\""
+        echo "  git tag v$HA_VERSION"
+        echo "  git push origin"
+        echo "  git push origin v$HA_VERSION"
+        echo ""
+    fi
+fi
+
+echo "$LOG_PREFIX Done."

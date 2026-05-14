@@ -663,6 +663,7 @@ async function saveChitAndStay() {
         body: JSON.stringify({ exception })
       });
       if (!resp.ok) throw new Error(await resp.text());
+      if (typeof syncSend === 'function') syncSend('chits_changed', {});
       setSaveButtonSaved();
     } catch (error) {
       console.error("[saveChitAndStay] Instance error:", error);
@@ -717,6 +718,7 @@ async function saveChitAndStay() {
     // Create desktop-targeted notifications (removes them from chit alerts)
     await _createDesktopNotifications(updatedChit.id, updatedChit.title);
 
+    if (typeof syncSend === 'function') syncSend('chits_changed', {});
     setSaveButtonSaved();
     _showAssignmentToast(updatedChit);
   } catch (error) {
@@ -760,6 +762,7 @@ function performDeleteChit() {
       return response.json();
     })
     .then(function () {
+      if (typeof syncSend === 'function') syncSend('chits_changed', {});
       // Store undo info for the dashboard to pick up
       try {
         sessionStorage.setItem('cwoc_pending_undo', JSON.stringify({

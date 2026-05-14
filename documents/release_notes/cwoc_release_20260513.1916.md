@@ -1,0 +1,1 @@
+All-day defaults ON when selecting a date mode. Time inputs stay visible (empty HH:MM) during initial creation so users can see them and click in. Picking a time auto-deselects all-day. Once the user explicitly toggles all-day or loads a saved chit, time inputs hide/show normally as before.
