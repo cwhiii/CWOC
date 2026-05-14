@@ -1,0 +1,1 @@
+Rebuilt Omni Layout arrange modal as a single ordered list. Items are dragged to reorder vertically — position in the list determines render order. L/R/Full buttons on each card control column placement. Full-width items can now be placed anywhere (top, middle, or bottom) relative to half-width items.

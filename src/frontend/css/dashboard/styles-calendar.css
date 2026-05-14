@@ -112,12 +112,14 @@
     padding: 1px 0 !important;
     background: transparent !important;
     overflow: hidden;
+    width: 100%;
+    display: block;
 }
 
 .birthday-chip {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    padding: 2px 12px 2px 12px;
+    padding: 2px 16px 2px 16px;
     font-size: 0.78em;
     font-family: 'Lora', Georgia, serif;
     color: #4a2c2a;
@@ -130,6 +132,8 @@
     user-select: none;
     gap: 3px;
     max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
     clip-path: polygon(
         0% 0%, 8px 50%, 0% 100%,
         100% 100%, calc(100% - 8px) 50%, 100% 0%
@@ -142,6 +146,7 @@
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
+    margin-left: 2px;
 }
 
 .month-event {

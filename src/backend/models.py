@@ -79,6 +79,7 @@ class Settings(BaseModel):
     session_lifetime: Optional[str] = "24"       # Session lifetime in hours: "1", "12", "24", "168" (1 week), "720" (1 month), "0" (never expire)
     omni_layout: Optional[str] = None            # JSON string: layout config for Omni View sections
     omni_locked_filters: Optional[str] = None    # JSON string: locked filter defaults for Omni View
+    omni_hst_clock_mode: Optional[str] = "both"  # HST bar clock mode: "hst", "system", or "both"
 
 class Chit(BaseModel):
     class Config:

@@ -149,6 +149,15 @@ function collectLocationsData() {
   });
   const nonEmpty = all.filter(loc => loc.address !== "");
   if (nonEmpty.length === 0) {
+    // Safety: if the loaded settings had locations but the DOM is empty,
+    // preserve the original data rather than wiping it
+    if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.saved_locations) {
+      var orig = window.settingsManager.settings.saved_locations;
+      if (Array.isArray(orig) && orig.length > 0 && orig.some(function(l) { return l.address; })) {
+        console.warn('[Settings] collectLocationsData: DOM is empty but original settings had locations — preserving original');
+        return orig;
+      }
+    }
     return [{ label: "", address: "", is_default: false }];
   }
   return nonEmpty;
@@ -362,22 +371,37 @@ function handleDropOnInactive(e) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 var _omniLayoutAreas = [
-  { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true },
-  { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true },
-  { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true },
-  { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true },
-  { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true },
-  { id: 'email', label: '📧 Unread Email', width: 'half', visible: true },
-  { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true },
-  { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true }
+  { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true, column: null },
+  { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true, column: null },
+  { id: 'hst_weather', label: '📊🌤️ HST + Weather', width: 'full', visible: false, column: null },
+  { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true, column: 'left' },
+  { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true, column: 'left' },
+  { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true, column: 'left' },
+  { id: 'email', label: '📧 Unread Email', width: 'half', visible: true, column: 'left' },
+  { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true, column: 'right' },
+  { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true, column: 'right' },
+  { id: 'pinned_all', label: '📌 Pinned (Notes + Checklists)', width: 'half', visible: false, column: 'right' }
 ];
 
 var _omniLayoutState = null;
 
 function _getDefaultOmniLayout() {
   return _omniLayoutAreas.map(function(area, i) {
-    return { id: area.id, label: area.label, width: area.width, visible: area.visible, position: i };
+    return { id: area.id, label: area.label, width: area.width, visible: area.visible, position: i, column: area.column };
   });
+}
+
+function _openOmniLayoutModal() {
+  var modal = document.getElementById('omni-layout-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    _renderOmniLayoutGrid();
+  }
+}
+
+function _closeOmniLayoutModal() {
+  var modal = document.getElementById('omni-layout-modal');
+  if (modal) modal.style.display = 'none';
 }
 
 function _renderOmniLayoutGrid() {
@@ -389,84 +413,127 @@ function _renderOmniLayoutGrid() {
     _omniLayoutState = _getDefaultOmniLayout();
   }
 
-  // Sort by position
+  // Split into active (visible) and inactive (hidden), sorted by position
   var sorted = _omniLayoutState.slice().sort(function(a, b) { return a.position - b.position; });
+  var activeAreas = sorted.filter(function(a) { return a.visible !== false; });
+  var inactiveAreas = sorted.filter(function(a) { return a.visible === false; });
 
-  sorted.forEach(function(area) {
-    var card = document.createElement('div');
-    card.className = 'omni-layout-card' + (area.visible ? '' : ' hidden-area');
-    card.draggable = true;
-    card.dataset.areaId = area.id;
+  // ── Active list (single ordered list) ─────────────────────────────────────
+  var activeLabel = document.createElement('div');
+  activeLabel.className = 'omni-layout-col-label';
+  activeLabel.textContent = 'Active (drag to reorder)';
+  container.appendChild(activeLabel);
 
-    var handle = document.createElement('span');
-    handle.className = 'omni-drag-handle';
-    handle.textContent = '☰';
-
-    var label = document.createElement('span');
-    label.className = 'omni-card-label';
-    label.textContent = area.label;
-
-    var controls = document.createElement('span');
-    controls.className = 'omni-card-controls';
-
-    // Width toggle buttons
-    var halfBtn = document.createElement('button');
-    halfBtn.textContent = '½';
-    halfBtn.title = 'Half width';
-    halfBtn.className = area.width === 'half' ? 'active-width' : '';
-    halfBtn.onclick = function(e) {
-      e.stopPropagation();
-      area.width = 'half';
-      _renderOmniLayoutGrid();
-      setSaveButtonUnsaved();
-    };
-
-    var fullBtn = document.createElement('button');
-    fullBtn.textContent = 'Full';
-    fullBtn.title = 'Full width';
-    fullBtn.className = area.width === 'full' ? 'active-width' : '';
-    fullBtn.onclick = function(e) {
-      e.stopPropagation();
-      area.width = 'full';
-      _renderOmniLayoutGrid();
-      setSaveButtonUnsaved();
-    };
-
-    // Visibility toggle
-    var visBtn = document.createElement('button');
-    visBtn.className = 'omni-vis-btn' + (area.visible ? '' : ' hidden-state');
-    visBtn.textContent = area.visible ? '👁️' : '🚫';
-    visBtn.title = area.visible ? 'Visible (click to hide)' : 'Hidden (click to show)';
-    visBtn.onclick = function(e) {
-      e.stopPropagation();
-      area.visible = !area.visible;
-      _renderOmniLayoutGrid();
-      setSaveButtonUnsaved();
-    };
-
-    controls.appendChild(halfBtn);
-    controls.appendChild(fullBtn);
-    controls.appendChild(visBtn);
-
-    card.appendChild(handle);
-    card.appendChild(label);
-    card.appendChild(controls);
-    container.appendChild(card);
+  var activeList = document.createElement('div');
+  activeList.className = 'omni-layout-col-list omni-layout-active-list';
+  activeList.dataset.zone = 'active';
+  activeAreas.forEach(function(area) {
+    activeList.appendChild(_buildOmniLayoutCard(area));
   });
+  if (activeAreas.length === 0) {
+    activeList.innerHTML = '<span class="omni-layout-empty-hint">Drop items here to activate</span>';
+  }
+  container.appendChild(activeList);
+
+  // ── Inactive "Unused" zone ────────────────────────────────────────────────
+  var unusedLabel = document.createElement('div');
+  unusedLabel.className = 'omni-layout-unused-label';
+  unusedLabel.textContent = 'Unused';
+  container.appendChild(unusedLabel);
+
+  var unusedZone = document.createElement('div');
+  unusedZone.className = 'omni-layout-unused-zone';
+  unusedZone.dataset.zone = 'unused';
+  if (inactiveAreas.length === 0) {
+    unusedZone.innerHTML = '<span class="omni-layout-empty-hint">Drag items here to hide them</span>';
+  } else {
+    inactiveAreas.forEach(function(area) {
+      unusedZone.appendChild(_buildOmniLayoutCard(area));
+    });
+  }
+  container.appendChild(unusedZone);
 
   _setupOmniDragListeners();
+}
+
+function _buildOmniLayoutCard(area) {
+  var card = document.createElement('div');
+  card.className = 'omni-layout-card' + (area.visible ? '' : ' hidden-area');
+  card.draggable = true;
+  card.dataset.areaId = area.id;
+  card.dataset.width = area.width;
+
+  var handle = document.createElement('span');
+  handle.className = 'omni-drag-handle';
+  handle.textContent = '☰';
+
+  var label = document.createElement('span');
+  label.className = 'omni-card-label';
+  label.textContent = area.label;
+
+  var controls = document.createElement('span');
+  controls.className = 'omni-card-controls';
+
+  // Column/width buttons: L | R | Full
+  var leftBtn = document.createElement('button');
+  leftBtn.textContent = 'L';
+  leftBtn.title = 'Left column (half width)';
+  leftBtn.className = (area.width === 'half' && area.column === 'left') ? 'active-width' : '';
+  leftBtn.onclick = function(e) {
+    e.stopPropagation();
+    area.width = 'half';
+    area.column = 'left';
+    _renderOmniLayoutGrid();
+    setSaveButtonUnsaved();
+  };
+
+  var rightBtn = document.createElement('button');
+  rightBtn.textContent = 'R';
+  rightBtn.title = 'Right column (half width)';
+  rightBtn.className = (area.width === 'half' && area.column === 'right') ? 'active-width' : '';
+  rightBtn.onclick = function(e) {
+    e.stopPropagation();
+    area.width = 'half';
+    area.column = 'right';
+    _renderOmniLayoutGrid();
+    setSaveButtonUnsaved();
+  };
+
+  var fullBtn = document.createElement('button');
+  fullBtn.textContent = 'Full';
+  fullBtn.title = 'Full width (spans both columns)';
+  fullBtn.className = area.width === 'full' ? 'active-width' : '';
+  fullBtn.onclick = function(e) {
+    e.stopPropagation();
+    area.width = 'full';
+    area.column = null;
+    _renderOmniLayoutGrid();
+    setSaveButtonUnsaved();
+  };
+
+  controls.appendChild(leftBtn);
+  controls.appendChild(rightBtn);
+  controls.appendChild(fullBtn);
+
+  card.appendChild(handle);
+  card.appendChild(label);
+  card.appendChild(controls);
+  return card;
 }
 
 function _setupOmniDragListeners() {
   var container = document.getElementById('omni-layout-grid');
   if (!container) return;
 
+  var allLists = container.querySelectorAll('.omni-layout-col-list, .omni-layout-unused-zone');
   var cards = container.querySelectorAll('.omni-layout-card');
   var draggedCard = null;
+  var draggedAreaId = null;
 
   cards.forEach(function(card) {
     card.addEventListener('dragstart', function(e) {
       draggedCard = card;
+      draggedAreaId = card.dataset.areaId;
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', card.dataset.areaId);
@@ -475,74 +542,108 @@ function _setupOmniDragListeners() {
     card.addEventListener('dragend', function() {
       card.classList.remove('dragging');
       draggedCard = null;
-      // Remove any drag-over indicators
+      draggedAreaId = null;
       container.querySelectorAll('.omni-layout-card').forEach(function(c) {
         c.style.borderTop = '';
         c.style.borderBottom = '';
       });
     });
+  });
 
-    card.addEventListener('dragover', function(e) {
+  allLists.forEach(function(list) {
+    list.addEventListener('dragover', function(e) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (!draggedCard || draggedCard === card) return;
+      if (!draggedCard) return;
 
-      // Visual indicator
-      var rect = card.getBoundingClientRect();
-      var midY = rect.top + rect.height / 2;
       container.querySelectorAll('.omni-layout-card').forEach(function(c) {
         c.style.borderTop = '';
         c.style.borderBottom = '';
       });
-      if (e.clientY < midY) {
-        card.style.borderTop = '2px solid #8b5a2b';
-      } else {
-        card.style.borderBottom = '2px solid #8b5a2b';
+
+      var cardsInList = Array.from(list.querySelectorAll('.omni-layout-card:not(.dragging)'));
+      for (var i = 0; i < cardsInList.length; i++) {
+        var rect = cardsInList[i].getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          cardsInList[i].style.borderTop = '3px solid #8b5a2b';
+          return;
+        } else if (e.clientY < rect.bottom) {
+          cardsInList[i].style.borderBottom = '3px solid #8b5a2b';
+          return;
+        }
       }
     });
 
-    card.addEventListener('drop', function(e) {
+    list.addEventListener('dragleave', function(e) {
+      if (!list.contains(e.relatedTarget)) {
+        list.querySelectorAll('.omni-layout-card').forEach(function(c) {
+          c.style.borderTop = '';
+          c.style.borderBottom = '';
+        });
+      }
+    });
+
+    list.addEventListener('drop', function(e) {
       e.preventDefault();
-      if (!draggedCard || draggedCard === card) return;
+      if (!draggedCard) return;
 
-      var draggedId = draggedCard.dataset.areaId;
-      var targetId = card.dataset.areaId;
+      var zone = list.dataset.zone;
+      var area = _omniLayoutState.find(function(a) { return a.id === draggedAreaId; });
+      if (!area) return;
 
-      // Determine insertion position
-      var rect = card.getBoundingClientRect();
-      var midY = rect.top + rect.height / 2;
-      var insertBefore = e.clientY < midY;
+      // Determine insert position
+      var cardsInList = Array.from(list.querySelectorAll('.omni-layout-card:not(.dragging)'));
+      var insertIdx = cardsInList.length;
+      for (var i = 0; i < cardsInList.length; i++) {
+        var rect = cardsInList[i].getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          insertIdx = i;
+          break;
+        }
+      }
 
-      // Reorder the state
-      var sorted = _omniLayoutState.slice().sort(function(a, b) { return a.position - b.position; });
-      var draggedIdx = sorted.findIndex(function(a) { return a.id === draggedId; });
-      var targetIdx = sorted.findIndex(function(a) { return a.id === targetId; });
+      if (zone === 'unused') {
+        area.visible = false;
+      } else {
+        // 'active' zone — make visible, preserve width/column
+        area.visible = true;
+      }
 
-      if (draggedIdx === -1 || targetIdx === -1) return;
-
-      // Remove dragged item
-      var draggedItem = sorted.splice(draggedIdx, 1)[0];
-
-      // Find new target index after removal
-      var newTargetIdx = sorted.findIndex(function(a) { return a.id === targetId; });
-      if (!insertBefore) newTargetIdx++;
-
-      sorted.splice(newTargetIdx, 0, draggedItem);
-
-      // Update positions
-      sorted.forEach(function(area, i) { area.position = i; });
+      // Recalculate positions based on list order
+      _recalcOmniPositions(insertIdx, zone, area);
 
       _renderOmniLayoutGrid();
       setSaveButtonUnsaved();
     });
   });
+}
 
-  // Touch support — reuse shared-touch pattern
-  if (typeof enableTouchDrag === 'function') {
-    cards.forEach(function(card) {
-      enableTouchDrag(card);
-    });
+/**
+ * Recalculate all positions after a drag-drop.
+ * Active items get positions 0..N-1 based on their order in the active list.
+ * The dropped item is inserted at insertIdx within its target zone.
+ */
+function _recalcOmniPositions(insertIdx, targetZone, droppedArea) {
+  // Gather active items (excluding the dropped one), sorted by current position
+  var activeItems = _omniLayoutState.filter(function(a) {
+    return a.id !== droppedArea.id && a.visible;
+  }).sort(function(a, b) { return a.position - b.position; });
+
+  var unusedItems = _omniLayoutState.filter(function(a) {
+    return a.id !== droppedArea.id && !a.visible;
+  }).sort(function(a, b) { return a.position - b.position; });
+
+  // Insert the dropped item at the correct position
+  if (targetZone === 'active') {
+    activeItems.splice(Math.min(insertIdx, activeItems.length), 0, droppedArea);
+  } else {
+    unusedItems.splice(Math.min(insertIdx, unusedItems.length), 0, droppedArea);
   }
+
+  // Assign positions: active first, then unused
+  var pos = 0;
+  activeItems.forEach(function(a) { a.position = pos++; });
+  unusedItems.forEach(function(a) { a.position = pos++; });
 }
 
 function _loadOmniLayout(settings) {
@@ -555,7 +656,7 @@ function _loadOmniLayout(settings) {
         _omniLayoutState = defaults.map(function(def) {
           var found = saved.find(function(s) { return s.id === def.id; });
           if (found) {
-            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position };
+            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position, column: found.column !== undefined ? found.column : def.column };
           }
           return def;
         });
@@ -569,7 +670,8 @@ function _loadOmniLayout(settings) {
 function _collectOmniLayout() {
   if (!_omniLayoutState) return JSON.stringify(_getDefaultOmniLayout());
   return JSON.stringify(_omniLayoutState.map(function(area) {
-    return { id: area.id, width: area.width, visible: area.visible, position: area.position };
+    var entry = { id: area.id, width: area.width, visible: area.visible, position: area.position, column: area.column || null };
+    return entry;
   }));
 }
 
@@ -581,34 +683,32 @@ async function _loadOmniBundleToggles() {
   var container = document.getElementById('omni-bundle-toggles');
   if (!container) return;
 
-  try {
-    var resp = await fetch('/api/bundles');
-    if (!resp.ok) throw new Error('Failed to fetch bundles');
-    var bundles = await resp.json();
-    _omniBundles = bundles;
-
-    if (!bundles || bundles.length === 0) {
-      container.innerHTML = '<p class="setting-hint" style="font-style:italic;">No email bundles configured.</p>';
-      return;
-    }
-
-    container.innerHTML = '';
-    bundles.forEach(function(bundle) {
-      var label = document.createElement('label');
-      label.className = 'cwoc-checkbox-label';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'omni-bundle-cb';
-      cb.dataset.bundleId = bundle.id;
-      cb.checked = !!bundle.omni_view;
-      cb.onchange = function() { setSaveButtonUnsaved(); };
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(' ' + (bundle.name || 'Unnamed Bundle')));
-      container.appendChild(label);
-    });
-  } catch (e) {
-    container.innerHTML = '<p class="setting-hint" style="color:#a0522d;">Failed to load bundles.</p>';
+  // Bundles are already piggybacked on the settings response — no separate API call needed
+  var bundles = null;
+  if (window.settingsManager && window.settingsManager.settings) {
+    bundles = window.settingsManager.settings.bundles;
   }
+
+  if (!bundles || !Array.isArray(bundles) || bundles.length === 0) {
+    container.innerHTML = '<p class="setting-hint" style="font-style:italic;">No email bundles configured.</p>';
+    return;
+  }
+
+  _omniBundles = bundles;
+  container.innerHTML = '';
+  bundles.forEach(function(bundle) {
+    var label = document.createElement('label');
+    label.className = 'cwoc-checkbox-label';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'omni-bundle-cb';
+    cb.dataset.bundleId = bundle.id;
+    cb.checked = !!bundle.omni_view;
+    cb.onchange = function() { setSaveButtonUnsaved(); };
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + (bundle.name || 'Unnamed Bundle')));
+    container.appendChild(label);
+  });
 }
 
 async function _saveOmniBundleToggles() {
@@ -679,6 +779,19 @@ function _clearOmniLockedFilters() {
   // Mark as cleared — will be saved as empty on next save
   _omniLockedFiltersCleared = true;
   setSaveButtonUnsaved();
+}
+
+function _resetOmniViewDefaults() {
+  // Reset layout to defaults
+  _omniLayoutState = _getDefaultOmniLayout();
+  _renderOmniLayoutGrid();
+  // Reset clock mode
+  var clockMode = document.getElementById('omni-hst-clock-mode');
+  if (clockMode) clockMode.value = 'both';
+  // Clear locked filters
+  _clearOmniLockedFilters();
+  setSaveButtonUnsaved();
+  if (typeof cwocToast === 'function') cwocToast('Omni View reset to defaults', 'info');
 }
 
 var _omniLockedFiltersCleared = false;
@@ -1355,6 +1468,10 @@ function cancelSettings() {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    var omniLayoutModal = document.getElementById("omni-layout-modal");
+    if (omniLayoutModal && omniLayoutModal.style.display === "flex") {
+      event.preventDefault(); event.stopPropagation(); _closeOmniLayoutModal(); return;
+    }
     var arrangeViewsModal = document.getElementById("arrange-views-modal");
     if (arrangeViewsModal && arrangeViewsModal.style.display === "flex") {
       event.preventDefault(); event.stopPropagation(); _cancelArrangeViews(); return;
@@ -1743,6 +1860,10 @@ class SettingsManager {
     }
 
     // ── Omni View settings ──
+    // Omni HST clock mode
+    var hstClockMode = document.getElementById('omni-hst-clock-mode');
+    if (hstClockMode) hstClockMode.value = this.settings.omni_hst_clock_mode || 'both';
+
     _loadOmniLayout(this.settings);
     _renderOmniLayoutGrid();
     _loadOmniBundleToggles();
@@ -1840,6 +1961,7 @@ class SettingsManager {
       show_map_thumbnails: (document.getElementById('show-map-thumbnails') && document.getElementById('show-map-thumbnails').checked) ? '1' : '0',
       view_order: _collectViewOrder(),
       session_lifetime: (document.getElementById('session-lifetime-select') || {}).value || '24',
+      omni_hst_clock_mode: (document.getElementById('omni-hst-clock-mode') || {}).value || 'both',
       omni_layout: _collectOmniLayout(),
       omni_locked_filters: _omniLockedFiltersCleared ? '' : undefined,
     };

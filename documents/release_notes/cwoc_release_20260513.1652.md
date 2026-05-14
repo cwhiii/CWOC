@@ -1,0 +1,1 @@
+Added "Pinned (Notes + Checklists)" combined section to the Omni View layout. It starts in the Unused section of the Arrange Omni Layout modal and can be dragged to active to show both pinned notes and checklists in a single group. Also ensured the layout arrangement properly applies to the Omni View rendering.

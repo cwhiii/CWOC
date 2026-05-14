@@ -1,0 +1,1 @@
+Added safety guard to collectLocationsData: if the DOM has no location rows but the loaded settings had locations, preserves the original data instead of overwriting with empty. Prevents accidental location data loss on save.

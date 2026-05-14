@@ -845,24 +845,74 @@
                 .omni-layout-grid {
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
+                    gap: 10px;
                     background: #fff8e1;
                     border: 1px solid #8b5a2b;
                     border-radius: 5px;
                     padding: 10px;
                     min-height: 80px;
                 }
+                .omni-layout-col-label {
+                    font-size: 0.8em;
+                    font-weight: bold;
+                    color: #6b4e31;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 4px;
+                    padding-left: 2px;
+                }
+                .omni-layout-col-list {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    min-height: 40px;
+                    padding: 6px;
+                    background: rgba(139, 90, 43, 0.03);
+                    border: 1px dashed rgba(139, 90, 43, 0.3);
+                    border-radius: 5px;
+                    transition: background 0.15s;
+                }
+                .omni-layout-empty-hint {
+                    font-style: italic;
+                    color: #8b5a2b;
+                    opacity: 0.5;
+                    font-size: 0.8em;
+                    text-align: center;
+                    padding: 8px 0;
+                }
+                .omni-layout-unused-label {
+                    margin-top: 8px;
+                    font-size: 0.8em;
+                    font-weight: bold;
+                    color: #6b4e31;
+                    opacity: 0.7;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+                .omni-layout-unused-zone {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    min-height: 40px;
+                    padding: 8px;
+                    background: rgba(139, 90, 43, 0.05);
+                    border: 1px dashed #8b5a2b;
+                    border-radius: 5px;
+                    margin-top: 4px;
+                }
                 .omni-layout-card {
                     display: flex;
                     align-items: center;
-                    gap: 8px;
-                    padding: 8px 12px;
+                    gap: 4px;
+                    padding: 6px 8px;
                     background: #f5e6cc;
                     border: 1px solid #8b5a2b;
                     border-radius: 5px;
                     cursor: move;
                     user-select: none;
                     transition: opacity 0.15s, transform 0.1s;
+                    min-width: 0;
+                    overflow: hidden;
                 }
                 .omni-layout-card:active {
                     opacity: 0.7;
@@ -887,7 +937,7 @@
                 .omni-layout-card .omni-card-controls {
                     display: flex;
                     align-items: center;
-                    gap: 6px;
+                    gap: 3px;
                     flex-shrink: 0;
                 }
                 .omni-layout-card .omni-card-controls button {
@@ -895,9 +945,9 @@
                     color: #fff8e1;
                     border: 1px solid #5c4033;
                     border-radius: 4px;
-                    padding: 3px 8px;
+                    padding: 2px 5px;
                     cursor: pointer;
-                    font-size: 0.8em;
+                    font-size: 0.7em;
                     font-family: inherit;
                     transition: background 0.15s;
                 }
@@ -1171,9 +1221,18 @@
                     <div class="setting-group" id="omni-view-settings">
                         <h3>🔮 Omni View</h3>
 
+                        <div class="setting-inline" style="margin-bottom:12px;">
+                            <label for="omni-hst-clock-mode">🕐 HST Bar Clock</label>
+                            <select id="omni-hst-clock-mode" onchange="setSaveButtonUnsaved();">
+                                <option value="both">Both (System + HST)</option>
+                                <option value="hst">HST Only</option>
+                                <option value="system">System Time Only</option>
+                            </select>
+                        </div>
+
                         <label class="setting-subheader">📐 Layout</label>
-                        <p class="setting-hint">Drag cards to reorder. Toggle width (half/full) and visibility for each area.</p>
-                        <div id="omni-layout-grid" class="omni-layout-grid"></div>
+                        <p class="setting-hint">Configure section order, width, and visibility.</p>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_openOmniLayoutModal()">🔮 Arrange Omni Layout</button>
 
                         <label class="setting-subheader">📧 Bundle Omni View Toggles</label>
                         <p class="setting-hint">Select which email bundles appear in the Omni View email section.</p>
@@ -1183,6 +1242,7 @@
                         <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>
                         <div id="omni-locked-filters-display" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;font-style:italic;">No locked filters set.</div>
                         <button type="button" class="standard-button" style="width:100%;" onclick="_clearOmniLockedFilters()">🗑️ Clear Defaults</button>
+                        <button type="button" class="standard-button" style="width:100%;margin-top:8px;" onclick="_resetOmniViewDefaults()">↩️ Reset Omni View to Defaults</button>
                     </div>
                     <div class="setting-group">
                         <h3>🔁 Habits</h3>
@@ -1966,6 +2026,17 @@
                         <button type="button" class="standard-button" style="flex:1;max-width:180px;" onclick="_cancelArrangeViews()">Cancel</button>
                         <button type="button" class="standard-button" style="flex:1;max-width:180px;" onclick="_resetViewOrder()">↩️ Reset to Default</button>
                         <button type="button" class="standard-button" style="flex:1;max-width:180px;background:#8b5a2b;color:#fdf5e6;" onclick="_closeArrangeViewsModal()">Done</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Omni Layout Modal -->
+            <div class="modal" id="omni-layout-modal" style="display:none;">
+                <div class="modal-content" style="max-width:95vw;width:auto;text-align:center;overflow:hidden;">
+                    <h3 style="margin-bottom:12px;">🔮 Arrange Omni Layout</h3>
+                    <p class="setting-hint" style="margin-bottom:12px;">Drag cards between zones to arrange. Drop into Full Width, Left, or Right columns.</p>
+                    <div id="omni-layout-grid" class="omni-layout-grid"></div>
+                    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">
+                        <button type="button" class="standard-button" style="flex:1;max-width:180px;" onclick="_closeOmniLayoutModal()">Done</button>
                     </div>
                 </div>
             </div>

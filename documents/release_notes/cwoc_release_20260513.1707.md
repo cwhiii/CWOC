@@ -1,0 +1,1 @@
+Added "HST + Weather" combined section to the Omni View layout. Renders the HST bar on the left and Weather bar on the right side-by-side in a single section. Can be placed in the Full Width zone or in a left/right column. Starts in the Unused section by default.

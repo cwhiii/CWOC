@@ -1,0 +1,1 @@
+Fixed five Omni View bugs: columns now scroll independently, habit cards match event widths, layout configurator is a modal, bundle toggle errors are logged with details, and layout padding/margins are tightened.

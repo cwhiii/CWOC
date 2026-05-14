@@ -1,0 +1,1 @@
+Omni View polish: added HST bar clock format setting (HST only, System only, or Both), removed Georgia font fallback from dashboard layout and omni CSS (Lora only), made sidebar use --header-bg for consistency, enlarged weather icons on HST bar, and added descriptive weather condition tooltips.

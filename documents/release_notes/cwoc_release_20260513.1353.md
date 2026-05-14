@@ -1,0 +1,1 @@
+Fixed 5 Omni View bugs: removed white background/margins so it uses full parchment space, fixed right-click context menu not closing when right-clicking elsewhere, filtered archived chits from pinned sections, reduced HST/Weather bar margins, and enabled birthday chip color and profile picture rendering in itinerary events.

@@ -1,0 +1,1 @@
+Fixed Omni View layout so full-width sections can appear above OR below the two-column grid. Layout now renders in strict position order, interleaving full-width sections with column groups as needed.

@@ -21,18 +21,21 @@ var _omniLockedFilters = null;     // Persisted filter defaults
 var _omniHSTInterval = null;       // HST bar update interval
 var _omniTimeUntilInterval = null; // Time-until badge update interval
 var _omniFiltersApplied = false;   // Prevents re-applying filters on every render cycle
+var _omniHSTMode = 'both';        // HST bar icon mode: 'chits', 'both', 'weather', 'none'
 
 /* ── Default layout config ───────────────────────────────────────────────── */
 
 var _omniDefaultLayout = [
     { id: "hst", width: "full", visible: true, position: 0 },
     { id: "weather", width: "full", visible: true, position: 1 },
-    { id: "chrono", width: "half", visible: true, position: 2, column: "left" },
-    { id: "ondeck", width: "half", visible: true, position: 3, column: "left" },
-    { id: "soon", width: "half", visible: true, position: 4, column: "left" },
-    { id: "email", width: "half", visible: true, position: 5, column: "left" },
-    { id: "pinned_notes", width: "half", visible: true, position: 6, column: "right" },
-    { id: "pinned_checklists", width: "half", visible: true, position: 7, column: "right" }
+    { id: "hst_weather", width: "full", visible: false, position: 2 },
+    { id: "chrono", width: "half", visible: true, position: 3, column: "left" },
+    { id: "ondeck", width: "half", visible: true, position: 4, column: "left" },
+    { id: "soon", width: "half", visible: true, position: 5, column: "left" },
+    { id: "email", width: "half", visible: true, position: 6, column: "left" },
+    { id: "pinned_notes", width: "half", visible: true, position: 7, column: "right" },
+    { id: "pinned_checklists", width: "half", visible: true, position: 8, column: "right" },
+    { id: "pinned_all", width: "half", visible: false, position: 9, column: "right" }
 ];
 
 /* ── Section display names and icons ─────────────────────────────────────── */
@@ -40,12 +43,14 @@ var _omniDefaultLayout = [
 var _omniSectionMeta = {
     hst: { label: "HST Bar", icon: "" },
     weather: { label: "Weather", icon: "" },
+    hst_weather: { label: "HST + Weather", icon: "📊🌤️" },
     chrono: { label: "Chrono Anchored", icon: "⏰" },
     ondeck: { label: "On Deck", icon: "🔜" },
     soon: { label: "Soon", icon: "🗓️" },
     email: { label: "Unread Email", icon: "📧" },
     pinned_notes: { label: "Pinned Notes", icon: "📝" },
-    pinned_checklists: { label: "Pinned Checklists", icon: "☑️" }
+    pinned_checklists: { label: "Pinned Checklists", icon: "☑️" },
+    pinned_all: { label: "Pinned", icon: "📌" }
 };
 
 /* ── Omni View entry point ───────────────────────────────────────────────── */
@@ -95,24 +100,23 @@ function displayOmniView(filteredChits) {
         .filter(function(s) { return s.visible !== false; })
         .sort(function(a, b) { return (a.position || 0) - (b.position || 0); });
 
+    console.log('[OmniLayout] layout source:', settings.omni_layout ? 'saved' : 'defaults');
+    console.log('[OmniLayout] all layout items:', JSON.stringify(layout.map(function(s) { return { id: s.id, visible: s.visible, width: s.width, column: s.column }; })));
+    console.log('[OmniLayout] visibleSections:', visibleSections.map(function(s) { return s.id; }));
+    console.log('[OmniLayout] is "email" in visible?', visibleSections.some(function(s) { return s.id === 'email'; }));
+
     // 6. Build the Omni View container
     var omniContainer = document.createElement("div");
     omniContainer.className = "omni-view";
 
-    // 7. Separate full-width sections from half-width sections
-    var fullWidthSections = visibleSections.filter(function(s) { return s.width === "full"; });
-    var halfWidthSections = visibleSections.filter(function(s) { return s.width === "half"; });
-    var leftSections = halfWidthSections.filter(function(s) { return s.column === "left"; });
-    var rightSections = halfWidthSections.filter(function(s) { return s.column === "right"; });
+    // 7. Render sections in position order, interleaving full-width and half-width.
+    //    Consecutive half-width sections are grouped into a two-column grid.
+    //    Full-width sections break the grid and render standalone.
+    var leftSections = [];
+    var rightSections = [];
 
-    // 8. Render full-width sections first (in position order)
-    fullWidthSections.forEach(function(sectionConfig) {
-        var sectionEl = _buildOmniSection(sectionConfig, "omni-section-full");
-        if (sectionEl) omniContainer.appendChild(sectionEl);
-    });
-
-    // 9. Build two-column grid for half-width sections
-    if (leftSections.length > 0 || rightSections.length > 0) {
+    function _flushColumns() {
+        if (leftSections.length === 0 && rightSections.length === 0) return;
         var gridContainer = document.createElement("div");
         gridContainer.className = "omni-grid";
 
@@ -133,11 +137,39 @@ function displayOmniView(filteredChits) {
         gridContainer.appendChild(leftCol);
         gridContainer.appendChild(rightCol);
         omniContainer.appendChild(gridContainer);
+        leftSections = [];
+        rightSections = [];
     }
+
+    visibleSections.forEach(function(s) {
+        if (s.width === "full") {
+            // Flush any pending half-width columns before this full-width section
+            _flushColumns();
+            var sectionEl = _buildOmniSection(s, "omni-section-full");
+            if (sectionEl) omniContainer.appendChild(sectionEl);
+        } else {
+            // Half-width: accumulate into left/right columns
+            if (s.column === "right") {
+                rightSections.push(s);
+            } else if (s.column === "left") {
+                leftSections.push(s);
+            } else {
+                var def = _omniDefaultLayout.find(function(d) { return d.id === s.id; });
+                if (def && def.column === "right") {
+                    rightSections.push(s);
+                } else {
+                    leftSections.push(s);
+                }
+            }
+        }
+    });
+
+    // Flush any remaining half-width columns
+    _flushColumns();
 
     chitList.appendChild(omniContainer);
 
-    // 10. Route to section renderers (stubs for now — implemented in later tasks)
+    // 10. Route to section renderers
     _populateOmniSections(filteredChits, visibleSections);
 }
 
@@ -151,7 +183,7 @@ function _buildOmniSection(sectionConfig, widthClass) {
     section.dataset.omniSection = sectionConfig.id;
 
     // HST and Weather bars don't get a visible header (they are self-contained)
-    if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather") {
+    if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather") {
         var header = document.createElement("div");
         header.className = "omni-section-header";
         header.innerHTML = (meta.icon ? '<span class="omni-section-icon">' + meta.icon + '</span> ' : '') + meta.label;
@@ -211,12 +243,16 @@ function _omniDeduplicateChits(filteredChits) {
     weekEnd.setDate(weekEnd.getDate() + 7);
 
     // ── Step 1: Separate email chits ────────────────────────────────────────
-    filteredChits.forEach(function(chit) {
+    // Use the GLOBAL chits array for emails — sidebar filters should not exclude emails
+    // from the Omni View email section (they have their own bundle-based filtering)
+    var _allChits = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits : filteredChits;
+    _allChits.forEach(function(chit) {
         if (chit.email_message_id) {
             result.email.push(chit);
             placedIds.add(chit.id);
         }
     });
+    console.log('[OmniDedup] Step 1: email chits separated:', result.email.length, 'from global chits:', _allChits.length, '(filteredChits was:', filteredChits.length, ')');
 
     // ── Step 2: Categorize remaining into itinerary buckets ─────────────────
     // Process habits first (same logic as displayItineraryView)
@@ -390,6 +426,7 @@ function _omniDeduplicateChits(filteredChits) {
     filteredChits.forEach(function(chit) {
         if (placedIds.has(chit.id)) return;
         if (!chit.pinned) return;
+        if (chit.archived) return;
 
         // Has checklist items → Pinned Checklists
         var checklist = chit.checklist;
@@ -416,6 +453,8 @@ function _populateOmniSections(filteredChits, visibleSections) {
 
     // Run deduplication to get categorized data
     var categorized = _omniDeduplicateChits(filteredChits);
+    console.log('[OmniSections] _populateOmniSections: visibleSections=', visibleSections.map(function(s) { return s.id; }));
+    console.log('[OmniSections] categorized.email length:', categorized.email ? categorized.email.length : 'undefined');
 
     visibleSections.forEach(function(sectionConfig) {
         var contentEl = document.getElementById("omni-content-" + sectionConfig.id);
@@ -433,6 +472,10 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 if (typeof _renderOmniWeather === 'function') {
                     _renderOmniWeather(contentEl);
                 }
+                break;
+            case "hst_weather":
+                // Combined HST + Weather side by side
+                _renderOmniHSTWeatherCombo(contentEl, categorized.chrono);
                 break;
             case "chrono":
                 // Chrono Anchored — implemented in task 6.1
@@ -454,8 +497,11 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 break;
             case "email":
                 // Email — implemented in task 10.1
+                console.log('[OmniEmail] CASE "email" reached, categorized.email length:', categorized.email ? categorized.email.length : 'undefined');
                 if (typeof _renderOmniEmail === 'function') {
                     _renderOmniEmail(contentEl, categorized.email);
+                } else {
+                    console.log('[OmniEmail] _renderOmniEmail function NOT FOUND');
                 }
                 break;
             case "pinned_notes":
@@ -470,15 +516,39 @@ function _populateOmniSections(filteredChits, visibleSections) {
                     _renderOmniPinnedChecklists(contentEl, categorized.pinned_checklists, _viSettings);
                 }
                 break;
+            case "pinned_all":
+                // Combined Pinned Notes + Checklists in one section
+                var allPinned = (categorized.pinned_notes || []).concat(categorized.pinned_checklists || []);
+                if (allPinned.length > 0) {
+                    // Render checklists first, then notes
+                    var pinnedChecklists = categorized.pinned_checklists || [];
+                    var pinnedNotes = categorized.pinned_notes || [];
+                    if (pinnedChecklists.length > 0 && typeof _renderOmniPinnedChecklists === 'function') {
+                        _renderOmniPinnedChecklists(contentEl, pinnedChecklists, _viSettings);
+                    }
+                    if (pinnedNotes.length > 0 && typeof _renderOmniPinnedNotes === 'function') {
+                        // Create a sub-container so notes append after checklists
+                        var notesContainer = document.createElement('div');
+                        notesContainer.className = 'omni-pinned-all-notes';
+                        _renderOmniPinnedNotes(notesContainer, pinnedNotes, _viSettings);
+                        contentEl.appendChild(notesContainer);
+                    }
+                }
+                break;
         }
 
         // Hide empty sections (Requirement 2.2)
-        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather") {
+        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather") {
             var sectionEl = contentEl.parentElement;
-            var dataKey = sectionConfig.id === "pinned_notes" ? "pinned_notes" :
-                          sectionConfig.id === "pinned_checklists" ? "pinned_checklists" :
-                          sectionConfig.id;
-            var items = categorized[dataKey] || [];
+            var items;
+            if (sectionConfig.id === "pinned_all") {
+                items = (categorized.pinned_notes || []).concat(categorized.pinned_checklists || []);
+            } else {
+                var dataKey = sectionConfig.id === "pinned_notes" ? "pinned_notes" :
+                              sectionConfig.id === "pinned_checklists" ? "pinned_checklists" :
+                              sectionConfig.id;
+                items = categorized[dataKey] || [];
+            }
             if (items.length === 0 && sectionEl) {
                 sectionEl.style.display = "none";
             }
@@ -501,14 +571,17 @@ function _renderOmniChrono(contentEl, chronoItems, viSettings) {
 
     var now = new Date();
 
-    // Filter out past events (start time < now)
-    var futureItems = chronoItems.filter(function(item) {
-        return item.start && item.start > now;
+    // Filter out events that have fully ended (end time < now)
+    var activeItems = chronoItems.filter(function(item) {
+        if (!item.start) return false;
+        // Use end time if available, otherwise start + 1 hour
+        var endTime = item.end || new Date(item.start.getTime() + 3600000);
+        return endTime > now;
     });
 
-    if (futureItems.length === 0) return;
+    if (activeItems.length === 0) return;
 
-    futureItems.forEach(function(item) {
+    activeItems.forEach(function(item) {
         var cardEl = _buildItineraryEvent(item.chit, viSettings, { isPast: item.isPast });
 
         // Add time-until badge
@@ -736,22 +809,17 @@ function _buildDueDateBadge(dueDate, now) {
     var due = (dueDate instanceof Date) ? dueDate : new Date(dueDate);
     if (isNaN(due.getTime())) return null;
 
-    // Calculate if it's tomorrow
+    // Calculate days difference
     var today = new Date(now);
     today.setHours(0, 0, 0, 0);
-    var tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    var tomorrowEnd = new Date(tomorrow);
-    tomorrowEnd.setHours(23, 59, 59, 999);
+    var dueDay = new Date(due);
+    dueDay.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((dueDay - today) / 86400000);
 
     var text;
-    if (due >= tomorrow && due <= tomorrowEnd) {
-        text = "Tomorrow";
-    } else {
-        // Short day name (e.g., "Tue", "Wed")
-        var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        text = dayNames[due.getDay()];
-    }
+    if (diffDays <= 0) text = "today";
+    else if (diffDays === 1) text = "1 day";
+    else text = diffDays + " days";
 
     var badge = document.createElement("span");
     badge.className = "omni-due-badge";
@@ -787,6 +855,41 @@ function _renderOmniHST(contentEl, chronoItems) {
     var iconsLayer = document.createElement("div");
     iconsLayer.className = "omni-hst-icons";
     bar.appendChild(iconsLayer);
+
+    // ── Time display overlay ────────────────────────────────────────────────
+    var timeOverlay = document.createElement("div");
+    timeOverlay.className = "omni-hst-time-overlay";
+    
+    function _updateHSTTime() {
+        // Use the SAME calculation as _renderClocks in main-modals.js
+        var now = new Date();
+        var h24 = now.getHours();
+        var min = now.getMinutes();
+        var sec = now.getSeconds();
+        var dayFraction = (h24 * 3600 + min * 60 + sec) / 86400;
+        var hstVal = (dayFraction * 100).toFixed(3);
+        
+        var settings = window._cwocSettings || {};
+        var clockMode = settings.omni_hst_clock_mode || 'both';
+        
+        if (clockMode === 'hst') {
+            timeOverlay.textContent = hstVal + ' sd';
+        } else if (clockMode === 'system') {
+            // Use _globalFmtTime if available (same as clock modal uses)
+            var timeStr = String(h24).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+            if (typeof _globalFmtTime === 'function') {
+                timeStr = _globalFmtTime(timeStr);
+            } else if (typeof _sharedFmtTime === 'function') {
+                timeStr = _sharedFmtTime(timeStr);
+            }
+            timeOverlay.textContent = timeStr;
+        } else {
+            // Both: show HST value centered (same display as clock modal HST bar)
+            timeOverlay.textContent = hstVal + ' sd';
+        }
+    }
+    _updateHSTTime();
+    bar.appendChild(timeOverlay);
 
     contentEl.appendChild(bar);
 
@@ -866,9 +969,35 @@ function _renderOmniHST(contentEl, chronoItems) {
     // ── Fetch and place weather icons ───────────────────────────────────────
     _placeOmniHSTWeather(iconsLayer);
 
+    // ── Apply current HST mode visibility ───────────────────────────────────
+    _applyHSTMode(iconsLayer);
+
+    // ── Click bar to cycle mode: chits → both → weather → none → chits ─────
+    bar.addEventListener("click", function(e) {
+        if (e.target !== bar && e.target !== fill && e.target !== timeOverlay) return;
+        var modes = ['chits', 'both', 'weather', 'none'];
+        var idx = modes.indexOf(_omniHSTMode);
+        _omniHSTMode = modes[(idx + 1) % modes.length];
+        _applyHSTMode(iconsLayer);
+    });
+
     // ── Set 1-second update interval for fill animation ─────────────────────
     if (_omniHSTInterval) { clearInterval(_omniHSTInterval); }
-    _omniHSTInterval = setInterval(_updateHSTFill, 1000);
+    _omniHSTInterval = setInterval(function() { _updateHSTFill(); _updateHSTTime(); }, 1000);
+}
+
+/**
+ * Apply HST bar icon visibility based on _omniHSTMode.
+ * Modes: 'chits' (chits only), 'both' (both), 'weather' (weather only), 'none' (neither)
+ */
+function _applyHSTMode(iconsLayer) {
+    if (!iconsLayer) return;
+    var chitIcons = iconsLayer.querySelectorAll('.omni-hst-chit-icon, .omni-hst-line');
+    var weatherIcons = iconsLayer.querySelectorAll('.omni-hst-weather-icon');
+    var showChits = (_omniHSTMode === 'chits' || _omniHSTMode === 'both');
+    var showWeather = (_omniHSTMode === 'weather' || _omniHSTMode === 'both');
+    chitIcons.forEach(function(el) { el.style.display = showChits ? '' : 'none'; });
+    weatherIcons.forEach(function(el) { el.style.display = showWeather ? '' : 'none'; });
 }
 
 /**
@@ -931,6 +1060,16 @@ async function _placeOmniHSTWeather(iconsLayer) {
 }
 
 /**
+ * Returns a human-readable weather condition name for a WMO weather code.
+ * Uses the shared _weatherDescriptions from shared-utils.js.
+ * @param {number} code - WMO weather code
+ * @returns {string} Condition name
+ */
+function _getWeatherConditionName(code) {
+    return (typeof _weatherDescriptions !== 'undefined' && _weatherDescriptions[code]) || 'Unknown';
+}
+
+/**
  * Renders weather icons on the HST bar at their hour positions.
  * Weather icons are always shown as icons (never collapsed to lines).
  *
@@ -951,13 +1090,23 @@ function _renderHSTWeatherIcons(iconsLayer, codes) {
         if (code === null || code === undefined) continue;
 
         var icon = (typeof _getWeatherIcon === "function") ? _getWeatherIcon(code) : "❓";
+
+        // Only show icon when weather changes from previous hour
+        var prevCode = (hour > 0) ? codes[hour - 1] : null;
+        var prevIcon = (prevCode !== null && prevCode !== undefined && typeof _getWeatherIcon === "function") ? _getWeatherIcon(prevCode) : null;
+        if (prevIcon === icon && hour > currentHour - 1) continue;
+
         var pct = ((hour * 3600) / 86400) * 100;
 
         var weatherEl = document.createElement("span");
         weatherEl.className = "omni-hst-weather-icon";
         weatherEl.style.left = pct + "%";
         weatherEl.textContent = icon;
-        weatherEl.title = "Weather at " + (hour === 0 ? "12 AM" : hour < 12 ? hour + " AM" : hour === 12 ? "12 PM" : (hour - 12) + " PM");
+
+        // Build descriptive tooltip
+        var timeLabel = (hour === 0 ? "12 AM" : hour < 12 ? hour + " AM" : hour === 12 ? "12 PM" : (hour - 12) + " PM");
+        var conditionName = _getWeatherConditionName(code);
+        weatherEl.title = timeLabel + " — " + conditionName;
 
         // Click → open weather modal
         weatherEl.addEventListener("click", function(e) {
@@ -1101,15 +1250,23 @@ function _buildWeatherBarContent(bar, daily, locationLabel) {
     var lowT = (minC !== null) ? _celsiusToFahrenheit(minC) : "--";
     var unit = (typeof _tempUnit === "function") ? _tempUnit() : "°F";
 
-    // Build the bar content
+    // Build temperature bar using the same function as the weather modal
+    var tempBarHtml = '';
+    if (maxC !== null && minC !== null && typeof _buildTempBarHTML === 'function' && typeof _tempBarRange === 'function') {
+        var barR = _tempBarRange();
+        var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
+        var minT = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? Math.round(minC) : Math.round(minC * 9 / 5 + 32);
+        var maxT = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? Math.round(maxC) : Math.round(maxC * 9 / 5 + 32);
+        var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
+        var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
+        var tUnit = (typeof _tempUnit === 'function') ? _tempUnit() : '°F';
+        tempBarHtml = _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
+    }
+
+    // Build the bar content (no high/low text — temp bar shows the range visually)
     bar.innerHTML =
         '<span class="omni-weather-icon">' + icon + '</span>' +
-        '<span class="omni-weather-temps">' +
-            '<span class="omni-weather-high">' + highT + '</span>' +
-            '<span class="omni-weather-sep"> / </span>' +
-            '<span class="omni-weather-low">' + lowT + '</span>' +
-            '<span class="omni-weather-unit">' + unit + '</span>' +
-        '</span>' +
+        tempBarHtml +
         '<span class="omni-weather-location">' + _escOmniHtml(locationLabel) + '</span>';
 }
 
@@ -1121,6 +1278,41 @@ function _buildWeatherBarContent(bar, daily, locationLabel) {
 function _escOmniHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ── HST + Weather Combo Section ──────────────────────────────────────────── */
+
+/**
+ * Renders a combined HST + Weather section with HST on the left and Weather on the right,
+ * side by side in a single row.
+ *
+ * @param {HTMLElement} contentEl - The section content container
+ * @param {Array} chronoItems - Chrono items for the HST bar
+ */
+function _renderOmniHSTWeatherCombo(contentEl, chronoItems) {
+    if (!contentEl) return;
+    contentEl.innerHTML = "";
+
+    var comboWrapper = document.createElement("div");
+    comboWrapper.className = "omni-hst-weather-combo";
+
+    // Left side: HST bar
+    var hstSide = document.createElement("div");
+    hstSide.className = "omni-combo-hst";
+    if (typeof _renderOmniHST === 'function') {
+        _renderOmniHST(hstSide, chronoItems);
+    }
+    comboWrapper.appendChild(hstSide);
+
+    // Right side: Weather bar
+    var weatherSide = document.createElement("div");
+    weatherSide.className = "omni-combo-weather";
+    if (typeof _renderOmniWeather === 'function') {
+        _renderOmniWeather(weatherSide);
+    }
+    comboWrapper.appendChild(weatherSide);
+
+    contentEl.appendChild(comboWrapper);
 }
 
 /* ── Pinned Notes Section ─────────────────────────────────────────────────── */
@@ -1152,8 +1344,19 @@ function _renderOmniPinnedNotes(contentEl, pinnedNotes, viSettings) {
         if (chit.pinned) {
             var pinIcon = document.createElement('i');
             pinIcon.className = 'fas fa-bookmark';
-            pinIcon.title = 'Pinned';
+            pinIcon.title = 'Click to unpin';
             pinIcon.style.fontSize = '0.85em';
+            pinIcon.style.cursor = 'pointer';
+            (function(c, icon) {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    fetch('/api/chits/' + c.id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(Object.assign({}, c, { pinned: false }))
+                    }).then(function(r) { if (r.ok) { fetchChits(); } });
+                });
+            })(chit, pinIcon);
             titleRow.appendChild(pinIcon);
         }
         if (chit.archived) {
@@ -1334,6 +1537,23 @@ function _renderOmniPinnedChecklists(contentEl, pinnedChecklists, viSettings) {
         var titleHtml = '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>';
         chitElement.appendChild(_buildChitHeader(chit, titleHtml, viSettings, { checklistCount: true, skipMapIcon: true }));
 
+        // Pin icon click → unpin
+        var _pinEl = chitElement.querySelector('.fa-bookmark');
+        if (_pinEl) {
+            _pinEl.style.cursor = 'pointer';
+            _pinEl.title = 'Click to unpin';
+            (function(c, icon) {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    fetch('/api/chits/' + c.id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(Object.assign({}, c, { pinned: false }))
+                    }).then(function(r) { if (r.ok) { fetchChits(); } });
+                });
+            })(chit, _pinEl);
+        }
+
         // ── Strike out title when all checklist items are checked ────────────
         var _clNonEmpty = (chit.checklist || []).filter(function(i) { return i && i.text && i.text.trim(); });
         var _clAllChecked = _clNonEmpty.length > 0 && _clNonEmpty.every(function(i) { return i.checked || i.done; });
@@ -1405,6 +1625,9 @@ var _OMNI_EMAIL_PAGE_SIZE = 3;
  * @param {Array} allEmailChits - All email chits from deduplication (may include read/non-Omni)
  */
 function _renderOmniEmail(contentEl, allEmailChits) {
+    console.log('[OmniEmail] _renderOmniEmail ENTER');
+    console.log('[OmniEmail] contentEl:', !!contentEl);
+    console.log('[OmniEmail] allEmailChits:', allEmailChits ? allEmailChits.length : 'NULL/undefined');
     if (!contentEl) return;
     contentEl.innerHTML = "";
 
@@ -1412,9 +1635,12 @@ function _renderOmniEmail(contentEl, allEmailChits) {
 
     // Get Omni-enabled bundles
     var omniBundles = _getOmniEnabledBundles();
+    console.log('[OmniEmail] omniBundles count:', omniBundles ? omniBundles.length : 'NULL');
+    console.log('[OmniEmail] omniBundles:', JSON.stringify((omniBundles || []).map(function(b) { return { id: b.id, name: b.name, omni_view: b.omni_view }; })));
 
     // If no Omni-enabled bundles, nothing to show — hide section
     if (!omniBundles || omniBundles.length === 0) {
+        console.log('[OmniEmail] NO Omni-enabled bundles — hiding section');
         var sectionEl = contentEl.parentElement;
         if (sectionEl) sectionEl.style.display = "none";
         return;
@@ -1424,6 +1650,11 @@ function _renderOmniEmail(contentEl, allEmailChits) {
     var omniBundleTags = omniBundles.map(function(b) {
         return 'CWOC_System/Bundle/' + b.name;
     });
+    // Check if any Omni-enabled bundle is the catch-all (non-removable / "Everything Else")
+    var hasCatchAll = omniBundles.some(function(b) {
+        return b.removable === 0 || b.removable === false || b.removable === '0' || b.name === 'Everything Else';
+    });
+    console.log('[OmniEmail] omniBundleTags:', JSON.stringify(omniBundleTags), 'hasCatchAll:', hasCatchAll);
 
     // Filter: email_message_id present, email_read === false, tags include an Omni-enabled bundle
     var unreadOmniEmails = (allEmailChits || []).filter(function(chit) {
@@ -1435,11 +1666,36 @@ function _renderOmniEmail(contentEl, allEmailChits) {
         if (typeof tags === 'string') {
             try { tags = JSON.parse(tags); } catch (e) { return false; }
         }
-        return tags.some(function(t) {
+
+        // Check if email has a matching bundle tag
+        var matchesNamedBundle = tags.some(function(t) {
             var tagName = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
             return omniBundleTags.indexOf(tagName) !== -1;
         });
+        if (matchesNamedBundle) return true;
+
+        // If catch-all bundle is Omni-enabled, include emails with NO bundle tag
+        if (hasCatchAll) {
+            var hasAnyBundleTag = tags.some(function(t) {
+                var tagName = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
+                return tagName.indexOf('CWOC_System/Bundle/') === 0;
+            });
+            if (!hasAnyBundleTag) return true;
+        }
+
+        return false;
     });
+    console.log('[OmniEmail] unreadOmniEmails after filter:', unreadOmniEmails.length);
+
+    // Log first few email chits for debugging tag matching
+    if (allEmailChits && allEmailChits.length > 0) {
+        var sample = allEmailChits.slice(0, 5);
+        sample.forEach(function(chit, i) {
+            var tags = chit.tags || [];
+            if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+            console.log('[OmniEmail] Sample email[' + i + ']: id=' + chit.id + ', email_read=' + chit.email_read + ', subject=' + (chit.title || '').substring(0, 40) + ', tags=' + JSON.stringify(tags).substring(0, 200));
+        });
+    }
 
     // Sort by email_date descending (most recent first)
     unreadOmniEmails.sort(function(a, b) {
@@ -1524,16 +1780,26 @@ function _getOmniEnabledBundles() {
         ? _emailBundlesData
         : null;
 
+    console.log('[OmniEmail] _getOmniEnabledBundles: _emailBundlesData=' + (_emailBundlesData ? _emailBundlesData.length + ' items' : 'null/undefined'));
+
     // Fallback: try settings cache
     if (!bundles && window._cwocSettings && window._cwocSettings.bundles) {
         bundles = window._cwocSettings.bundles;
+        console.log('[OmniEmail] _getOmniEnabledBundles: fell back to _cwocSettings.bundles=' + bundles.length + ' items');
     }
 
-    if (!bundles || !Array.isArray(bundles)) return [];
+    if (!bundles || !Array.isArray(bundles)) {
+        console.log('[OmniEmail] _getOmniEnabledBundles: NO bundles data at all');
+        return [];
+    }
 
-    return bundles.filter(function(b) {
-        return b.omni_view === 1 || b.omni_view === true;
+    console.log('[OmniEmail] _getOmniEnabledBundles: all bundles omni_view values:', JSON.stringify(bundles.map(function(b) { return { name: b.name, omni_view: b.omni_view, omni_view_type: typeof b.omni_view }; })));
+
+    var filtered = bundles.filter(function(b) {
+        return !!b.omni_view && b.omni_view !== 0 && b.omni_view !== '0';
     });
+    console.log('[OmniEmail] _getOmniEnabledBundles: filtered to', filtered.length, 'Omni-enabled bundles');
+    return filtered;
 }
 
 /* ── Filter Lock ─────────────────────────────────────────────────────────── */
@@ -1572,6 +1838,12 @@ function _applyOmniEntryFilters() {
         _clearAllFilters();
         _omniLockedFilters = null;
         _showOmniLockedIndicator(false);
+    }
+
+    // Always enable "Show Email (Received)" for Omni View so email chits are included
+    var showEmailRecvCb = document.getElementById('show-email-received');
+    if (showEmailRecvCb && !showEmailRecvCb.checked) {
+        showEmailRecvCb.checked = true;
     }
 }
 

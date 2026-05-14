@@ -1,0 +1,1 @@
+Fixed 8 Omni View bugs: header spacing between "Omni" and "Chits", habit card width overflow, pin icon now unpins chits, settings layout configurator shows 2-column grid preview, bundle toggles wait for auth before fetching, HST/weather bar overflow containment, weather icon deduplication in HST bar, and birthday chips now match full event width.

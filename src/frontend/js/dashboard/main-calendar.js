@@ -896,17 +896,30 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
   }
   if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
   if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
-  if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
+  if (chit._isBirthday && !_omniViewActive) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
+  if (chit._isBirthday && _omniViewActive) { chitElement.classList.add("omni-contact-date"); }
 
   // Type icon INSIDE the card, leftmost
   var iconEl = document.createElement("span");
   iconEl.style.cssText = "font-size:1em;flex-shrink:0;margin-right:6px;";
-  iconEl.textContent = isTask ? '☑️' : '🗓️';
+  if (chit._isBirthday) {
+    var dateLabel = (chit._date_label || '').toLowerCase();
+    if (dateLabel.indexOf('birthday') !== -1 || dateLabel.indexOf('birth') !== -1) {
+      iconEl.textContent = '🎂';
+    } else if (dateLabel.indexOf('anniversary') !== -1) {
+      iconEl.textContent = '💍';
+    } else {
+      iconEl.textContent = '🗓️';
+    }
+  } else {
+    iconEl.textContent = isTask ? '☑️' : '🗓️';
+  }
   chitElement.appendChild(iconEl);
 
-  // Status dropdown for tasks (between icon and time), or spacer for alignment
+  // Status dropdown for tasks
+  var statusSelect = null;
   if (isTask) {
-    var statusSelect = document.createElement("select");
+    statusSelect = document.createElement("select");
     statusSelect.style.cssText = "font-size:0.8em;padding:2px 4px;border:1px solid #c4a97d;border-radius:3px;background:#fffaf0;color:#4a2c2a;margin-right:8px;flex-shrink:0;width:90px;";
     var statuses = ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'];
     statuses.forEach(function(s) {
@@ -933,13 +946,8 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
         }
       }).catch(function(err) { console.error('Status update failed:', err); });
     });
-    chitElement.appendChild(statusSelect);
-  } else {
-    // Spacer to align time columns with task rows
-    var spacer = document.createElement("span");
-    spacer.style.cssText = "display:inline-block;width:90px;margin-right:8px;flex-shrink:0;";
-    chitElement.appendChild(spacer);
   }
+
   // Time column
   const timeColumn = document.createElement("div");
   timeColumn.className = "time-column";
@@ -958,16 +966,43 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
     const pitDate = new Date(chit.point_in_time);
     timeColumn.innerHTML = `📌 ${formatTime(pitDate)}`;
   }
-  chitElement.appendChild(timeColumn);
 
-  // Title (left-justified, no pinned icon)
+  // Title
   const detailsColumn = document.createElement("div");
   detailsColumn.className = "details-column";
   detailsColumn.style.cssText = "text-align:left;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
 
-  var pastLabel = '';
-  detailsColumn.innerHTML = `<span style="font-weight:bold;font-size:1.05em;">${pastLabel}${chit.title || '(Untitled)'}</span>`;
-  chitElement.appendChild(detailsColumn);
+  // Birthday/anniversary entries: render as a person chip with color and image
+  if (chit._isBirthday && !_omniViewActive) {
+    detailsColumn.innerHTML = calendarEventTitle(chit, false, null, _viSettings, 'itinerary');
+  } else {
+    var pastLabel = '';
+    var displayTitle = chit.title || '(Untitled)';
+    // Strip emoji from title for birthday chits in Omni View (icon already shown separately)
+    if (chit._isBirthday && _omniViewActive) {
+      displayTitle = displayTitle.replace(/🎂|💍|🗓️/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
+    detailsColumn.innerHTML = `<span style="font-weight:bold;font-size:1.05em;">${pastLabel}${displayTitle}</span>`;
+  }
+
+  // Append in order based on view mode
+  if (_omniViewActive) {
+    // Omni View order: [icon][time][title][status]
+    chitElement.appendChild(timeColumn);
+    chitElement.appendChild(detailsColumn);
+    if (statusSelect) chitElement.appendChild(statusSelect);
+  } else {
+    // Default order: [icon][status/spacer][time][title]
+    if (statusSelect) {
+      chitElement.appendChild(statusSelect);
+    } else {
+      var spacer = document.createElement("span");
+      spacer.style.cssText = "display:inline-block;width:90px;margin-right:8px;flex-shrink:0;";
+      chitElement.appendChild(spacer);
+    }
+    chitElement.appendChild(timeColumn);
+    chitElement.appendChild(detailsColumn);
+  }
 
   // Extra info indicators (recurrence only) — far right
   var extraInfo = document.createElement("span");

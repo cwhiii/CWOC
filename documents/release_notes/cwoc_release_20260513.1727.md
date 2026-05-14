@@ -1,0 +1,1 @@
+Fixed Omni View email section not showing emails. Two issues: (1) email dedup now uses global chits array instead of sidebar-filtered chits, (2) Omni View entry now auto-enables "Show Email (Received)" checkbox so email chits pass through the filter pipeline.

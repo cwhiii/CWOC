@@ -1,0 +1,1 @@
+Rebuilt the Arrange Omni Layout modal to use explicit left/right column zones (like the Notes view masonry layout). Each column can now have an unequal number of items. Drag cards between Full Width, Left Column, Right Column, and Unused zones. Width is determined by which zone the card is in — no more manual width toggle buttons.

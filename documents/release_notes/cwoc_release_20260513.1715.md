@@ -1,0 +1,1 @@
+Fixed bundle toggles 401 error: removed the broken separate /api/bundles fetch and now reads bundle data directly from the settings response (which already piggybacks bundles). Restored ½/Full width toggle buttons on Omni Layout cards. Removed all debug logging from middleware.

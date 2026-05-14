@@ -929,6 +929,25 @@ function _showChitContextMenu(e, chit, onRefresh) {
     if (ev.target === overlay) _close();
   });
 
+  // Right-click on overlay: close current menu and open new one on target element
+  overlay.addEventListener('contextmenu', function(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    _close();
+    // Find the element under the cursor (now that overlay is removed)
+    var targetEl = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (targetEl) {
+      // Dispatch a new contextmenu event to the element underneath
+      var newEvent = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: ev.clientX,
+        clientY: ev.clientY
+      });
+      targetEl.dispatchEvent(newEvent);
+    }
+  });
+
   // ESC to close
   function _escHandler(ev) {
     if (ev.key === 'Escape') {

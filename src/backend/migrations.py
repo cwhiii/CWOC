@@ -2990,6 +2990,9 @@ def migrate_omni_view_settings():
         if "omni_locked_filters" not in columns:
             cursor.execute("ALTER TABLE settings ADD COLUMN omni_locked_filters TEXT")
             logger.info("Added omni_locked_filters column to settings table")
+        if "omni_hst_clock_mode" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN omni_hst_clock_mode TEXT DEFAULT 'both'")
+            logger.info("Added omni_hst_clock_mode column to settings table")
         conn.commit()
     except Exception as e:
         logger.error(f"Error adding Omni View settings columns: {str(e)}")

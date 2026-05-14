@@ -108,6 +108,7 @@ def _set_session_cookie(response: JSONResponse, token: str, lifetime_hours: int 
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
+        secure=True,
         path="/",
         samesite="lax",
         max_age=max_age,
@@ -120,6 +121,7 @@ def _clear_session_cookie(response: JSONResponse) -> JSONResponse:
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         path="/",
+        secure=True,
     )
     return response
 

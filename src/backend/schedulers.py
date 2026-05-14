@@ -706,6 +706,17 @@ async def _alert_push_loop():
                             weather_threshold = alert.get("weather_threshold")
                             if not weather_condition:
                                 continue
+
+                            # Skip weather notifications for past chits
+                            chit_end = end_dt or due_dt or start_dt
+                            if chit_end:
+                                try:
+                                    chit_end_dt = datetime.fromisoformat(chit_end.replace("Z", "+00:00")).replace(tzinfo=None)
+                                    if chit_end_dt < now - timedelta(hours=1):
+                                        continue
+                                except (ValueError, TypeError):
+                                    pass
+
                             key = f"weather-notif-{chit_id}-{idx}-{today_str}"
                             if key in _fired_keys:
                                 continue

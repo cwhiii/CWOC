@@ -296,6 +296,7 @@ def save_settings(settings: Settings, request: Request):
             "autosave_mobile": settings.autosave_mobile or "0",
             "omni_layout": settings.omni_layout,
             "omni_locked_filters": settings.omni_locked_filters,
+            "omni_hst_clock_mode": settings.omni_hst_clock_mode or "both",
         }
 
         cursor.execute(
@@ -314,8 +315,8 @@ def save_settings(settings: Settings, request: Request):
                 default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
                 bundles_multi_placement, bundles_enabled, bundles_show_count, session_lifetime,
                 autosave_desktop, autosave_mobile,
-                omni_layout, omni_locked_filters
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                omni_layout, omni_locked_filters, omni_hst_clock_mode
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -373,6 +374,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["autosave_mobile"],
                 new_settings_dict["omni_layout"],
                 new_settings_dict["omni_locked_filters"],
+                new_settings_dict["omni_hst_clock_mode"],
             )
         )
 

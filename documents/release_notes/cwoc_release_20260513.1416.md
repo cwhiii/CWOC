@@ -1,0 +1,1 @@
+Omni View polish: HST bar now displays system time (left) and HST sidereal time (right) as an overlay, weather icons are vertically centered in the bar, and the h1/Omni header button explicitly uses Lora font.
