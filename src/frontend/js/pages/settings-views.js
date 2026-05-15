@@ -5,6 +5,9 @@
 /** Default view order — matches the HTML tab order in index.html */
 var _defaultViewOrder = ['Calendar', 'Checklists', 'Tasks', 'Projects', 'Notes', 'Email', 'Indicators', 'Alarms'];
 
+/** All available views (includes hidden-by-default views like Notebook) */
+var _allAvailableViews = ['Calendar', 'Checklists', 'Tasks', 'Projects', 'Notes', 'Notebook', 'Email', 'Indicators', 'Alarms'];
+
 /** Current view order state for the modal (visible tabs) */
 var _currentViewOrder = null;
 
@@ -43,7 +46,7 @@ function _openArrangeViewsModal() {
     _currentViewOrder = _defaultViewOrder.slice();
   }
 
-  _hiddenViews = _defaultViewOrder.filter(function(v) {
+  _hiddenViews = _allAvailableViews.filter(function(v) {
     return _currentViewOrder.indexOf(v) === -1;
   });
 
@@ -72,7 +75,7 @@ function _cancelArrangeViews() {
   } else {
     _currentViewOrder = _defaultViewOrder.slice();
   }
-  _hiddenViews = _defaultViewOrder.filter(function(v) {
+  _hiddenViews = _allAvailableViews.filter(function(v) {
     return _currentViewOrder.indexOf(v) === -1;
   });
   _closeArrangeViewsModal();
@@ -81,7 +84,9 @@ function _cancelArrangeViews() {
 /** Reset view order to default */
 function _resetViewOrder() {
   _currentViewOrder = _defaultViewOrder.slice();
-  _hiddenViews = [];
+  _hiddenViews = _allAvailableViews.filter(function(v) {
+    return _currentViewOrder.indexOf(v) === -1;
+  });
   _renderArrangeViewsGrid();
   setSaveButtonUnsaved();
 }
@@ -93,6 +98,9 @@ function _renderArrangeViewsGrid() {
   if (!grid || !hidden) return;
   grid.innerHTML = '';
   hidden.innerHTML = '';
+
+  // Mutual exclusion: Notebook vs Notes/Checklists
+  _applyNotebookExclusion();
 
   // Omni is always fixed first (non-draggable)
   var omniItem = document.createElement('div');
@@ -115,6 +123,59 @@ function _renderArrangeViewsGrid() {
   });
 
   _setupArrangeViewsDrag();
+}
+
+/**
+ * Apply mutual exclusion between Notebook and Notes/Checklists.
+ * Called after any drag-drop operation that changes the view order.
+ * When both sides are present, the most recently added item wins:
+ * - If Notes/Checklists was just added (both present): Notebook moves to hidden
+ * - If Notebook was just added (both present): Notes & Checklists move to hidden
+ * - If only one side is present: no conflict, nothing to do
+ */
+function _applyNotebookExclusion() {
+  var hasNotebook = _currentViewOrder.indexOf('Notebook') !== -1;
+  var hasNotes = _currentViewOrder.indexOf('Notes') !== -1;
+  var hasChecklists = _currentViewOrder.indexOf('Checklists') !== -1;
+  var hasNotesOrChecklists = hasNotes || hasChecklists;
+
+  // No conflict if only one side is present
+  if (!hasNotebook || !hasNotesOrChecklists) return false;
+
+  // Both sides present — the last item added wins.
+  // Since the drop handler appends/inserts the dragged item before calling render,
+  // we determine the winner by checking which item appears LATER in the array
+  // (the most recently inserted item is typically at a higher index or was just spliced in).
+  // Simpler heuristic: Notes/Checklists are the "default" views, so if they appear
+  // alongside Notebook, the user most likely just dragged one of them in → Notebook loses.
+  // BUT if Notebook appears after Notes/Checklists, the user dragged Notebook in → Notes/Checklists lose.
+  var nbIdx = _currentViewOrder.indexOf('Notebook');
+  var notesIdx = hasNotes ? _currentViewOrder.indexOf('Notes') : -1;
+  var checklistsIdx = hasChecklists ? _currentViewOrder.indexOf('Checklists') : -1;
+  var latestNcIdx = Math.max(notesIdx, checklistsIdx);
+
+  // The item with the higher index was added more recently (dropped after existing items)
+  // But this heuristic isn't reliable since items can be inserted at any position.
+  // Better approach: use a flag set by the drop handler.
+  if (window._lastDroppedView === 'Notebook') {
+    // Notebook was just dropped in — remove Notes & Checklists
+    ['Notes', 'Checklists'].forEach(function(v) {
+      var idx = _currentViewOrder.indexOf(v);
+      if (idx !== -1) {
+        _currentViewOrder.splice(idx, 1);
+        if (_hiddenViews.indexOf(v) === -1) _hiddenViews.push(v);
+      }
+    });
+  } else {
+    // Notes or Checklists was just dropped in — remove Notebook
+    var idx = _currentViewOrder.indexOf('Notebook');
+    if (idx !== -1) {
+      _currentViewOrder.splice(idx, 1);
+      if (_hiddenViews.indexOf('Notebook') === -1) _hiddenViews.push('Notebook');
+    }
+  }
+  window._lastDroppedView = null;
+  return true;
 }
 
 /** Create a single view tab item element */
@@ -228,6 +289,7 @@ function _setupArrangeViewsDrag() {
         _hiddenViews.splice(targetIdx, 0, draggedView);
       }
 
+      window._lastDroppedView = draggedView;
       _renderArrangeViewsGrid();
       setSaveButtonUnsaved();
     });
@@ -245,6 +307,7 @@ function _setupArrangeViewsDrag() {
     _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
     _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
     _currentViewOrder.push(draggedView);
+    window._lastDroppedView = draggedView;
     _renderArrangeViewsGrid();
     setSaveButtonUnsaved();
   });
@@ -258,6 +321,7 @@ function _setupArrangeViewsDrag() {
     _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
     _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
     _hiddenViews.push(draggedView);
+    window._lastDroppedView = draggedView;
     _renderArrangeViewsGrid();
     setSaveButtonUnsaved();
   });
@@ -346,6 +410,7 @@ function _setupArrangeViewsTouch(grid, hiddenZone) {
             _hiddenViews.splice(targetIdx, 0, draggedView);
           }
 
+          window._lastDroppedView = draggedView;
           _renderArrangeViewsGrid();
           setSaveButtonUnsaved();
         } else {
@@ -356,6 +421,7 @@ function _setupArrangeViewsTouch(grid, hiddenZone) {
             _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
             _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
             _hiddenViews.push(draggedView);
+            window._lastDroppedView = draggedView;
             _renderArrangeViewsGrid();
             setSaveButtonUnsaved();
           } else if (touch.clientX >= gridRect.left && touch.clientX <= gridRect.right &&
@@ -363,6 +429,7 @@ function _setupArrangeViewsTouch(grid, hiddenZone) {
             _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
             _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
             _currentViewOrder.push(draggedView);
+            window._lastDroppedView = draggedView;
             _renderArrangeViewsGrid();
             setSaveButtonUnsaved();
           }

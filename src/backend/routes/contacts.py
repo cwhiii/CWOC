@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, 
 
 from src.backend.db import (
     DB_PATH, CONTACT_IMAGES_DIR, serialize_json_field, deserialize_json_field,
-    compute_display_name,
+    compute_display_name, get_next_sync_version,
 )
 from src.backend.models import Contact
 from src.backend.serializers import vcard_parse, vcard_print, csv_export, csv_import
@@ -143,6 +143,10 @@ def create_contact(contact: Contact, request: Request):
         db_fields = _serialize_contact_for_db(contact)
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
+
         cursor.execute(
             """
             INSERT INTO contacts (
@@ -151,8 +155,8 @@ def create_contact(contact: Contact, request: Request):
                 x_handles, websites, dates, has_signal, signal_username, pgp_key, favorite,
                 color, organization, social_context, image_url, notes, tags,
                 shared_to_vault,
-                created_datetime, modified_datetime, owner_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_datetime, modified_datetime, owner_id, sync_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contact_id,
@@ -184,6 +188,7 @@ def create_contact(contact: Contact, request: Request):
                 current_time,
                 current_time,
                 user_id,
+                sync_version,
             ),
         )
         # Audit logging for contact creation
@@ -569,6 +574,10 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
         db_fields = _serialize_contact_for_db(contact)
         if db_fields.get("image_url") is None and existing_row.get("image_url"):
             db_fields["image_url"] = existing_row["image_url"]
+
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
+
         cursor.execute(
             """
             UPDATE contacts SET
@@ -578,7 +587,7 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
                 has_signal = ?, signal_username = ?, pgp_key = ?, favorite = ?,
                 color = ?, organization = ?, social_context = ?, image_url = ?,
                 notes = ?, tags = ?, shared_to_vault = ?,
-                modified_datetime = ?
+                modified_datetime = ?, sync_version = ?
             WHERE id = ?
             """,
             (
@@ -589,7 +598,8 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
                 db_fields["websites"], db_fields["dates"], db_fields["has_signal"], db_fields["signal_username"],
                 db_fields["pgp_key"], db_fields["favorite"], db_fields["color"],
                 db_fields["organization"], db_fields["social_context"], db_fields["image_url"],
-                db_fields["notes"], db_fields["tags"], db_fields["shared_to_vault"], current_time, contact_id,
+                db_fields["notes"], db_fields["tags"], db_fields["shared_to_vault"], current_time,
+                sync_version, contact_id,
             ),
         )
         try:
@@ -645,9 +655,11 @@ def delete_contact(contact_id: str, request: Request):
         contact_display_name = existing[1]
 
         current_time = datetime.now().isoformat()
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
         cursor.execute(
-            "UPDATE contacts SET deleted = 1, deleted_datetime = ?, modified_datetime = ? WHERE id = ?",
-            (current_time, current_time, contact_id),
+            "UPDATE contacts SET deleted = 1, deleted_datetime = ?, modified_datetime = ?, sync_version = ? WHERE id = ?",
+            (current_time, current_time, sync_version, contact_id),
         )
         try:
             actor = get_actor_from_request(request)

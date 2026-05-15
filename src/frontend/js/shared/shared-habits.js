@@ -582,18 +582,22 @@ function _getPreviousPeriodDate(chit, currentPeriod) {
 async function _persistHabitRollover(chit) {
   if (!chit || !chit.id) return;
   try {
-    // Strip fields not in the Chit model to avoid 422
-    var payload = Object.assign({}, chit);
-    delete payload.owner_id; delete payload.effective_role; delete payload.assigned_to_display_name;
-    delete payload.deleted_datetime; delete payload.owner_display_name; delete payload.owner_username;
-    delete payload.habit_periods; delete payload.email_account_id;
-    var resp = await fetch('/api/chits/' + chit.id, {
-      method: 'PUT',
+    // Use PATCH /fields to update only the rollover-affected fields
+    // This avoids 422 errors from type mismatches when sending the full chit via PUT
+    var payload = {
+      habit_success: chit.habit_success,
+      recurrence_exceptions: chit.recurrence_exceptions || []
+    };
+    if (chit.status !== undefined) payload.status = chit.status || '';
+    var resp = await fetch('/api/chits/' + chit.id + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     if (!resp.ok) {
-      console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status);
+      var detail = '';
+      try { var errData = await resp.json(); detail = errData.detail || ''; } catch(e) {}
+      console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status, detail);
     }
   } catch (err) {
     console.error('[_persistHabitRollover] Error saving rollover for chit ' + chit.id + ':', err);

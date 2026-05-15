@@ -3,13 +3,18 @@
 Validates the cwoc_session cookie on every request, injects user identity
 into request.state, and periodically cleans up expired sessions.
 
+Also supports Bearer token authentication for mobile device tokens:
+if the session cookie check fails, checks for an Authorization: Bearer <token>
+header and validates against the device_tokens table.
+
 Excluded paths (no auth required):
-  POST /api/auth/login, GET /login, GET /health,
+  POST /api/auth/login, POST /api/auth/device-token, GET /login, GET /health,
   GET /sw.js, GET /manifest.json,
   GET /api/push/vapid-public-key,
   /static/*, /frontend/*, /data/*, /pwa/*
 """
 
+import hashlib
 import logging
 import sqlite3
 from datetime import datetime, timedelta
@@ -55,6 +60,10 @@ def _is_excluded(path: str, method: str) -> bool:
 
     # Login API endpoint
     if path == "/api/auth/login" and method == "POST":
+        return True
+
+    # Device token creation (requires username/password auth, not token auth)
+    if path == "/api/auth/device-token" and method == "POST":
         return True
 
     # Push VAPID public key (needed before user authenticates on new devices)
@@ -240,7 +249,46 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 request.state.username = _authenticated_username
                 return await call_next(request)
 
-        # No valid session — return appropriate error
+        # --- Bearer token authentication (device tokens for mobile app) ---
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw_token = auth_header[7:]
+            token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    "SELECT dt.id AS device_id, dt.user_id, dt.revoked, u.username, u.is_active "
+                    "FROM device_tokens dt JOIN users u ON dt.user_id = u.id "
+                    "WHERE dt.token_hash = ?",
+                    (token_hash,),
+                ).fetchone()
+
+                if row and not row["revoked"] and row["is_active"]:
+                    # Valid device token — update last_seen_datetime
+                    try:
+                        now = utcnow_iso()
+                        conn.execute(
+                            "UPDATE device_tokens SET last_seen_datetime = ? WHERE id = ?",
+                            (now, row["device_id"]),
+                        )
+                        conn.commit()
+                    except Exception as e:
+                        logger.warning(f"Auth middleware: failed to update last_seen for device {row['device_id']}: {e}")
+
+                    request.state.user_id = row["user_id"]
+                    request.state.username = row["username"]
+                    request.state.device_id = row["device_id"]
+                    return await call_next(request)
+            except Exception as e:
+                logger.error(f"Auth middleware Bearer token error (path={path}): {e}")
+            finally:
+                if conn:
+                    conn.close()
+
+        # No valid session or token — return appropriate error
         if path.startswith("/api/"):
             return JSONResponse(
                 status_code=401,

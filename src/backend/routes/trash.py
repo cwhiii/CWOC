@@ -9,7 +9,7 @@ Admins see all deleted chits across all users.
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -26,6 +26,32 @@ def _is_admin(conn, user_id: str) -> bool:
         "SELECT is_admin FROM users WHERE id = ?", (user_id,)
     ).fetchone()
     return bool(row and row[0])
+
+
+def _can_purge_record(cursor, sync_version: int, owner_id: str) -> bool:
+    """Check if all active devices for this user have synced past this record's version.
+
+    Returns True if purge is safe (all active devices have seen this version,
+    or no devices are registered). Returns False if any active device hasn't
+    synced past it yet.
+
+    Devices with last_seen_datetime older than 90 days are excluded from this
+    check — stale devices don't block cleanup.
+    """
+    stale_cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+
+    row = cursor.execute(
+        "SELECT MIN(last_sync_version) AS min_version FROM device_tokens "
+        "WHERE user_id = ? AND revoked = 0 AND last_seen_datetime >= ?",
+        (owner_id, stale_cutoff),
+    ).fetchone()
+
+    # No active (non-stale, non-revoked) devices — allow purge (web-only user)
+    if row is None or row["min_version"] is None:
+        return True
+
+    # Only purge if all active devices have synced past this record's version
+    return sync_version <= row["min_version"]
 
 
 @router.get("/api/trash")
@@ -139,7 +165,7 @@ def purge_chit(chit_id: str, request: Request):
 
         # Verify the chit exists and is deleted
         row = cursor.execute(
-            "SELECT id, owner_id, email_message_id, email_status FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
+            "SELECT id, owner_id, sync_version, email_message_id, email_status FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Chit not found in trash")
@@ -147,6 +173,14 @@ def purge_chit(chit_id: str, request: Request):
         # Non-admins can only purge their own chits
         if row["owner_id"] != user_id and not _is_admin(conn, user_id):
             raise HTTPException(status_code=403, detail="Not authorized")
+
+        # Tombstone retention: don't purge if any active device hasn't synced past it
+        chit_sync_version = row["sync_version"] or 0
+        if not _can_purge_record(cursor, chit_sync_version, row["owner_id"]):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot purge: one or more devices have not yet synced this deletion"
+            )
 
         # Cascade cleanup: if this is an email chit, null out any nest_thread_id references
         if row["email_message_id"] or row["email_status"]:
@@ -271,7 +305,7 @@ def purge_contact(contact_id: str, request: Request):
         cursor = conn.cursor()
 
         row = cursor.execute(
-            "SELECT id, owner_id, shared_to_vault FROM contacts WHERE id = ? AND deleted = 1", (contact_id,)
+            "SELECT id, owner_id, shared_to_vault, sync_version FROM contacts WHERE id = ? AND deleted = 1", (contact_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Contact not found in trash")
@@ -281,6 +315,15 @@ def purge_contact(contact_id: str, request: Request):
         is_vault = bool(row["shared_to_vault"])
         if not is_owner and not is_vault and not _is_admin(conn, user_id):
             raise HTTPException(status_code=403, detail="Not authorized")
+
+        # Tombstone retention: don't purge if any active device hasn't synced past it
+        contact_owner = row["owner_id"] or user_id
+        contact_sync_version = row["sync_version"] or 0
+        if not _can_purge_record(cursor, contact_sync_version, contact_owner):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot purge: one or more devices have not yet synced this deletion"
+            )
 
         # Remove vcf file if it exists
         contacts_dir = "/app/data/contacts/"

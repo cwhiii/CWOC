@@ -234,7 +234,7 @@ function displayHabitsView(chitsToDisplay) {
   });
 
   var habitsContainer = document.createElement('div');
-  habitsContainer.className = 'checklist-view';
+  habitsContainer.className = 'tasks-view';
 
   // 6.8 — Sort: incomplete first, completed last
   _renderHabitCards(habitsContainer, habitData, windowDays);
@@ -265,7 +265,7 @@ async function _fetchAndRenderRuleHabits(container) {
 
   // Create a sub-container for rule habits
   var rulesContainer = document.createElement('div');
-  rulesContainer.className = 'checklist-view';
+  rulesContainer.className = 'tasks-view';
   _renderHabitRuleCards(rulesContainer, rules);
   container.appendChild(rulesContainer);
 
@@ -807,7 +807,7 @@ function _optimisticHabitCardUpdate(card, chit, newSuccess, goal) {
     card.style.opacity = '0';
 
     setTimeout(function() {
-      var container = card.closest('.checklist-view');
+      var container = card.closest('.tasks-view');
       if (!container) return;
 
       // Update card state

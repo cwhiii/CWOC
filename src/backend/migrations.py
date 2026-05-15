@@ -3272,3 +3272,182 @@ def migrate_add_default_view():
     finally:
         if conn:
             conn.close()
+
+
+# ── Mobile Sync: sync_version columns and indexes ────────────────────────
+
+def migrate_add_sync_version():
+    """Add sync_version and has_unviewed_conflict columns for mobile sync support.
+
+    Adds to chits: sync_version (INTEGER DEFAULT 0), has_unviewed_conflict (BOOLEAN DEFAULT 0)
+    Adds to contacts: sync_version (INTEGER DEFAULT 0)
+    Adds to settings: sync_version (INTEGER DEFAULT 0)
+
+    Creates indexes:
+    - idx_chits_sync_version on chits(sync_version)
+    - idx_chits_owner_sync on chits(owner_id, sync_version)
+    - idx_contacts_sync_version on contacts(sync_version)
+
+    Creates sync_state table (single-row global version counter).
+    Creates device_tokens table (long-lived device authentication).
+
+    Backfills existing records with sequential sync_version values ordered by
+    modified_datetime (chits first, then contacts, then settings). Updates
+    sync_state.next_version to max_assigned + 1. Only runs if records still
+    have sync_version = 0 (idempotent on subsequent startups).
+
+    Fully idempotent — checks column existence before adding, uses
+    CREATE TABLE/INDEX IF NOT EXISTS, and INSERT OR IGNORE for the seed row.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── chits table ──────────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "sync_version" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN sync_version INTEGER DEFAULT 0")
+            logger.info("Added sync_version column to chits table")
+        if "has_unviewed_conflict" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN has_unviewed_conflict BOOLEAN DEFAULT 0")
+            logger.info("Added has_unviewed_conflict column to chits table")
+
+        # ── contacts table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(contacts)")
+        contact_cols = {row[1] for row in cursor.fetchall()}
+
+        if "sync_version" not in contact_cols:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN sync_version INTEGER DEFAULT 0")
+            logger.info("Added sync_version column to contacts table")
+
+        # ── settings table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "sync_version" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN sync_version INTEGER DEFAULT 0")
+            logger.info("Added sync_version column to settings table")
+
+        # ── indexes ──────────────────────────────────────────────────────
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chits_sync_version
+            ON chits (sync_version)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chits_owner_sync
+            ON chits (owner_id, sync_version)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_contacts_sync_version
+            ON contacts (sync_version)
+        """)
+
+        # ── sync_state table (global version counter) ────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sync_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                next_version INTEGER NOT NULL DEFAULT 1
+            )
+        """)
+        cursor.execute("INSERT OR IGNORE INTO sync_state (id, next_version) VALUES (1, 1)")
+        logger.info("sync_state table ready")
+
+        # ── device_tokens table (long-lived device authentication) ───────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS device_tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                device_name TEXT NOT NULL DEFAULT 'Unknown Device',
+                created_datetime TEXT NOT NULL,
+                last_seen_datetime TEXT NOT NULL,
+                last_sync_version INTEGER DEFAULT 0,
+                revoked BOOLEAN DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_device_tokens_user
+            ON device_tokens (user_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_device_tokens_hash
+            ON device_tokens (token_hash)
+        """)
+        logger.info("device_tokens table ready")
+
+        # ── Backfill existing records with sequential sync_version ────────
+        # Only runs if any records still have sync_version = 0 (idempotent).
+        # Assigns sequential versions: chits (by modified_datetime), then
+        # contacts (by modified_datetime), then settings (by user_id).
+        cursor.execute("SELECT COUNT(*) FROM chits WHERE sync_version = 0")
+        unversioned_chits = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM contacts WHERE sync_version = 0")
+        unversioned_contacts = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM settings WHERE sync_version = 0")
+        unversioned_settings = cursor.fetchone()[0]
+
+        if unversioned_chits + unversioned_contacts + unversioned_settings > 0:
+            version = 1
+
+            # Chits — ordered by modified_datetime (NULLs last)
+            cursor.execute("""
+                SELECT id FROM chits
+                WHERE sync_version = 0
+                ORDER BY COALESCE(modified_datetime, '9999') ASC
+            """)
+            for (chit_id,) in cursor.fetchall():
+                cursor.execute(
+                    "UPDATE chits SET sync_version = ? WHERE id = ?",
+                    (version, chit_id)
+                )
+                version += 1
+
+            # Contacts — ordered by modified_datetime (NULLs last)
+            cursor.execute("""
+                SELECT id FROM contacts
+                WHERE sync_version = 0
+                ORDER BY COALESCE(modified_datetime, '9999') ASC
+            """)
+            for (contact_id,) in cursor.fetchall():
+                cursor.execute(
+                    "UPDATE contacts SET sync_version = ? WHERE id = ?",
+                    (version, contact_id)
+                )
+                version += 1
+
+            # Settings — no modified_datetime column, order by user_id
+            cursor.execute("""
+                SELECT user_id FROM settings
+                WHERE sync_version = 0
+                ORDER BY user_id ASC
+            """)
+            for (uid,) in cursor.fetchall():
+                cursor.execute(
+                    "UPDATE settings SET sync_version = ? WHERE user_id = ?",
+                    (version, uid)
+                )
+                version += 1
+
+            # Update sync_state.next_version to 1 higher than max assigned
+            cursor.execute(
+                "UPDATE sync_state SET next_version = ? WHERE id = 1",
+                (version,)
+            )
+            logger.info(f"Backfilled {unversioned_chits} chits, {unversioned_contacts} contacts, "
+                        f"{unversioned_settings} settings with sync_version 1–{version - 1}; "
+                        f"next_version set to {version}")
+
+        conn.commit()
+        logger.info("Sync version migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_sync_version: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

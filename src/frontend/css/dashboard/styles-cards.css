@@ -124,11 +124,32 @@
 .chit-card .chit-meta {
     display: none; /* hidden — replaced by chit-header-row */
 }
+
+/* ── Content zone distinction: editable area below header gets subtle recess ─ */
+/* Applies to non-calendar, non-email views where cards have editable content */
+.tasks-view .chit-card > .chit-header-row ~ *,
+.checklist-view .chit-card > .chit-header-row ~ *,
+.alarms-view .chit-card > .chit-header-row ~ *,
+.projects-view .chit-card > .chit-header-row ~ * {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 3px;
+    padding: 0.3em 0.5em;
+    margin-top: 0.3em;
+}
+/* Notes/Notebook: note-content already has its own background — just add margin */
+.notebook-view .chit-card > ul {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 3px;
+    padding: 0.3em 0.5em;
+    margin-top: 0.3em;
+}
+
 .chit-card.completed-task {
     opacity: 0.5;
 }
 
 /* ── Consistent spacing for all non-calendar views ────────────────────────── */
+.tasks-view,
 .alarms-view,
 .projects-view {
     padding: 0.75em;
@@ -143,6 +164,7 @@
     color: #2b1e0f;
     overscroll-behavior: contain;
 }
+.tasks-view .chit-card,
 .alarms-view .chit-card,
 .projects-view .chit-card {
     overflow: visible;

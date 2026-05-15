@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, `migrate_omni_view_settings()`, and `migrate_add_timezone_column()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, `ha_router`, `sync_router`, and `devices_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, `migrate_omni_view_settings()`, `migrate_add_timezone_column()`, and `migrate_add_sync_version()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -95,6 +95,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `row_to_dict(cursor, row)` | Convert a sqlite3 row tuple to a dict using cursor.description (shared helper) |
 | `require_admin(request)` | Check that the requesting user is an admin; return user_id or raise 401/403 (shared helper) |
 | `seed_version_info()` | Seed initial version info from `/app/src/VERSION` if table is empty |
+| `get_next_sync_version(cursor)` | Atomically get and increment the global sync version counter in `sync_state` table. Must be called within the same transaction as the record write. Returns the version number to assign |
 
 ### 1.5 `src/backend/migrations.py` — Database Migrations
 
@@ -166,6 +167,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_custom_view_filters()` | Add `custom_view_filters` (TEXT) column to settings table for per-view custom filter/sort defaults. Fully idempotent |
 | `migrate_add_timezone_column()` | Add `timezone` (TEXT DEFAULT NULL) column to chits table for anchored/floating timezone support. Uses column-existence-check pattern. Fully idempotent |
 | `migrate_add_default_view()` | Add `default_view` (TEXT DEFAULT 'Calendar') column to settings table for user's preferred landing view. Fully idempotent |
+| `migrate_add_sync_version()` | Add `sync_version` (INTEGER DEFAULT 0) and `has_unviewed_conflict` (BOOLEAN DEFAULT 0) columns to chits table; add `sync_version` (INTEGER DEFAULT 0) to contacts and settings tables; create `sync_state` table (single-row global counter); create `device_tokens` table (id, user_id, token_hash, device_name, created_datetime, last_seen_datetime, last_sync_version, revoked); create indexes `idx_chits_sync_version`, `idx_chits_owner_sync`, `idx_contacts_sync_version`, `idx_device_tokens_user`, `idx_device_tokens_hash`; backfill existing records with sequential sync_version values based on `modified_datetime` order. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -323,16 +325,16 @@ Uses Python stdlib only — `hashlib.pbkdf2_hmac` with SHA-256, `os.urandom` for
 
 ### 1.11 `src/backend/middleware.py` — Authentication Middleware
 
-Session-based authentication middleware for all CWOC requests.
+Session-based authentication middleware for all CWOC requests. Also supports Bearer token authentication for mobile device tokens: if the session cookie check fails, checks for an `Authorization: Bearer <token>` header and validates against the `device_tokens` table (sha256 hash lookup). On successful Bearer auth, sets `request.state.device_id` in addition to `user_id` and `username`.
 
 | Symbol | Description |
 |--------|-------------|
 | `SESSION_COOKIE_NAME` | Cookie name constant: `"cwoc_session"` |
 | `_INACTIVITY_SECONDS` | Inactivity timeout: 24 hours (86,400 seconds) |
 | `_CLEANUP_INTERVAL` | Periodic cleanup interval: every 100 requests |
-| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, kiosk page and API, PWA files: `/sw.js`, `/manifest.json`, `/pwa/*`, `/api/push/vapid-public-key`) |
+| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, kiosk page and API, PWA files: `/sw.js`, `/manifest.json`, `/pwa/*`, `/api/push/vapid-public-key`, `/api/auth/device-token`) |
 | `_cleanup_expired_sessions()` | Delete sessions past their `expires_datetime` or inactive > 24h |
-| `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie, injects `request.state.user_id` and `request.state.username`, returns 401 for API paths or redirects to `/login` for page paths |
+| `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie first; if no valid session, checks `Authorization: Bearer <token>` header against `device_tokens` table (sha256 hash lookup, non-revoked, active user); injects `request.state.user_id`, `request.state.username`, and `request.state.device_id` (for Bearer auth); updates `last_seen_datetime` on device token; returns 401 for API paths or redirects to `/login` for page paths |
 
 ### 1.12 `src/backend/test_auth.py` — Auth Property Tests
 
@@ -471,6 +473,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception |
 | `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit |
 | `POST /api/chits/{chit_id}/snooze` | `snooze_chit(chit_id, request)` | Snooze/unsnooze a chit. Body: `{"minutes": N}` or `{"until": "ISO"}` or `{"until": null}` to unsnooze. Owner-only |
+| `POST /api/chit/{chit_id}/dismiss-conflict` | `dismiss_conflict(chit_id, request)` | Dismiss the unviewed conflict flag on a chit. Sets `has_unviewed_conflict = 0`, assigns new sync_version. Requires owner or manager access |
 
 **Internal helpers:**
 
@@ -522,6 +525,7 @@ All trash endpoints are user-scoped: regular users see/act on only their own del
 | Helper | Description |
 |--------|-------------|
 | `_is_admin(conn, user_id)` | Check if the given user has admin privileges |
+| `_can_purge_record(cursor, sync_version, owner_id)` | Check if all active (non-revoked, seen within 90 days) device tokens for the user have `last_sync_version >= sync_version`. Returns True if safe to purge (all devices have synced past it), False if any active device hasn't synced yet. Devices with `last_seen_datetime` older than 90 days are excluded from the check |
 
 ### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
@@ -1348,6 +1352,45 @@ Provides CRUD endpoints for managing Custom Zones — user-defined named collect
 |----------|-------------|
 | `_slugify_zone_name(name)` | Generate zone_id from name: lowercase, replace non-alphanumeric with `_`, collapse consecutive, strip leading/trailing, prefix `cz_` |
 
+### 1.50 `src/backend/routes/sync.py` — Sync API (Pull & Push)
+
+Provides endpoints for mobile sync: pulling changes since a given sync version, and pushing local changes from mobile clients with field-level conflict resolution.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/sync/changes` | `get_sync_changes(request, since, include)` | Pull changes since a given sync version. Query params: `since` (int, default 0), `include` (comma-separated: chits, contacts, settings). Returns `{server_version, chits: [...], contacts: [...], settings: {...}}`. Includes soft-deleted chits. Updates `last_sync_version` on the requesting device token |
+| `POST /api/sync/push` | `sync_push(request)` | Push local changes from mobile clients. Accepts JSON body: `{chits: [...], contacts: [...], settings: {...}}`. For each record: creates if new, updates if no conflict, resolves via field-level LWW merge if conflict. Returns per-record status (accepted/created/merged/conflict/error). Writes audit log entries for conflicts |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_deserialize_chit_for_sync(chit)` | Deserialize JSON fields on a chit dict in place for sync response. Mirrors the deserialization done in the GET /api/chits endpoint |
+| `_deserialize_contact_for_sync(contact)` | Deserialize JSON fields on a contact dict in place for sync response |
+| `_resolve_conflict(server_chit, client_chit)` | Field-level conflict resolution for chits using Last-Writer-Wins (LWW) on `modified_datetime`. Returns `(merged_dict, conflict_fields_list)`. Sets `has_unviewed_conflict = true` on the merged record |
+| `_resolve_contact_conflict(server_contact, client_contact)` | Field-level conflict resolution for contacts using LWW on `modified_datetime`. Returns `(merged_dict, conflict_fields_list)` |
+| `_build_chit_insert_values(chit, user_id, sync_version, current_time)` | Build the column names and values tuple for inserting a new chit from a sync push |
+| `_build_chit_update_values(chit, sync_version, current_time, chit_id)` | Build the SET clause values tuple for updating an existing chit from a sync push |
+| `_apply_settings_from_push(cursor, user_id, settings_data, sync_version, current_time)` | Apply settings from a sync push using LWW on entire record (no field-level merge) |
+
+### 1.51 `src/backend/routes/devices.py` — Device Token Management
+
+Provides endpoints for creating device tokens (mobile app authentication), listing registered devices, revoking device tokens, and renaming devices.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/auth/device-token` | `create_device_token(body)` | Validate username/password credentials and issue a new device token. Generates token via `secrets.token_urlsafe(32)`, stores sha256 hash in `device_tokens` table. Returns raw token (one time only), device_id, device_name, created_datetime. No existing session required |
+| `GET /api/devices` | `list_devices(request)` | Return all non-revoked device tokens for the authenticated user (id, device_name, created_datetime, last_seen_datetime, last_sync_version — never the token itself) |
+| `DELETE /api/devices/{device_id}` | `revoke_device(device_id, request)` | Revoke a device token (sets `revoked = 1`). Immediately rejects future requests using that token. Verifies device belongs to authenticated user |
+| `PATCH /api/devices/{device_id}` | `rename_device(device_id, body, request)` | Update the `device_name` for a registered device token. Rejects rename on revoked devices. Verifies device belongs to authenticated user |
+
+**Pydantic models:**
+
+| Class | Description |
+|-------|-------------|
+| `DeviceTokenRequest` | Create device token request — `username` (str), `password` (str), `device_name` (Optional[str], default "Unknown Device") |
+| `DeviceRenameRequest` | Rename device request — `device_name` (str) |
+
 ---
 
 ## 2. Frontend JavaScript
@@ -1637,11 +1680,12 @@ Universal hotkey dispatch loaded by all pages. Contains the tab map and action k
 
 | Function | Description |
 |----------|-------------|
-| `_cwocHotkeyTabMap` | Object mapping lowercase keys to tab names (c→Calendar, h→Checklists, etc.) |
+| `_cwocHotkeyTabMap` | Object mapping lowercase keys to tab names (c→Calendar, h→Checklists, b→Notebook, etc.) |
 | `_cwocIsDashboard()` | Returns true if the current page is the main dashboard |
 | `_cwocSwitchTab(tabName)` | Switch to a tab — calls `filterChits()` on dashboard, navigates via `cwoc_jump_tab` on secondary pages |
 | `_cwocHandleActionHotkey(keyLower, e)` | Handle action keys (K, S, W, L, R); returns true if handled |
 | `_cwocDispatchHotkey(e)` | Main entry point — dispatches tab and action hotkeys; returns true if consumed |
+| `_resolveHotkeyTab(keyLower)` | Resolve a hotkey to the correct tab, accounting for Notebook (n/h → Notebook when active) |
 
 #### shared.js (coordinator)
 
@@ -2011,6 +2055,12 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | Function | Description |
 |----------|-------------|
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in masonry column layout with inline editing |
+
+#### main-views-notebook.js
+
+| Function | Description |
+|----------|-------------|
+| `displayNotebookView(chitsToDisplay)` | Render the Notebook tab — combined Notes + Checklists in masonry column layout |
 
 #### main-views-projects.js
 
@@ -3231,11 +3281,12 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_openArrangeViewsModal()` | Open the Arrange Views modal, load current view order from settings |
 | `_closeArrangeViewsModal()` | Close the Arrange Views modal |
 | `_resetViewOrder()` | Reset view order to default (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alarms) |
-| `_renderArrangeViewsGrid()` | Render draggable tab buttons in the arrange views modal grid |
+| `_renderArrangeViewsGrid()` | Render draggable tab buttons in the arrange views modal grid; auto-hides Notes/Checklists when Notebook is active |
 | `_setupArrangeViewsDrag()` | Set up HTML5 drag-and-drop for the arrange views grid |
 | `_setupArrangeViewsTouch(grid)` | Set up touch-based drag support for mobile devices |
 | `_getViewItemAtPoint(grid, x, y, exclude)` | Find the view-tab-item element at a given point (excluding the dragged item) |
 | `_collectViewOrder()` | Collect the current view order for saving; returns null if matches default |
+| `_allAvailableViews` | All available views including hidden-by-default ones (Notebook) |
 | `_resetSortOrders()` | Reset all sort orders and preferences via confirmation modal; calls DELETE /api/sort-orders and clears localStorage |
 
 #### settings-badges.js
@@ -4260,6 +4311,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-views-tasks.js"></script>
 <script src="/frontend/js/dashboard/main-views-habits.js"></script>
 <script src="/frontend/js/dashboard/main-views-notes.js"></script>
+<script src="/frontend/js/dashboard/main-views-notebook.js"></script>
 <script src="/frontend/js/dashboard/main-views-projects.js"></script>
 <script src="/frontend/js/dashboard/main-views-alarms.js"></script>
 <script src="/frontend/js/dashboard/main-views-indicators.js"></script>
@@ -4423,14 +4475,14 @@ New frontend pages added for Rules Engine:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault, migrate_create_rules_tables, migrate_add_habit_mode_to_rules)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault, migrate_create_rules_tables, migrate_add_habit_mode_to_rules, migrate_add_sync_version)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
   ├── src.backend.schedulers  (start_rules_scheduler)
-  └── src.backend.routes.*    (all 15 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, attachments_router, and rules_router)
+  └── src.backend.routes.*    (all 17 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, attachments_router, rules_router, bundles_router, custom_objects_router, custom_zones_router, ha_router, sync_router, and devices_router)
 
 src/backend/routes/chits.py
-  ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
+  ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, get_next_sync_version, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
   ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing)
   ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
@@ -4438,7 +4490,7 @@ src/backend/routes/chits.py
   └── src.backend.rules_engine (dispatch_trigger — called after chit create/update/email_received)
 
 src/backend/routes/trash.py
-  └── src.backend.db           (DB_PATH, deserialize_json_field)
+  └── src.backend.db           (DB_PATH, deserialize_json_field, get_next_sync_version)
 
 src/backend/routes/settings.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize)
@@ -4492,6 +4544,14 @@ src/backend/routes/custom_objects.py
 src/backend/routes/custom_zones.py
   ├── src.backend.db           (DB_PATH)
   └── src.backend.models       (CustomZoneCreate, CustomZoneUpdate)
+
+src/backend/routes/sync.py
+  ├── src.backend.db           (DB_PATH, compute_system_tags, deserialize_json_field, get_next_sync_version, serialize_json_field)
+  └── src.backend.routes.audit (insert_audit_entry)
+
+src/backend/routes/devices.py
+  ├── src.backend.auth_utils   (verify_password)
+  └── src.backend.db           (DB_PATH, utcnow_iso)
 
 src/backend/rules_engine.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
@@ -4557,7 +4617,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, `auth_utils.py`, and `cron_parser.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, `ntfy.py`, and `rules.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` and `rules_engine.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` and `rules_engine.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `cron_parser.py` is imported by `schedulers.py` for cron expression parsing. `middleware.py` is imported by `main.py`. `rules_engine.py` is imported by `routes/rules.py` (for `execute_action`), `routes/chits.py` and `routes/contacts.py` (for `dispatch_trigger`), and `schedulers.py` (for condition evaluation and action execution in scheduled rules). All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, `auth_utils.py`, and `cron_parser.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, `ntfy.py`, `rules.py`, and `sync.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` and `rules_engine.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` and `rules_engine.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, `routes/devices.py`, and `migrations.py`. `cron_parser.py` is imported by `schedulers.py` for cron expression parsing. `middleware.py` is imported by `main.py`. `rules_engine.py` is imported by `routes/rules.py` (for `execute_action`), `routes/chits.py` and `routes/contacts.py` (for `dispatch_trigger`), and `schedulers.py` (for condition evaluation and action execution in scheduled rules). All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 
@@ -4611,6 +4671,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views-tasks.js
               │     main-views-habits.js (uses shared-habits.js for fetchHabitRules)
               │     main-views-notes.js
+              │     main-views-notebook.js
               │     main-views-projects.js
               │     main-views-alarms.js
               │     main-views-indicators.js

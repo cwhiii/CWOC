@@ -496,6 +496,7 @@ var _omniLayoutAreas = [
   { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true, column: null, hideWhenEmpty: true },
   { id: 'hst_weather', label: '📊🌤️ HST + Weather', width: 'full', visible: false, column: null, hideWhenEmpty: true },
   { id: 'hst_temp_strip', label: '📊🌡️ HST Weather Strip', width: 'full', visible: false, column: null, hideWhenEmpty: true },
+  { id: 'events_weather', label: '🗓️🌤️ Events & Weather', width: 'full', visible: false, column: null, hideWhenEmpty: true },
   { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
   { id: 'reminders', label: '📢 Reminders', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
   { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true, column: 'left', hideWhenEmpty: true },
@@ -2056,8 +2057,14 @@ class SettingsManager {
     var omniEmailCount = document.getElementById('omni-email-count');
     if (omniEmailCount) omniEmailCount.value = this.settings.omni_email_count || '3';
 
-    var omniNormColors = document.getElementById('omni-normalize-colors');
-    if (omniNormColors) omniNormColors.checked = (this.settings.omni_normalize_colors === '1');
+    var omniColorMode = document.getElementById('omni-color-mode');
+    if (omniColorMode) {
+        var colorVal = this.settings.omni_normalize_colors || 'colored';
+        // Backward compat: '1' = normalized, '0' = colored
+        if (colorVal === '1') colorVal = 'normalized';
+        else if (colorVal === '0') colorVal = 'colored';
+        omniColorMode.value = colorVal;
+    }
 
     _loadOmniLayout(this.settings);
     _renderOmniLayoutGrid();
@@ -2176,7 +2183,7 @@ class SettingsManager {
       session_lifetime: (document.getElementById('session-lifetime-select') || {}).value || '24',
       omni_hst_clock_mode: (document.getElementById('omni-hst-clock-mode') || {}).value || 'both',
       omni_email_count: (document.getElementById('omni-email-count') || {}).value || '3',
-      omni_normalize_colors: document.getElementById('omni-normalize-colors')?.checked ? '1' : '0',
+      omni_normalize_colors: (document.getElementById('omni-color-mode') || {}).value || 'colored',
       omni_layout: _collectOmniLayout(),
       omni_locked_filters: (function() {
         // Sync omni_locked_filters from custom_view_filters for backward compat

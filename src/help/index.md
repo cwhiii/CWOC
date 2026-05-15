@@ -45,4 +45,5 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Ntfy Notifications](/frontend/html/help.html#ntfy-notifications) — Push notifications setup
 - [Home Assistant](/frontend/html/help.html#home-assistant) — Bidirectional HA integration
 - [Cron Triggers & Habit Rules](/frontend/html/help.html#cron-triggers) — Scheduled rules, cron syntax, weather conditions
+- [Mobile Sync](/frontend/html/help.html#mobile-sync) — Device sync, conflict resolution, device management
 - [Install as App](/frontend/html/help.html#install-app) — PWA installation on all platforms

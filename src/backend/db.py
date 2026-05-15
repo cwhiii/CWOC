@@ -349,6 +349,17 @@ def row_to_dict(cursor, row) -> dict:
     return dict(zip(columns, row))
 
 
+def get_next_sync_version(cursor) -> int:
+    """Atomically get and increment the global sync version counter.
+
+    Must be called within the same transaction as the record write.
+    Returns the version number assigned to the current write.
+    """
+    cursor.execute("UPDATE sync_state SET next_version = next_version + 1 WHERE id = 1")
+    cursor.execute("SELECT next_version - 1 FROM sync_state WHERE id = 1")
+    return cursor.fetchone()[0]
+
+
 def require_admin(request) -> str:
     """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
     from fastapi import HTTPException

@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
     compute_system_tags, _build_export_envelope, ensure_tags_in_settings,
+    get_next_sync_version,
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
@@ -380,6 +381,7 @@ def get_all_chits(request: Request):
             chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
             chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
             chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
+            chit["has_unviewed_conflict"] = bool(chit.get("has_unviewed_conflict"))
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -429,6 +431,9 @@ def create_chit(chit: Chit, request: Request):
         # Validate nest_thread_id before saving
         _validate_nest_thread_id(cursor, chit)
 
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
+
         cursor.execute(
             """
             INSERT INTO chits (
@@ -445,8 +450,8 @@ def create_chit(chit: Chit, request: Request):
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
                 attachments, availability, snoozed_until, prerequisites,
-                checklist_autosave, auto_complete_checklist
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                checklist_autosave, auto_complete_checklist, sync_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -517,6 +522,7 @@ def create_chit(chit: Chit, request: Request):
                 serialize_json_field(chit.prerequisites),
                 1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
                 1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
+                sync_version,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -546,6 +552,7 @@ def create_chit(chit: Chit, request: Request):
             **chit.dict(), "id": chit_id, "tags": chit_tags,
             "created_datetime": current_time, "modified_datetime": current_time,
             "owner_id": user_id, "owner_display_name": owner_display_name, "owner_username": owner_username,
+            "sync_version": sync_version, "has_unviewed_conflict": False,
         }
         # Fire-and-forget: dispatch rules engine trigger for chit creation
         try:
@@ -627,6 +634,7 @@ def get_chit(chit_id: str, request: Request):
         chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
         chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
         chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
+        chit["has_unviewed_conflict"] = bool(chit.get("has_unviewed_conflict"))
         chit["effective_role"] = effective_role
 
         # ── Email privacy: strip tracking pixels / external content ──
@@ -750,6 +758,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 elif has_something and (not checklist_ok or not prereqs_ok) and chit.status == "Complete":
                     chit.status = "ToDo"
 
+            # Assign sync_version for mobile sync tracking
+            sync_version = get_next_sync_version(cursor)
+
             # Update existing chit
             cursor.execute(
                 """
@@ -766,7 +777,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
                     attachments = ?, availability = ?, nest_thread_id = ?, snoozed_until = ?,
-                    prerequisites = ?, checklist_autosave = ?, auto_complete_checklist = ?
+                    prerequisites = ?, checklist_autosave = ?, auto_complete_checklist = ?,
+                    sync_version = ?
                 WHERE id = ?
                 """,
                 (
@@ -834,6 +846,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.prerequisites),
                     1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
                     1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
+                    sync_version,
                     chit_id,
                 )
             )
@@ -947,6 +960,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             # Validate nest_thread_id before saving
             _validate_nest_thread_id(cursor, chit)
 
+            # Assign sync_version for mobile sync tracking
+            sync_version = get_next_sync_version(cursor)
+
             cursor.execute(
                 """
                 INSERT INTO chits (
@@ -963,8 +979,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
                     attachments, availability, snoozed_until, prerequisites,
-                    checklist_autosave, auto_complete_checklist
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    checklist_autosave, auto_complete_checklist, sync_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -1035,6 +1051,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.prerequisites),
                     1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
                     1 if (chit.auto_complete_checklist is None or chit.auto_complete_checklist) else 0,
+                    sync_version,
                 )
             )
             # Audit logging for chit creation
@@ -1080,7 +1097,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         except Exception as e:
             logger.error(f"Auto-complete revert cascade failed (best-effort): {str(e)}")
 
-        chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
+        chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time, "sync_version": sync_version, "has_unviewed_conflict": False}
         # Fire-and-forget: dispatch rules engine trigger for chit update or creation
         try:
             trigger = "chit_updated" if existing else "chit_created"
@@ -1147,16 +1164,18 @@ def delete_chit(chit_id: str, request: Request):
         chit_title = chit_dict.get("title")
 
         current_time = datetime.utcnow().isoformat()
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
         # If this is an email chit, also move it to the trash folder
         if chit_dict.get("email_message_id") or chit_dict.get("email_status"):
             cursor.execute(
-                "UPDATE chits SET deleted = 1, email_folder = 'trash', modified_datetime = ? WHERE id = ?",
-                (current_time, chit_id),
+                "UPDATE chits SET deleted = 1, email_folder = 'trash', modified_datetime = ?, sync_version = ? WHERE id = ?",
+                (current_time, sync_version, chit_id),
             )
         else:
             cursor.execute(
-                "UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
-                (current_time, chit_id),
+                "UPDATE chits SET deleted = 1, modified_datetime = ?, sync_version = ? WHERE id = ?",
+                (current_time, sync_version, chit_id),
             )
         # Audit logging for chit deletion
         try:
@@ -1187,7 +1206,7 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
         "title", "note", "location", "all_day", "perpetual", "stealth",
         "habit_success", "habit_goal", "habit_last_action_date",
         "habit_hide_overall", "show_on_calendar", "availability",
-        "snoozed_until", "assigned_to",
+        "snoozed_until", "assigned_to", "recurrence_exceptions",
     }
     conn = None
     try:
@@ -1227,8 +1246,15 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
             set_clauses.append(f"{field} = ?")
             if isinstance(value, bool):
                 values.append(1 if value else 0)
+            elif isinstance(value, (list, dict)):
+                values.append(serialize_json_field(value))
             else:
                 values.append(value)
+
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
+        set_clauses.append("sync_version = ?")
+        values.append(sync_version)
 
         set_clauses.append("modified_datetime = ?")
         values.append(datetime.utcnow().isoformat())
@@ -1621,6 +1647,69 @@ def snooze_chit(chit_id: str, request: Request, body: dict = {}):
     except Exception as e:
         logger.error(f"Error snoozing chit {chit_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to snooze chit: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Conflict dismissal endpoint ───────────────────────────────────────────
+
+@router.post("/api/chit/{chit_id}/dismiss-conflict")
+def dismiss_conflict(chit_id: str, request: Request):
+    """Dismiss the unviewed conflict flag on a chit.
+
+    Sets has_unviewed_conflict = false and assigns a new sync_version
+    so other devices see the flag change.
+
+    Authorization: The requesting user must own the chit or have manager access.
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT owner_id, shares, assigned_to, stealth, tags FROM chits WHERE id = ? AND (deleted = 0 OR deleted IS NULL)",
+            (chit_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+
+        # Build a dict for role resolution
+        chit_dict = dict(row)
+        owner_id = chit_dict.get("owner_id")
+
+        # Load owner settings for tag-level sharing resolution
+        owner_settings = None
+        if owner_id and owner_id != user_id:
+            cursor.execute("SELECT shared_tags FROM settings WHERE user_id = ?", (owner_id,))
+            settings_row = cursor.fetchone()
+            if settings_row and settings_row["shared_tags"]:
+                owner_settings = {"shared_tags": settings_row["shared_tags"]}
+
+        effective_role = resolve_effective_role(chit_dict, user_id, owner_settings)
+        if effective_role is None:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        if effective_role == "viewer":
+            raise HTTPException(status_code=403, detail="You do not have permission to dismiss conflicts on this chit")
+
+        # Clear the conflict flag and assign new sync_version
+        sync_version = get_next_sync_version(cursor)
+        cursor.execute(
+            "UPDATE chits SET has_unviewed_conflict = 0, sync_version = ? WHERE id = ?",
+            (sync_version, chit_id),
+        )
+        conn.commit()
+
+        return {"message": "Conflict dismissed", "sync_version": sync_version}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error dismissing conflict on chit {chit_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to dismiss conflict: {str(e)}")
     finally:
         if conn:
             conn.close()

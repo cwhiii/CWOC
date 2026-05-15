@@ -546,8 +546,18 @@
         padding: 4px;
     }
 
+    /* ── Checklist view: compact ──────────────────────────────────────────── */
+    .checklist-view {
+        padding: 4px;
+    }
+
+    /* ── Notebook view: compact ───────────────────────────────────────────── */
+    .notebook-view {
+        padding: 4px;
+    }
+
     /* ── List views: full width cards ─────────────────────────────────────── */
-    .checklist-view,
+    .tasks-view,
     .alarms-view,
     .projects-view {
         padding: 4px;
@@ -610,7 +620,7 @@
        ═══════════════════════════════════════════════════════════════════════ */
 
     /* ── All list views: full-width, compact ──────────────────────────────── */
-    .checklist-view,
+    .tasks-view,
     .alarms-view,
     .projects-view {
         padding: 4px !important;

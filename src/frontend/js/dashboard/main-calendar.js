@@ -1373,7 +1373,7 @@ function _buildItineraryHabitCard(item, _viSettings, windowDays) {
 
   // Render into a temporary container using the existing habit card renderer
   var tempContainer = document.createElement('div');
-  tempContainer.className = 'checklist-view';
+  tempContainer.className = 'tasks-view';
   if (typeof _renderHabitCards === 'function') {
     _renderHabitCards(tempContainer, habitData, windowDays);
   }

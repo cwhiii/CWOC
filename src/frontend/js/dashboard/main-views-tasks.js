@@ -41,7 +41,7 @@ function displayTasksView(chitsToDisplay) {
   }
 
   const tasksContainer = document.createElement("div");
-  tasksContainer.className = "checklist-view"; // reuse consistent spacing
+  tasksContainer.className = "tasks-view";
 
   taskChits.forEach((chit) => {
     const chitElement = document.createElement("div");
@@ -225,7 +225,7 @@ function displayAssignedToMeView(chitsToDisplay) {
   }
 
   var container = document.createElement('div');
-  container.className = 'checklist-view';
+  container.className = 'tasks-view';
 
   assignedChits.forEach(function(chit) {
     var chitElement = document.createElement('div');

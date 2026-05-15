@@ -23,6 +23,7 @@
 #   src/backend/routes/bundles.py — Email bundle CRUD & rule associations
 #   src/backend/routes/custom_objects.py — Custom Objects registry CRUD & zone assignments
 #   src/backend/routes/custom_zones.py — Custom Zones CRUD (user-defined zone collections)
+#   src/backend/routes/devices.py — Device token auth & management
 #   src/backend/middleware.py   — Auth middleware (session validation)
 #
 # PWA files served directly from src/pwa/:
@@ -203,6 +204,7 @@ from src.backend.migrations import (
     migrate_add_habit_trigger_config,
     migrate_add_timezone_column,
     migrate_add_default_view,
+    migrate_add_sync_version,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -291,6 +293,7 @@ migrate_add_email_privacy_and_send_later()
 migrate_add_habit_trigger_config()
 migrate_add_timezone_column()
 migrate_add_default_view()
+migrate_add_sync_version()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)
@@ -362,6 +365,8 @@ from src.backend.routes.admin import admin_router
 from src.backend.routes.bundles import bundles_router
 from src.backend.routes.custom_objects import router as custom_objects_router
 from src.backend.routes.custom_zones import router as custom_zones_router
+from src.backend.routes.devices import devices_router
+from src.backend.routes.sync import sync_router
 from src.backend.routes.docs import router as docs_router
 
 app.include_router(auth_router)
@@ -390,6 +395,8 @@ app.include_router(admin_router)
 app.include_router(bundles_router)
 app.include_router(custom_objects_router)
 app.include_router(custom_zones_router)
+app.include_router(devices_router)
+app.include_router(sync_router)
 app.include_router(docs_router)
 
 # ── Bundle reclassification is triggered by rule changes, not on startup ──

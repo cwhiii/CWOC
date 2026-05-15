@@ -1436,11 +1436,15 @@
                         <p class="setting-hint">Number of unread emails displayed per page in the Omni View.</p>
 
                         <label class="setting-subheader">🎨 Colors</label>
-                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                            <input type="checkbox" id="omni-normalize-colors" onchange="setSaveButtonUnsaved();" />
-                            Normalize colors
-                        </label>
-                        <p class="setting-hint">Override chit colors with consistent type-based tones (events, tasks, notes, checklists, birthdays).</p>
+                        <div class="setting-inline">
+                            <label for="omni-color-mode">Color mode</label>
+                            <select id="omni-color-mode" onchange="setSaveButtonUnsaved();">
+                                <option value="colored">Colored</option>
+                                <option value="normalized">Normalized</option>
+                                <option value="mono">Mono</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">Colored = user-set chit colors. Normalized = consistent type-based tones. Mono = clean ivory/cream for all.</p>
 
                         <label class="setting-subheader">🔒 Locked Filter Defaults</label>
                         <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>

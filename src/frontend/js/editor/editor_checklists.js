@@ -580,7 +580,11 @@ class Checklist {
     selectStrip.addEventListener("mousedown", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      this._toggleSelectItem(item.id);
+      if (e.shiftKey && this._lastSelectedId) {
+        this._rangeSelectTo(item.id);
+      } else {
+        this._toggleSelectItem(item.id);
+      }
     });
     el.appendChild(selectStrip);
 
@@ -1189,6 +1193,11 @@ class Checklist {
     }
     this.draggedItem = null; this.draggedSubtree = []; this.dragOverItem = null; this.dragOverPosition = null;
     this.render(); this._notifyChange();
+    // Restore multi-select visuals after re-render
+    if (this._multiSelectMode) {
+      this._updateSelectVisuals();
+      this._updateMultiSelectToolbar();
+    }
   }
   clearDropIndicator() {
     this.container.querySelectorAll(".checklist-item, .completed-checklist-item, .ghost-checklist-item").forEach(el => {
@@ -1308,8 +1317,8 @@ class Checklist {
   }
 
   /**
-   * Shift+click: select the range from the anchor (_lastSelectedId) to the clicked item.
-   * Clears previous selection and replaces it with the range (file-manager style).
+   * Shift+click: add/extend the range from the anchor (_lastSelectedId) to the clicked item.
+   * Does NOT clear existing selection — adds the range on top of current selection.
    * If no anchor exists, just selects the clicked item.
    */
   _rangeSelectTo(itemId) {
@@ -1317,15 +1326,13 @@ class Checklist {
 
     if (!this._lastSelectedId) {
       // No anchor — just select this item and set it as anchor
-      this._selectedIds.clear();
       this._selectedIds.add(itemId);
       this._lastSelectedId = itemId;
     } else {
       var startIdx = unchecked.findIndex(i => i.id === this._lastSelectedId);
       var endIdx = unchecked.findIndex(i => i.id === itemId);
       if (startIdx === -1 || endIdx === -1) return;
-      // Clear and set the range (anchor stays the same — don't move it)
-      this._selectedIds.clear();
+      // Add the range to current selection (don't clear)
       var from = Math.min(startIdx, endIdx);
       var to = Math.max(startIdx, endIdx);
       for (var i = from; i <= to; i++) {

@@ -4,13 +4,23 @@
 - [Sidebar Layout](#sidebar-layout)
 
 
-The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a [Global Search](/frontend/html/help.html#global-search) view (magnifying glass icon). The **[Omni View](/frontend/html/help.html#omni-view)** (click "Omni" in the header or press `O`) provides a command-center dashboard fusing today's itinerary, pinned chits, and unread email. The **sidebar** (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.
+The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a [Global Search](/frontend/html/help.html#global-search) view (magnifying glass icon). An optional **Notebook** view combines Notes and Checklists into a single masonry grid. The **[Omni View](/frontend/html/help.html#omni-view)** (click "Omni" in the header or press `O`) provides a command-center dashboard fusing today's itinerary, pinned chits, and unread email. The **sidebar** (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.
 
 ## Default View
 
-By default, the dashboard opens to the Calendar view when you first visit the site. You can change this in [Settings → Default View](/frontend/html/settings.html#default-view) to any of the available views: Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alerts, or Omni.
+By default, the dashboard opens to the Calendar view when you first visit the site. You can change this in [Settings → Default View](/frontend/html/settings.html#default-view) to any of the available views: Calendar, Checklists, Tasks, Projects, Notes, Notebook, Email, Indicators, Alerts, or Omni.
 
 This setting only applies on a **fresh site entry** — when you navigate directly to the dashboard without any prior session state. It does not override the view you were on when returning from the chit editor, settings, or other pages (those always restore your previous position).
+
+## Notebook View
+
+The Notebook view combines Notes and Checklists into a single masonry column layout. It's hidden by default — enable it via the **Arrange Views** modal in [Settings → Views](/frontend/html/settings.html#views).
+
+When you add Notebook to the active views, Notes and Checklists are automatically moved to the hidden area (since Notebook replaces both). Cards display a type badge (📝 for notes, ☑ for checklists, 📝☑ for both) so you can tell them apart at a glance.
+
+**Hotkeys:** When Notebook is active, pressing `N` or `H` switches to Notebook (instead of Notes/Checklists). You can also press `B` to go directly to Notebook.
+
+All interactions work the same as in the individual views: inline note editing (click), checklist item toggling, drag-and-drop items between checklists, and masonry column reordering (drag cards between columns).
 
 ## Sidebar Layout
 
@@ -25,6 +35,8 @@ The sidebar is organized top-to-bottom:
 - **Clock, Weather, Reference, Help** — Four compact buttons at the bottom. Clock opens a modal. Weather navigates to the full page (Shift+click for quick modal). Reference and Help open their respective overlays/pages
 
 The Alerts and Projects views have a **View Mode** toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).
+
+The **Checklists** and **Notes** views both use a masonry column layout on desktop — cards are arranged in multiple columns and can be dragged between columns to organize them. On mobile, they collapse to a single-column list with drag-to-reorder.
 
 ---
 

@@ -21,6 +21,7 @@ var _cwocHotkeyTabMap = {
   p: 'Projects',
   t: 'Tasks',
   n: 'Notes',
+  b: 'Notebook',
   e: 'Email',
   i: 'Indicators',
   g: 'Search',

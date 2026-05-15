@@ -612,10 +612,17 @@ function _populateOmniSections(filteredChits, visibleSections) {
         }
     });
 
-    // ── Normalize colors if enabled ─────────────────────────────────────────
+    // ── Apply color mode ────────────────────────────────────────────────────
     var settings = window._cwocSettings || {};
-    if (settings.omni_normalize_colors === '1') {
+    var colorMode = settings.omni_normalize_colors || 'colored';
+    // Backward compat: '1' = normalized, '0' = colored
+    if (colorMode === '1') colorMode = 'normalized';
+    else if (colorMode === '0') colorMode = 'colored';
+
+    if (colorMode === 'normalized') {
         _applyOmniNormalizedColors();
+    } else if (colorMode === 'mono') {
+        _applyOmniMonoColors();
     }
 }
 
@@ -708,6 +715,23 @@ function _omniGetNormalizedColor(chit) {
     if (chit.start_datetime || chit.due_datetime) return _omniNormalizedColorMap.event;
     // Note (everything else)
     return _omniNormalizedColorMap.note;
+}
+
+/**
+ * Mono mode: set all chit cards to a clean ivory/cream background.
+ */
+function _applyOmniMonoColors() {
+    var omniView = document.querySelector('.omni-view');
+    if (!omniView) return;
+
+    var monoColor = '#fffaf0';  // ivory/cream
+    var textColor = '#1a1208';
+
+    var cards = omniView.querySelectorAll('[data-chit-id]');
+    cards.forEach(function(card) {
+        card.style.backgroundColor = monoColor;
+        card.style.color = textColor;
+    });
 }
 
 /* ── Chrono Anchored Section ──────────────────────────────────────────────── */

@@ -1619,22 +1619,36 @@ function _notesColLeft(colIdx, actualCardWidth) {
 
 /**
  * Assign initial data-col to cards that don't have one yet.
- * New cards go to column 0 (top-left) so the most recently created/updated
- * notes appear at the top-left of the masonry grid.
+ * If ALL cards are unassigned (no saved layout), distribute evenly across columns.
+ * If only some are unassigned (new cards added to existing layout), put them in column 0.
  */
 function _assignMissingCols(cards, colCount) {
   // Count existing assignments
   const colCounts = new Array(colCount).fill(0);
+  let assignedCount = 0;
   cards.forEach(card => {
     const col = parseInt(card.dataset.col, 10);
     if (!isNaN(col) && col >= 0 && col < colCount) {
       colCounts[col]++;
+      assignedCount++;
     }
   });
+
+  // If NO cards have assignments, distribute evenly (round-robin)
+  if (assignedCount === 0 && cards.length > 0) {
+    let nextCol = 0;
+    cards.forEach(card => {
+      card.dataset.col = nextCol;
+      colCounts[nextCol]++;
+      nextCol = (nextCol + 1) % colCount;
+    });
+    return;
+  }
+
+  // Otherwise, assign unassigned cards to column 0 (new cards appear top-left)
   cards.forEach(card => {
     let col = parseInt(card.dataset.col, 10);
     if (isNaN(col) || col < 0 || col >= colCount) {
-      // Assign to column 0 (leftmost) so new notes appear top-left
       col = 0;
       card.dataset.col = col;
       colCounts[col]++;
@@ -1685,7 +1699,13 @@ function applyNotesLayout(container) {
   const cards = Array.from(container.querySelectorAll('.chit-card'));
   if (cards.length === 0) return;
 
-  const { colCount, actualCardWidth } = _notesColMetrics(container);
+  const { colCount, actualCardWidth, contentWidth } = _notesColMetrics(container);
+
+  // If container has no width yet, retry after a frame
+  if (contentWidth <= 0) {
+    requestAnimationFrame(function() { applyNotesLayout(container); });
+    return;
+  }
 
   // Clamp out-of-range columns (e.g. window resized narrower)
   // but leave unassigned cards (NaN) for _assignMissingCols to distribute
@@ -1784,7 +1804,7 @@ function enableNotesDragReorder(container, tab, onReorder) {
 
       enableTouchGesture(card, {
         onDragStart: function (data) {
-          if (data.target && data.target.closest && data.target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+          if (data.target && data.target.closest && data.target.closest('input, textarea, select, button, a, ul, li, [contenteditable="true"]')) return;
           if (data.target && data.target.closest && data.target.closest('.note-content')) return;
           if (card.querySelector('[contenteditable="true"]')) return;
 
@@ -1836,7 +1856,14 @@ function enableNotesDragReorder(container, tab, onReorder) {
           if (window._dragJustEnded || window._touchDragActive) return;
           var chitId = card.dataset.chitId;
           var noteEl = card.querySelector('.note-content');
-          if (!noteEl) return;
+          // For cards without note content (e.g. checklist-only), open quick-edit
+          if (!noteEl) {
+            var chit = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits.find(function (c) { return c.id === chitId; }) : null;
+            if (chit && typeof showQuickEditModal === 'function' && (typeof _isViewerRole !== 'function' || !_isViewerRole(chit))) {
+              showQuickEditModal(chit, function() { if (typeof displayChits === 'function') displayChits(); });
+            }
+            return;
+          }
           var chit = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits.find(function (c) { return c.id === chitId; }) : null;
           if (!chit) return;
           if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
@@ -3667,18 +3694,22 @@ function _getPreviousPeriodDate(chit, currentPeriod) {
 async function _persistHabitRollover(chit) {
   if (!chit || !chit.id) return;
   try {
-    // Strip fields not in the Chit model to avoid 422
-    var payload = Object.assign({}, chit);
-    delete payload.owner_id; delete payload.effective_role; delete payload.assigned_to_display_name;
-    delete payload.deleted_datetime; delete payload.owner_display_name; delete payload.owner_username;
-    delete payload.habit_periods; delete payload.email_account_id;
-    var resp = await fetch('/api/chits/' + chit.id, {
-      method: 'PUT',
+    // Use PATCH /fields to update only the rollover-affected fields
+    // This avoids 422 errors from type mismatches when sending the full chit via PUT
+    var payload = {
+      habit_success: chit.habit_success,
+      recurrence_exceptions: chit.recurrence_exceptions || []
+    };
+    if (chit.status !== undefined) payload.status = chit.status || '';
+    var resp = await fetch('/api/chits/' + chit.id + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     if (!resp.ok) {
-      console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status);
+      var detail = '';
+      try { var errData = await resp.json(); detail = errData.detail || ''; } catch(e) {}
+      console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status, detail);
     }
   } catch (err) {
     console.error('[_persistHabitRollover] Error saving rollover for chit ' + chit.id + ':', err);

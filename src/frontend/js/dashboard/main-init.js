@@ -841,6 +841,7 @@ function _updateTabCounts(filteredChits) {
     Projects: chits.filter(c => c.is_project_master && !c.deleted && !c.archived).length,
     Tasks: unique.filter(c => c.status || c.due_datetime).length,
     Notes: unique.filter(c => c.note && c.note.trim() !== '').length,
+    Notebook: unique.filter(c => (c.note && c.note.trim() !== '') || (Array.isArray(c.checklist) && c.checklist.some(i => i && i.text && i.text.trim()))).length,
     Email: unique.filter(c => c.email_message_id || c.email_status).length,
   };
   document.querySelectorAll('.tab').forEach(tab => {

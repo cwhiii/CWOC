@@ -1718,6 +1718,14 @@ function _checkMail() {
     _emailSetPillSpinners(true);
     fetch('/api/email/sync', { method: 'POST' })
         .then(function(r) {
+            var contentType = r.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                // Server returned non-JSON (proxy timeout, HTML error page, etc.)
+                return r.text().then(function(txt) {
+                    console.error('[Email Check Mail] Non-JSON response (' + r.status + '):', txt.substring(0, 200));
+                    return { ok: false, status: r.status, data: { detail: 'Server returned a non-JSON response (HTTP ' + r.status + '). This usually means a timeout or server error.' } };
+                });
+            }
             return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
         })
         .then(function(result) {

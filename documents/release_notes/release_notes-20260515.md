@@ -1,3 +1,31 @@
+## 20260515.1338
+
+Added mobile sync infrastructure — sync version tracking, sync pull/push endpoints with field-level conflict resolution, device token authentication, tombstone retention, and conflict dismissal.
+
+## 20260515.1322
+
+Fixed Omni View column scrolling — added bottom padding so the last items in each column are fully visible, and added `overscroll-behavior: contain` to prevent the elastic bounce from propagating to the parent container.
+
+## 20260515.1321
+
+Added contacts and settings push handling to the sync push endpoint — contacts use field-level LWW merge (same as chits) with audit logging for conflicts; settings use whole-record LWW (no field-level merge, server or client wins entirely based on modified_datetime).
+
+## 20260515.1258
+
+Integrated sync_version tracking into settings save — every settings write now assigns a new sync_version via the global counter, and GET responses include the sync_version field automatically.
+
+## 20260515.1120
+
+Fixed Omni View color modes — "Mono" and "Normalized" modes weren't being applied because the rendering code checked for the old `'1'` value instead of the new `'normalized'`/`'mono'` strings saved by settings. Added the missing mono mode implementation (ivory/cream for all cards).
+
+## 20260515.1118
+
+Fixed Tasks view layout — cards were overlapping horizontally because the container was using `checklist-view` class (masonry/absolute positioning). Switched Tasks, Assigned, and Habits views to use their own `tasks-view` class (vertical flex column). Added `.tasks-view` to the shared container CSS group.
+
+## 20260515.1115
+
+Added subtle content zone distinction on chit cards. Editable areas (note previews, checklists, status controls) below the header/drag zone now have a faint recessed background (`rgba(0,0,0,0.04)`) with rounded corners, visually separating the grabbable header from the interactive content beneath it.
+
 ## 20260515.0821
 
 Fixed visual indicators for health/custom object data: renamed "❤️ Health" to "❤️ Indicators" in settings, fixed field name mismatch (health_indicators → health_data) that prevented the icon from ever showing, and added a new "📊 Custom Data" indicator for non-indicator custom zone data. The two icons now split based on whether data belongs to the Indicators zone or user-created custom zones.

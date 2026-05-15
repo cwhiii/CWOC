@@ -30,13 +30,6 @@
     overflow: hidden;
 }
 
-/* Remove borders from all chit cards in Omni View (overdue/blocked borders still applied inline) */
-.omni-view .itinerary-event,
-.omni-view .chit-card {
-    border: none;
-}
-}
-
 .omni-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -69,8 +62,10 @@
     flex-direction: column;
     gap: 4px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     min-height: 0;
     padding: 0;
+    padding-bottom: 20px;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }

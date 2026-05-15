@@ -14,6 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
+    get_next_sync_version,
 )
 from src.backend.routes.audit import (
     insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune,
@@ -303,6 +304,10 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         # Ensure the row exists (INSERT if brand new user)
         if not old_settings_dict:
             cursor.execute("INSERT OR IGNORE INTO settings (user_id) VALUES (?)", (authenticated_user_id,))
+
+        # Assign sync_version for mobile sync tracking
+        sync_version = get_next_sync_version(cursor)
+        update_dict["sync_version"] = sync_version
 
         # Build dynamic UPDATE statement with only the provided fields
         set_clauses = [f"{col} = ?" for col in update_dict.keys()]
