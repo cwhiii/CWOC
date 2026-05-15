@@ -13,6 +13,9 @@ DO NOT INSTALL THINGS!
 
 # General Principles
 
+## Document everything
+If you haven't updated the readme and help files, then you haven't finished a task. 
+
 ## DRY — Don't Repeat Yourself
 - Before writing a new helper, check `shared.js` and `shared-page.js` for an existing equivalent.
 - Reuse `shared-page.css` for all secondary pages. Only add page-specific styles when truly unique to that page.
@@ -106,6 +109,23 @@ DO NOT INSTALL THINGS!
   - The `class="active"` on a span controls which side appears highlighted (brown background, light text).
   - Reference implementation: Sex toggle in `settings.html` + `settings.js` (`_initPillToggle`).
 
+## UI Feedback — Use the Existing Shared Functions
+- **Do NOT create new toast, modal, confirm, undo, or notification mechanisms.** CWOC has exactly 5 universal UI feedback functions in `shared-utils.js`. Use them. Do not invent new ones without explicit user permission.
+- The 5 shared functions are:
+  1. `cwocToast(message, type, duration)` — brief auto-dismissing notification (top-center)
+  2. `cwocUndoToast(message, opts)` — countdown bar with Undo button (bottom-center); opts: `duration`, `onExpire`, `onUndo`, `id`
+  3. `cwocConfirm(message, opts)` — yes/no confirmation modal; returns `Promise<boolean>`; opts: `title`, `confirmLabel`, `cancelLabel`, `danger`
+  4. `cwocPromptModal(title, placeholder, onConfirm, opts)` — text input modal
+  5. `cwocUnsavedModal(opts)` — Save/Discard/Cancel modal; returns `Promise<'save'|'discard'|'cancel'>`; opts: `message`, `saveLabel`, `discardLabel`, `cancelLabel`
+- **Choosing the right one:**
+  - Need to tell the user something briefly? → `cwocToast`
+  - Need a reversible action with countdown? → `cwocUndoToast`
+  - Need a yes/no decision? → `cwocConfirm`
+  - Need text input from the user? → `cwocPromptModal`
+  - Need save/discard/cancel before navigating? → `cwocUnsavedModal`
+- **Never** build inline DOM for modals, toasts, or confirmation dialogs. Never create new CSS classes for these patterns. The shared functions handle all styling and behavior (ESC, click-outside, overlay backdrop via `.cwoc-overlay`).
+- Inline feedback functions (`_tsFeedback`, `_ntfyFeedback`, `_showAdminMessage`) are the only exception — they show status anchored to a specific UI control, not a global notification.
+
 ## Incremental Template & Custom Element Adoption
 
 When making **substantial changes** to a JS function that builds DOM via string templates (`innerHTML = \`...\``) or `createElement` chains, convert that function to use native `<template>` elements instead. "Substantial" means you're rewriting or significantly modifying the function — not fixing a one-line bug or tweaking a value.
@@ -165,6 +185,34 @@ no installs, no pip, no npm.
 
 ## Help & Reference
 Ensure that any time you change or add a feature that has or should have, documentaion that you update both the help & reference, as applicable.
+
+**Help files live in `src/help/` as individual markdown files** — one per topic. They are served via `/api/docs` and rendered dynamically on the help page (`/frontend/html/help.html`).
+
+**Deep-linking is mandatory.** Every reference to another page, section, or feature in a help file MUST be a working link to the actual destination:
+
+- **App pages** — Link directly to the real page URL:
+  - Settings: `/frontend/html/settings.html#hash` (with tab/section hash)
+  - Editor: `/editor`
+  - People: `/frontend/html/people.html`
+  - Maps: `/maps`
+  - Weather: `/frontend/html/weather.html`
+  - Trash: `/frontend/html/trash.html`
+  - Audit Log: `/frontend/html/audit-log.html`
+  - Custom Objects: `/frontend/html/custom-objects-editor.html`
+
+- **Settings deep-links** — Always include the hash for the correct tab and section. The whole "Settings → Section" phrase is the link text:
+  - `[Settings → Email](/frontend/html/settings.html#email)` (opens Email tab)
+  - `[Settings → Data Management](/frontend/html/settings.html#data-management)` (opens Admin tab, scrolls to section)
+  - `[Settings → Omni View](/frontend/html/settings.html#omni-view)` (opens Views tab, scrolls to section)
+  - `[Settings → Dependent Apps](/frontend/html/settings.html#dependent-apps)` (opens Admin tab, scrolls to section)
+  - Available hashes: `#general`, `#email`, `#badges`, `#admin`, `#views`, `#collections`, `#data-management`, `#dependent-apps`, `#home-assistant`, `#kiosk`, `#version`, `#omni-view`, `#map-settings`, `#habits`, `#periods`, `#clocks`, `#visual-indicators`, `#custom-filters`, `#install-app`, `#saved-locations`, `#tags`, `#unit-system`
+  - If you add a new settings section, add a corresponding hash entry in `settings.js` (the `tabMap` and `headingMap` objects in the deep-linking block at the bottom).
+
+- **Help cross-references** — Link to other help pages using the help page hash: `/frontend/html/help.html#slug` (e.g., `[Habits](/frontend/html/help.html#habits)`). These load the doc within the help page without navigating away.
+
+- **External links** — Use full URLs with `target="_blank"` where appropriate.
+
+**Never use plain text for a navigable reference.** If you write "see Settings → Email" or "open the Chit Editor", it MUST be a clickable link.
 
 ## Versioning
 

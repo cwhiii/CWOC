@@ -841,17 +841,17 @@ function _renderOmniReminders(contentEl, reminderChits, viSettings) {
             card.style.transition = 'opacity 0.3s, transform 0.3s';
             card.style.opacity = '0.3';
             card.style.transform = 'translateX(20px)';
-            _emailUndoToast(
-                '✓ ' + (chit.title || 'Reminder'),
-                function() {
+            cwocUndoToast('✓ ' + (chit.title || 'Reminder'), {
+                onExpire: function() {
                     fetch('/api/chits/' + encodeURIComponent(chit.id), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'Complete', archived: true })
                     }).then(function(r) { if (r.ok) { card.remove(); if (typeof displayChits === 'function') displayChits(); } });
                 },
-                function() { card.style.opacity = ''; card.style.transform = ''; }
-            );
+                onUndo: function() { card.style.opacity = ''; card.style.transform = ''; },
+                id: 'emailUndoToast'
+            });
         });
         card.appendChild(completeBtn);
 

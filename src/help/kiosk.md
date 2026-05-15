@@ -1,10 +1,17 @@
 # Kiosk
 
+- [Setting Up the Kiosk](#setting-up-the-kiosk)
+- [Accessing the Kiosk](#accessing-the-kiosk)
+- [Kiosk Display](#kiosk-display)
+- [Period Navigation](#period-navigation)
+- [Auto-Refresh & Interaction](#auto-refresh-interaction)
+
+
 The Kiosk is a read-only, unauthenticated display designed for wall-mounted screens or shared monitors. It shows calendar events and active tasks filtered by the tags you choose — no login required.
 
 ## Setting Up the Kiosk
 
-Configure which tags appear on the kiosk in **[Settings](/frontend/html/settings.html) → Tools → Kiosk**:
+Configure which tags appear on the kiosk in **[Settings → Tools → Kiosk](/frontend/html/settings.html#kiosk)**:
 
 - **Tag picker** — A tree of your user-created tags (system tags are excluded). Check the tags you want displayed on the kiosk. Selecting a parent tag automatically includes all child tags.
 - **Save** — Click Save to persist your kiosk tag selection. This is required for direct-URL access to work.

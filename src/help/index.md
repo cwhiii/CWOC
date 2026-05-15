@@ -37,7 +37,7 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Custom Objects](/frontend/html/custom-objects-editor.html) — Trackable data entities and health metrics
 - [Calculator](/frontend/html/help.html#calculator) — Floating arithmetic calculator
 - [Settings](/frontend/html/settings.html) — All settings groups and options
-- [Data Management](/frontend/html/help.html#data-management) — Export, import, calendar import (.ics)
+- [Data Management](/frontend/html/help.html#data-management) — Export, import, calendar import (.ics), Google Tasks import, Google Keep import
 - [Audit Log](/frontend/html/audit-log.html) — Change tracking, revert, export
 - [Version & Updates](/frontend/html/help.html#version-management) — Version info and upgrade process
 - [Dependent Apps](/frontend/html/help.html#dependent-apps) — Tailscale VPN configuration

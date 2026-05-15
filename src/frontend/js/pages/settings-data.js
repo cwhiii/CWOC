@@ -257,10 +257,17 @@ function triggerIcsImport() {
       btn.textContent = 'Importing…';
 
       try {
+        var payload = { ics_content: icsContent };
+        // If admin has selected a target user, include it
+        var ownerSelect = document.getElementById('ics-import-owner');
+        if (ownerSelect && ownerSelect.value) {
+          payload.target_user_id = ownerSelect.value;
+        }
+
         var response = await fetch('/api/import/ics', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ics_content: icsContent }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -288,6 +295,167 @@ function triggerIcsImport() {
 
   fileInput.addEventListener('change', onChange);
   fileInput.click();
+}
+
+/**
+ * Import Google Tasks (.json): open file picker, read JSON, POST to /api/import/google-tasks.
+ */
+function triggerGoogleTasksImport() {
+  var fileInput = document.getElementById('googleTasksImportFile');
+  var btn = document.getElementById('googleTasksImportBtn');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      var jsonContent = e.target.result;
+      btn.disabled = true;
+      var originalText = btn.textContent;
+      btn.textContent = 'Importing…';
+
+      try {
+        var payload = { json_content: jsonContent };
+        // If admin has selected a target user, include it
+        var ownerSelect = document.getElementById('ics-import-owner');
+        if (ownerSelect && ownerSelect.value) {
+          payload.target_user_id = ownerSelect.value;
+        }
+
+        var response = await fetch('/api/import/google-tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          var errData = await response.json().catch(function() { return {}; });
+          throw new Error(errData.detail || response.statusText);
+        }
+
+        var result = await response.json();
+        var msg = 'Imported ' + result.imported + ' tasks';
+        if (result.list_name) msg += ' from "' + result.list_name + '"';
+        if (result.skipped > 0) msg += ', skipped ' + result.skipped + ' duplicates';
+        if (result.errors && result.errors.length > 0) msg += ', ' + result.errors.length + ' errors';
+        cwocToast(msg, 'success');
+        loadImportBatches();
+      } catch (error) {
+        console.error('Google Tasks import failed:', error);
+        cwocToast('Import failed: ' + error.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
+/**
+ * Import Google Keep (.json): open multi-file picker, read all JSON files,
+ * POST array of note objects to /api/import/google-keep.
+ */
+function triggerGoogleKeepImport() {
+  var fileInput = document.getElementById('googleKeepImportFile');
+  var btn = document.getElementById('googleKeepImportBtn');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var files = fileInput.files;
+    if (!files || files.length === 0) return;
+
+    btn.disabled = true;
+    var originalText = btn.textContent;
+    btn.textContent = 'Reading files…';
+
+    var notes = [];
+    var filesRead = 0;
+    var totalFiles = files.length;
+
+    for (var i = 0; i < totalFiles; i++) {
+      (function(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            var parsed = JSON.parse(e.target.result);
+            notes.push(parsed);
+          } catch (err) {
+            // Skip non-JSON files silently
+          }
+          filesRead++;
+          if (filesRead === totalFiles) {
+            _sendKeepImport(notes, btn, originalText);
+          }
+        };
+        reader.onerror = function() {
+          filesRead++;
+          if (filesRead === totalFiles) {
+            _sendKeepImport(notes, btn, originalText);
+          }
+        };
+        reader.readAsText(file);
+      })(files[i]);
+    }
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
+/**
+ * Send parsed Keep notes to the backend.
+ */
+async function _sendKeepImport(notes, btn, originalText) {
+  if (notes.length === 0) {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    cwocToast('No valid JSON files found', 'error');
+    return;
+  }
+
+  btn.textContent = 'Importing ' + notes.length + ' notes…';
+
+  try {
+    var payload = { notes: notes };
+    var ownerSelect = document.getElementById('ics-import-owner');
+    if (ownerSelect && ownerSelect.value) {
+      payload.target_user_id = ownerSelect.value;
+    }
+
+    var response = await fetch('/api/import/google-keep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      var errData = await response.json().catch(function() { return {}; });
+      throw new Error(errData.detail || response.statusText);
+    }
+
+    var result = await response.json();
+    var msg = 'Imported ' + result.imported + ' notes from Google Keep';
+    if (result.skipped > 0) msg += ', skipped ' + result.skipped + ' duplicates';
+    if (result.errors && result.errors.length > 0) msg += ', ' + result.errors.length + ' errors';
+    cwocToast(msg, 'success');
+    loadImportBatches();
+  } catch (error) {
+    console.error('Google Keep import failed:', error);
+    cwocToast('Import failed: ' + error.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 /**
@@ -403,6 +571,37 @@ function switchCalExportTab(tab) {
 
 
 // ── Import Batch Management ─────────────────────────────────────────────────
+
+/**
+ * Populate the ICS import owner picker with all users (admin only).
+ * Defaults to the current logged-in user.
+ */
+async function loadIcsImportOwnerPicker() {
+  var select = document.getElementById('ics-import-owner');
+  if (!select) return;
+
+  try {
+    var response = await fetch('/api/users');
+    if (!response.ok) return;
+
+    var users = await response.json();
+    select.innerHTML = '';
+
+    var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    var currentId = currentUser ? currentUser.id : '';
+
+    users.forEach(function(user) {
+      if (user.deactivated) return;
+      var opt = document.createElement('option');
+      opt.value = user.id;
+      opt.textContent = user.display_name || user.username;
+      if (user.id === currentId) opt.selected = true;
+      select.appendChild(opt);
+    });
+  } catch (error) {
+    console.error('Failed to load users for ICS import picker:', error);
+  }
+}
 
 /**
  * Load and display ICS import batches.

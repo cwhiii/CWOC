@@ -1,5 +1,15 @@
 # Home Assistant Integration
 
+- [Setup Overview](#setup-overview)
+- [1. Deploy the HA Custom Integration](#1-deploy-the-ha-custom-integration)
+- [2. Add CWOC via HA Integrations Panel](#2-add-cwoc-via-ha-integrations-panel)
+- [3. Configure HA Connection in CWOC Settings](#3-configure-ha-connection-in-cwoc-settings)
+- [Common Use Cases](#common-use-cases)
+- [Webhook Payloads (HA → CWOC)](#webhook-payloads-ha-cwoc)
+- [Using fire_ha_event in CWOC Rules](#using-firehaevent-in-cwoc-rules)
+- [HA State Change Trigger](#ha-state-change-trigger)
+
+
 CWOC integrates bidirectionally with **Home Assistant** (HA). You can display chit counts on HA dashboards, create or update chits from HA automations, trigger HA scenes from CWOC rules, and fire HA events when chit state changes.
 
 ## Setup Overview
@@ -22,7 +32,7 @@ There are two sides to configure: the HA custom integration (runs inside Home As
 
 This step enables CWOC rules to call HA services and fire HA events. Admin-only.
 
-1. Go to **CWOC [Settings](/frontend/html/settings.html) → Home Assistant**.
+1. Go to **CWOC [Settings → Home Assistant](/frontend/html/settings.html#home-assistant)**.
 2. Enter your HA base URL (e.g., `http://192.168.1.100:8123`).
 3. Paste a **Long-Lived Access Token** from HA (create one in HA → Profile → Long-Lived Access Tokens).
 4. Set the poll interval (default 30 seconds) for state change monitoring.

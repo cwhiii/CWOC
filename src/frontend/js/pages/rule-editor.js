@@ -223,6 +223,15 @@ var HABIT_TRIGGER_FIELDS = [
     { value: '_weather', label: '🌤️ Weather' }
 ];
 
+// Weather condition fields — only shown when trigger type is "scheduled"
+var WEATHER_FIELDS = [
+    { value: 'weather_code', label: 'Weather Code (WMO)' },
+    { value: 'weather_temperature_high', label: 'Temperature High (°C)' },
+    { value: 'weather_temperature_low', label: 'Temperature Low (°C)' },
+    { value: 'weather_precipitation', label: 'Precipitation (mm)' },
+    { value: 'weather_wind_speed', label: 'Wind Speed (km/h)' }
+];
+
 var OPERATOR_GROUPS = [
     { label: 'Comparison', operators: [
         { value: 'equals', label: 'equals' },
@@ -371,7 +380,13 @@ var FIELD_OPERATOR_MAP = {
     'due_datetime': DATE_OPERATORS,
     'point_in_time': DATE_OPERATORS,
     'completed_datetime': DATE_OPERATORS,
-    'email_date': DATE_OPERATORS
+    'email_date': DATE_OPERATORS,
+    // Weather condition fields (scheduled trigger only)
+    'weather_code': ['equals', 'not_equals'],
+    'weather_temperature_high': ['greater_than', 'less_than', 'equals'],
+    'weather_temperature_low': ['greater_than', 'less_than', 'equals'],
+    'weather_precipitation': ['greater_than', 'less_than', 'equals'],
+    'weather_wind_speed': ['greater_than', 'less_than', 'equals']
 };
 
 function _getAllowedOperators(field) {
@@ -802,9 +817,11 @@ function _renderCreateChitAction(action, container) {
     if (!action.params) action.params = {};
 
     var panel = document.createElement('div');
-    panel.className = 'create-chit-action-panel';
+    panel.className = 'smart-input-create-chit-panel';
 
-    // Title field
+    function onChange() { _markDirty(); }
+
+    // ── Title field ──
     var titleLabel = document.createElement('label');
     titleLabel.textContent = 'Title';
     titleLabel.className = 'create-chit-field-label';
@@ -812,136 +829,180 @@ function _renderCreateChitAction(action, container) {
 
     var titleInput = document.createElement('input');
     titleInput.type = 'text';
-    titleInput.placeholder = 'e.g. Cold weather alert - {{title}}';
+    titleInput.placeholder = 'e.g. {{matched_title}} follow-up';
     titleInput.value = action.params.title || '';
     titleInput.className = 'create-chit-field-input';
     titleInput.oninput = function() {
         action.params.title = this.value;
-        _markDirty();
+        onChange();
     };
     panel.appendChild(titleInput);
 
-    // Note field
+    // ── Note field ──
     var noteLabel = document.createElement('label');
     noteLabel.textContent = 'Note';
     noteLabel.className = 'create-chit-field-label';
     panel.appendChild(noteLabel);
 
     var noteInput = document.createElement('textarea');
-    noteInput.placeholder = 'e.g. Temperature will be {{weather_low}}°C today. Bundle up!';
+    noteInput.placeholder = 'Supports {{placeholder}} templates';
     noteInput.value = action.params.note || '';
     noteInput.className = 'create-chit-field-input';
     noteInput.rows = 3;
     noteInput.oninput = function() {
         action.params.note = this.value;
-        _markDirty();
+        onChange();
     };
     panel.appendChild(noteInput);
 
-    // Status field
+    // ── Status field (reuse smart dropdown) ──
     var statusLabel = document.createElement('label');
     statusLabel.textContent = 'Status';
     statusLabel.className = 'create-chit-field-label';
     panel.appendChild(statusLabel);
 
-    var statusSelect = document.createElement('select');
-    statusSelect.className = 'create-chit-field-input';
-    var statusOptions = ['ToDo', 'In Progress', 'Blocked', 'Complete'];
-    statusOptions.forEach(function(opt) {
-        var option = document.createElement('option');
-        option.value = opt;
-        option.textContent = opt;
-        if (action.params.status === opt) option.selected = true;
-        statusSelect.appendChild(option);
-    });
-    statusSelect.onchange = function() {
-        action.params.status = this.value;
-        _markDirty();
-    };
-    panel.appendChild(statusSelect);
+    var statusDropdown = _renderDropdownInput(
+        action.params.status || '',
+        ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'],
+        '— Status —',
+        function(val) { action.params.status = val; onChange(); }
+    );
+    panel.appendChild(statusDropdown);
 
-    // Priority field
+    // ── Priority field (reuse smart dropdown) ──
     var priorityLabel = document.createElement('label');
     priorityLabel.textContent = 'Priority';
     priorityLabel.className = 'create-chit-field-label';
     panel.appendChild(priorityLabel);
 
-    var prioritySelect = document.createElement('select');
-    prioritySelect.className = 'create-chit-field-input';
-    var priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
-    priorityOptions.forEach(function(opt) {
-        var option = document.createElement('option');
-        option.value = opt;
-        option.textContent = opt;
-        if (action.params.priority === opt) option.selected = true;
-        prioritySelect.appendChild(option);
-    });
-    prioritySelect.onchange = function() {
-        action.params.priority = this.value;
-        _markDirty();
+    var priorityDropdown = _renderDropdownInput(
+        action.params.priority || '',
+        ['Low', 'Medium', 'High', 'Critical'],
+        '— Priority —',
+        function(val) { action.params.priority = val; onChange(); }
+    );
+    panel.appendChild(priorityDropdown);
+
+    // ── Tags field (reuse tag picker / searchable input) ──
+    var tagsLabel = document.createElement('label');
+    tagsLabel.textContent = 'Tags';
+    tagsLabel.className = 'create-chit-field-label';
+    panel.appendChild(tagsLabel);
+
+    var tagsValue = (action.params.tags && Array.isArray(action.params.tags)) ? action.params.tags.join(', ') : '';
+    if (_cachedTagList) {
+        var tagNames = _cachedTagList.map(function(t) { return t.name; });
+        var tagPicker = _renderSearchableInput(tagsValue, tagNames, 'Search tags…', function(val) {
+            action.params.tags = val ? val.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+            onChange();
+        });
+        panel.appendChild(tagPicker);
+    } else {
+        // Load tags async, show text input as fallback
+        var tagWrapper = document.createElement('div');
+        tagWrapper.className = 'smart-input-wrapper';
+        var tagTempInput = document.createElement('input');
+        tagTempInput.type = 'text';
+        tagTempInput.placeholder = 'Comma-separated tags';
+        tagTempInput.value = tagsValue;
+        tagTempInput.className = 'create-chit-field-input';
+        tagTempInput.oninput = function() {
+            action.params.tags = this.value ? this.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+            onChange();
+        };
+        tagWrapper.appendChild(tagTempInput);
+        panel.appendChild(tagWrapper);
+        _loadTagList().then(function() {
+            if (_cachedTagList && tagWrapper.parentNode) {
+                var tagNames = _cachedTagList.map(function(t) { return t.name; });
+                var picker = _renderSearchableInput(tagsValue, tagNames, 'Search tags…', function(val) {
+                    action.params.tags = val ? val.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+                    onChange();
+                });
+                tagWrapper.parentNode.replaceChild(picker, tagWrapper);
+            }
+        });
+    }
+
+    // ── Start Date/Time field ──
+    var startLabel = document.createElement('label');
+    startLabel.textContent = 'Start Date/Time';
+    startLabel.className = 'create-chit-field-label';
+    panel.appendChild(startLabel);
+
+    var startInput = document.createElement('input');
+    startInput.type = 'text';
+    startInput.placeholder = 'e.g. {{today}}T09:00 or 2026-05-15T09:00:00';
+    startInput.value = action.params.start_datetime || '';
+    startInput.className = 'create-chit-field-input';
+    startInput.oninput = function() {
+        action.params.start_datetime = this.value;
+        onChange();
     };
-    panel.appendChild(prioritySelect);
+    panel.appendChild(startInput);
 
-    // Due datetime field
-    var dueDateLabel = document.createElement('label');
-    dueDateLabel.textContent = 'Due Date/Time';
-    dueDateLabel.className = 'create-chit-field-label';
-    panel.appendChild(dueDateLabel);
+    // ── Due Date/Time field ──
+    var dueLabel = document.createElement('label');
+    dueLabel.textContent = 'Due Date/Time';
+    dueLabel.className = 'create-chit-field-label';
+    panel.appendChild(dueLabel);
 
-    var dueDateInput = document.createElement('input');
-    dueDateInput.type = 'text';
-    dueDateInput.placeholder = 'e.g. {{today}} 08:00 or 2026-05-15T08:00:00';
-    dueDateInput.value = action.params.due_datetime || '';
-    dueDateInput.className = 'create-chit-field-input';
-    dueDateInput.oninput = function() {
+    var dueInput = document.createElement('input');
+    dueInput.type = 'text';
+    dueInput.placeholder = 'e.g. {{today}}T17:00 or 2026-05-15T17:00:00';
+    dueInput.value = action.params.due_datetime || '';
+    dueInput.className = 'create-chit-field-input';
+    dueInput.oninput = function() {
         action.params.due_datetime = this.value;
-        _markDirty();
+        onChange();
     };
-    panel.appendChild(dueDateInput);
+    panel.appendChild(dueInput);
 
-    // Alert time field
-    var alertLabel = document.createElement('label');
-    alertLabel.textContent = 'Alert/Notification Time';
-    alertLabel.className = 'create-chit-field-label';
-    panel.appendChild(alertLabel);
-
-    var alertInput = document.createElement('input');
-    alertInput.type = 'text';
-    alertInput.placeholder = 'e.g. {{today}}T08:00:00 (leave empty for no alert)';
-    alertInput.value = (action.params.alerts && action.params.alerts.length > 0) ? action.params.alerts[0].datetime || '' : '';
-    alertInput.className = 'create-chit-field-input';
-    alertInput.oninput = function() {
-        var val = this.value.trim();
-        if (val) {
-            action.params.alerts = [{ datetime: val, type: 'notification' }];
-        } else {
-            action.params.alerts = [];
-        }
-        _markDirty();
-    };
-    panel.appendChild(alertInput);
-
-    // Location field
+    // ── Location field (reuse location combobox) ──
     var locationLabel = document.createElement('label');
     locationLabel.textContent = 'Location';
     locationLabel.className = 'create-chit-field-label';
     panel.appendChild(locationLabel);
 
-    var locationInput = document.createElement('input');
-    locationInput.type = 'text';
-    locationInput.placeholder = 'e.g. {{location}} or Default Location';
-    locationInput.value = action.params.location || '';
-    locationInput.className = 'create-chit-field-input';
-    locationInput.oninput = function() {
-        action.params.location = this.value;
-        _markDirty();
-    };
-    panel.appendChild(locationInput);
+    var locationWidget = _renderLocationCombobox(action.params.location || '', function(val) {
+        action.params.location = val;
+        onChange();
+    });
+    panel.appendChild(locationWidget);
 
-    // Template help
+    // ── Color field (reuse color swatches) ──
+    var colorLabel = document.createElement('label');
+    colorLabel.textContent = 'Color';
+    colorLabel.className = 'create-chit-field-label';
+    panel.appendChild(colorLabel);
+
+    var colorWidget = _renderColorSwatches(action.params.color || '', function(val) {
+        action.params.color = val;
+        onChange();
+    });
+    panel.appendChild(colorWidget);
+
+    // ── People field (reuse contact autocomplete in name mode) ──
+    var peopleLabel = document.createElement('label');
+    peopleLabel.textContent = 'People';
+    peopleLabel.className = 'create-chit-field-label';
+    panel.appendChild(peopleLabel);
+
+    var peopleValue = (action.params.people && Array.isArray(action.params.people)) ? action.params.people.join(', ') : '';
+    var peopleWidget = _renderContactAutocomplete({
+        mode: 'name',
+        currentValue: peopleValue,
+        onChange: function(val) {
+            action.params.people = val ? val.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+            onChange();
+        }
+    });
+    panel.appendChild(peopleWidget);
+
+    // ── Template help ──
     var helpDiv = document.createElement('div');
     helpDiv.className = 'create-chit-help';
-    helpDiv.innerHTML = '<strong>Template Variables:</strong> {{title}}, {{note}}, {{status}}, {{location}}, {{today}}, {{now}}, {{owner_id}}, {{weather_low}}, {{weather_high}}, {{weather_precipitation}}, {{weather_wind_speed}}, {{weather_wind_gusts}}';
+    helpDiv.innerHTML = '<strong>Template Variables:</strong> {{matched_title}}, {{matched_note}}, {{matched_status}}, {{today}}, {{now}}, {{trigger_field}}, {{location}}, {{weather_low}}, {{weather_high}}';
     panel.appendChild(helpDiv);
 
     container.appendChild(panel);
@@ -1383,7 +1444,9 @@ function _getFieldsForTrigger() {
     if (trigger === 'contact_created' || trigger === 'contact_updated') return CONTACT_FIELDS;
     if (trigger === 'ha_state_change') return HA_STATE_CHANGE_FIELDS;
     if (trigger === 'habit_achieved' || trigger === 'habit_missed' || trigger === 'habit_due') return HABIT_TRIGGER_FIELDS;
-    return CHIT_FIELDS; // default for chit_created, chit_updated, scheduled, ha_webhook
+    // For scheduled trigger, include weather condition fields
+    if (trigger === 'scheduled') return CHIT_FIELDS.concat(WEATHER_FIELDS);
+    return CHIT_FIELDS; // default for chit_created, chit_updated, ha_webhook
 }
 
 // ── Condition Tree Builder ──
@@ -1532,7 +1595,7 @@ function _getFieldGroups() {
     var habitFields = [];
     
     fields.forEach(function(f) {
-        if (f.value === '_weather') {
+        if (f.value === '_weather' || f.value.indexOf('weather_') === 0) {
             weatherFields.push(f);
         } else if (DATE_TYPE_FIELDS.indexOf(f.value) !== -1) {
             dateFields.push(f);
@@ -1849,6 +1912,585 @@ function _wrapWithLabel(labelText, element) {
     return wrapper;
 }
 
+// ── Smart Input Factory ──
+// Returns the appropriate DOM element for a condition leaf's value input.
+// Inspects leaf.field and leaf.operator to determine widget type.
+// Falls back to plain text input for unmapped fields or not-yet-implemented widgets.
+
+var BOOLEAN_FIELDS = ['archived', 'pinned', 'all_day', 'habit', 'email_read'];
+var EMAIL_ADDRESS_FIELDS = ['email_from', 'email_to', 'email_cc', 'email_bcc'];
+
+// ── Reusable Dropdown Helper ──
+function _renderDropdownInput(currentValue, options, placeholder, onChange) {
+    var select = document.createElement('select');
+    select.className = 'smart-input-dropdown';
+
+    // Placeholder option (disabled, shown when no value selected)
+    var placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = placeholder || 'Select…';
+    placeholderOpt.disabled = true;
+    if (!currentValue) {
+        placeholderOpt.selected = true;
+    }
+    select.appendChild(placeholderOpt);
+
+    // Add each option
+    options.forEach(function(opt) {
+        var option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        if (currentValue === opt) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+
+    select.onchange = function() {
+        onChange(this.value);
+    };
+
+    return select;
+}
+
+// ── Email Account Dropdown ──
+// Renders a <select> populated from getCachedSettings() → email_accounts.
+// Label = nickname (if non-empty) else email address. Value = account ID.
+// Shows placeholder if no accounts configured.
+// Shows unrecognized indicator for saved values not matching current accounts.
+function _renderEmailAccountDropdown(currentValue, onChange) {
+    var select = document.createElement('select');
+    select.className = 'smart-input-dropdown';
+
+    var settings = window._cwocSettings || {};
+    var accounts = settings.email_accounts || [];
+
+    // Placeholder option
+    var placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.disabled = true;
+    if (accounts.length === 0) {
+        placeholderOpt.textContent = 'No accounts configured';
+    } else {
+        placeholderOpt.textContent = 'Select account…';
+    }
+    if (!currentValue) {
+        placeholderOpt.selected = true;
+    }
+    select.appendChild(placeholderOpt);
+
+    // Track whether currentValue matches a known account
+    var valueFound = false;
+
+    // Add each account as an option
+    accounts.forEach(function(acct) {
+        if (!acct || !acct.id) return;
+        var option = document.createElement('option');
+        option.value = acct.id;
+        // Label: nickname if non-empty string, otherwise email address
+        var label = (acct.nickname && acct.nickname.trim()) ? acct.nickname.trim() : (acct.email || acct.id);
+        option.textContent = label;
+        if (currentValue === acct.id) {
+            option.selected = true;
+            valueFound = true;
+        }
+        select.appendChild(option);
+    });
+
+    // If currentValue is set but doesn't match any account, add as unrecognized
+    if (currentValue && !valueFound) {
+        var unrecOpt = document.createElement('option');
+        unrecOpt.value = currentValue;
+        unrecOpt.textContent = currentValue + ' (unrecognized)';
+        unrecOpt.selected = true;
+        unrecOpt.className = 'smart-input-unrecognized';
+        select.appendChild(unrecOpt);
+    }
+
+    select.onchange = function() {
+        onChange(this.value);
+    };
+
+    return select;
+}
+
+// ── Location Combobox Widget ──
+// Combines a dropdown of saved locations with a text input for custom entry.
+// Loads saved locations from getCachedSettings() → saved_locations.
+// Displays location label as text, stores address as value.
+// Falls back to text-only input if saved_locations is empty or unavailable.
+
+function _renderLocationCombobox(currentValue, onChange) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'smart-input-location-combobox';
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'smart-input-location-input';
+    input.placeholder = 'Type or select location…';
+    input.maxLength = 200;
+    input.value = currentValue || '';
+
+    // Try to load saved locations from cached settings
+    var locations = [];
+    try {
+        var settings = window._cwocSettings || {};
+        var savedLocs = settings.saved_locations;
+        if (Array.isArray(savedLocs)) {
+            locations = savedLocs.filter(function(l) {
+                return l && (l.label || l.address);
+            });
+        }
+        // Fallback: try _cachedSavedLocations (loaded by weather section)
+        if (locations.length === 0 && Array.isArray(_cachedSavedLocations) && _cachedSavedLocations.length > 0) {
+            locations = _cachedSavedLocations.filter(function(l) {
+                return l && (l.label || l.address);
+            });
+        }
+    } catch (e) {
+        locations = [];
+    }
+
+    // If no saved locations, just render the text input (fallback)
+    if (locations.length === 0) {
+        input.oninput = function() {
+            onChange(this.value);
+        };
+        wrapper.appendChild(input);
+        return wrapper;
+    }
+
+    // Build dropdown for saved locations
+    var dropdown = document.createElement('div');
+    dropdown.className = 'smart-input-dropdown';
+    dropdown.style.display = 'none';
+
+    function buildLocationList(filter) {
+        dropdown.innerHTML = '';
+        var q = (filter || '').toLowerCase();
+        var filtered = locations.filter(function(loc) {
+            var label = (loc.label || '').toLowerCase();
+            var address = (loc.address || '').toLowerCase();
+            return !q || label.indexOf(q) !== -1 || address.indexOf(q) !== -1;
+        });
+        if (filtered.length === 0) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        filtered.forEach(function(loc) {
+            var item = document.createElement('div');
+            item.className = 'smart-input-option';
+            // Display label as text
+            item.textContent = loc.label || loc.address || '';
+            item.onmousedown = function(e) {
+                e.preventDefault(); // prevent blur
+                var address = loc.address || '';
+                input.value = address;
+                dropdown.style.display = 'none';
+                onChange(address);
+            };
+            dropdown.appendChild(item);
+        });
+        dropdown.style.display = '';
+    }
+
+    input.onfocus = function() { buildLocationList(this.value); };
+    input.oninput = function() {
+        buildLocationList(this.value);
+        onChange(this.value);
+    };
+    input.onblur = function() {
+        setTimeout(function() { dropdown.style.display = 'none'; }, 150);
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(dropdown);
+    return wrapper;
+}
+
+// ── Weather Smart Input (numeric threshold + location selector) ──
+// Renders a numeric input for the threshold value and a location combobox
+// for weather_location. The numeric value is stored in leaf.value via onChange,
+// and the location is stored as leaf.weather_location.
+
+function _renderWeatherInput(leaf, onChange) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'smart-input-weather-wrapper';
+
+    // Numeric input for threshold value
+    var numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.className = 'smart-input-weather-numeric';
+    numInput.placeholder = 'Threshold';
+    numInput.value = leaf.value || '';
+    numInput.oninput = function() {
+        onChange(this.value);
+    };
+
+    // Location combobox (reuse pattern from _renderLocationCombobox)
+    var locationOnChange = function(val) {
+        leaf.weather_location = val;
+        _markDirty();
+    };
+    var locationCombobox = _renderLocationCombobox(leaf.weather_location || '', locationOnChange);
+
+    // Label for location
+    var locLabel = document.createElement('label');
+    locLabel.className = 'smart-input-weather-loc-label';
+    locLabel.textContent = 'Location:';
+
+    wrapper.appendChild(numInput);
+    wrapper.appendChild(locLabel);
+    wrapper.appendChild(locationCombobox);
+
+    return wrapper;
+}
+
+// ── Color Swatches Widget ──
+// Displays default palette swatches plus custom_colors from settings.
+// On swatch click, populates condition value with hex string.
+// Highlights selected swatch with visible border/checkmark.
+// Also includes a small text input showing the current hex value.
+
+function _renderColorSwatches(currentValue, onChange) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'smart-input-color-swatches';
+
+    // Combine default palette + custom colors
+    var colors = (_cwocDefaultColors || []).slice();
+    var settings = window._cwocSettings || {};
+    var customColors = settings.custom_colors;
+    if (Array.isArray(customColors)) {
+        customColors.forEach(function(c) {
+            var hex = (typeof c === 'string') ? c : (c.hex || c.color || '');
+            var name = (typeof c === 'string') ? c : (c.name || c.hex || '');
+            if (hex) colors.push({ hex: hex, name: name });
+        });
+    }
+
+    // Swatches container
+    var swatchGrid = document.createElement('div');
+    swatchGrid.className = 'smart-input-swatch-grid';
+
+    // Hex text input
+    var hexInput = document.createElement('input');
+    hexInput.type = 'text';
+    hexInput.className = 'smart-input-color-hex';
+    hexInput.placeholder = '#000000';
+    hexInput.value = currentValue || '';
+    hexInput.maxLength = 7;
+
+    // Helper: update selection state on all swatches
+    function updateSelection(selectedHex) {
+        swatchGrid.querySelectorAll('.smart-input-swatch').forEach(function(s) {
+            var match = s.dataset.hex.toLowerCase() === (selectedHex || '').toLowerCase();
+            s.classList.toggle('smart-input-swatch-selected', match);
+        });
+    }
+
+    // Render each swatch
+    colors.forEach(function(c) {
+        var swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'smart-input-swatch';
+        swatch.style.backgroundColor = c.hex;
+        swatch.title = c.name || c.hex;
+        swatch.dataset.hex = c.hex;
+        if (c.hex.toLowerCase() === (currentValue || '').toLowerCase()) {
+            swatch.classList.add('smart-input-swatch-selected');
+        }
+        swatch.addEventListener('click', function() {
+            hexInput.value = c.hex;
+            updateSelection(c.hex);
+            onChange(c.hex);
+        });
+        swatchGrid.appendChild(swatch);
+    });
+
+    // Hex input change handler
+    hexInput.oninput = function() {
+        var val = this.value.trim();
+        updateSelection(val);
+        onChange(val);
+    };
+
+    wrapper.appendChild(swatchGrid);
+    wrapper.appendChild(hexInput);
+    return wrapper;
+}
+
+// ── Contact Autocomplete Widget ──
+// Reusable autocomplete component for email address and people name lookups.
+// Queries /api/contacts?q={input} when input >= 2 chars, displays up to 10 results.
+// Caches most recent API response to avoid redundant calls.
+
+function _renderContactAutocomplete(options) {
+    var mode = options.mode || 'email'; // 'email' or 'name'
+    var currentValue = options.currentValue || '';
+    var maxLength = options.maxLength || (mode === 'email' ? 254 : undefined);
+    var onChange = options.onChange || function() {};
+
+    // Cache: stores { query: string, results: array } for the most recent call
+    var cache = { query: null, results: null };
+
+    // Build wrapper
+    var wrapper = document.createElement('div');
+    wrapper.className = 'smart-input-autocomplete-wrapper';
+    wrapper.style.position = 'relative';
+
+    // Input element
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'smart-input-autocomplete';
+    input.value = currentValue;
+    input.placeholder = mode === 'email' ? 'Type email or search contacts…' : 'Type name or search contacts…';
+    if (maxLength) {
+        input.maxLength = maxLength;
+    }
+
+    // Dropdown container
+    var dropdown = document.createElement('div');
+    dropdown.className = 'smart-input-autocomplete-dropdown';
+    dropdown.style.display = 'none';
+
+    // Dismiss dropdown helper
+    function dismissDropdown() {
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
+    }
+
+    // Filter contacts client-side based on mode and query
+    function filterContacts(contacts, query) {
+        var q = query.toLowerCase();
+        var results = [];
+
+        for (var i = 0; i < contacts.length && results.length < 10; i++) {
+            var contact = contacts[i];
+            var displayName = contact.display_name || ((contact.given_name || '') + ' ' + (contact.surname || '')).trim();
+
+            if (mode === 'email') {
+                // Match against display_name and each email value
+                var emails = contact.emails || [];
+                var nameMatches = displayName.toLowerCase().indexOf(q) !== -1;
+
+                for (var j = 0; j < emails.length && results.length < 10; j++) {
+                    var emailVal = (emails[j].value || '').trim();
+                    if (!emailVal) continue;
+                    var emailMatches = emailVal.toLowerCase().indexOf(q) !== -1;
+                    if (nameMatches || emailMatches) {
+                        results.push({
+                            displayText: displayName ? displayName + ' <' + emailVal + '>' : emailVal,
+                            storeValue: emailVal
+                        });
+                    }
+                }
+            } else {
+                // Name mode: match against display_name only
+                if (displayName && displayName.toLowerCase().indexOf(q) !== -1) {
+                    results.push({
+                        displayText: displayName,
+                        storeValue: displayName
+                    });
+                }
+            }
+        }
+
+        return results;
+    }
+
+    // Show results in dropdown
+    function showResults(results) {
+        dropdown.innerHTML = '';
+        if (results.length === 0) {
+            dismissDropdown();
+            return;
+        }
+
+        results.forEach(function(result) {
+            var item = document.createElement('div');
+            item.className = 'smart-input-autocomplete-item';
+            item.textContent = result.displayText;
+            item.onmousedown = function(e) {
+                e.preventDefault(); // prevent blur from firing first
+                input.value = result.storeValue;
+                onChange(result.storeValue);
+                dismissDropdown();
+            };
+            dropdown.appendChild(item);
+        });
+
+        dropdown.style.display = '';
+    }
+
+    // Fetch contacts from API with caching
+    async function fetchAndShow(query) {
+        // Check cache first
+        if (cache.query === query && cache.results !== null) {
+            var filtered = filterContacts(cache.results, query);
+            showResults(filtered);
+            return;
+        }
+
+        try {
+            var resp = await fetch('/api/contacts?q=' + encodeURIComponent(query));
+            if (!resp.ok) {
+                // API error: silently dismiss dropdown
+                dismissDropdown();
+                return;
+            }
+            var contacts = await resp.json();
+
+            // Cache this response
+            cache.query = query;
+            cache.results = contacts;
+
+            // Filter and display
+            var filtered = filterContacts(contacts, query);
+            showResults(filtered);
+        } catch (e) {
+            // Network error: silently dismiss dropdown, allow manual entry
+            dismissDropdown();
+        }
+    }
+
+    // Input event: trigger search when >= 2 chars
+    input.oninput = function() {
+        var val = this.value;
+        onChange(val);
+
+        if (val.length >= 2) {
+            fetchAndShow(val);
+        } else {
+            dismissDropdown();
+        }
+    };
+
+    // Blur: dismiss dropdown with small delay for click registration
+    input.onblur = function() {
+        setTimeout(function() {
+            dismissDropdown();
+        }, 150);
+    };
+
+    // Escape key: dismiss dropdown
+    input.onkeydown = function(e) {
+        if (e.key === 'Escape') {
+            dismissDropdown();
+            e.stopPropagation();
+        }
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(dropdown);
+    return wrapper;
+}
+
+function _renderSmartInput(leaf, onChange) {
+    var field = leaf.field;
+    var operator = leaf.operator;
+    var currentValue = leaf.value || '';
+
+    // ── Contact autocomplete (email mode) — email address fields ──
+    if (EMAIL_ADDRESS_FIELDS.indexOf(field) !== -1) {
+        return _renderContactAutocomplete({
+            mode: 'email',
+            currentValue: currentValue,
+            maxLength: 254,
+            onChange: onChange
+        });
+    }
+
+    // ── Email account dropdown ──
+    if (field === 'email_account_id') {
+        return _renderEmailAccountDropdown(currentValue, onChange);
+    }
+
+    // ── Priority dropdown ──
+    if (field === 'priority') {
+        return _renderDropdownInput(currentValue, ['Low', 'Medium', 'High', 'Critical'], 'Select priority…', onChange);
+    }
+
+    // ── Status dropdown ──
+    if (field === 'status') {
+        return _renderDropdownInput(currentValue, ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'], 'Select status…', onChange);
+    }
+
+    // ── Severity dropdown ──
+    if (field === 'severity') {
+        return _renderDropdownInput(currentValue, ['Low', 'Medium', 'High', 'Critical'], 'Select severity…', onChange);
+    }
+
+    // ── Location combobox ──
+    if (field === 'location') {
+        return _renderLocationCombobox(currentValue, onChange);
+    }
+
+    // ── Color swatches ──
+    if (field === 'color') {
+        return _renderColorSwatches(currentValue, onChange);
+    }
+
+    // ── Tag picker ──
+    if (field === 'tags' && (operator === 'tag_present' || operator === 'tag_not_present')) {
+        // Non-system tags sorted: favorites first (alphabetically), then non-favorites alphabetically
+        if (_cachedTagList) {
+            var tagNames = _cachedTagList.map(function(t) { return t.name; });
+            return _renderSearchableInput(currentValue, tagNames, 'Search tags…', onChange);
+        }
+        // Tag list not yet loaded — show placeholder and load async, then swap in picker
+        var tagWrapper = document.createElement('div');
+        tagWrapper.className = 'smart-input-wrapper';
+        var tempInput = document.createElement('input');
+        tempInput.type = 'text';
+        tempInput.placeholder = 'Loading tags…';
+        tempInput.value = currentValue || '';
+        tempInput.className = 'smart-input-field';
+        tempInput.oninput = function() { onChange(this.value); };
+        tagWrapper.appendChild(tempInput);
+        _loadTagList().then(function() {
+            if (_cachedTagList && tagWrapper.parentNode) {
+                var tagNames = _cachedTagList.map(function(t) { return t.name; });
+                var picker = _renderSearchableInput(currentValue, tagNames, 'Search tags…', onChange);
+                tagWrapper.parentNode.replaceChild(picker, tagWrapper);
+            }
+        });
+        return tagWrapper;
+    }
+
+    // ── People autocomplete (name mode) ──
+    if (field === 'people' && (operator === 'person_on_chit' || operator === 'person_not_on_chit')) {
+        return _renderContactAutocomplete({
+            mode: 'name',
+            currentValue: currentValue,
+            onChange: onChange
+        });
+    }
+
+    // ── Weather smart input (numeric + location) ──
+    if (field.indexOf('weather_') === 0) {
+        return _renderWeatherInput(leaf, onChange);
+    }
+
+    // ── Boolean dropdown (true/false) ──
+    if (BOOLEAN_FIELDS.indexOf(field) !== -1) {
+        return _renderDropdownInput(currentValue, ['true', 'false'], 'Select value…', onChange);
+    }
+
+    // ── Default: plain text input ──
+    return _renderPlainTextInput(currentValue, onChange);
+}
+
+function _renderPlainTextInput(currentValue, onChange) {
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Value';
+    input.value = currentValue || '';
+    input.oninput = function() {
+        onChange(this.value);
+    };
+    return input;
+}
+
 function _renderLeaf(leaf) {
     var div = document.createElement('div');
     div.className = 'condition-leaf';
@@ -1939,40 +2581,16 @@ function _renderLeaf(leaf) {
 
         // Value input (hidden for is_empty / is_not_empty)
         if (NO_VALUE_OPERATORS.indexOf(leaf.operator) === -1) {
-            var useSmartTag = (leaf.operator === 'tag_present' || leaf.operator === 'tag_not_present');
-            var useSmartPerson = (leaf.operator === 'person_on_chit' || leaf.operator === 'person_not_on_chit');
-            var useSmartLocation = (leaf.field === 'location' && ['equals', 'not_equals', 'contains'].indexOf(leaf.operator) !== -1);
-            
-            if (useSmartTag && _cachedTagList) {
-                var tagNames = _cachedTagList.map(function(t) { return t.name; });
-                var smartInput = _renderSearchableInput(leaf.value, tagNames, 'Search tags…', function(val) {
-                    leaf.value = val;
-                    _markDirty();
-                });
-                div.appendChild(_wrapWithLabel('Tag', smartInput));
-            } else if (useSmartPerson && _cachedPeopleList) {
-                var smartInput = _renderSearchableInput(leaf.value, _cachedPeopleList, 'Search people…', function(val) {
-                    leaf.value = val;
-                    _markDirty();
-                });
-                div.appendChild(_wrapWithLabel('Person', smartInput));
-            } else if (useSmartLocation && _cachedLocationsList && _cachedLocationsList.length > 0) {
-                var smartInput = _renderSearchableInput(leaf.value, _cachedLocationsList, 'Search locations…', function(val) {
-                    leaf.value = val;
-                    _markDirty();
-                });
-                div.appendChild(_wrapWithLabel('Location', smartInput));
-            } else {
-                var valueInput = document.createElement('input');
-                valueInput.type = 'text';
-                valueInput.placeholder = 'Value';
-                valueInput.value = leaf.value || '';
-                valueInput.oninput = function() {
-                    leaf.value = this.value;
-                    _markDirty();
-                };
-                div.appendChild(_wrapWithLabel('Value', valueInput));
-            }
+            var smartInput = _renderSmartInput(leaf, function(val) {
+                leaf.value = val;
+                _markDirty();
+            });
+            var labelText = 'Value';
+            // Use contextual labels for specific field/operator combos
+            if (leaf.operator === 'tag_present' || leaf.operator === 'tag_not_present') labelText = 'Tag';
+            else if (leaf.operator === 'person_on_chit' || leaf.operator === 'person_not_on_chit') labelText = 'Person';
+            else if (leaf.field === 'location') labelText = 'Location';
+            div.appendChild(_wrapWithLabel(labelText, smartInput));
         }
     }
 
@@ -2018,12 +2636,17 @@ function _serializeTree(node) {
             children: (node.children || []).map(_serializeTree)
         };
     }
-    return {
+    var serialized = {
         type: 'leaf',
         field: node.field,
         operator: node.operator,
         value: node.value
     };
+    // Preserve weather_location for weather condition fields
+    if (node.weather_location) {
+        serialized.weather_location = node.weather_location;
+    }
+    return serialized;
 }
 
 // ── Deserialize Condition Tree (add internal _id fields) ──
@@ -2037,13 +2660,18 @@ function _deserializeTree(node) {
             children: (node.children || []).map(_deserializeTree)
         };
     }
-    return {
+    var deserialized = {
         _id: _nextNodeId(),
         type: 'leaf',
         field: node.field || '',
         operator: node.operator || 'equals',
         value: node.value || ''
     };
+    // Preserve weather_location for weather condition fields
+    if (node.weather_location) {
+        deserialized.weather_location = node.weather_location;
+    }
+    return deserialized;
 }
 
 // ── Count Leaf Conditions ──

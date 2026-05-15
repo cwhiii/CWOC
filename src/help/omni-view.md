@@ -1,5 +1,13 @@
 # Omni View
 
+- [Activating](#activating)
+- [Sections](#sections)
+- [Layout Configuration](#layout-configuration)
+- [Filter Locking](#filter-locking)
+- [Bundle Omni View Toggles](#bundle-omni-view-toggles)
+- [Hotkey Changes](#hotkey-changes)
+
+
 The Omni View is a command-center dashboard that fuses today's itinerary, pinned chits, and unread email into a single actionable view. It shows what's relevant *right now* without switching between tabs.
 
 ## Activating
@@ -25,7 +33,7 @@ Empty sections are automatically hidden. Each chit appears in exactly one sectio
 
 ## Layout Configuration
 
-Configure the Omni View layout in **[Settings](/frontend/html/settings.html) → 🔮 Omni View**:
+Configure the Omni View layout in **[Settings → 🔮 Omni View](/frontend/html/settings.html#omni-view)**:
 
 - **Drag to reorder** — Drag section cards to change their display order
 - **Width toggle** — Set each section to half-width (one column) or full-width (spans both columns)
@@ -36,14 +44,14 @@ Configure the Omni View layout in **[Settings](/frontend/html/settings.html) →
 The Omni View starts with a base filter (today's itinerary + pinned + unread Omni-enabled email) that cannot be removed. Standard sidebar filters (status, tags, priority, people, text) narrow results further on top of this base.
 
 - **🔒 Lock Filters** — When the Omni View is active, a 🔒 button appears in the sidebar filter section. Click it to save the current filters as Omni View defaults. Next time you open the Omni View, these filters are pre-applied
-- **Clear Defaults** — Remove locked filter defaults from [Settings](/frontend/html/settings.html) → Omni View
+- **Clear Defaults** — Remove locked filter defaults from [Settings → Omni View](/frontend/html/settings.html#omni-view)
 
 ## Bundle Omni View Toggles
 
 Control which email bundles appear in the Omni View email section:
 
 - **Bundle editor modal** — Each bundle has an "Include in Omni View" checkbox in its create/edit modal
-- **[Settings](/frontend/html/settings.html) → Omni View** — Lists all bundles with Omni View checkboxes for quick toggling
+- **[Settings → Omni View](/frontend/html/settings.html#omni-view)** — Lists all bundles with Omni View checkboxes for quick toggling
 
 ## Hotkey Changes
 

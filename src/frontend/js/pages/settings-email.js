@@ -227,32 +227,18 @@ function _emailModalDeleteAccount() {
   var acct = _emailAccounts[_emailModalEditIdx];
   var username = acct.username || acct.email || 'unknown';
   var host = acct.imap_host || 'unknown';
-  var modal = document.getElementById('deleteEmailAccountModal');
-  var msg = document.getElementById('deleteEmailAccountMessage');
-  if (msg) msg.textContent = 'Email ' + username + ' on ' + host;
-  modal.style.display = 'flex';
-
-  var confirmBtn = document.getElementById('confirmDeleteEmailAccountBtn');
-  var cancelBtn = document.getElementById('cancelDeleteEmailAccountBtn');
-
-  function cleanup() {
-    modal.style.display = 'none';
-    confirmBtn.removeEventListener('click', onConfirm);
-    cancelBtn.removeEventListener('click', onCancel);
-  }
-  function onConfirm() {
-    cleanup();
+  cwocConfirm('Delete email account ' + username + ' on ' + host + '? This action cannot be undone.', {
+    title: 'Delete Email Account',
+    confirmLabel: '🗑️ Delete',
+    danger: true
+  }).then(function(confirmed) {
+    if (!confirmed) return;
     _emailAccounts.splice(_emailModalEditIdx, 1);
     _emailModalEditIdx = -1;
     _emailModalShowList();
     _renderEmailAccountsSummary();
     setSaveButtonUnsaved();
-  }
-  function onCancel() {
-    cleanup();
-  }
-  confirmBtn.addEventListener('click', onConfirm);
-  cancelBtn.addEventListener('click', onCancel);
+  });
 }
 
 /** Toggle password visibility in the modal edit form */

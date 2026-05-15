@@ -96,7 +96,7 @@ function cwocConfirm(message, opts) {
 
     var overlay = document.createElement('div');
     overlay.id = 'cwoc-confirm-modal';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.className = 'cwoc-overlay';
 
     var box = document.createElement('div');
     box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:400px;width:90%;font-family:Lora, Georgia, serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
@@ -208,6 +208,197 @@ function cwocToast(message, type, duration) {
 }
 
 /**
+ * Show an undo toast with countdown bar.
+ * Creates a bottom-center toast with a progress bar and Undo button.
+ * If a toast with the same id already exists, removes it (calling its onExpire).
+ *
+ * @param {string} message - HTML-safe message to display
+ * @param {object} opts
+ * @param {number} [opts.duration=5000] - Countdown duration in ms
+ * @param {function} [opts.onExpire] - Called when countdown finishes without undo
+ * @param {function} [opts.onUndo] - Called when user clicks Undo
+ * @param {string} [opts.id='cwoc-undo-toast'] - Element ID (for coexistence)
+ */
+function cwocUndoToast(message, opts) {
+  opts = opts || {};
+  var duration = opts.duration || 5000;
+  var onExpire = opts.onExpire || null;
+  var onUndo = opts.onUndo || null;
+  var id = opts.id || 'cwoc-undo-toast';
+
+  // If an element with the same id already exists, remove it and fire its onExpire
+  var existing = document.getElementById(id);
+  if (existing) {
+    if (existing._cwocUndoDismissed === false && typeof existing._cwocOnExpire === 'function') {
+      existing._cwocOnExpire();
+    }
+    if (existing._cwocInterval) clearInterval(existing._cwocInterval);
+    existing.remove();
+  }
+
+  // Build DOM
+  var toast = document.createElement('div');
+  toast.className = 'cwoc-undo-toast';
+  toast.id = id;
+  toast._cwocUndoDismissed = false;
+  toast._cwocOnExpire = onExpire;
+
+  var msgRow = document.createElement('div');
+  msgRow.className = 'cwoc-undo-msg-row';
+
+  var msg = document.createElement('span');
+  msg.className = 'cwoc-undo-msg';
+  msg.innerHTML = message;
+
+  var undoBtn = document.createElement('button');
+  undoBtn.textContent = 'Undo';
+  undoBtn.className = 'cwoc-undo-btn';
+
+  msgRow.appendChild(msg);
+  msgRow.appendChild(undoBtn);
+  toast.appendChild(msgRow);
+
+  // Progress bar
+  var barOuter = document.createElement('div');
+  barOuter.className = 'cwoc-undo-bar-outer';
+  var barInner = document.createElement('div');
+  barInner.className = 'cwoc-undo-bar-inner';
+  barOuter.appendChild(barInner);
+  toast.appendChild(barOuter);
+
+  document.body.appendChild(toast);
+
+  // Countdown interval — update bar every 50ms
+  var start = Date.now();
+  var interval = setInterval(function () {
+    var elapsed = Date.now() - start;
+    var pct = Math.max(0, 100 - (elapsed / duration) * 100);
+    barInner.style.width = pct + '%';
+    if (elapsed >= duration) {
+      clearInterval(interval);
+      if (!toast._cwocUndoDismissed) {
+        toast._cwocUndoDismissed = true;
+        toast.remove();
+        if (onExpire) onExpire();
+      }
+    }
+  }, 50);
+
+  toast._cwocInterval = interval;
+
+  // Undo click handler
+  undoBtn.onclick = function () {
+    if (toast._cwocUndoDismissed) return;
+    toast._cwocUndoDismissed = true;
+    clearInterval(interval);
+    toast.remove();
+    if (onUndo) onUndo();
+  };
+}
+
+/**
+ * Show an unsaved-changes modal with Save/Discard/Cancel.
+ * Returns a Promise resolving to 'save', 'discard', or 'cancel'.
+ * Uses the same parchment styling as cwocConfirm.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.message='You have unsaved changes.']
+ * @param {string} [opts.saveLabel='Save & Continue']
+ * @param {string} [opts.discardLabel='Discard & Continue']
+ * @param {string} [opts.cancelLabel='Cancel']
+ * @returns {Promise<'save'|'discard'|'cancel'>}
+ */
+function cwocUnsavedModal(opts) {
+  opts = opts || {};
+  var message = opts.message || 'You have unsaved changes.';
+  var saveLabel = opts.saveLabel || 'Save & Continue';
+  var discardLabel = opts.discardLabel || 'Discard & Continue';
+  var cancelLabel = opts.cancelLabel || 'Cancel';
+
+  return new Promise(function (resolve) {
+    // Remove any existing unsaved modal
+    var existing = document.getElementById('cwoc-unsaved-modal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'cwoc-overlay';
+    overlay.id = 'cwoc-unsaved-modal';
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:420px;width:90%;font-family:Lora, Georgia, serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
+
+    var h3 = document.createElement('h3');
+    h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;';
+    h3.textContent = 'Unsaved Changes';
+    box.appendChild(h3);
+
+    var p = document.createElement('p');
+    p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;';
+    p.textContent = message;
+    box.appendChild(p);
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap;';
+
+    // Cancel button (neutral)
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'standard-button';
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;';
+
+    // Discard button (danger red)
+    var discardBtn = document.createElement('button');
+    discardBtn.className = 'standard-button';
+    discardBtn.textContent = discardLabel;
+    discardBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;background:#b22222;color:#fff;border-color:#8b1a1a;';
+
+    // Save button (primary brown)
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'standard-button';
+    saveBtn.textContent = saveLabel;
+    saveBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;background:#8b5a2b;color:#fdf5e6;border-color:#5a3f2a;font-weight:bold;';
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(discardBtn);
+    btnRow.appendChild(saveBtn);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+
+    function cleanup() {
+      document.removeEventListener('keydown', onKey, true);
+      var el = document.getElementById('cwoc-unsaved-modal');
+      if (el) el.remove();
+    }
+
+    cancelBtn.onclick = function () { cleanup(); resolve('cancel'); };
+    discardBtn.onclick = function () { cleanup(); resolve('discard'); };
+    saveBtn.onclick = function () { cleanup(); resolve('save'); };
+
+    // ESC key resolves with 'cancel'
+    var onKey = function (e) {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        cleanup();
+        resolve('cancel');
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+
+    // Click outside the box resolves with 'cancel'
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        cleanup();
+        resolve('cancel');
+      }
+    });
+
+    document.body.appendChild(overlay);
+    saveBtn.focus();
+  });
+}
+
+/**
  * Show a styled input modal (replaces browser prompt()).
  * @param {string} title - Modal title text
  * @param {string} placeholder - Input placeholder text
@@ -220,8 +411,7 @@ function cwocPromptModal(title, placeholder, onConfirm, opts) {
   document.querySelectorAll('.cwoc-prompt-modal-overlay').forEach(function(el) { el.remove(); });
 
   var overlay = document.createElement('div');
-  overlay.className = 'cwoc-prompt-modal-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.className = 'cwoc-overlay cwoc-prompt-modal-overlay';
 
   var modal = document.createElement('div');
   modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:300px;max-width:400px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';

@@ -1,5 +1,9 @@
 # Filtering & Sorting
 
+- [Filters](#filters)
+- [Sorting](#sorting)
+
+
 ## Filters
 
 The sidebar provides multiple filter types that combine with AND logic:
@@ -11,7 +15,7 @@ The sidebar provides multiple filter types that combine with AND logic:
 - **People** — Multi-select from contacts assigned to chits
 - **Show** — Toggle visibility of Pinned, Archived, Snoozed, Unmarked chits, and Hide Past-Due
 
-When any filter is active, a "✕ Clear All" button appears. If the current tab has custom filters configured ([Settings](/frontend/html/settings.html) → Custom Filters & Sorting), the "Clear" button resets to those custom defaults. A "🔄 Defaults" button also appears to quickly restore the saved custom filter state.
+When any filter is active, a "✕ Clear All" button appears. If the current tab has custom filters configured ([Settings → Custom Filters & Sorting](/frontend/html/settings.html#custom-filters)), the "Clear" button resets to those custom defaults. A "🔄 Defaults" button also appears to quickly restore the saved custom filter state.
 
 ## Sorting
 

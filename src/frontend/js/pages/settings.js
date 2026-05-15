@@ -52,8 +52,7 @@ const formats = [
   { value: "12houranalog", label: "12 Hour Analog" },
 ];
 
-// Track item pending deletion
-var itemToDelete = null;
+// (itemToDelete removed — delete-modal migrated to cwocConfirm)
 
 // Color mapping from main.js
 const colorMap = {
@@ -1142,27 +1141,7 @@ async function addColor(newColor) {
 }
 
 async function deleteColor(hex, name) {
-  var modal = document.getElementById('delete-modal');
-  if (!modal) { if (!(await cwocConfirm('Delete color (' + name + ' - ' + hex + ')?', { title: 'Delete Color', confirmLabel: '🗑️ Delete', danger: true }))) return; }
-  else {
-    var msg = modal.querySelector('p');
-    if (msg) msg.textContent = 'Delete color ' + (name || 'Custom') + ' (' + hex + ')?';
-    modal.style.display = 'flex';
-    var confirmed = await new Promise(function (resolve) {
-      var confirmBtn = modal.querySelector('button[onclick="confirmDelete()"]');
-      var cancelBtn = modal.querySelector('button[onclick="closeDeleteModal()"]');
-      var onConfirm = function () { cleanup(); resolve(true); };
-      var onCancel = function () { cleanup(); resolve(false); };
-      function cleanup() {
-        if (confirmBtn) { confirmBtn.removeEventListener('click', onConfirm); confirmBtn.onclick = function () { confirmDelete(); }; }
-        if (cancelBtn) { cancelBtn.removeEventListener('click', onCancel); cancelBtn.onclick = function () { closeDeleteModal(); }; }
-        modal.style.display = 'none';
-      }
-      if (confirmBtn) { confirmBtn.onclick = null; confirmBtn.addEventListener('click', onConfirm); }
-      if (cancelBtn) { cancelBtn.onclick = null; cancelBtn.addEventListener('click', onCancel); }
-    });
-    if (!confirmed) return;
-  }
+  if (!(await cwocConfirm('Delete color (' + name + ' - ' + hex + ')?', { title: 'Delete Color', confirmLabel: '🗑️ Delete', danger: true }))) return;
   try {
     _invalidateSettingsCache();
     const settings = await getCachedSettings();
@@ -1352,20 +1331,7 @@ function _openBorderAssignPopup(e, hex) {
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
 
-function confirmDelete() {
-  if (itemToDelete) {
-    if (itemToDelete.classList.contains("color-item")) {
-      const hex = itemToDelete.dataset.color;
-      const name = itemToDelete.dataset.name;
-      deleteColor(hex, name);
-    } else {
-      itemToDelete.remove();
-    }
-    closeDeleteModal();
-    setSaveButtonUnsaved();
-    _renderSettingsTagTree();
-  }
-}
+// confirmDelete removed — logic moved into openDeleteModal using cwocConfirm
 
 function handleTagInput(event) {
   if (event.key === "Enter" && event.shiftKey) {
@@ -1373,8 +1339,7 @@ function handleTagInput(event) {
     const tagText = input.value.trim();
     if (tagText) {
       if (isReservedTagPrefix(tagText)) {
-        const modal = document.getElementById("reserved-tag-modal");
-        if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
+        cwocToast('Tags starting with "CWOC_System/" are reserved.', 'error');
         return;
       }
       input.value = "";
@@ -1393,8 +1358,7 @@ function handleInfoClick(event) {
   const tagText = input.value.trim();
   if (!tagText) return;
   if (isReservedTagPrefix(tagText)) {
-    const modal = document.getElementById("reserved-tag-modal");
-    if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
+    cwocToast('Tags starting with "CWOC_System/" are reserved.', 'error');
     return;
   }
   if (event.shiftKey) {
@@ -1423,8 +1387,7 @@ function addTag() {
   const tagText = input.value.trim();
   if (!tagText) return;
   if (isReservedTagPrefix(tagText)) {
-    const modal = document.getElementById("reserved-tag-modal");
-    if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
+    cwocToast('Tags starting with "CWOC_System/" are reserved.', 'error');
     return;
   }
   input.value = "";
@@ -1535,15 +1498,21 @@ function toggleTagFavorite() {}
 function saveTag() { if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) cwocTagModal.close(); }
 function deleteTag() { if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) cwocTagModal.close(); }
 
-function openDeleteModal(event, item) {
+async function openDeleteModal(event, item) {
   event.stopPropagation();
-  itemToDelete = item;
-  document.getElementById("delete-modal").style.display = "flex";
-}
-
-function closeDuplicateTagModal() {
-  const modal = document.getElementById("duplicate-tag-modal");
-  modal.style.display = "none";
+  var isColor = item.classList.contains("color-item");
+  var label = isColor ? (item.dataset.name || 'Custom') + ' (' + item.dataset.color + ')' : (item.textContent || '').replace(/✕$/, '').trim();
+  var title = isColor ? 'Delete Color' : 'Delete Tag';
+  var message = 'Are you sure you want to delete "' + label + '"?';
+  var confirmed = await cwocConfirm(message, { title: title, confirmLabel: '🗑️ Delete', danger: true });
+  if (!confirmed) return;
+  if (isColor) {
+    deleteColor(item.dataset.color, item.dataset.name);
+  } else {
+    item.remove();
+    setSaveButtonUnsaved();
+    _renderSettingsTagTree();
+  }
 }
 
 // ── Save/Cancel/ESC ──────────────────────────────────────────────────────────
@@ -1591,8 +1560,6 @@ document.addEventListener("keydown", (event) => {
     var emailAccountsModal = document.getElementById("email-accounts-modal");
     if (emailAccountsModal && emailAccountsModal.style.display === "flex") {
       event.preventDefault(); event.stopPropagation();
-      var deleteEmailModal = document.getElementById("deleteEmailAccountModal");
-      if (deleteEmailModal && deleteEmailModal.style.display === "flex") { deleteEmailModal.style.display = "none"; return; }
       var editView = document.getElementById("emailModalEditView");
       if (editView && editView.style.display !== "none") { _emailModalBackToList(); } else { closeEmailAccountsModal(); }
       return;
@@ -1601,23 +1568,16 @@ document.addEventListener("keydown", (event) => {
     if (qrOverlay) { qrOverlay.remove(); return; }
     if (cwocTagModal.isOpen()) { cwocTagModal.close(); return; }
     if (document.getElementById("tag-modal") && document.getElementById("tag-modal").style.display === "flex") { closeTagModal(); return; }
-    if (document.getElementById("delete-modal").style.display === "flex") { closeDeleteModal(); return; }
-    if (document.getElementById("duplicate-tag-modal").style.display === "flex") { closeDuplicateTagModal(); return; }
     var unsavedModal = document.getElementById("cwoc-unsaved-modal");
     if (unsavedModal) { unsavedModal.remove(); return; }
     if (document.activeElement && document.activeElement.tagName && ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) { document.activeElement.blur(); return; }
     cancelSettings();
   } else if (event.key === "Enter") {
     if (cwocTagModal.isOpen()) {
-    } else if (document.getElementById("delete-modal").style.display === "flex") {
-      confirmDelete();
-    } else if (document.getElementById("duplicate-tag-modal").style.display === "flex") {
-      closeDuplicateTagModal();
     }
   }
 });
 
-document.getElementById("duplicate-tag-modal").addEventListener("click", closeDuplicateTagModal);
 
 updateGrid();
 
@@ -2187,10 +2147,7 @@ function setSaveButtonSaved() {
   if (window._cwocSave) window._cwocSave.markSaved();
 }
 
-function closeDeleteModal() {
-  document.getElementById("delete-modal").style.display = "none";
-  itemToDelete = null;
-}
+// closeDeleteModal removed — #delete-modal migrated to cwocConfirm
 
 function monitorChanges() {
   const formElements = document.querySelectorAll("input, select, textarea");
@@ -2268,6 +2225,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadVersionInfo();
   refreshDiskUsage();
   loadImportBatches();
+  loadIcsImportOwnerPicker();
 
   _loadTagSharingData();
 
@@ -2301,17 +2259,52 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(function() {
       var hash = window.location.hash.substring(1).toLowerCase();
       // Map hash names to tabs
-      var tabMap = { 'email': 'email', 'admin': 'admin', 'administration': 'admin', 'views': 'views', 'collections': 'collections', 'tags': 'collections', 'colors': 'collections', 'calendar': 'views' };
+      var tabMap = {
+        'general': 'general',
+        'email': 'email', 'accounts': 'email', 'signature': 'email', 'syncing': 'email', 'badges': 'email',
+        'admin': 'admin', 'administration': 'admin',
+        'data': 'admin', 'data-management': 'admin', 'dependent-apps': 'admin', 'network-access': 'admin',
+        'home-assistant': 'admin', 'kiosk': 'admin', 'version': 'admin', 'updates': 'admin',
+        'views': 'views', 'omni-view': 'views', 'omni': 'views', 'map-settings': 'views', 'habits': 'views', 'periods': 'views',
+        'collections': 'collections', 'tags': 'collections', 'colors': 'collections', 'saved-locations': 'collections',
+        'calendar': 'views',
+        'clocks': 'general', 'visual-indicators': 'general', 'indicators': 'general',
+        'custom-filters': 'general', 'install-app': 'general', 'pwa': 'general',
+        'unit-system': 'general', 'units': 'general'
+      };
       if (tabMap[hash]) {
         _switchSettingsTab(tabMap[hash]);
       }
-      // Also scroll to specific headings within the active tab
-      var headingMap = { 'notifications': '🔔 Default Notifications', 'calendar': '📅 Time Periods' };
+      // Also scroll to specific sections/headings within the active tab
+      var headingMap = {
+        'notifications': '🔔 Default Notifications',
+        'calendar': '📅 Time Periods',
+        'periods': '📅 Time Periods',
+        'data-management': '📦 Data Management',
+        'data': '📦 Data Management',
+        'dependent-apps': '📱 Dependent Apps',
+        'network-access': '📱 Dependent Apps',
+        'home-assistant': '🏠 Home Assistant',
+        'kiosk': '📺 Kiosk',
+        'version': '🔄 Version & Updates',
+        'updates': '🔄 Version & Updates',
+        'omni-view': '🔮 Omni View',
+        'omni': '🔮 Omni View',
+        'map-settings': '🗺️ Map Settings',
+        'habits': '🎯 Habits',
+        'install-app': '📱 Install as App',
+        'pwa': '📱 Install as App',
+        'badges': '🏷️ Badges',
+        'visual-indicators': 'Visual Indicators',
+        'indicators': 'Visual Indicators',
+        'clocks': '🕰️ Time Format',
+        'custom-filters': 'Custom Filters & Sorting'
+      };
       var target = headingMap[hash];
       if (target) {
-        var headings = document.querySelectorAll('.settings-tab-content.active h3');
+        var headings = document.querySelectorAll('.settings-tab-content.active h3, .settings-tab-content.active label.setting-subheader');
         for (var i = 0; i < headings.length; i++) {
-          if (headings[i].textContent.trim() === target) {
+          if (headings[i].textContent.trim().indexOf(target) !== -1 || headings[i].textContent.trim() === target) {
             headings[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
             headings[i].style.transition = 'background 0.3s';
             headings[i].style.background = 'rgba(212, 175, 55, 0.3)';

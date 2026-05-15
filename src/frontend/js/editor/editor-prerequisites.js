@@ -292,40 +292,24 @@ function _openPrereqChit(chitId) {
   var url = '/frontend/html/editor.html?id=' + encodeURIComponent(chitId);
 
   if (window._cwocSave && window._cwocSave.hasChanges()) {
-    var existing = document.getElementById('cwoc-unsaved-modal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'cwoc-unsaved-modal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.innerHTML =
-      '<div class="modal-content">' +
-        '<h3>Unsaved Changes</h3>' +
-        '<p>You have unsaved changes. What would you like to do?</p>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
-          '<button class="standard-button" id="cwoc-stay-here">Cancel</button>' +
-          '<button class="standard-button" id="cwoc-save-exit">💾 Save &amp; Go</button>' +
-          '<button class="standard-button" id="cwoc-confirm-exit" style="background:#a0522d;color:#fdf5e6;">🗑️ Discard</button>' +
-        '</div>' +
-      '</div>';
-    document.body.appendChild(modal);
-    document.getElementById('cwoc-stay-here').onclick = function() { modal.remove(); };
-    document.getElementById('cwoc-save-exit').onclick = function() {
-      modal.remove();
-      saveChitData().then(function(success) {
-        if (success !== false) {
-          window._cwocSkipBeforeUnload = true;
-          window.location.href = url;
-        }
-      });
-    };
-    document.getElementById('cwoc-confirm-exit').onclick = function() {
-      if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
-      window._cwocSkipBeforeUnload = true;
-      window.location.href = url;
-    };
-    var _onKey = function(e) { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', _onKey); } };
-    document.addEventListener('keydown', _onKey);
+    cwocUnsavedModal({
+      saveLabel: '💾 Save & Go',
+      discardLabel: '🗑️ Discard'
+    }).then(function(result) {
+      if (result === 'save') {
+        saveChitData().then(function(success) {
+          if (success !== false) {
+            window._cwocSkipBeforeUnload = true;
+            window.location.href = url;
+          }
+        });
+      } else if (result === 'discard') {
+        if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+        window._cwocSkipBeforeUnload = true;
+        window.location.href = url;
+      }
+      // 'cancel' — do nothing, stay on page
+    });
   } else {
     window.location.href = url;
   }

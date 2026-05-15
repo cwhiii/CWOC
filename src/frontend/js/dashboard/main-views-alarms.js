@@ -1040,10 +1040,8 @@ function _displayRemindersView(chitsToDisplay) {
         card.style.transition = 'opacity 0.3s, transform 0.3s';
         card.style.opacity = '0.4';
         card.style.transform = 'translateX(20px)';
-        _emailUndoToast(
-          '✓ Completed: ' + (chit.title || 'Reminder'),
-          // onExpire — actually complete + archive
-          function() {
+        cwocUndoToast('✓ Completed: ' + (chit.title || 'Reminder'), {
+          onExpire: function() {
             fetch('/api/chits/' + encodeURIComponent(chit.id), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -1061,12 +1059,12 @@ function _displayRemindersView(chitsToDisplay) {
               }
             });
           },
-          // onUndo — restore the card
-          function() {
+          onUndo: function() {
             card.style.opacity = '';
             card.style.transform = '';
-          }
-        );
+          },
+          id: 'emailUndoToast'
+        });
       }
     });
     actions.appendChild(statusBtn);

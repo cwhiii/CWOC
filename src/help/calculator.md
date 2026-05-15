@@ -1,5 +1,12 @@
 # Calculator
 
+- [Arithmetic](#arithmetic)
+- [Keyboard Input](#keyboard-input)
+- [Insert Result](#insert-result)
+- [Draggable](#draggable)
+- [ESC to Close](#esc-to-close)
+
+
 Press `F4` on any page to open a floating calculator popover. Press the same hotkey again (or `ESC`) to close it. The calculator provides basic arithmetic with correct operator precedence and can insert results directly into editor fields.
 
 ## Arithmetic

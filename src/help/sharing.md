@@ -1,5 +1,9 @@
 # Sharing
 
+- [Roles](#roles)
+- [Dashboard](#dashboard)
+
+
 Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the [chit editor](/editor).
 
 ## Roles

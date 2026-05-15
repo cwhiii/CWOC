@@ -263,7 +263,10 @@ def find_duplicates(cursor, user_id: str, chits: List[dict]) -> Set[int]:
 
 @router.post("/api/import/ics", response_model=ICSImportResponse)
 async def import_ics(body: ICSImportRequest, request: Request):
-    """Import iCalendar (.ics) file content as CWOC chits."""
+    """Import iCalendar (.ics) file content as CWOC chits.
+
+    Admins can pass target_user_id to import on behalf of another user.
+    """
     user_id = request.state.user_id
 
     # Parse ICS content
@@ -288,11 +291,21 @@ async def import_ics(body: ICSImportRequest, request: Request):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # Look up user info
-        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        # Determine the target user (admin can import on behalf of another user)
+        target_user_id = user_id
+        if body.target_user_id and body.target_user_id != user_id:
+            # Verify caller is admin
+            if not _is_admin(conn, user_id):
+                raise HTTPException(status_code=403, detail="Only admins can import on behalf of another user")
+            target_user_id = body.target_user_id
+
+        # Look up target user info
+        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (target_user_id,))
         user_row = cursor.fetchone()
-        display_name = user_row[0] if user_row else ""
-        username = user_row[1] if user_row else getattr(request.state, "username", "")
+        if not user_row:
+            raise HTTPException(status_code=404, detail="Target user not found")
+        display_name = user_row[0] or ""
+        username = user_row[1] or ""
 
         # Map all components to chits
         mapped_chits: List[dict] = []
@@ -300,13 +313,13 @@ async def import_ics(body: ICSImportRequest, request: Request):
 
         for i, comp in enumerate(components):
             try:
-                chit = map_component_to_chit(comp, user_id, display_name, username, batch_tag, calendar_name)
+                chit = map_component_to_chit(comp, target_user_id, display_name, username, batch_tag, calendar_name)
                 mapped_chits.append(chit)
             except Exception as e:
                 mapping_errors.append(f"Component {i + 1}: {str(e)}")
 
         # Detect duplicates
-        duplicate_indices = find_duplicates(cursor, user_id, mapped_chits)
+        duplicate_indices = find_duplicates(cursor, target_user_id, mapped_chits)
 
         # Insert non-duplicate chits in a single transaction
         imported_count = 0
@@ -394,7 +407,7 @@ async def import_ics(body: ICSImportRequest, request: Request):
                     continue
                 chit_tags = chit.get("tags") or []
                 all_tags.extend(chit_tags)
-            ensure_tags_in_settings(conn, user_id, all_tags)
+            ensure_tags_in_settings(conn, target_user_id, all_tags)
         except Exception as e:
             logger.warning(f"ICS import: could not register tags in settings: {str(e)}")
 

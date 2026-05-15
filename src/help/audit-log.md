@@ -1,5 +1,14 @@
 # Audit Log
 
+- [What Is Tracked](#what-is-tracked)
+- [Actor](#actor)
+- [Accessing the Audit Log](#accessing-the-audit-log)
+- [Global Audit Log Page](#global-audit-log-page)
+- [Log Management](#log-management)
+- [Audit Log Limits](#audit-log-limits)
+- [Column Reordering](#column-reordering)
+
+
 CWOC tracks all changes to your data with a built-in audit log. Every create, update, and delete operation on chits, contacts, settings, and system upgrades is recorded automatically.
 
 ## What Is Tracked
@@ -14,11 +23,11 @@ Each audit entry records the actor (who made the change), a timestamp, the actio
 
 ## Actor
 
-The actor field reflects the username configured in [Settings](/frontend/html/settings.html) → General. If no username is set, the actor defaults to **"Unknown Gremlin"**. The username is stored as a snapshot at the time of the change — if you later change your username, older entries still show the name you had when the change was made.
+The actor field reflects the username configured in [Settings → General](/frontend/html/settings.html#general). If no username is set, the actor defaults to **"Unknown Gremlin"**. The username is stored as a snapshot at the time of the change — if you later change your username, older entries still show the name you had when the change was made.
 
 ## Accessing the Audit Log
 
-- **Global Audit Log page** — Access via [Settings](/frontend/html/settings.html) → Data → Audit Log, or the Audit Log link in the navigation header. Shows all audit entries across all entities.
+- **Global Audit Log page** — Access via [Settings → Data → Audit Log](/frontend/html/settings.html#data-management), or the Audit Log link in the navigation header. Shows all audit entries across all entities.
 - **Per-chit link** — The [chit editor](/editor) has an "📜 Audit Log" button at the bottom that deep-links to the audit log filtered for that chit.
 - **Per-contact link** — The [contact editor](/frontend/html/people.html) has an "📜 Audit Log" button that deep-links to the audit log filtered for that contact.
 
@@ -40,7 +49,7 @@ The dedicated audit log page provides a full-featured interface for browsing cha
 
 ## Audit Log Limits
 
-In [Settings](/frontend/html/settings.html) → Data → Audit Log Limits, you can configure automatic pruning:
+In [Settings → Data → Audit Log Limits](/frontend/html/settings.html#data-management), you can configure automatic pruning:
 
 - **Enable Pruning** — Checkbox to enable or disable automatic pruning. When unchecked, both limit inputs are disabled and pruning is skipped entirely.
 - **Max Age (days)** — Entries older than this are pruned automatically. Default: 1096 (3 years). Minimum: 1.

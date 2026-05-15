@@ -1,6 +1,6 @@
 # Saved Locations
 
-Manage saved locations in [Settings](/frontend/html/settings.html) → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.
+Manage saved locations in [Settings → Saved Locations](/frontend/html/settings.html#saved-locations). Each location has a label and an address. Use the radio button to mark one as the default.
 
 - **Adding** — Click ➕ Add Location to add a new row. Fill in a label and address.
 - **Default** — Select the radio button next to a location to make it the default. If only one location has an address, it is auto-selected.

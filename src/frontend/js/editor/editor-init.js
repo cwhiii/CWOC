@@ -1605,11 +1605,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      const deleteModal = document.getElementById('deleteChitModal');
-      if (deleteModal && deleteModal.style.display === 'block') {
-        deleteModal.style.display = 'none';
-        return;
-      }
+      // deleteChitModal removed — cwocConfirm handles its own ESC
 
       const alertModals = ['alarmModal', 'timerModal', 'stopwatchModal', 'notificationModal', 'alertModal'];
       for (const mid of alertModals) {

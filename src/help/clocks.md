@@ -1,6 +1,10 @@
 # Clocks
 
-Press `L` on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in [Settings](/frontend/html/settings.html) → Clocks.
+- [Clock Types](#clock-types)
+- [Configuration](#configuration)
+
+
+Press `L` on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in [Settings → Clocks](/frontend/html/settings.html#clocks).
 
 ## Clock Types
 

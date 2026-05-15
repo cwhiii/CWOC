@@ -229,6 +229,91 @@
 
     </div>
 
+    <!-- ═══ SMART INPUT TEMPLATES ═══ -->
+
+    <!-- Contact autocomplete (email or name mode) -->
+    <template id="tmpl-smart-autocomplete">
+        <div class="smart-input-autocomplete-wrapper">
+            <input type="text" class="smart-input-autocomplete" placeholder="Type to search…" />
+            <div class="smart-input-autocomplete-dropdown"></div>
+        </div>
+    </template>
+
+    <!-- Color swatches grid with hex input -->
+    <template id="tmpl-smart-color-swatches">
+        <div class="smart-input-color-swatches">
+            <div class="smart-input-swatch-grid"></div>
+            <input type="text" class="smart-input-color-hex" placeholder="#000000" maxlength="7" />
+        </div>
+    </template>
+
+    <!-- Location combobox (dropdown + text input) -->
+    <template id="tmpl-smart-location-combobox">
+        <div class="smart-input-location-combobox">
+            <input type="text" class="smart-input-location-input" placeholder="Type or select location…" maxlength="200" />
+            <div class="smart-input-dropdown"></div>
+        </div>
+    </template>
+
+    <!-- Weather input (numeric threshold + location selector) -->
+    <template id="tmpl-smart-weather-input">
+        <div class="smart-input-weather-wrapper">
+            <input type="number" class="smart-input-weather-numeric" placeholder="Threshold" />
+            <div class="smart-input-weather-location">
+                <input type="text" class="smart-input-location-input" placeholder="Location…" maxlength="200" />
+                <div class="smart-input-dropdown"></div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Create Chit action panel -->
+    <template id="tmpl-smart-create-chit">
+        <div class="smart-input-create-chit-panel">
+            <label class="create-chit-field-label">Title</label>
+            <input type="text" class="create-chit-field-input" data-field="title" placeholder="e.g. {{matched_title}} follow-up" />
+
+            <label class="create-chit-field-label">Note</label>
+            <textarea class="create-chit-field-input" data-field="note" rows="3" placeholder="Supports {{placeholder}} templates"></textarea>
+
+            <label class="create-chit-field-label">Status</label>
+            <select class="create-chit-field-input" data-field="status">
+                <option value="">— None —</option>
+                <option value="ToDo">ToDo</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Complete">Complete</option>
+                <option value="Rejected">Rejected</option>
+            </select>
+
+            <label class="create-chit-field-label">Priority</label>
+            <select class="create-chit-field-input" data-field="priority">
+                <option value="">— None —</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+            </select>
+
+            <label class="create-chit-field-label">Tags</label>
+            <div class="create-chit-field-input" data-field="tags"></div>
+
+            <label class="create-chit-field-label">Start Date/Time</label>
+            <input type="text" class="create-chit-field-input" data-field="start_datetime" placeholder="e.g. {{today}}T09:00:00" />
+
+            <label class="create-chit-field-label">Due Date/Time</label>
+            <input type="text" class="create-chit-field-input" data-field="due_datetime" placeholder="e.g. {{today}}T17:00:00" />
+
+            <label class="create-chit-field-label">Location</label>
+            <input type="text" class="create-chit-field-input" data-field="location" placeholder="e.g. {{location}} or address" />
+
+            <label class="create-chit-field-label">Color</label>
+            <div class="create-chit-field-input" data-field="color"></div>
+
+            <label class="create-chit-field-label">People</label>
+            <div class="create-chit-field-input" data-field="people"></div>
+        </div>
+    </template>
+
     <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
     <script src="/frontend/js/shared/shared-auth.js"></script>
     <script src="/frontend/js/shared/shared-utils.js"></script>

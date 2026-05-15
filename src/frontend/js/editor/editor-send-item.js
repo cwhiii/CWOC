@@ -633,65 +633,33 @@ function _sendItemConfirmAndNavigate() {
     return;
   }
 
-  // Show the save/discard/cancel modal
-  var existing = document.getElementById('cwoc-unsaved-modal');
-  if (existing) existing.remove();
-
-  var modal = document.createElement('div');
-  modal.id = 'cwoc-unsaved-modal';
-  modal.className = 'modal';
-  modal.style.display = 'flex';
-  modal.innerHTML = '<div class="modal-content">'
-    + '<h3>Unsaved Changes</h3>'
-    + '<p>You have unsaved changes. What would you like to do?</p>'
-    + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'
-    + '<button class="standard-button" id="cwoc-spawn-cancel">Cancel</button>'
-    + '<button class="standard-button" id="cwoc-spawn-save">💾 Save &amp; Continue</button>'
-    + '<button class="standard-button" id="cwoc-spawn-discard" style="background:#a0522d;color:#fdf5e6;">🗑️ Discard &amp; Continue</button>'
-    + '</div>'
-    + '</div>';
-  document.body.appendChild(modal);
-
-  // Cancel — stay here, clean up prefill data
-  document.getElementById('cwoc-spawn-cancel').onclick = function() {
-    modal.remove();
-    sessionStorage.removeItem('cwoc_prefill_checklist');
-  };
-
-  // Save & Continue — save current chit, then navigate
-  document.getElementById('cwoc-spawn-save').onclick = function() {
-    modal.remove();
-    if (typeof saveChitAndStay === 'function') {
-      saveChitAndStay().then(function() {
+  // Show the shared unsaved-changes modal
+  cwocUnsavedModal({
+    saveLabel: '💾 Save & Continue',
+    discardLabel: '🗑️ Discard & Continue'
+  }).then(function(result) {
+    if (result === 'save') {
+      if (typeof saveChitAndStay === 'function') {
+        saveChitAndStay().then(function() {
+          window.location.href = targetUrl;
+        }).catch(function(e) {
+          console.error('Failed to save before navigating:', e);
+          cwocToast('Save failed. Please save manually.', 'error');
+          sessionStorage.removeItem('cwoc_prefill_checklist');
+        });
+      } else {
         window.location.href = targetUrl;
-      }).catch(function(e) {
-        console.error('Failed to save before navigating:', e);
-        cwocToast('Save failed. Please save manually.', 'error');
-        sessionStorage.removeItem('cwoc_prefill_checklist');
-      });
-    } else {
+      }
+    } else if (result === 'discard') {
+      if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+      if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
+      window._cwocSkipBeforeUnload = true;
       window.location.href = targetUrl;
-    }
-  };
-
-  // Discard & Continue — abandon changes, navigate
-  document.getElementById('cwoc-spawn-discard').onclick = function() {
-    modal.remove();
-    if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
-    if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
-    window._cwocSkipBeforeUnload = true;
-    window.location.href = targetUrl;
-  };
-
-  // ESC closes the modal (same as Cancel)
-  var onKey = function(e) {
-    if (e.key === 'Escape') {
-      modal.remove();
+    } else {
+      // 'cancel' — stay here, clean up prefill data
       sessionStorage.removeItem('cwoc_prefill_checklist');
-      document.removeEventListener('keydown', onKey);
     }
-  };
-  document.addEventListener('keydown', onKey);
+  });
 }
 
 /* ── Flash arrow on new item add ──────────────────────────────────────────── */

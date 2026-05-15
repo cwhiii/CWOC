@@ -1,6 +1,6 @@
 # Trash
 
-When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from [Settings](/frontend/html/settings.html) → Data.
+When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from [Settings → Data](/frontend/html/settings.html#data-management).
 
 - **User scoping** — Regular users see only their own deleted chits. Admins see all deleted chits across all users, with an extra "Owner" column showing who each chit belongs to.
 - **Restore** — Click the Restore button on any row to un-delete the chit and return it to your active views.

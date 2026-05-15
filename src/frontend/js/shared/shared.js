@@ -2075,71 +2075,21 @@ function _onNotesDragKey(e) {
 
 /**
  * Show a delete-undo toast with a countdown timer bar.
+ * Delegates to cwocUndoToast (shared-utils.js).
  * @param {string} chitId - The deleted chit's ID
  * @param {string} chitTitle - The chit title for display
  * @param {function} onExpire - Called when toast expires (no undo)
  * @param {function} onUndo - Called when user clicks Undo
+ * @param {string} customMessage - Optional custom message (overrides default)
  */
 function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo, customMessage) {
-  var DURATION = 5000;
-
-  // Remove any existing undo toast
-  var existing = document.querySelector('.cwoc-undo-toast');
-  if (existing) existing.remove();
-
-  var toast = document.createElement("div");
-  toast.className = "cwoc-undo-toast";
-
-  var msgRow = document.createElement("div");
-  msgRow.className = "cwoc-undo-msg-row";
-  var msg = document.createElement("span");
-  msg.className = "cwoc-undo-msg";
-  var _msgContent = customMessage || ("🗑️ Deleted: " + (chitTitle || "(Untitled)"));
-  if (_msgContent.indexOf('<') !== -1) {
-    msg.innerHTML = _msgContent;
-  } else {
-    msg.textContent = _msgContent;
-  }
-  var undoBtn = document.createElement("button");
-  undoBtn.textContent = "Undo";
-  undoBtn.className = "cwoc-undo-btn";
-  msgRow.appendChild(msg);
-  msgRow.appendChild(undoBtn);
-  toast.appendChild(msgRow);
-
-  // Timer bar
-  var barOuter = document.createElement("div");
-  barOuter.className = "cwoc-undo-bar-outer";
-  var barInner = document.createElement("div");
-  barInner.className = "cwoc-undo-bar-inner";
-  barOuter.appendChild(barInner);
-  toast.appendChild(barOuter);
-
-  document.body.appendChild(toast);
-
-  var start = Date.now();
-  var dismissed = false;
-  var interval = setInterval(function () {
-    var elapsed = Date.now() - start;
-    var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
-    barInner.style.width = pct + "%";
-    if (elapsed >= DURATION) {
-      clearInterval(interval);
-      if (!dismissed) {
-        dismissed = true;
-        toast.remove();
-        if (onExpire) onExpire();
-      }
-    }
-  }, 50);
-
-  undoBtn.onclick = function () {
-    if (dismissed) return;
-    dismissed = true;
-    clearInterval(interval);
-    toast.remove();
-    if (onUndo) onUndo();
-  };
+  var message = customMessage || ("🗑️ Deleted: " + (chitTitle || "(Untitled)"));
+  cwocUndoToast(message, {
+    duration: 5000,
+    onExpire: onExpire || null,
+    onUndo: onUndo || null,
+    id: 'cwoc-undo-toast'
+  });
 }
 
 /**

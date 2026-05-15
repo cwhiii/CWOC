@@ -1,5 +1,20 @@
 # Habits
 
+- [Habit Toggle](#habit-toggle)
+- [Date Options for Habits](#date-options-for-habits)
+- [Goal and Progress](#goal-and-progress)
+- [Habits Zone (Editor)](#habits-zone-editor)
+- [Reset Period (Cooldown)](#reset-period-cooldown)
+- [Switching to Habits Mode](#switching-to-habits-mode)
+- [Habits View Sections](#habits-view-sections)
+- [Habit Cards](#habit-cards)
+- [Per-Habit Options](#per-habit-options)
+- [Period Rollover](#period-rollover)
+- [Habit Icon](#habit-icon)
+- [Sidebar Filter](#sidebar-filter)
+- [Settings](#settings)
+
+
 CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit, with its own goal/progress system, charts, reset periods, and a dedicated Habits view in the [Tasks view](/frontend/html/help.html#views).
 
 ## Habit Toggle
@@ -69,7 +84,7 @@ Each habit appears as a card showing:
 ## Per-Habit Options
 
 - **Show overall % in view** — Default on. When unchecked, the Overall % metric box is hidden from the habit card
-- **Show on calendar views** — When off, the habit is hidden from all calendar views but still appears in the Habits view. Default for new habits is controlled by [Settings](/frontend/html/settings.html) → Habits
+- **Show on calendar views** — When off, the habit is hidden from all calendar views but still appears in the Habits view. Default for new habits is controlled by [Settings → Habits](/frontend/html/settings.html#habits)
 - **Reset period** — Optional cooldown (see above)
 - **Perpetual mode** — Via the ♾️ Perpetual date radio option
 

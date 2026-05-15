@@ -348,6 +348,8 @@ from src.backend.routes.network_access import router as network_access_router
 from src.backend.routes.push import push_router
 from src.backend.routes.ntfy import ntfy_router
 from src.backend.routes.ics_import import router as ics_import_router
+from src.backend.routes.tasks_import import router as tasks_import_router
+from src.backend.routes.keep_import import router as keep_import_router
 from src.backend.routes.email import email_router
 from src.backend.routes.attachments import attachments_router
 from src.backend.routes.rules import router as rules_router
@@ -374,6 +376,8 @@ app.include_router(ntfy_router)
 app.include_router(network_access_router)
 app.include_router(push_router)
 app.include_router(ics_import_router)
+app.include_router(tasks_import_router)
+app.include_router(keep_import_router)
 app.include_router(email_router)
 app.include_router(attachments_router)
 app.include_router(rules_router)

@@ -1,5 +1,10 @@
 # Keyboard Shortcuts
 
+- [Dashboard Navigation](#dashboard-navigation)
+- [View Switching](#view-switching)
+- [Editor Shortcuts](#editor-shortcuts)
+
+
 CWOC provides extensive keyboard shortcuts for fast navigation and actions. Press `?` on the dashboard to see the full hotkey overlay.
 
 ## Dashboard Navigation

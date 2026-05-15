@@ -484,82 +484,23 @@ function _emailCheckPendingSend() {
         // Only process if it's recent (within 30 seconds)
         if (Date.now() - pending.timestamp > 30000) return;
 
-        _emailShowUndoSendBar(pending.chitId, pending.archiveOriginal, pending.inReplyTo);
+        // Read undo delay from settings (default 5 seconds)
+        var delaySec = (window._cwocSettings && window._cwocSettings.email_undo_send_delay)
+            ? parseInt(window._cwocSettings.email_undo_send_delay, 10) || 5 : 5;
+
+        var chitId = pending.chitId;
+        var archiveOriginal = pending.archiveOriginal;
+        var inReplyTo = pending.inReplyTo;
+
+        cwocUndoToast('✉️ Sending email...', {
+            duration: delaySec * 1000,
+            onExpire: function() { _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo); },
+            onUndo: function() { cwocToast('Send cancelled.', 'info'); },
+            id: 'emailUndoSendToast'
+        });
     } catch (e) {
         console.error('[Email] Failed to parse pending send:', e);
     }
-}
-
-/**
- * Show the undo-send countdown bar on the dashboard.
- * @param {string} chitId
- * @param {boolean} archiveOriginal
- * @param {string|null} inReplyTo
- */
-function _emailShowUndoSendBar(chitId, archiveOriginal, inReplyTo) {
-    // Read undo delay from settings (default 5 seconds)
-    var delaySec = 5;
-    try {
-        var settings = window._cwocSettings || (typeof getCachedSettings === 'function' ? getCachedSettings() : null);
-        if (settings && settings.email_undo_send_delay) {
-            delaySec = parseInt(settings.email_undo_send_delay, 10) || 5;
-        }
-    } catch(e) {}
-    var DURATION = delaySec * 1000;
-
-    // Remove any existing
-    var existing = document.getElementById('emailUndoSendToast');
-    if (existing) existing.remove();
-
-    var toast = document.createElement('div');
-    toast.id = 'emailUndoSendToast';
-    toast.className = 'email-undo-toast';
-
-    var msgRow = document.createElement('div');
-    msgRow.className = 'email-undo-msg-row';
-    var msg = document.createElement('span');
-    msg.className = 'email-undo-msg';
-    msg.textContent = '✉️ Sending email...';
-    var undoBtn = document.createElement('button');
-    undoBtn.className = 'email-undo-btn';
-    undoBtn.textContent = 'Undo';
-    msgRow.appendChild(msg);
-    msgRow.appendChild(undoBtn);
-    toast.appendChild(msgRow);
-
-    var barOuter = document.createElement('div');
-    barOuter.className = 'email-undo-bar-outer';
-    var barInner = document.createElement('div');
-    barInner.className = 'email-undo-bar-inner';
-    barOuter.appendChild(barInner);
-    toast.appendChild(barOuter);
-
-    document.body.appendChild(toast);
-
-    var start = Date.now();
-    var dismissed = false;
-
-    var interval = setInterval(function() {
-        var elapsed = Date.now() - start;
-        var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
-        barInner.style.width = pct + '%';
-        if (elapsed >= DURATION) {
-            clearInterval(interval);
-            if (!dismissed) {
-                dismissed = true;
-                toast.remove();
-                _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo);
-            }
-        }
-    }, 50);
-
-    undoBtn.onclick = function() {
-        if (dismissed) return;
-        dismissed = true;
-        clearInterval(interval);
-        toast.remove();
-        cwocToast('Send cancelled.', 'info');
-    };
 }
 
 /**
@@ -2680,10 +2621,8 @@ function _emailQuickArchive(chit, card) {
 
     var title = chit.title || chit.email_subject || '(No Subject)';
 
-    _emailUndoToast(
-        '📦 Archived: ' + title,
-        // onExpire — actually archive
-        async function() {
+    cwocUndoToast('📦 Archived: ' + title, {
+        onExpire: async function() {
             try {
                 var resp = await fetch('/api/chit/' + encodeURIComponent(chit.id));
                 if (!resp.ok) { cwocToast('Failed to archive email', 'error'); _emailRestoreCard(card); return; }
@@ -2719,12 +2658,12 @@ function _emailQuickArchive(chit, card) {
                 _emailRestoreCard(card);
             }
         },
-        // onUndo — restore the card
-        function() {
+        onUndo: function() {
             _emailRestoreCard(card);
             cwocToast('Archive undone', 'success');
-        }
-    );
+        },
+        id: 'emailUndoToast'
+    });
 }
 
 /**
@@ -2740,10 +2679,8 @@ function _emailQuickDelete(chit, card) {
 
     var title = chit.title || chit.email_subject || '(No Subject)';
 
-    _emailUndoToast(
-        '🗑️ Deleted: ' + title,
-        // onExpire — actually delete
-        async function() {
+    cwocUndoToast('🗑️ Deleted: ' + title, {
+        onExpire: async function() {
             try {
                 var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id), {
                     method: 'DELETE'
@@ -2765,12 +2702,12 @@ function _emailQuickDelete(chit, card) {
                 _emailRestoreCard(card);
             }
         },
-        // onUndo — restore the card
-        function() {
+        onUndo: function() {
             _emailRestoreCard(card);
             cwocToast('Delete undone', 'success');
-        }
-    );
+        },
+        id: 'emailUndoToast'
+    });
 }
 
 /**
@@ -2787,75 +2724,3 @@ function _emailRestoreCard(card) {
     setTimeout(function() { card.classList.remove('email-card-flash'); }, 1500);
 }
 
-/**
- * Show an undo toast with a countdown timer bar for email actions.
- * Reuses the same visual style as _showDeleteUndoToast but with a custom message.
- * @param {string} message - The message to display (e.g. "📦 Archived: Subject")
- * @param {function} onExpire - Called when countdown expires (perform the action)
- * @param {function} onUndo - Called when user clicks Undo
- */
-function _emailUndoToast(message, onExpire, onUndo) {
-    var DURATION = 5000;
-
-    // Remove any existing email undo toast
-    var existing = document.getElementById('emailUndoToast');
-    if (existing) {
-        if (existing._undoDismissed === false && existing._onExpire) existing._onExpire();
-        existing.remove();
-    }
-
-    var toast = document.createElement('div');
-    toast.id = 'emailUndoToast';
-    toast.className = 'email-undo-toast';
-
-    var msgRow = document.createElement('div');
-    msgRow.className = 'email-undo-msg-row';
-    var msg = document.createElement('span');
-    msg.className = 'email-undo-msg';
-    msg.textContent = message;
-    var undoBtn = document.createElement('button');
-    undoBtn.className = 'email-undo-btn';
-    undoBtn.textContent = 'Undo';
-    msgRow.appendChild(msg);
-    msgRow.appendChild(undoBtn);
-    toast.appendChild(msgRow);
-
-    // Timer bar
-    var barOuter = document.createElement('div');
-    barOuter.className = 'email-undo-bar-outer';
-    var barInner = document.createElement('div');
-    barInner.className = 'email-undo-bar-inner';
-    barOuter.appendChild(barInner);
-    toast.appendChild(barOuter);
-
-    document.body.appendChild(toast);
-
-    var start = Date.now();
-    var dismissed = false;
-    toast._undoDismissed = false;
-    toast._onExpire = onExpire;
-
-    var interval = setInterval(function() {
-        var elapsed = Date.now() - start;
-        var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
-        barInner.style.width = pct + '%';
-        if (elapsed >= DURATION) {
-            clearInterval(interval);
-            if (!dismissed) {
-                dismissed = true;
-                toast._undoDismissed = true;
-                toast.remove();
-                if (onExpire) onExpire();
-            }
-        }
-    }, 50);
-
-    undoBtn.onclick = function() {
-        if (dismissed) return;
-        dismissed = true;
-        toast._undoDismissed = true;
-        clearInterval(interval);
-        toast.remove();
-        if (onUndo) onUndo();
-    };
-}

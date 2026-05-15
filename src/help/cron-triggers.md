@@ -1,5 +1,18 @@
 # Cron Triggers & Habit Rules
 
+- [Cron Expression Syntax](#cron-expression-syntax)
+- [Supported Syntax](#supported-syntax)
+- [Common Examples](#common-examples)
+- [Cron Builder UI](#cron-builder-ui)
+- [Habit Mode for Rules](#habit-mode-for-rules)
+- ["Days Ago" Condition Operators](#days-ago-condition-operators)
+- [Weather Condition Operators](#weather-condition-operators)
+  - [Current Weather Operators](#current-weather-operators)
+  - [Forecast Window Operators](#forecast-window-operators)
+- [Create Chit Action](#create-chit-action)
+- [Habit Event Triggers](#habit-event-triggers)
+
+
 The Rules Engine supports **cron-based scheduling** for precise control over when rules fire, and **habit mode** for tracking whether automated maintenance tasks actually run on schedule.
 
 ## Cron Expression Syntax

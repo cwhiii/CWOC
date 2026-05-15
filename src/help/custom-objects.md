@@ -1,5 +1,10 @@
 # Custom Objects
 
+- [Custom Objects Editor](#custom-objects-editor)
+- [Standard Objects](#standard-objects)
+- [Zone Assignments](#zone-assignments)
+
+
 The Custom Objects registry is a generic system for defining trackable data entities. Objects have a type, category, name, value type (integer, decimal, boolean, or string), optional units, and optional acceptable ranges. They can be assigned to one or more zones (like the Health Indicators zone or the Graphs zone) to control where they appear.
 
 ## Custom Objects Editor

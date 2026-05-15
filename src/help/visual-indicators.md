@@ -1,6 +1,13 @@
 # Visual Indicators
 
-Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in [Settings](/frontend/html/settings.html) → Visual Indicators. Each indicator has three visibility modes:
+- [Indicator Types](#indicator-types)
+- [Combine Alerts Toggle](#combine-alerts-toggle)
+- [Calendar Views](#calendar-views)
+- [Card Views](#card-views)
+- ["If Space" Behavior](#if-space-behavior)
+
+
+Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in [Settings → Visual Indicators](/frontend/html/settings.html#visual-indicators). Each indicator has three visibility modes:
 
 - **Always** — The indicator icon is always shown
 - **Never** — The indicator icon is never shown

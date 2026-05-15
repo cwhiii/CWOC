@@ -15,7 +15,7 @@ Settings are organized into groups. Labels and controls are placed inline where 
 - **Habits** — Success rate window (7/30/90 days or all time), default show habits on calendar toggle
 - **Version & Updates** — Current version, upgrade button, update log, restart service (admin only)
 - **Data** — Audit log link, trash link, [audit log](/frontend/html/audit-log.html) pruning limits
-- **[Data Management](/frontend/html/help.html#data-management)** — JSON export/import for chit data and user data (add or replace modes), plus iCalendar (.ics) import for Google Calendar, Apple Calendar, and Outlook
+- **[Data Management](/frontend/html/help.html#data-management)** — JSON export/import for chit data and user data (add or replace modes), plus iCalendar (.ics) import for Google Calendar, Google Tasks import, and Google Keep import
 - **Kiosk** — Select which tags to display on the unauthenticated kiosk view, and launch it
 - **Dependent Apps** — (Admin only) Configure external services: Tailscale VPN for remote access, Ntfy for push notifications
 

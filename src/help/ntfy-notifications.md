@@ -1,10 +1,17 @@
 # Ntfy Notifications
 
+- [Setup (One-Time)](#setup-one-time)
+- [How It Works at Home vs. Away](#how-it-works-at-home-vs-away)
+- [Tailscale Subnet Routing (Required for Remote Access)](#tailscale-subnet-routing-required-for-remote-access)
+- [What Gets Notified](#what-gets-notified)
+- [Troubleshooting](#troubleshooting)
+
+
 Ntfy is a lightweight push notification service that delivers alerts to your phone even when the browser is closed. CWOC runs its own Ntfy server alongside the main app — no third-party services needed. Notifications work for chit alarms, start times, and due dates.
 
 ## Setup (One-Time)
 
-1. **Enable Ntfy on the server** — Go to **[Settings](/frontend/html/settings.html) → Dependent Apps → Ntfy** (admin only). Expand the Ntfy section and check that the status shows 🟢 Active. Click **💾 Save Config** if not already enabled.
+1. **Enable Ntfy on the server** — Go to **[Settings → Dependent Apps → Ntfy](/frontend/html/settings.html#dependent-apps)** (admin only). Expand the Ntfy section and check that the status shows 🟢 Active. Click **💾 Save Config** if not already enabled.
 2. **Note your Topic and Server URL** — In the same section, your auto-generated Topic (e.g., `cwoc-a1b2c3d4e5f6`) and Server URL (e.g., `http://192.168.1.111:2586`) are displayed. You'll need both for the next step.
 3. **Install the Ntfy app on your phone**
    - **Android:** Search "ntfy" on the Google Play Store or F-Droid
@@ -14,7 +21,7 @@ Ntfy is a lightweight push notification service that delivers alerts to your pho
    - **Server URL:** Enter the Server URL shown in Settings — use the **local IP** with port 2586 (e.g., `http://192.168.1.111:2586`)
    - **Important:** Only add **one** subscription. Do not add a second subscription for the Tailscale IP — that would cause duplicate notifications. The single local-IP subscription works both at home and remotely (see below).
 5. **Enable Instant Delivery** — In the Ntfy app, tap your subscription, then enable **Instant Delivery**. This keeps a persistent connection so notifications arrive immediately.
-6. **Test it** — Back in CWOC [Settings](/frontend/html/settings.html) → Ntfy, click the **🔔 Test** button. You should see a notification on your phone within seconds.
+6. **Test it** — Back in CWOC [Settings → Ntfy](/frontend/html/settings.html#dependent-apps), click the **🔔 Test** button. You should see a notification on your phone within seconds.
 
 ## How It Works at Home vs. Away
 

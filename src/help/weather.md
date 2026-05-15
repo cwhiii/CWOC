@@ -1,6 +1,13 @@
 # Weather
 
-Press `W` on the dashboard to open the full Weather page. Press `Shift+W` for a quick weather modal showing the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting ([Settings](/frontend/html/settings.html) → Unit System). If no default location is configured, the modal will prompt you to set one in [Settings](/frontend/html/settings.html). The modal includes a **📊 Full Forecast** button that opens the dedicated Weather page.
+- [Weather Data on Chits](#weather-data-on-chits)
+- [Calendar View Weather Display](#calendar-view-weather-display)
+- [Weather Page](#weather-page)
+- [City Rows from Chits](#city-rows-from-chits)
+- [Weather Update Schedule](#weather-update-schedule)
+
+
+Press `W` on the dashboard to open the full Weather page. Press `Shift+W` for a quick weather modal showing the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting ([Settings → Unit System](/frontend/html/settings.html#unit-system)). If no default location is configured, the modal will prompt you to set one in [Settings](/frontend/html/settings.html). The modal includes a **📊 Full Forecast** button that opens the dedicated Weather page.
 
 In the [chit editor](/editor), weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.
 

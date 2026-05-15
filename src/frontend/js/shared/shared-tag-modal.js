@@ -103,21 +103,6 @@ var cwocTagModal = (function() {
       </div>
     </div>
 
-    <!-- Duplicate tag toast -->
-    <div class="modal" id="cwoc-tag-modal-dup" style="display:none;">
-      <div class="modal-content" style="animation:fadeOut 2s forwards;">
-        <h3>Duplicate Tag</h3>
-        <p>Duplicate tag not created</p>
-      </div>
-    </div>
-
-    <!-- Reserved tag toast -->
-    <div class="modal" id="cwoc-tag-modal-reserved" style="display:none;">
-      <div class="modal-content" style="animation:fadeOut 2s forwards;">
-        <h3>Reserved Tag</h3>
-        <p>Tags starting with 'CWOC_System/' are reserved for system use.</p>
-      </div>
-    </div>
   `;
 
 
@@ -279,11 +264,7 @@ var cwocTagModal = (function() {
 
     // Block reserved prefix
     if (isReservedTagPrefix(newName)) {
-      var reservedModal = document.getElementById('cwoc-tag-modal-reserved');
-      if (reservedModal) {
-        reservedModal.style.display = 'flex';
-        setTimeout(function() { reservedModal.style.display = 'none'; }, 2000);
-      }
+      cwocToast('Reserved tag prefix.', 'error');
       return;
     }
 
@@ -298,11 +279,7 @@ var cwocTagModal = (function() {
     });
 
     if (isDuplicate) {
-      var dupModal = document.getElementById('cwoc-tag-modal-dup');
-      if (dupModal) {
-        dupModal.style.display = 'flex';
-        setTimeout(function() { dupModal.style.display = 'none'; }, 2000);
-      }
+      cwocToast('Duplicate tag not created.', 'info');
       return;
     }
 

@@ -1,10 +1,18 @@
 # Email
 
-CWOC includes a built-in email client that supports multiple email accounts. Configure your accounts in [Settings](/frontend/html/settings.html) → Email → Accounts. Each account has its own IMAP/SMTP server settings, while syncing configuration (max pull, check interval) and signature are shared across all accounts. Emails are stored as chits with special email fields.
+- [Multiple Accounts](#multiple-accounts)
+- [Email Features](#email-features)
+- [Email Bundles](#email-bundles)
+- [Thread Nests](#thread-nests)
+- [Email Formatting Shortcuts](#email-formatting-shortcuts)
+- [Badges](#badges)
+
+
+CWOC includes a built-in email client that supports multiple email accounts. Configure your accounts in [Settings → Email → Accounts](/frontend/html/settings.html#email). Each account has its own IMAP/SMTP server settings, while syncing configuration (max pull, check interval) and signature are shared across all accounts. Emails are stored as chits with special email fields.
 
 ## Multiple Accounts
 
-- **Add Account** — Click "Add Account" in [Settings](/frontend/html/settings.html) → Email to add a new email account. You can add any number of accounts, including third-party providers (Gmail, Outlook, Yahoo, custom IMAP servers, etc.)
+- **Add Account** — Click "Add Account" in [Settings → Email](/frontend/html/settings.html#email) to add a new email account. You can add any number of accounts, including third-party providers (Gmail, Outlook, Yahoo, custom IMAP servers, etc.)
 - **Per-Account Settings** — Each account has its own email address, display name, username, password, and IMAP/SMTP server configuration
 - **Shared Settings** — Max pull count, check interval, and email signature are shared across all accounts
 - **Test Connection** — Each account card has its own "Test Connection" button to verify IMAP and SMTP connectivity independently
@@ -19,8 +27,8 @@ CWOC includes a built-in email client that supports multiple email accounts. Con
 - **Send & Archive** — Alongside the Send button, Send & Archive sends the reply and archives the original email in one step
 - **Threading** — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages. Click any thread entry to navigate to that email
 - **HTML Rendering** — Received emails with HTML content display in a sandboxed iframe. Use the HTML/Text toggle to switch between rendered and plain-text views
-- **Signature** — Configure a markdown signature in [Settings](/frontend/html/settings.html) → Email → Signature. It is automatically appended to all outgoing emails, converted to HTML
-- **Auto-check** — Configure automatic mail checking intervals in [Settings](/frontend/html/settings.html) → Email → Syncing (5, 15, 30, or 60 minutes)
+- **Signature** — Configure a markdown signature in [Settings → Email → Signature](/frontend/html/settings.html#email). It is automatically appended to all outgoing emails, converted to HTML
+- **Auto-check** — Configure automatic mail checking intervals in [Settings → Email → Syncing](/frontend/html/settings.html#email) (5, 15, 30, or 60 minutes)
 - **Deletion Sync** — When you delete an email in Gmail (or any IMAP provider), the deletion propagates to CWOC on the next sync. The deleted email chit is soft-deleted and moved to Trash. This happens automatically during every mail check, whether manual or auto-check
 - **PGP Encryption** — When composing an email to a contact who has a PGP public key stored in their contact record (Security zone), a PGP button appears in the email zone toolbar. Click it to enable encryption. The message body is encrypted client-side using the recipient's public key before sending. All recipients must have PGP keys on file to enable encryption. PGP-encrypted sent emails display a green lock banner
 - **PGP Decryption** — When viewing a received PGP-encrypted email, a green banner with a "Decrypt" button appears above the message body. Click Decrypt, enter your account password to unlock your private PGP key, and the message is decrypted in-place for viewing. The decrypted text is never saved — it's display-only. If you navigate away, the message returns to its encrypted state. Your private PGP key must be configured in your profile's Security zone
@@ -37,7 +45,7 @@ Bundle tabs appear in a toolbar above your email list when viewing the Inbox sub
 - **Create Bundle** — Click the "+" button at the end of the tab row. Enter a name and optional description, then click "Define Rule" to set up the classification rule in the [Rule Editor](/frontend/html/help.html#cron-triggers)
 - **Edit / Delete** — Right-click (or long-press on mobile) a bundle tab to open the context menu with Edit, Reorder, and Delete options. "Everything Else" cannot be deleted
 - **Reorder** — Choose "Reorder" from the context menu, then drag tabs to rearrange. In single-placement mode, order determines priority (first match wins)
-- **Multi-Placement** — By default, each email goes to the first matching bundle only. Enable "Allow Multi-Placement" in [Settings](/frontend/html/settings.html) → Email to let emails appear in multiple bundles simultaneously
+- **Multi-Placement** — By default, each email goes to the first matching bundle only. Enable "Allow Multi-Placement" in [Settings → Email](/frontend/html/settings.html#email) to let emails appear in multiple bundles simultaneously
 - **Bulk Actions** — Use the Select All checkbox, Archive, Tag, and Mark Read/Unread buttons in the toolbar row above the bundle tabs to act on multiple emails at once
 
 ## Thread Nests
@@ -77,7 +85,7 @@ Badges are smart action buttons that appear on email cards when actionable conte
 - **Automatic Detection** — Badges detect patterns automatically using keyword gates and regex matching. No manual tagging needed
 - **Categories** — Package (UPS, FedEx, USPS, DHL, Amazon, UniUni, OnTrac, LaserShip), Flight, Hotel (Marriott, Hilton, IHG, Hyatt, Airbnb, Booking.com, VRBO), Rental (Enterprise, Hertz, Avis/Budget, Turo), Event (Ticketmaster, Eventbrite, AXS, StubHub, SeatGeek), Restaurant (OpenTable, Resy), Transit (Uber, Lyft), Order (Amazon, Apple, Best Buy, Walmart, Target)
 - **One Per Category** — At most one badge per category per email, up to the configured maximum (default 3)
-- **Configure in Settings** — Go to [Settings](/frontend/html/settings.html) → Badges to enable/disable individual detectors or entire categories, change the max badges per email, or create custom detectors
+- **Configure in Settings** — Go to [Settings → Badges](/frontend/html/settings.html#badges) to enable/disable individual detectors or entire categories, change the max badges per email, or create custom detectors
 - **Custom Detectors** — Define your own detection patterns with keywords, regex, and a URL template. Useful for services not covered by the built-in set (pharmacies, loyalty programs, etc.)
 
 ---

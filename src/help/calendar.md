@@ -8,7 +8,7 @@ Periods: Itinerary, Day, Week, Work Hours, X Days, Month, Year. Switch with the 
 - **Point-in-time** → outward-pointing diamond shape (◇)
 - **Birthday/Anniversary** → concave-notch shape (inward cutouts on left and right edges), with contact thumbnail and 🎂 emoji. Click to open the [contact editor](/frontend/html/people.html). Searchable by name or date label
 - **Work Hours** → only configured working hours and days
-- **X Days** → configurable count ([Settings](/frontend/html/settings.html) → Period Options)
+- **X Days** → configurable count ([Settings → Period Options](/frontend/html/settings.html#periods))
 
 ---
 

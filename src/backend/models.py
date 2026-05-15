@@ -265,6 +265,7 @@ class PrivatePgpKeyRequest(BaseModel):
 
 class ICSImportRequest(BaseModel):
     ics_content: str
+    target_user_id: Optional[str] = None
 
 class ICSImportResponse(BaseModel):
     imported: int

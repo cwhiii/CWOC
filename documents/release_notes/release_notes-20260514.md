@@ -1,3 +1,27 @@
+## 20260514.1821
+
+UI Feedback Consolidation complete — consolidated ~15 distinct UI feedback mechanisms into 5 universal shared functions (`cwocToast`, `cwocUndoToast`, `cwocConfirm`, `cwocPromptModal`, `cwocUnsavedModal`). Deleted duplicate email undo toasts, replaced auto-fade modals with `cwocToast`, migrated legacy HTML delete modals to `cwocConfirm`, extracted `cwocUnsavedModal` for all unsaved-changes dialogs, and unified all modal backdrops under `.cwoc-overlay`.
+
+## 20260514.1744
+
+Added context-aware smart inputs to the Rule Editor condition builder — dropdowns for priority/status/severity/boolean fields, contact autocomplete for email/people fields, location combobox, color swatches, weather condition evaluation, and Create Chit action type.
+
+## 20260514.1917
+
+Updated help index and settings help page to explicitly mention Google Tasks and Google Keep importers in the Data Management entry, improving discoverability via search.
+
+## 20260514.1916
+
+Added Google Keep importer. Parses Google Takeout JSON files (one per note), maps title/textContent/listContent/labels/color/pinned/archived to CWOC chits. List notes become checklists with checked state preserved. Keep labels become tags. Keep colors mapped to hex. Multi-file select supported. Same batch tagging, duplicate detection, and admin user picker as other importers. New endpoint: POST /api/import/google-keep.
+
+## 20260514.1911
+
+Added Google Tasks importer. Parses Google Takeout JSON files (one per task list), maps title/notes/due/status/completed to CWOC chits with proper status mapping (needsAction→ToDo, completed→Complete). Uses the same batch tagging, duplicate detection, admin user picker, and import batch management as the ICS importer. New endpoint: POST /api/import/google-tasks.
+
+## 20260514.1902
+
+Admin ICS import now has a user picker — admin can select which user to import the calendar on behalf of. The dropdown shows all active users and defaults to the current user. Backend validates admin privileges before allowing import-as-another-user.
+
 ## 20260514.1721
 
 Import batch management now supports admin mode. Admins see all import batches across all users (with owner usernames displayed) and can delete any user's batch. Regular users only see and can delete their own batches.
@@ -5,6 +29,10 @@ Import batch management now supports admin mode. Admins see all import batches a
 ## 20260514.1713
 
 ICS calendar import now tracks import batches. Each import tags chits with `cwoc_system/imported/[calendar name]/[date]` for batch identification and `calendar/imported/[calendar name]` for user-facing filtering. Calendar name is extracted from the ICS file's X-WR-CALNAME property. Added Import Batches UI in Settings showing all previous imports with a one-click Delete button to send an entire batch to trash. New API endpoints: GET /api/import/ics/batches and POST /api/import/ics/batches/delete.
+
+## 20260514.1912
+
+Settings links in help docs now deep-link to the correct tab and section. "Settings → Email → Accounts" links to `/frontend/html/settings.html#email` (opens Email tab), "Settings → Data Management" links to `#data-management` (opens Admin tab, scrolls to Data Management), etc. Expanded the settings page hash-based deep-linking to support all sections: email, badges, admin, data-management, dependent-apps, home-assistant, kiosk, version, omni-view, map-settings, habits, periods, clocks, visual-indicators, custom-filters, install-app, saved-locations, tags, and more.
 
 ## 20260514.1700
 

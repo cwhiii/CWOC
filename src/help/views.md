@@ -1,5 +1,8 @@
 # Views
 
+- [Sidebar Layout](#sidebar-layout)
+
+
 The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a [Global Search](/frontend/html/help.html#global-search) view (magnifying glass icon). The **[Omni View](/frontend/html/help.html#omni-view)** (click "Omni" in the header or press `O`) provides a command-center dashboard fusing today's itinerary, pinned chits, and unread email. The **sidebar** (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.
 
 ## Sidebar Layout

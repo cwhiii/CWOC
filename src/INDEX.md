@@ -555,6 +555,37 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `map_rrule_to_recurrence(rrule, start_datetime)` | Translate ICS RRULE dict to CWOC recurrence_rule format |
 | `find_duplicates(cursor, user_id, chits)` | Check which mapped chits already exist in the DB (title + datetime match) |
 
+### 1.22c `src/backend/routes/tasks_import.py` — Google Tasks Import
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/import/google-tasks` | `import_google_tasks(body, request)` | Import Google Tasks (Takeout JSON) as CWOC chits |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_parse_rfc3339(value)` | Convert RFC 3339 timestamp to CWOC ISO format |
+| `_map_status(google_status)` | Map Google Tasks status (needsAction/completed) to CWOC status |
+| `map_task_to_chit(task, list_name, user_id, display_name, username, batch_tag)` | Map a Google Tasks item to a CWOC chit dict |
+| `find_duplicates(cursor, user_id, chits)` | Check for duplicate tasks by title + due_datetime |
+
+### 1.22d `src/backend/routes/keep_import.py` — Google Keep Import
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/import/google-keep` | `import_google_keep(body, request)` | Import Google Keep notes (Takeout JSON) as CWOC chits |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_usec_to_iso(usec)` | Convert microsecond timestamp to ISO datetime string |
+| `_map_color(keep_color)` | Map Google Keep color name to hex color |
+| `_build_checklist(list_content)` | Convert Keep listContent to CWOC checklist format |
+| `map_note_to_chit(note, user_id, display_name, username, batch_tag)` | Map a Google Keep note to a CWOC chit dict |
+| `find_duplicates(cursor, user_id, chits)` | Check for duplicate notes by title + created_datetime |
+
 ### 1.23 `src/backend/routes/audit.py` — Audit Log
 
 | Route | Handler | Description |
@@ -944,7 +975,10 @@ Pure-function evaluation engine that recursively walks AND/OR group nodes and le
 | `_get_current_weather_for_default_location(owner_id)` | Get current weather data for the user's default saved location via Open-Meteo. Returns dict with high, low, precipitation, wind_speed, wind_gusts, weather_code or None |
 | `_get_weather_forecast_for_default_location(owner_id, days)` | Get multi-day weather forecast for the user's default saved location. Returns list of weather dicts (one per day) or None |
 | `_check_weather_condition(operator, weather_data, threshold)` | Check if weather data meets the specified condition (temp/precip/wind comparisons). Returns bool |
-| `_substitute_templates(text, entity)` | Substitute template placeholders ({{title}}, {{today}}, {{now}}, etc.) in text with entity values |
+| `WEATHER_CONDITION_FIELDS` | frozenset of weather field names for field-based evaluation (weather_code, weather_temperature_high, weather_temperature_low, weather_precipitation, weather_wind_speed) |
+| `_WEATHER_FIELD_TO_API_KEY` | Dict mapping weather field names to Open-Meteo daily API response keys (e.g., weather_temperature_high → temperature_2m_max) |
+| `_evaluate_weather_condition(leaf)` | Evaluate a weather-field-based condition leaf — geocodes `weather_location`, fetches today's daily forecast from Open-Meteo, extracts relevant metric, compares against threshold using specified operator. Returns False on any failure (geocode, API, timeout) |
+| `_substitute_templates(text, entity, trigger_field)` | Resolve `{{placeholder}}` patterns in text against entity fields. Supports `{{today}}`, `{{now}}`, `{{trigger_field}}`, and any entity field name. Unresolved placeholders replaced with empty string |
 | `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user, create_chit), email actions (mark_email_read, mark_email_unread, move_email_to_folder), HA actions (call_ha_service, fire_ha_event), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
 | `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree (with habit-trigger-specific source matching for habit_achieved/habit_missed/habit_due), handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Recognizes trigger types: chit_created, chit_updated, email_received, contact_created, contact_updated, scheduled, ha_state_change, ha_webhook, habit_achieved, habit_missed, habit_due. Includes comprehensive logging at each step |
 | `_match_habit_trigger(rule, entity)` | Check if a habit trigger rule matches the incoming habit event entity based on habit_trigger_config (source_rule_id, source_chit_id, source_type). Wildcard "*" matches any source |
@@ -1316,8 +1350,11 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `_isMetricUnits()` | Return true if the user's `unit_system` is `'metric'` |
 | `_convertWind(kmh)` | Convert wind speed from km/h for display; returns `{ value, unit }` (metric → km/h, imperial → mph) |
 | `_tempBarRange()` | Return `{ barMin, barMax }` for temperature bar visuals (metric: -10–40°C, imperial: -14–104°F) |
+| `cwocToast(message, type, duration)` | Show a brief auto-dismissing notification toast at top-center; type: 'success'/'error'/'info'; duration in ms (default 3000, error 5000) |
+| `cwocUndoToast(message, opts)` | Show a bottom-center undo toast with countdown bar and Undo button; opts: `duration` (ms, default 5000), `onExpire` (callback), `onUndo` (callback), `id` (element ID for coexistence) |
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
 | `cwocPromptModal(title, placeholder, onConfirm, opts)` | Show a parchment-styled input modal (replaces browser `prompt()`); calls `onConfirm(value)` when user submits |
+| `cwocUnsavedModal(opts)` | Show a three-button unsaved-changes modal (Save/Discard/Cancel); returns Promise resolving to `'save'`, `'discard'`, or `'cancel'`; opts: `message`, `saveLabel`, `discardLabel`, `cancelLabel` |
 | `cwocChitPickerModal(options)` | Shared chit picker modal (table with search, status/priority filters, multi-select checkboxes). Options: `title`, `confirmLabel`, `onConfirm(selectedChits)`, `filterChits(chit)→bool`, `disabledIds`, `preSelectedIds`, `beforeSelect(id)→Promise<bool>`, `onItemDblClick(chit)` |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
 | `formatDate(date)` | Format a Date as `YYYY-Mon-DD` string |
@@ -1601,7 +1638,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `fetchAndCacheWeather(address)` | Fetch 16-day forecast for an address and store in cache |
 | `prefetchSavedLocationWeather()` | Prefetch weather for all saved locations (async, non-blocking) |
 | `_saveWeatherCacheToLS()` | Persist weather forecast cache to localStorage |
-| `_showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo)` | Show a delete-undo toast with a countdown timer bar |
+| `_showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo, customMessage)` | Show a delete-undo toast — delegates to cwocUndoToast |
 | `initAudioUnlock()` | Initialize the mobile audio unlock system (resume AudioContext on first gesture) |
 | `cwocPlayAudio(audio, opts)` | Play an audio file reliably with retry on blocked playback |
 | `_showAddToBundleModal(chit)` | Show the "Add to Bundle" modal for an email chit; allows user to choose between subject or sender matching, then select a bundle |
@@ -2060,7 +2097,6 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_emailQuickArchive(chit, card)` | Quick-archive a single email with undo countdown toast; hides card immediately, archives on expiry, restores on undo |
 | `_emailQuickDelete(chit, card)` | Quick-delete (soft delete) a single email with undo countdown toast; hides card immediately, deletes on expiry, restores on undo |
 | `_emailRestoreCard(card)` | Restore a hidden email card back to visible state (used by undo) |
-| `_emailUndoToast(message, onExpire, onUndo)` | Show an undo toast with countdown timer bar for email actions |
 | `_emailStripHtml(str)` | Strip HTML tags and decode entities from a string for clean plain-text display |
 | `_emailStripMarkdown(str)` | Strip markdown formatting (links, bold, italic, code, headings) returning plain text |
 | `_emailShiftSelect(currentCb)` | Shift+click range selection — checks/unchecks all checkboxes between last clicked and current |
@@ -3019,7 +3055,6 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `closeTagModal()` | Close the tag editor modal |
 | `toggleTagFavorite()` | Toggle the favorite star in the tag modal |
 | `openDeleteModal(event, item)` | Open the delete confirmation modal for a tag or color |
-| `closeDuplicateTagModal()` | Close the duplicate tag warning modal |
 | `_switchSettingsTab(tabId)` | Switch between settings tabs (general, views, collections, email, admin); persists to localStorage |
 | `saveSettings()` | Save & Exit — save settings then navigate back |
 | `saveSettingsAndStay()` | Save & Stay — save settings without navigating |
@@ -3048,9 +3083,13 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `importChitData()` | Import chit data: open file picker, read JSON, validate, show mode dialog |
 | `importUserData()` | Import user data: open file picker, read JSON, validate, show mode dialog |
 | `triggerIcsImport()` | Import Calendar (.ics): open file picker, read ICS text, POST to /api/import/ics, display results |
+| `triggerGoogleTasksImport()` | Import Google Tasks (.json): open file picker, read JSON, POST to /api/import/google-tasks, display results |
+| `triggerGoogleKeepImport()` | Import Google Keep (.json): open multi-file picker, read all JSON files, POST to /api/import/google-keep |
+| `_sendKeepImport(notes, btn, originalText)` | Send parsed Keep notes array to the backend |
 | `loadImportBatches()` | Load and display ICS import batches in the settings UI |
 | `_escHtml(str)` | Escape HTML for safe insertion |
 | `_deleteImportBatch(batch)` | Delete an import batch after confirmation (soft-delete all chits in batch) |
+| `loadIcsImportOwnerPicker()` | Populate the ICS import owner picker with all users (admin only) |
 | `importAllData()` | Import all data: open file picker, read JSON, validate type "all", show mode dialog |
 | `loadVersionInfo()` | Fetch and display the current version and install date from `/api/version` |
 | `refreshDiskUsage()` | Fetch and display disk usage (used/total/percent) from `/api/disk-usage` |
@@ -3462,7 +3501,7 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | Symbol | Description |
 |--------|-------------|
 | `CHIT_FIELDS` | Array of field definitions for chit triggers (title, note, status, priority, severity, location, color, tags, people, archived, pinned, all_day, habit, dates, `_weather`) |
-| `EMAIL_FIELDS` | Array of field definitions for email triggers (title, note, email_from, email_subject, email_body_text, email_folder, email_read, status, priority, tags, people, location) |
+| `EMAIL_FIELDS` | Array of field definitions for email triggers (title, note, email_from, email_to, email_cc, email_bcc, email_account_id, email_subject, email_body_text, email_folder, email_read, status, priority, tags, people, location) |
 | `CONTACT_FIELDS` | Array of field definitions for contact triggers (given_name, surname, organization, tags, emails, phones, addresses) |
 | `HA_STATE_CHANGE_FIELDS` | Array of field definitions for HA state change triggers (ha_entity_id, old_state, new_state, attributes) |
 | `HABIT_TRIGGER_FIELDS` | Array of field definitions for habit triggers (source_rule_name, source_chit_title, habit_event, streak, habit_goal, habit_success, offset_minutes, timestamp, plus chit fields) |
@@ -3474,6 +3513,9 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `WEATHER_OPERATORS` | Array of all weather operators (current + forecast) |
 | `ACTION_GROUPS` | Array of action groups for optgroup rendering (Tags & People, Status & Priority, Appearance & Location, Lifecycle, Create & Notify, Email, Home Assistant) |
 | `CHIT_ACTION_TYPES` | Flat array of all action types (built from ACTION_GROUPS). Includes create_chit, call_ha_service, fire_ha_event with custom renderers |
+| `WEATHER_FIELDS` | Array of weather condition field definitions (weather_code, weather_temperature_high, weather_temperature_low, weather_precipitation, weather_wind_speed) — only shown when trigger type is "scheduled" |
+| `BOOLEAN_FIELDS` | Array of boolean field names that render as true/false dropdowns (archived, pinned, all_day, habit, email_read) |
+| `EMAIL_ADDRESS_FIELDS` | Array of email address field names that render as contact autocomplete in email mode (email_from, email_to, email_cc, email_bcc) |
 | `_cachedTagList` | Cached flat list of user tags (excluding system tags) for the tag picker, sorted favorites-first then alphabetical |
 | `_cachedPeopleList` | Cached list of contact display names for smart person inputs |
 | `_cachedLocationsList` | Cached list of saved location names for smart location inputs |
@@ -3481,12 +3523,20 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `_loadPeopleList()` | Async function that fetches contacts from `/api/contacts` and caches display names |
 | `_loadLocationsList()` | Async function that fetches saved locations from settings and caches names |
 | `_renderSearchableInput(currentValue, options, placeholder, onChange)` | Creates a text input with a filterable dropdown of existing values |
-| `_renderCreateChitAction(action, container)` | Renders the Create Chit action panel with title, note, status, priority, due date, location fields and template variable help |
+| `_renderSmartInput(leaf, onChange)` | Factory function that returns the appropriate DOM element for a condition leaf's value input based on field/operator mapping (email→autocomplete, priority→dropdown, location→combobox, color→swatches, weather→numeric+location, boolean→true/false, default→plain text) |
+| `_renderPlainTextInput(currentValue, onChange)` | Creates a plain text input (fallback for unmapped fields) |
+| `_renderDropdownInput(currentValue, options, placeholder, onChange)` | Reusable dropdown helper for priority/status/severity/boolean fields — pre-selects current value, shows placeholder if unset |
+| `_renderEmailAccountDropdown(currentValue, onChange)` | Email account dropdown populated from `getCachedSettings()` → `email_accounts`. Shows nickname or email as label, stores account ID. Shows unrecognized indicator for saved values not matching current accounts |
+| `_renderContactAutocomplete(options)` | Reusable contact autocomplete component — queries `/api/contacts?q=` on 2+ chars, shows up to 10 results. Supports `mode: 'email'` (shows name+email, stores email) and `mode: 'name'` (shows name, stores name). Caches most recent API response. Dismisses on blur/Escape/selection |
+| `_renderLocationCombobox(currentValue, onChange)` | Location combobox with saved locations dropdown + text input. Loads from `getCachedSettings()` → `saved_locations`. Falls back to text-only if empty |
+| `_renderColorSwatches(currentValue, onChange)` | Color swatches widget with default palette + custom colors from settings. Highlights selected swatch, includes hex text input |
+| `_renderWeatherInput(leaf, onChange)` | Weather condition input — numeric threshold input + location combobox. Stores weather_location as additional property on the leaf node |
+| `_renderCreateChitAction(action, container)` | Create Chit action panel with smart input controls for title, note, status, priority, tags, start/due datetime, location, color, and people. All fields optional, text fields support `{{placeholder}}` template syntax |
 | `_getFieldsForTrigger()` | Return the appropriate field definitions array based on the selected trigger type |
 | `renderConditionTree()` | Render the condition tree into the `#condition-tree` container |
 | `_renderNode(node, isRoot)` | Render a single condition tree node (dispatches to group or leaf renderer) |
 | `_renderGroup(group, isRoot)` | Render a group node with AND/OR toggle, children, and add condition/group buttons |
-| `_renderLeaf(leaf)` | Render a leaf condition with field dropdown (with weather field), grouped operator dropdown, smart value inputs for tags/people/locations, and remove button |
+| `_renderLeaf(leaf)` | Render a leaf condition with field dropdown (with weather fields for scheduled triggers), grouped operator dropdown, smart value inputs (via `_renderSmartInput` factory), weather condition multi-inputs, and remove button |
 | `_removeNode(nodeId)` | Remove a node from the condition tree by ID |
 | `_serializeTree(node)` | Serialize the condition tree for API submission (strips internal `_id` fields) |
 | `_deserializeTree(node)` | Deserialize a condition tree from API data (adds internal `_id` fields) |
@@ -3647,6 +3697,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting), Maps View section (date range filter, marker popups, clustering, color-coded status markers, Google Maps preference warning), and Home Assistant Integration section (setup process, HA custom integration deployment, CWOC connection config, webhook payload format, use case examples) |
 | Author Footer (`.author-info`) | Page footer with copyright |
 | Modal (`.modal`) | Full-screen modal overlay and content box |
+| Universal Modal Overlay (`.cwoc-overlay`) | Shared fixed-position overlay backdrop for all modals — `position: fixed`, full viewport, `rgba(0,0,0,0.5)` background, `z-index: 9999`, flexbox centering. Used by `cwocConfirm`, `cwocPromptModal`, `cwocUnsavedModal` |
 | Loader Spinner (`.loader`) | CSS spinner animation |
 | Navigate Panel (`#cwoc-nav-overlay`) | V-hotkey navigation overlay for secondary pages |
 | Tablet Responsive (≤768px) | Settings grid single-column |
@@ -3711,6 +3762,14 @@ Rules-specific styles used by `rules-manager.html` and `rule-editor.html`. Depen
 | KV Editor (`.ha-kv-editor`) | Key-value pair editor for service_data and event_data with add/remove row buttons |
 | JSON Preview (`.ha-json-preview`) | Read-only JSON preview panel with monospace font and parchment background |
 | Entity/Service Picker Modal (`.ha-picker-modal`) | Searchable modal for selecting HA entities or services with filter input, scrollable list, and domain grouping |
+| Smart Input Wrapper (`.smart-input-wrapper`, `.smart-input-field`) | Base searchable dropdown wrapper with relative positioning and parchment-styled input |
+| Smart Input Dropdown (`.smart-input-dropdown`, `.smart-input-option`) | Generic dropdown select styling and absolute-positioned option list with hover highlighting |
+| Smart Input Unrecognized (`.smart-input-unrecognized`) | Red italic indicator for saved values not matching current options (e.g., deleted email account) |
+| Smart Input Color Swatches (`.smart-input-color-swatches`, `.smart-input-swatch-grid`, `.smart-input-swatch`, `.smart-input-swatch-selected`, `.smart-input-color-hex`) | Color swatches grid with clickable circles, selection checkmark indicator, and hex text input |
+| Smart Input Autocomplete (`.smart-input-autocomplete-wrapper`, `.smart-input-autocomplete`, `.smart-input-autocomplete-dropdown`, `.smart-input-autocomplete-item`) | Contact autocomplete widget — input with absolute dropdown, name+email display items, hover states |
+| Smart Input Location (`.smart-input-location-combobox`, `.smart-input-location-input`) | Location combobox with text input and saved locations dropdown |
+| Smart Input Weather (`.smart-input-weather-wrapper`, `.smart-input-weather-numeric`, `.smart-input-weather-location`) | Weather input — flex layout with numeric threshold input and location combobox side by side |
+| Smart Input Create Chit Panel (`.smart-input-create-chit-panel`, `.create-chit-field-group`, `.create-chit-field-label`) | Create Chit action panel — 2-column grid layout with field groups and full-width spanning |
 
 #### shared-timepicker.css
 iOS-style drum roller time picker styles. Mobile-first bottom-sheet on phones, centered modal on desktop. Parchment theme with scroll-snap drums, fade masks, highlight bar, and animated open/close transitions.
@@ -4274,7 +4333,7 @@ New frontend pages added for Maps View:
 
 New frontend pages added for Rules Engine:
 - `rules-manager.html` — Rules Manager page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Displays rules table with enabled toggle, name, trigger type badge, priority, last run, run count, and delete button. Pending confirmations section at top (collapsible, hidden when empty) with Accept/Dismiss buttons. "New Rule" button navigates to `rule-editor.html`. Drag-and-drop reorder. Loads `rules-manager.js`. `data-page-title="Rules Manager"`, `data-page-icon="🤖"`.
-- `rule-editor.html` — Rule Editor page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Sections: Rule Info (name, description), Trigger (dropdown with ha_state_change and ha_webhook options + config panels), Conditions (visual tree builder), Actions (dynamic list with call_ha_service and fire_ha_event types), Settings (confirm toggle), Save/Cancel via `CwocSaveSystem`. Loads `rule-editor.js`. `data-page-title="Rule Editor"`, `data-page-icon="🤖"`.
+- `rule-editor.html` — Rule Editor page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Sections: Rule Info (name, description), Trigger (dropdown with ha_state_change and ha_webhook options + config panels), Conditions (visual tree builder), Actions (dynamic list with call_ha_service and fire_ha_event types), Settings (confirm toggle), Save/Cancel via `CwocSaveSystem`. Contains `<template>` elements: `tmpl-smart-autocomplete` (contact autocomplete input + dropdown), `tmpl-smart-color-swatches` (color swatches grid + hex input), `tmpl-smart-location-combobox` (location text input with saved locations), `tmpl-smart-weather-input` (numeric threshold + location selector), `tmpl-smart-create-chit` (Create Chit action panel grid). Loads `rule-editor.js`. `data-page-title="Rule Editor"`, `data-page-icon="🤖"`.
 
 
 ---

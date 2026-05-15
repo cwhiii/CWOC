@@ -1,5 +1,9 @@
 # Global Search
 
+- [Available Field Prefixes](#available-field-prefixes)
+- [Field Search Examples](#field-search-examples)
+
+
 Press `G` or click the magnifying glass icon (last in the C CAPTN view bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which view they belong to.
 
 - **Search Input + Go** — Type a query in the search input and press Enter or click Go. The search performs case-insensitive substring matching across every chit field (title, note, tags, status, priority, location, people, checklist items, dates, color, alerts, and more).

@@ -1,5 +1,13 @@
 # Chit Editor
 
+- [Alerts Zone](#alerts-zone)
+- [Independent Alerts Board](#independent-alerts-board)
+- [Task Zone](#task-zone)
+- [Prerequisites](#prerequisites)
+- [Checklist Zone](#checklist-zone)
+- [Notes Zone](#notes-zone)
+
+
 Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see [Habits](/frontend/html/help.html#habits)). An "📜 [Audit Log](/frontend/html/audit-log.html)" button at the bottom links to the filtered [audit log](/frontend/html/audit-log.html) for the current chit. 📱 QR button generates data or link QR codes.
 
 When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the [Notes view](/frontend/html/help.html#notes)). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits. Creating from the [Indicators view](/frontend/html/help.html#indicators) auto-sets Point in Time to the current date/time and marks the chit Complete.

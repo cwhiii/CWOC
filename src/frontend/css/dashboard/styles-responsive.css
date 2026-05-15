@@ -593,8 +593,7 @@
     /* ── Modal buttons: touch targets ─────────────────────────────────────── */
     .recurrence-modal-overlay button,
     #clock-modal-overlay button,
-    #weather-modal-overlay button,
-    #deleteChitModal button {
+    #weather-modal-overlay button {
         min-height: 44px;
         min-width: 44px;
     }
@@ -603,12 +602,6 @@
     .recurrence-modal-overlay input[type="checkbox"] {
         min-height: 44px;
         min-width: 44px;
-    }
-
-    /* ── Delete modal: full width ─────────────────────────────────────────── */
-    #deleteChitModal > div {
-        width: calc(100% - 16px);
-        margin: 20% auto;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -1160,9 +1153,7 @@
 
 /* ── Undo Toasts: Mobile ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-    .cwoc-undo-toast,
-    .email-undo-toast,
-    .email-undo-send-toast {
+    .cwoc-undo-toast {
         bottom: 16px;
         left: 12px;
         right: 12px;
@@ -1172,38 +1163,30 @@
         width: auto;
     }
 
-    .cwoc-undo-toast .cwoc-undo-btn,
-    .email-undo-btn,
-    .email-undo-send-toast .email-undo-btn {
+    .cwoc-undo-toast .cwoc-undo-btn {
         min-height: 44px;
         padding: 10px 18px;
         font-size: 1em;
     }
 
-    .cwoc-undo-toast .cwoc-undo-bar-outer,
-    .email-undo-bar-outer,
-    .email-undo-send-toast .email-undo-bar-outer {
+    .cwoc-undo-toast .cwoc-undo-bar-outer {
         height: 8px;
     }
 }
 
 @media (max-width: 480px) {
-    .cwoc-undo-toast,
-    .email-undo-toast,
-    .email-undo-send-toast {
+    .cwoc-undo-toast {
         bottom: 12px;
         left: 8px;
         right: 8px;
         padding: 0.6em 0.8em 0.4em;
     }
 
-    .cwoc-undo-toast .cwoc-undo-msg-row,
-    .email-undo-msg-row {
+    .cwoc-undo-toast .cwoc-undo-msg-row {
         gap: 0.5em;
     }
 
-    .cwoc-undo-toast .cwoc-undo-msg,
-    .email-undo-msg {
+    .cwoc-undo-toast .cwoc-undo-msg {
         font-size: 0.85em;
     }
 }

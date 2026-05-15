@@ -909,6 +909,27 @@
         max-width: none;
         margin: 10px;
     }
+    /* Smart input responsive — tablet */
+    .smart-input-autocomplete-wrapper {
+        max-width: 100%;
+    }
+    .smart-input-location-combobox {
+        max-width: 100%;
+    }
+    .smart-input-weather-wrapper {
+        flex-direction: column;
+        max-width: 100%;
+    }
+    .smart-input-weather-numeric {
+        width: 100%;
+    }
+    .smart-input-weather-location {
+        min-width: 0;
+        width: 100%;
+    }
+    .smart-input-create-chit-panel {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -937,6 +958,19 @@
     }
     .ha-action-panel {
         padding: 10px;
+    }
+    /* Smart input responsive — mobile */
+    .smart-input-autocomplete-item {
+        padding: 10px;
+        min-height: 44px;
+    }
+    .smart-input-swatch {
+        width: 36px;
+        height: 36px;
+    }
+    .smart-input-create-chit-panel {
+        padding: 10px;
+        gap: 8px;
     }
 }
 
@@ -1158,6 +1192,234 @@
 
 .smart-input-option:hover {
     background: rgba(212, 175, 55, 0.15);
+}
+
+/* Unrecognized value indicator (e.g. saved email account no longer configured) */
+.smart-input-unrecognized {
+    color: #b44;
+    font-style: italic;
+}
+
+/* ── Smart Input: Color Swatches ──────────────────────────────────────── */
+.smart-input-color-swatches {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.smart-input-swatch-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.smart-input-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: border-color 0.15s, transform 0.1s;
+    box-sizing: border-box;
+}
+
+.smart-input-swatch:hover {
+    transform: scale(1.15);
+    border-color: var(--aged-brown-dark, #5a3e1b);
+}
+
+.smart-input-swatch-selected {
+    border-color: var(--aged-brown-darker, #1a1208);
+    box-shadow: 0 0 0 2px var(--accent-gold, #d4af37);
+}
+
+.smart-input-swatch-selected::after {
+    content: '\2713';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 13px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 2px rgba(0,0,0,0.7);
+}
+
+.smart-input-color-hex {
+    width: 80px;
+    padding: 3px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: var(--font-family);
+    font-size: 0.85em;
+    background: white;
+    box-sizing: border-box;
+}
+
+.smart-input-color-hex:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
+}
+
+/* ── Smart Input: Autocomplete ─────────────────────────────────────────── */
+.smart-input-autocomplete-wrapper {
+    position: relative;
+    display: inline-block;
+    min-width: 140px;
+    flex: 1;
+    max-width: 220px;
+}
+
+.smart-input-autocomplete {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    background: #f5e6cc;
+    color: #1a1208;
+    box-sizing: border-box;
+}
+
+.smart-input-autocomplete:focus {
+    outline: none;
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+}
+
+.smart-input-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #fffaf0;
+    border: 1px solid #8b5a2b;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.smart-input-autocomplete-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 0.88em;
+    color: #1a1208;
+    transition: background 0.1s;
+    min-height: 44px;
+    box-sizing: border-box;
+    justify-content: center;
+}
+
+.smart-input-autocomplete-item:hover {
+    background: #f0e0c0;
+}
+
+.smart-input-autocomplete-item .autocomplete-name {
+    font-weight: 600;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+.smart-input-autocomplete-item .autocomplete-email {
+    font-size: 0.9em;
+    color: var(--aged-brown-light, #a0522d);
+}
+
+/* ── Smart Input: Location Combobox ───────────────────────────────────── */
+.smart-input-location-combobox {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 140px;
+    flex: 1;
+    max-width: 260px;
+}
+
+.smart-input-location-input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    background: #f5e6cc;
+    color: #1a1208;
+    box-sizing: border-box;
+}
+
+.smart-input-location-input:focus {
+    outline: none;
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+}
+
+/* ── Smart Input: Weather (Numeric + Location) ────────────────────────── */
+.smart-input-weather-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    max-width: 440px;
+}
+
+.smart-input-weather-numeric {
+    width: 90px;
+    padding: 5px 8px;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    background: #f5e6cc;
+    color: #1a1208;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.smart-input-weather-numeric:focus {
+    outline: none;
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+}
+
+.smart-input-weather-location {
+    flex: 1;
+    min-width: 140px;
+}
+
+/* ── Smart Input: Create Chit Panel (Grid Layout) ─────────────────────── */
+.smart-input-create-chit-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    padding: 12px;
+    background: #fdf8ef;
+    border: 1px solid #d4c5a9;
+    border-radius: 5px;
+    margin-top: 8px;
+}
+
+.smart-input-create-chit-panel .create-chit-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.smart-input-create-chit-panel .create-chit-field-group.full-width {
+    grid-column: 1 / -1;
 }
 
 /* ── Optgroup styling for grouped selects ─────────────────────────────── */

@@ -1,5 +1,9 @@
 # Dependent Apps
 
+- [Tailscale](#tailscale)
+- [Troubleshooting](#troubleshooting)
+
+
 The Settings page includes a **📱 Dependent Apps** block (admin only) for configuring external services that CWOC integrates with. Currently supports Tailscale (mesh VPN for secure remote access) and Ntfy (push notifications to your phone).
 
 ## Tailscale

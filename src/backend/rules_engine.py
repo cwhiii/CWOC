@@ -7,6 +7,7 @@ cross-references, and regex with a signal-based timeout guard.
 No database or HTTP dependencies — this module is independently testable.
 """
 
+import json
 import logging
 import re
 import signal
@@ -202,6 +203,145 @@ def resolve_contact_cross_ref(
     return False
 
 
+# ── Weather Condition Fields (field-based evaluation) ────────────────
+
+WEATHER_CONDITION_FIELDS = frozenset({
+    "weather_temperature_high",
+    "weather_temperature_low",
+    "weather_precipitation",
+    "weather_wind_speed",
+    "weather_code",
+})
+
+# Maps weather_* field names to Open-Meteo daily API response keys
+_WEATHER_FIELD_TO_API_KEY = {
+    "weather_temperature_high": "temperature_2m_max",
+    "weather_temperature_low": "temperature_2m_min",
+    "weather_precipitation": "precipitation_sum",
+    "weather_wind_speed": "wind_speed_10m_max",
+    "weather_code": "weather_code",
+}
+
+
+def _evaluate_weather_condition(leaf: dict) -> bool:
+    """Evaluate a weather-field-based condition leaf.
+
+    Geocodes the weather_location, fetches today's forecast from Open-Meteo,
+    and compares the forecast value against the condition threshold.
+
+    Returns False on any failure (geocode, API, timeout, parse error).
+    """
+    import urllib.request
+    import urllib.parse
+
+    field = leaf.get("field", "")
+    operator = leaf.get("operator", "")
+    value = leaf.get("value", "")
+    weather_location = leaf.get("weather_location", "")
+
+    if not weather_location:
+        logger.error("Weather condition missing weather_location for field %r", field)
+        return False
+
+    # ── Geocode the location ─────────────────────────────────────
+    try:
+        from src.backend.schedulers import _geocode_address
+        import asyncio
+
+        # _geocode_address is async; run it synchronously
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're inside an async context — use a thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    coords = pool.submit(
+                        asyncio.run, _geocode_address(weather_location)
+                    ).result(timeout=15)
+            else:
+                coords = loop.run_until_complete(_geocode_address(weather_location))
+        except RuntimeError:
+            coords = asyncio.run(_geocode_address(weather_location))
+    except Exception as e:
+        logger.error("Weather condition geocode failed for location %r: %s", weather_location, e)
+        return False
+
+    if not coords:
+        logger.error("Weather condition geocode returned no results for location %r", weather_location)
+        return False
+
+    lat = coords.get("lat")
+    lon = coords.get("lon")
+    if lat is None or lon is None:
+        logger.error("Weather condition geocode returned invalid coords for location %r", weather_location)
+        return False
+
+    # ── Fetch today's forecast from Open-Meteo ───────────────────
+    api_url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,weather_code"
+        f"&timezone=auto&forecast_days=1"
+    )
+
+    try:
+        req = urllib.request.Request(api_url, headers={"User-Agent": "CWOC-Weather/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            forecast_data = json.loads(resp.read().decode())
+    except Exception as e:
+        logger.error("Weather condition API request failed for %r: %s", weather_location, e)
+        return False
+
+    # ── Extract the forecast value ───────────────────────────────
+    daily = forecast_data.get("daily")
+    if not daily:
+        logger.error("Weather condition API response missing 'daily' key for %r", weather_location)
+        return False
+
+    api_key = _WEATHER_FIELD_TO_API_KEY.get(field)
+    if not api_key:
+        logger.error("Unknown weather condition field: %r", field)
+        return False
+
+    values_list = daily.get(api_key, [])
+    if not values_list or len(values_list) == 0:
+        logger.error("Weather condition API response missing data for key %r", api_key)
+        return False
+
+    forecast_value = values_list[0]
+    if forecast_value is None:
+        logger.error("Weather condition forecast value is None for key %r", api_key)
+        return False
+
+    # ── Compare forecast value against threshold ─────────────────
+    try:
+        if field == "weather_code":
+            threshold = int(value)
+            forecast_int = int(forecast_value)
+            if operator == "equals":
+                return forecast_int == threshold
+            elif operator == "not_equals":
+                return forecast_int != threshold
+            else:
+                logger.error("Invalid operator %r for weather_code field", operator)
+                return False
+        else:
+            threshold = float(value)
+            forecast_num = float(forecast_value)
+            if operator == "greater_than":
+                return forecast_num > threshold
+            elif operator == "less_than":
+                return forecast_num < threshold
+            elif operator == "equals":
+                return forecast_num == threshold
+            else:
+                logger.error("Invalid operator %r for weather field %r", operator, field)
+                return False
+    except (ValueError, TypeError) as e:
+        logger.error("Weather condition comparison failed for field %r: %s", field, e)
+        return False
+
+
 # ── Leaf Condition Evaluator ─────────────────────────────────────────
 
 _CROSS_REF_OPERATORS = frozenset({
@@ -228,6 +368,10 @@ def evaluate_leaf(
     # Contact cross-reference operators are dispatched separately
     if operator in _CROSS_REF_OPERATORS:
         return resolve_contact_cross_ref(field, operator, value, entity, contacts)
+
+    # ── Weather field conditions (field starts with "weather_") ──
+    if field in WEATHER_CONDITION_FIELDS:
+        return _evaluate_weather_condition(leaf)
 
     field_value = _get_field_value(entity, field)
 
@@ -1087,63 +1231,80 @@ def execute_action(
 
             # ── Create Chit action ───────────────────────────────
             elif action_type == "create_chit":
-                # Create a new chit based on action parameters
+                # Create a new chit based on action parameters.
+                # Template placeholders in text fields (title, note, location)
+                # are resolved against the triggering entity.
                 new_chit_id = str(uuid4())
-                
+
+                # Determine trigger_field from action params (if the rule
+                # dispatcher passed it) — this is the field that caused the
+                # rule to fire.
+                trigger_field = params.get("_trigger_field", "")
+
                 # Build chit data from params with template substitution
                 chit_data = {
                     "id": new_chit_id,
                     "owner_id": owner_id,
                     "created_datetime": current_time,
                     "modified_datetime": current_time,
-                    "title": _substitute_templates(params.get("title", ""), chit),
-                    "note": _substitute_templates(params.get("note", ""), chit),
-                    "status": params.get("status", "ToDo"),
-                    "priority": params.get("priority", "Medium"),
-                    "severity": params.get("severity", "Medium"),
-                    "color": params.get("color", ""),
-                    "location": _substitute_templates(params.get("location", ""), chit),
-                    "start_datetime": _substitute_templates(params.get("start_datetime", ""), chit),
-                    "due_datetime": _substitute_templates(params.get("due_datetime", ""), chit),
-                    "point_in_time": _substitute_templates(params.get("point_in_time", ""), chit),
-                    "tags": serialize_json_field(params.get("tags", [])),
-                    "people": serialize_json_field(params.get("people", [])),
-                    "alerts": serialize_json_field(_substitute_alert_templates(params.get("alerts", []), chit)),
-                    "checklist": serialize_json_field(params.get("checklist", [])),
+                    "title": _substitute_templates(params.get("title", ""), chit, trigger_field),
+                    "note": _substitute_templates(params.get("note", ""), chit, trigger_field),
+                    "status": params.get("status") or None,
+                    "priority": params.get("priority") or None,
+                    "severity": params.get("severity") or None,
+                    "color": params.get("color") or None,
+                    "location": _substitute_templates(params.get("location", ""), chit, trigger_field),
+                    "start_datetime": params.get("start_datetime") or None,
+                    "due_datetime": params.get("due_datetime") or None,
+                    "point_in_time": params.get("point_in_time") or None,
+                    "tags": serialize_json_field(params.get("tags") or []),
+                    "people": serialize_json_field(params.get("people") or []),
+                    "alerts": serialize_json_field([]),
+                    "checklist": serialize_json_field([]),
                     "child_chits": serialize_json_field([]),
                     "recurrence_rule": serialize_json_field({}),
                     "recurrence_exceptions": serialize_json_field([]),
                     "shares": serialize_json_field([]),
-                    "archived": False,
-                    "deleted": False,
-                    "pinned": False,
+                    "archived": 0,
+                    "deleted": 0,
+                    "pinned": 0,
                     "all_day": params.get("all_day", False),
                     "show_on_calendar": params.get("show_on_calendar", True),
-                    "habit": False,
+                    "habit": 0,
                 }
-                
+
                 # Get owner info for the new chit
                 cursor.execute(
-                    "SELECT username, display_name FROM users WHERE id = ?", 
+                    "SELECT username, display_name FROM users WHERE id = ?",
                     (owner_id,)
                 )
                 user_row = cursor.fetchone()
                 if user_row:
                     chit_data["owner_username"] = user_row[0]
                     chit_data["owner_display_name"] = user_row[1]
-                
-                # Insert the new chit
-                columns = list(chit_data.keys())
-                placeholders = ", ".join(["?" for _ in columns])
-                values = [chit_data[col] for col in columns]
-                
-                cursor.execute(
-                    f"INSERT INTO chits ({', '.join(columns)}) VALUES ({placeholders})",
-                    values
-                )
-                
-                conn.commit()
-                return {"success": True, "message": f"Created chit: {chit_data['title']}", "chit_id": new_chit_id}
+
+                # Insert the new chit — wrapped in transaction
+                try:
+                    columns = list(chit_data.keys())
+                    placeholders = ", ".join(["?" for _ in columns])
+                    values = [chit_data[col] for col in columns]
+
+                    cursor.execute(
+                        f"INSERT INTO chits ({', '.join(columns)}) VALUES ({placeholders})",
+                        values
+                    )
+
+                    # Register any tags in settings so they appear in filters
+                    tags_list = params.get("tags") or []
+                    if tags_list:
+                        ensure_tags_in_settings(conn, owner_id, tags_list)
+
+                    conn.commit()
+                    return {"success": True, "chit_id": new_chit_id}
+                except Exception as db_err:
+                    conn.rollback()
+                    logger.error("create_chit DB error: %s", db_err)
+                    return {"success": False, "message": str(db_err)}
 
             # ── Create Reminder action ───────────────────────────
             elif action_type == "create_reminder":
@@ -1715,28 +1876,48 @@ def _substitute_alert_templates(alerts: list, entity: dict) -> list:
     return result
 
 
-def _substitute_templates(text: str, entity: dict) -> str:
+def _substitute_templates(text: str, entity: dict, trigger_field: str = "") -> str:
     """Substitute template placeholders in text with entity values.
-    
-    Supports placeholders like {{title}}, {{status}}, {{today}}, {{weather_low}}, etc.
+
+    Supports placeholders like:
+      - {{title}}, {{status}}, etc. — direct entity field lookup
+      - {{matched_title}}, {{matched_note}}, etc. — "matched_" prefix maps to
+        the triggering entity's field (prefix stripped)
+      - {{today}} — current date in YYYY-MM-DD format
+      - {{now}} — current UTC datetime ISO string
+      - {{trigger_field}} — the field name that triggered the rule
+      - {{weather_*}} — weather data for the owner's default location
+
+    Any unresolved {{...}} placeholder is replaced with an empty string.
     """
     if not isinstance(text, str) or not text:
-        return text
-        
+        return text or ""
+
     # Common template substitutions
     substitutions = {
-        "{{title}}": str(entity.get("title", "")),
-        "{{note}}": str(entity.get("note", "")),
-        "{{status}}": str(entity.get("status", "")),
-        "{{priority}}": str(entity.get("priority", "")),
-        "{{severity}}": str(entity.get("severity", "")),
-        "{{location}}": str(entity.get("location", "")),
-        "{{color}}": str(entity.get("color", "")),
+        "{{title}}": str(entity.get("title") or ""),
+        "{{note}}": str(entity.get("note") or ""),
+        "{{status}}": str(entity.get("status") or ""),
+        "{{priority}}": str(entity.get("priority") or ""),
+        "{{severity}}": str(entity.get("severity") or ""),
+        "{{location}}": str(entity.get("location") or ""),
+        "{{color}}": str(entity.get("color") or ""),
         "{{today}}": datetime.utcnow().strftime("%Y-%m-%d"),
         "{{now}}": datetime.utcnow().isoformat(),
-        "{{owner_id}}": str(entity.get("owner_id", "")),
+        "{{owner_id}}": str(entity.get("owner_id") or ""),
+        "{{trigger_field}}": str(trigger_field or ""),
     }
-    
+
+    # "matched_" prefix placeholders — map to triggering entity fields
+    # e.g. {{matched_title}} → entity["title"], {{matched_status}} → entity["status"]
+    substitutions["{{matched_title}}"] = str(entity.get("title") or "")
+    substitutions["{{matched_note}}"] = str(entity.get("note") or "")
+    substitutions["{{matched_status}}"] = str(entity.get("status") or "")
+    substitutions["{{matched_priority}}"] = str(entity.get("priority") or "")
+    substitutions["{{matched_severity}}"] = str(entity.get("severity") or "")
+    substitutions["{{matched_location}}"] = str(entity.get("location") or "")
+    substitutions["{{matched_color}}"] = str(entity.get("color") or "")
+
     # Weather template variables — fetch on demand if any weather placeholder is present
     if "{{weather_" in text:
         owner_id = entity.get("owner_id", "")
@@ -1755,12 +1936,29 @@ def _substitute_templates(text: str, entity: dict) -> str:
             substitutions["{{weather_wind_speed}}"] = "?"
             substitutions["{{weather_wind_gusts}}"] = "?"
             substitutions["{{weather_code}}"] = "?"
-    
-    # Apply substitutions
+
+    # Apply known substitutions
     result = text
     for placeholder, value in substitutions.items():
         result = result.replace(placeholder, value)
-        
+
+    # Resolve any remaining {{field_name}} patterns against entity fields,
+    # including {{matched_*}} variants not explicitly listed above
+    def _resolve_placeholder(match):
+        key = match.group(1)
+        # Strip "matched_" prefix and look up in entity
+        if key.startswith("matched_"):
+            field_name = key[8:]  # strip "matched_"
+            val = entity.get(field_name)
+            return str(val) if val is not None else ""
+        # Direct entity field lookup
+        val = entity.get(key)
+        if val is not None:
+            return str(val)
+        return ""
+
+    result = re.sub(r'\{\{(\w+)\}\}', _resolve_placeholder, result)
+
     return result
 
 

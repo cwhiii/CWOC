@@ -1,5 +1,10 @@
 # Recurrence
 
+- [Supported Patterns](#supported-patterns)
+- [Recurrence Options](#recurrence-options)
+- [How It Works](#how-it-works)
+
+
 Chits can repeat on a schedule. Enable recurrence in the Dates & Times zone of the [chit editor](/editor) by checking the **Repeat** checkbox.
 
 ## Supported Patterns

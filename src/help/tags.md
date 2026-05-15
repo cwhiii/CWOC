@@ -1,5 +1,10 @@
 # Tags
 
+- [Tag Features](#tag-features)
+- [Tag Editor (Settings)](#tag-editor-settings)
+- [Using Tags](#using-tags)
+
+
 Tags organize chits into categories. They support a hierarchical tree structure with parent/child relationships (e.g., `Work/Projects/Alpha`).
 
 ## Tag Features
@@ -7,7 +12,7 @@ Tags organize chits into categories. They support a hierarchical tree structure 
 - **Hierarchical** — Use `/` to create nested tags. Filtering by a parent tag includes all children
 - **Favorites** — Star tags to pin them to the top of filter lists
 - **System tags** — Auto-assigned based on chit properties (Calendar, Tasks, Notes, Checklists, Alerts, Projects, Habits)
-- **User tags** — Created and managed in [Settings](/frontend/html/settings.html) → Tag Editor
+- **User tags** — Created and managed in [Settings → Tag Editor](/frontend/html/settings.html#tags)
 
 ## Tag Editor (Settings)
 

@@ -732,25 +732,15 @@ function deleteChit() {
     cwocToast("No chit to delete.", "error");
     return;
   }
-  const modal = document.getElementById("deleteChitModal");
-  if (modal) {
-    modal.style.display = "block";
-
-    const confirmBtn = document.getElementById("confirmDeleteChitBtn");
-    const cancelBtn = document.getElementById("cancelDeleteChitBtn");
-
-    confirmBtn.onclick = null;
-    cancelBtn.onclick = null;
-
-    confirmBtn.onclick = () => {
-      modal.style.display = "none";
+  cwocConfirm('This action cannot be undone.', {
+    title: 'Delete Chit?',
+    confirmLabel: '🗑️ Delete',
+    danger: true
+  }).then(function (confirmed) {
+    if (confirmed) {
       performDeleteChit();
-    };
-
-    cancelBtn.onclick = () => {
-      modal.style.display = "none";
-    };
-  }
+    }
+  });
 }
 
 function performDeleteChit() {
@@ -931,42 +921,22 @@ function _navigateWithSaveCheck(url) {
   }
 
   if (window._cwocSave && window._cwocSave.hasChanges()) {
-    var existing = document.getElementById('cwoc-unsaved-modal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'cwoc-unsaved-modal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.innerHTML = '<div class="modal-content">'
-      + '<h3>Unsaved Changes</h3>'
-      + '<p>You have unsaved changes. What would you like to do?</p>'
-      + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'
-      + '<button class="standard-button" id="cwoc-nav-cancel">Cancel</button>'
-      + '<button class="standard-button" id="cwoc-nav-save">💾 Save &amp; Continue</button>'
-      + '<button class="standard-button" id="cwoc-nav-discard" style="background:#a0522d;color:#fdf5e6;">🗑️ Discard &amp; Continue</button>'
-      + '</div>'
-      + '</div>';
-    document.body.appendChild(modal);
-    document.getElementById('cwoc-nav-cancel').onclick = function() { modal.remove(); };
-    document.getElementById('cwoc-nav-save').onclick = function() {
-      modal.remove();
-      if (typeof saveChitAndStay === 'function') {
-        saveChitAndStay().then(function() {
-          window._cwocSkipBeforeUnload = true;
-          window.location.href = url;
-        });
+    cwocUnsavedModal().then(function(result) {
+      if (result === 'save') {
+        if (typeof saveChitAndStay === 'function') {
+          saveChitAndStay().then(function() {
+            window._cwocSkipBeforeUnload = true;
+            window.location.href = url;
+          });
+        }
+      } else if (result === 'discard') {
+        if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+        if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
+        window._cwocSkipBeforeUnload = true;
+        window.location.href = url;
       }
-    };
-    document.getElementById('cwoc-nav-discard').onclick = function() {
-      modal.remove();
-      if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
-      if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
-      window._cwocSkipBeforeUnload = true;
-      window.location.href = url;
-    };
-    // ESC closes the modal
-    var onKey = function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); modal.remove(); document.removeEventListener('keydown', onKey, true); } };
-    document.addEventListener('keydown', onKey, true);
+      // 'cancel' — do nothing, stay on page
+    });
   } else {
     window._cwocSkipBeforeUnload = true;
     window.location.href = url;

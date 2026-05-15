@@ -1,5 +1,19 @@
 # Maps View
 
+- [Mode Toggle](#mode-toggle)
+- [Collapsible Sidebar](#collapsible-sidebar)
+- [Fullscreen Mode](#fullscreen-mode)
+- [Default View Button](#default-view-button)
+- [Map Start Settings](#map-start-settings)
+- [Chits Mode](#chits-mode)
+- [Chits Mode Filters](#chits-mode-filters)
+- [People Mode](#people-mode)
+- [People Mode Filters](#people-mode-filters)
+- [Cluster Markers](#cluster-markers)
+- [Mobile](#mobile)
+- [Google Maps Preference](#google-maps-preference)
+
+
 The Maps View displays an interactive map with two modes: **Chits** and **People**. Access it from the navigation menu (🗺️ Maps) or by navigating to `/maps`. The map fills all available viewport space for maximum visibility.
 
 ## Mode Toggle
@@ -31,7 +45,7 @@ A home button in the top-right corner of the map resets the view to your configu
 
 ## Map Start Settings
 
-Configure how the map opens each time in **[Settings](/frontend/html/settings.html) → 🗺️ Map Settings**:
+Configure how the map opens each time in **[Settings → 🗺️ Map Settings](/frontend/html/settings.html#map-settings)**:
 
 - **Auto-zoom to markers** — When enabled (the default), the map automatically fits all visible markers into view on load
 - **Custom center and zoom** — When auto-zoom is disabled, set a default latitude, longitude, and zoom level (1–18). The map will open at this position each time
@@ -96,7 +110,7 @@ On mobile devices, the sidebar defaults to collapsed and overlays the map when e
 
 ## Google Maps Preference
 
-If "Prefer Google for Maps" is enabled in [Settings](/frontend/html/settings.html) → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in [Settings](/frontend/html/settings.html) to use the Maps View.
+If "Prefer Google for Maps" is enabled in [Settings → Chit Options](/frontend/html/settings.html#general), the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in [Settings](/frontend/html/settings.html) to use the Maps View.
 
 ---
 
