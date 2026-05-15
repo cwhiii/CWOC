@@ -720,6 +720,37 @@
         font-size: 0.85em;
     }
 
+    /* ── Checklist view: force single column on mobile ────────────────────── */
+    .checklist-view {
+        padding: 4px !important;
+        overscroll-behavior: contain;
+    }
+    .checklist-view .chit-card {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        margin: 6px 0 !important;
+    }
+
+    /* ── Notebook view: force single column on mobile ─────────────────────── */
+    .notebook-view {
+        padding: 4px !important;
+        overscroll-behavior: contain;
+    }
+    .notebook-view .chit-card {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        margin: 6px 0 !important;
+    }
+    .notebook-view .note-content {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.9em;
+    }
+
     /* ── Projects view: stack kanban columns ───────────────────────────────── */
     .project-status-section {
         width: 100% !important;
