@@ -1,3 +1,7 @@
+## 20260515.1602
+
+Fixed Calendar Invites bundle matching every email. Bundle rules with empty condition trees (no leaf conditions) were evaluating to true via vacuous truth, causing the auto-created Calendar Invites rule to classify all emails into that bundle. Empty rules are now skipped during classification.
+
 ## 20260515.1338
 
 Added mobile sync infrastructure — sync version tracking, sync pull/push endpoints with field-level conflict resolution, device token authentication, tombstone retention, and conflict dismissal.

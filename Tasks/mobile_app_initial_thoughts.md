@@ -1,340 +1,248 @@
-# Mobile App — Initial Thoughts
+# CWOC Android App — Roadmap
 
-## The Big Picture
+## Summary
 
-CWOC currently runs as a web app served from a single server. Mobile access is via the browser. The goal: build a native Android app that keeps all chit data on-device, works fully offline, and syncs back to the server when connectivity returns.
+Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data on-device, works fully offline, and syncs back to the server when connectivity returns. The web app stays fully intact — the Android app is an additional client, not a replacement.
 
-This is a significant architectural shift. The web app is a thin client — it fetches everything from the server on every page load. The Android app would be a thick client with its own local database, its own rendering, and a sync layer that reconciles local and remote state.
+**Server-side sync infrastructure is complete** (Phase 0, done 2026-05-15). All remaining work is client-side.
 
-**Important:** The web app (desktop + mobile browser) stays fully intact. Not everyone wants to install an app, and the browser version remains the primary interface for desktop users and a fallback for mobile users who prefer not to install. The Android app is an *additional* client, not a replacement for the mobile web experience.
-
----
-
-## Jargon Reference
-
-- **CRUD** — Create, Read, Update, Delete. The four basic operations on any data record. "Full CRUD on chits" means you can make new chits, view them, edit them, and delete them.
-- **DAO** — Data Access Object. A class that provides methods to interact with the database (Room uses these in Android).
-- **ORM** — Object-Relational Mapping. A layer that maps database rows to code objects (Room is a lightweight ORM for SQLite on Android).
-- **LWW** — Last Write Wins. A conflict resolution strategy where the most recent edit (by timestamp) is kept.
-- **Tombstone** — A soft-deleted record kept around so other devices know it was deleted during sync.
-- **Dirty flag** — A marker on a local record indicating it has unsaved changes that need to be pushed to the server.
+**Estimated timeline:** 2-3 months with heavy LLM assistance.
 
 ---
 
-## Major Work Streams
+## Phase 0: Server Prep ✅ COMPLETE
 
-### 1. The Android App Itself
+*All items done as of version 20260515.1338 via the `mobile-sync-prep` spec.*
 
-**Technology choices:**
-- **Kotlin + Jetpack Compose** — modern Android-native. Best performance, best platform integration, most control. Steepest learning curve if you're not already in the Kotlin ecosystem.
-- **React Native / Expo** — JavaScript-based, cross-platform potential. Larger bundle, more dependencies, but familiar web-dev mental model.
-- **Flutter** — Dart-based, cross-platform, good performance. Strong offline/local-DB story with packages like Drift or Isar.
-- **Capacitor/Ionic wrapping the existing web UI** — lowest effort to start, but you'd still need the offline DB and sync layer, and you'd be fighting the webview for native feel.
-
-> **⭐ Recommendation: Kotlin + Jetpack Compose.**
->
-> Rationale: You're targeting Android only (for now), and LLMs (Claude, Qwen, DeepSeek) all have strong Kotlin/Compose training data — it's the official Android stack so there's massive corpus coverage. Room (SQLite ORM) is the standard local DB, WorkManager handles background sync, and the entire Jetpack ecosystem is well-documented and well-represented in LLM training. You'll get better code generation quality from an LLM for Kotlin/Compose than for Flutter/Dart (smaller corpus) or React Native (fragmented ecosystem, lots of outdated patterns in training data). If you ever want iOS, you can revisit with Kotlin Multiplatform (KMP) which shares business logic across platforms while keeping native UI.
-
-**What the app needs to do locally:**
-- Store the full chit database on-device (SQLite via Room on Android)
-- Render all C CAPTN views natively (Calendar, Checklists, Alerts, Projects, Tasks, Notes)
-- Full CRUD on chits while offline
-- Local notifications/alarms (replacing the server-side ntfy push)
-- Contacts, tags, settings — all mirrored locally
-
-### 2. Offline-First Local Database
-
-The app needs its own SQLite database that mirrors the server schema. Key considerations:
-
-- **Schema parity** — the local DB needs all the same columns as the server's `chits` table, plus sync metadata (last_synced_at, sync_status, local_version, server_version)
-- **Conflict tracking** — every local edit needs a timestamp and a "dirty" flag so the sync engine knows what to push
-- **Soft deletes** — same pattern as the server. Deleted chits get a flag, not removed, so sync can propagate deletions correctly
-- **Attachments** — if chits have file attachments, those need local caching too (download on first access, upload on create/edit)
-
-> **⭐ Recommendation: Room (Android Jetpack) for the local database.**
->
-> Room is SQLite under the hood (same engine as your server), gives you compile-time query verification, and LLMs generate Room DAOs/entities extremely well because it's the most common Android DB pattern in training data. Define your entities to mirror the server schema 1:1, plus a `SyncMetadata` table tracking dirty state per record. Don't use Realm, ObjectBox, or other alternatives — Room's SQLite foundation means your mental model stays consistent between server and client.
-
-### 3. The Sync Engine (The Hard Part)
-
-This is where most of the complexity lives. You need bidirectional sync with conflict resolution.
-
-**Sync strategy options:**
-
-| Strategy | Pros | Cons |
-|---|---|---|
-| **Last-write-wins (LWW)** | Simple to implement | Loses data if both sides edit the same chit |
-| **Field-level merge** | Preserves non-conflicting edits to different fields | Complex to implement, still needs conflict UI for same-field edits |
-| **CRDT-based** | Mathematically correct merge | Very complex, overkill for this use case |
-| **Manual conflict resolution** | User always decides | Annoying UX if conflicts are frequent |
-
-> **⭐ Recommendation: Field-level merge with LWW fallback + conflict notification.**
->
-> If the server and client both edited the same chit but different fields, merge them automatically. If they edited the same field, latest `modified_datetime` wins. Don't interrupt the user with a dialog at sync time — resolve silently.
->
-> **However:** The next time the user opens a chit that had a conflict resolved, show a subtle notification banner at the top of the editor (e.g., "⚠️ This chit had a sync conflict resolved on May 15. View details in audit log."). The banner links directly to the audit log entry for that chit, where both the local version and the server version are preserved. From the audit log, the user can see exactly which fields differed, compare both values side-by-side, and cherry-pick values from either version to populate the current record. This gives you the simplicity of automatic resolution with the safety net of full recoverability.
->
-> Implementation: When a conflict is resolved, write an audit entry with `action: "sync_conflict_resolved"` containing both the local and server versions of the conflicting fields. Add a `has_unviewed_conflict` boolean flag on the chit record that gets cleared when the user dismisses the banner.
-
-**Two sync modes — the app operates in both:**
-
-1. **Live mode (online)** — When the app has connectivity, it behaves just like the web browser does today: WebSocket connection to `/ws/sync`, real-time push/pull of changes as they happen. Edits on the phone appear on the desktop instantly and vice versa. Same immediate sync the web app already does.
-
-2. **Offline mode** — When connectivity drops, the app queues all changes locally. On reconnect, it flushes the queue (push dirty changes, pull missed changes) and then re-establishes the WebSocket for live mode.
-
-The transition between modes should be seamless and automatic. The user shouldn't have to think about it — they just use the app, and it's always up to date when it can be.
-
-> **⭐ Recommendation: Use Android's ConnectivityManager + WorkManager for mode transitions.**
->
-> ConnectivityManager tells you when network state changes. WorkManager handles the "flush queue on reconnect" job with automatic retry and backoff. The WebSocket connection (OkHttp's built-in WebSocket client) handles live mode. Pattern: WorkManager enqueues a one-time sync job whenever connectivity returns → job pushes dirty records, pulls changes → on success, opens WebSocket for live updates. If the WebSocket drops, fall back to periodic polling (every 30s) until it reconnects.
-
-**Sync protocol design:**
-- Each chit gets a `modified_datetime` (already exists!) and a monotonically increasing `sync_version` (new)
-- Client tracks: `last_sync_timestamp` — the high-water mark of what it's seen from the server
-- Live mode: WebSocket delivers changes in real-time (same as current web app sync hub)
-- Reconnect/catch-up: client sends all locally-dirty chits; server responds with all chits modified since client's last sync
-- Server needs a new endpoint: `GET /api/sync/changes?since={timestamp}&user_id={id}` → returns all chits (including soft-deleted) modified after that timestamp
-- Client needs a new endpoint to push: `POST /api/sync/push` → accepts a batch of chit updates with their local timestamps
-- On reconnect, the app does a full catch-up sync first, THEN opens the WebSocket for live updates going forward
-
-**Edge cases to handle:**
-- ~~Chit created offline, then same chit created on web (ID collision)~~ — ✅ Already using UUIDs, no collision possible
-- Chit deleted on one side, edited on the other
-- Checklist items reordered on both sides simultaneously
-- Tags renamed on server while client has chits using old tag name
-- Settings changed on both sides
-
-> **⭐ Recommendation on edge cases:**
->
-> - **~~ID collision:~~** ✅ Already solved — both sides generate UUIDs independently.
-> - **Delete vs. edit conflict:** Delete wins. If something was deleted on either side, it stays deleted. The edit is lost. This matches user intent — deletion is a deliberate act. Log it in audit so you can see what was lost.
-> - **Checklist reorder:** Treat the entire checklist JSON as a single field for conflict purposes. LWW on the whole checklist blob. Merging individual item positions across two different orderings is a rabbit hole not worth entering.
-> - **Tag renames:** Tags are strings on chits. If a tag is renamed on the server, push the rename as a separate sync event that the client applies to all local chits bearing that tag. Add a `tag_renames` table on the server to track these.
-> - **Settings conflicts:** LWW, full stop. Settings change rarely and there's only one "correct" state.
-> - **All conflicts:** Write an audit entry with both versions. Set `has_unviewed_conflict = true` on the chit. Next time the user opens it, they see the banner and can drill into the audit log to review/cherry-pick.
-
-### 4. Server-Side Changes
-
-The existing server needs modifications to support the sync protocol:
-
-- **~~UUID primary keys~~** — ✅ Already done! Both chits and contacts already use `uuid4()` for ID generation. No migration needed.
-- **Sync version column** — add `sync_version INTEGER` to chits table, auto-incremented on every write
-- **New sync API endpoints** — pull changes, push changes, resolve conflicts
-- **Conflict audit entries** — when a sync conflict is resolved, write both versions to the audit log so the user can review and cherry-pick later
-- **Tombstone tracking** — soft deletes already exist, but you need to keep them around long enough for all clients to sync (can't purge trash immediately)
-- **Multi-device awareness** — track which devices have synced up to which version, so you can tell a device "you're 47 changes behind"
-
-> **⭐ Recommendation: The UUID migration is already done — that's a huge head start.**
->
-> The remaining server work is straightforward:
-> 1. Add `sync_version` column (standard migration pattern you already use)
-> 2. Add `has_unviewed_conflict` boolean column to chits
-> 3. Create a `device_tokens` table (id, user_id, device_name, token, last_seen_at, last_sync_version)
-> 4. Build 2-3 new API endpoints for sync pull/push
-> 5. Extend the existing audit log to store sync conflict entries with both versions
->
-> **On tombstone retention:** Add a `purge_after` datetime to soft-deleted records. Don't hard-delete anything until all registered devices have synced past that deletion. A 90-day retention window is safe — if a device hasn't synced in 90 days, it gets a full re-sync on next connect.
-
-### 5. Web App — Stays As-Is
-
-The web app continues to serve both desktop and mobile browsers. It remains the primary interface for desktop users and a fully functional fallback for anyone who doesn't want to install the Android app.
-
-- Keep all mobile-responsive CSS/JS — the web app's mobile view is still a first-class experience
-- The web app stays a thin client hitting the server directly (no offline needed for web)
-- Shared API means both clients talk to the same backend
-- The existing WebSocket sync hub already handles multi-client real-time updates — the Android app is just another client connecting to it
-
-> **⭐ Recommendation: Don't touch the web app's mobile experience.**
->
-> It works, people might prefer it, and it costs nothing to maintain. The Android app is for users who want offline access, native notifications, and a more integrated mobile experience. The web app is for everyone else. Both are valid.
-
-### 6. Authentication & Security
-
-- The Android app needs to authenticate against the server (token-based, probably JWT or a long-lived API key per device)
-- Tokens need to survive app restarts (stored in Android Keystore)
-- Sync traffic should be encrypted (HTTPS — already using self-signed certs with Tailscale)
-- Device registration: server should know which devices are syncing (for conflict resolution and "last synced" tracking)
-
-> **⭐ Recommendation: Long-lived device tokens, not JWTs.**
->
-> JWTs expire and need refresh flows, which add complexity when the app is offline (token expires while offline → can't sync on reconnect until re-auth). Instead:
-> - On first login, the app authenticates with username/password and receives a device-specific API token (a random 256-bit string stored in a `device_tokens` table on the server).
-> - That token never expires unless explicitly revoked.
-> - Store it in Android's EncryptedSharedPreferences (backed by Keystore).
-> - The server's `device_tokens` table tracks: token, user_id, device_name, created_at, last_seen_at. This gives you the "which devices are syncing" visibility for free.
-> - Revocation: add a "Manage Devices" section in web app settings where you can see all registered devices and revoke any token.
+- ✅ UUID primary keys (already existed)
+- ✅ `sync_version` column on chits, contacts, settings tables + global counter in `sync_state` table
+- ✅ Sync pull endpoint: `GET /api/sync/changes?since={version}&include=chits,contacts,settings`
+- ✅ Sync push endpoint: `POST /api/sync/push` with field-level LWW conflict resolution
+- ✅ Device token auth: `POST /api/auth/device-token`, Bearer token middleware, `device_tokens` table
+- ✅ Device management API: `GET /api/devices`, `DELETE /api/devices/{id}`, `PATCH /api/devices/{id}`
+- ✅ `has_unviewed_conflict` flag on chits + `POST /api/chit/{id}/dismiss-conflict` endpoint
+- ✅ Audit log entries for conflicts (`sync_conflict_resolved` action with both versions per field)
+- ✅ Tombstone retention (trash purge checks all active devices have synced past deletion)
+- ✅ Contacts and settings sync (field-level merge for contacts, LWW for settings)
+- ✅ WebSocket broadcast of push changes to connected web clients
+- ✅ `last_sync_version` updated on device after each successful pull
 
 ---
 
-## Scale & Scope Estimate
+## Phase 1: Read-Only Android App
 
-| Component | Effort | Notes |
-|---|---|---|
-| Android app shell + navigation | Medium | Screens, routing, theming |
-| Local SQLite database + Room DAOs | Medium | Schema mirroring, migrations |
-| All C CAPTN views rendered natively | **Large** | Calendar alone is complex; 6+ distinct view types |
-| Offline CRUD | Medium | Standard Room/ViewModel pattern |
-| Sync engine (client side) | **Large** | Conflict resolution, queue management, retry logic |
-| Sync API (server side) | Medium | New endpoints, version tracking |
-| ~~UUID migration (server)~~ | ~~Done~~ | ✅ Already using uuid4() |
-| Local notifications | Medium | Android alarm manager, notification channels |
-| Attachments sync | Medium | Download queue, upload queue, cache management |
-| Settings/contacts sync | Small-Medium | Simpler than chits (less conflict potential) |
-| Auth/device management | Small-Medium | Token storage, device registration |
-| Testing & edge cases | **Large** | Sync bugs are subtle and data-destructive |
+*Goal: Authenticate, pull all data, display it natively. Validates the architecture and sync-pull mechanism.*
 
-> **⭐ Recommendation on effort with LLM assistance:**
->
-> Using Claude/Qwen/DeepSeek to generate code will dramatically speed up the "write the code" part of each component. Where you'll still spend real time:
-> - **Architecture decisions** — the LLM can't decide your sync strategy for you, it can only implement what you specify
-> - **Integration testing** — sync bugs manifest at the boundary between components, not within them. You'll need to manually test scenarios like "edit on phone, airplane mode, edit same chit on web, reconnect"
-> - **Debugging sync state** — when something goes wrong, you'll be staring at two databases trying to figure out why they diverged
->
-> Revised estimate with LLM assistance: **2-4 months** instead of 3-6. The LLM cuts boilerplate time in half but doesn't reduce debugging/integration time.
+**Budget: 2-3 weeks**
 
-**Total estimate:** 2-3 months for a solo developer with heavy LLM assistance. The UUID migration being already done removes what would have been 2-3 weeks of the scariest prerequisite work. The sync engine is still the long pole — not because the code is hard to write, but because the edge cases are hard to find and fix.
+### 1.1 Project Setup
+- Create Android project: Kotlin, Jetpack Compose, API 26+ (Android 8.0+)
+- Configure Hilt (dependency injection), Room (local DB), Retrofit + OkHttp (API), Compose Navigation
+- Material 3 theming with CWOC parchment colors (primary `#6b4e31`, background `#fffaf0`, surface `#f5e6d3`, Lora font)
 
----
+### 1.2 Authentication
+- Login screen: username + password → `POST /api/auth/device-token`
+- Store returned token in Android EncryptedSharedPreferences (backed by Keystore)
+- All subsequent API calls use `Authorization: Bearer <token>` header
+- Handle 401 responses (revoked token → redirect to login)
 
-## Key Decisions — With Recommendations
+### 1.3 Local Database (Room)
+- Define Room entities mirroring server schema: `ChitEntity`, `ContactEntity`, `SettingsEntity`
+- Add sync metadata columns: `sync_version`, `last_synced_at`, `is_dirty`
+- Define DAOs with queries for all C CAPTN view filters
+- Database migrations strategy (Room's built-in migration support)
 
-### 1. Native vs. cross-platform?
+### 1.4 Initial Sync (Full Pull)
+- On first login: call `GET /api/sync/changes?since=0&include=chits,contacts,settings`
+- Populate local Room database with all records
+- Store `server_version` from response as the device's high-water mark
 
-> **⭐ Recommendation: Kotlin + Jetpack Compose (native Android).**
->
-> You said Android. Go native. LLMs generate excellent Kotlin/Compose code. The ecosystem is stable, well-documented, and won't break under you. If iOS becomes a goal later, Kotlin Multiplatform (KMP) lets you share the sync engine, data layer, and business logic while writing SwiftUI for the iOS UI layer. That's a better path than Flutter or React Native for a project this data-heavy.
+### 1.5 Core Views (Read-Only)
+- Chit list screen (all chits, searchable/filterable)
+- Tasks view (status-based grouping)
+- Notes view (markdown rendering via a Compose markdown library)
+- Calendar view (day + week only)
+- Navigation: bottom nav bar with C CAPTN tabs
 
-### 2. UUID migration now or later?
-
-> **⭐ Recommendation: Already done! ✅**
->
-> Both chits and contacts already use `str(uuid4())` for ID generation. No migration needed. This removes what would have been the single biggest prerequisite task. You can start the Android app knowing that locally-generated UUIDs will never collide with server-generated ones.
-
-### 3. How much UI parity?
-
-> **⭐ Recommendation: Start with Tasks + Notes + Calendar (day/week view only). Add the rest incrementally.**
->
-> These three cover 80% of daily use. Checklists, Projects (Kanban), and Alerts can come in Phase 4. The editor (create/edit a chit) is the critical path — get that right first, then build out the views. Don't try to ship all 6 C CAPTN views in v1.
-
-### 4. Sync granularity — whole-chit vs. field-level?
-
-> **⭐ Recommendation: Field-level tracking, whole-chit transfer.**
->
-> Track which fields changed locally (store a `dirty_fields` JSON array per dirty record). Transfer the whole chit JSON on sync (it's small — a few KB at most). But use the dirty_fields metadata on the server to do field-level merge: only overwrite fields that the client actually changed. This gives you the merge benefits without the complexity of partial-record transfer.
-
-### 5. Conflict UX?
-
-> **⭐ Recommendation: Silent LWW + notification banner + audit log drill-down.**
->
-> Don't interrupt the user at sync time. Resolve automatically (latest timestamp wins per field). But the next time the user opens a chit that had a conflict, show a dismissible banner: "⚠️ Sync conflict resolved — [View in audit log]". The audit log entry preserves both the local and server versions of every conflicting field, and provides a UI to cherry-pick values from either version. This gives you zero-friction daily use with full recoverability when it matters.
-
-### 6. Shared code between web and mobile?
-
-> **⭐ Recommendation: Don't try to share code. Share the API contract instead.**
->
-> The web app is vanilla JS. The Android app is Kotlin. There's no practical way to share code between them. What you share is the API — same endpoints, same JSON shapes, same sync protocol. Document the API contract clearly (consider an OpenAPI spec) and both clients implement against it independently. The LLM can generate the Kotlin data classes directly from your Pydantic models — just feed it `models.py` and ask for Room entities.
+### 1.6 Visual Identity
+- Parchment theme adapted for native Android (Material 3 structure, CWOC skin)
+- Lora font loaded as a custom font family
+- Brown tones, card styling, indicator icons matching web app
 
 ---
 
-## Suggested Phasing
+## Phase 2: Offline CRUD + Live Sync
 
-**Phase 0: Server prep** (do this while the web app is still the only client)
-- ~~Migrate to UUID primary keys~~ ✅ Already done
-- Add sync_version column
-- Build sync API endpoints (`/api/sync/changes`, `/api/sync/push`)
-- Add `device_tokens` table and device auth
-- Add `has_unviewed_conflict` flag to chits table
-- Extend audit log to store sync conflict entries with both versions
-- Keep web app working throughout
+*Goal: Full create/edit/delete while offline. Live sync via WebSocket when online. Push queued changes on reconnect.*
 
-> **⭐ Recommendation: Budget 1-2 weeks for Phase 0.** No UUID migration needed (already done!). The sync endpoints are straightforward FastAPI routes. The device token system is a simple table + auth middleware check.
+**Budget: 3-4 weeks**
 
-**Phase 1: Read-only Android app**
-- App authenticates, pulls all chits, displays them
-- No local edits yet — just a native viewer
-- Validates the sync-pull mechanism
-- Establish the app's visual identity and navigation structure
+### 2.1 Chit Editor
+- Full editor screen with all chit fields (title, note, dates, status, priority, tags, checklist, people, location, color, alerts, recurrence)
+- Create new chits (generate UUID locally)
+- Edit existing chits
+- Soft-delete chits
+- Mark edited records as dirty (`is_dirty = true`, store `dirty_fields` JSON array)
 
-> **⭐ Recommendation: Budget 2-3 weeks.** This is where you establish the app's architecture — dependency injection (Hilt), navigation (Compose Navigation), theming, and the Room database. Get this foundation right because everything builds on it. An LLM can scaffold all of this quickly, but you'll want to review the architecture choices carefully.
+### 2.2 Dirty Tracking & Queue
+- Every local write sets `is_dirty = true` on the record
+- Track which fields changed per record (`dirty_fields` array)
+- Queue management: ordered list of pending changes to push
 
-**Phase 2: Offline CRUD + Live Sync**
-- Local database, dirty tracking
-- Create/edit/delete chits offline
-- WebSocket connection for live sync when online
-- Push changes on reconnect (WorkManager)
+### 2.3 Sync Push (Reconnect)
+- On connectivity restored: push all dirty records via `POST /api/sync/push`
+- Each pushed chit includes `last_known_sync_version` (the version the client last saw from the server)
+- Handle response statuses per record: `accepted`, `created`, `merged`, `error`
+- Clear dirty flags on successful push
+- Pull any missed changes: `GET /api/sync/changes?since={last_known_version}`
 
-> **⭐ Recommendation: Budget 3-4 weeks.** This is the core of the app's value proposition. The chit editor UI + sync engine together. Test heavily: create offline, edit offline, delete offline, reconnect, verify server state matches.
+### 2.4 Live Sync (WebSocket)
+- Connect to `/ws/sync` when online (OkHttp WebSocket client)
+- Receive real-time change notifications → pull updated records
+- Seamless transition: WorkManager detects connectivity → push dirty → pull changes → open WebSocket
+- If WebSocket drops, fall back to periodic polling (every 30s) until reconnect
 
-**Phase 3: Full bidirectional sync**
-- Conflict detection and resolution
-- Multi-device awareness
-- Attachments, contacts, settings sync
-- Notifications (local alarms via AlarmManager)
-
-> **⭐ Recommendation: Budget 3-4 weeks.** Conflicts are rare in practice (single user) but you still need the code paths. Attachments are the wildcard — large file sync adds complexity. Consider deferring attachment sync to Phase 4 if it's slowing you down.
-
-**Phase 4: Feature parity**
-- Remaining C CAPTN views (Checklists, Projects/Kanban, Alerts, Indicators)
-- Maps integration (Android MapView + your existing geocoding)
-- Polish, animations, edge cases
-- Widget for home screen (quick-add chit, today's calendar)
-
-> **⭐ Recommendation: This phase is open-ended.** Ship after Phase 3 with the core views working. Phase 4 is ongoing improvement, not a gate to "done."
+### 2.5 Connectivity Management
+- Android ConnectivityManager monitors network state
+- WorkManager enqueues one-time sync job on connectivity restored (automatic retry + backoff)
+- UI indicator showing online/offline/syncing state
 
 ---
 
+## Phase 3: Full Bidirectional Sync + Notifications
+
+*Goal: Handle conflicts gracefully. Sync contacts/settings/attachments. Local notifications.*
+
+**Budget: 3-4 weeks**
+
+### 3.1 Conflict Handling (Client Side)
+- When push returns `status: "merged"` with `conflict_fields`:
+  - Update local record with server's merged version
+  - Set `has_unviewed_conflict = true` locally
+  - Show conflict banner next time user opens the chit in editor
+- Conflict banner: "⚠️ Sync conflict resolved — View in audit log"
+- Dismiss conflict: `POST /api/chit/{id}/dismiss-conflict`
+
+### 3.2 Contacts Sync
+- Mirror contacts table locally (same Room entity pattern as chits)
+- Pull contacts via `GET /api/sync/changes?include=contacts`
+- Push contact changes via `POST /api/sync/push` (contacts array)
+- Field-level merge on conflicts (same as chits)
+
+### 3.3 Settings Sync
+- Mirror settings locally
+- Pull via `GET /api/sync/changes?include=settings`
+- Push via `POST /api/sync/push` (settings object)
+- LWW on entire record (no field-level merge)
+
+### 3.4 Attachments Sync
+- Download attachments on first access (lazy loading)
+- Upload new attachments on sync push
+- Local cache with size management
+- *Consider deferring to Phase 4 if this slows things down*
+
+### 3.5 Local Notifications
+- Android AlarmManager + NotificationChannels for chit alerts
+- Mirror the server's alert/notification system locally
+- Fire notifications based on local chit data (no server dependency)
+- Notification types: alarms (sound), timers (countdown), reminders (silent push)
+
+### 3.6 Edge Case Handling
+- Delete vs. edit conflict: delete wins, log the lost edit in audit
+- Checklist reorder conflict: LWW on entire checklist blob
+- Settings conflict: LWW, full stop
+- Tag renames: apply rename to all local chits bearing the old tag name
+
 ---
 
-## Getting Started — The Hello World Stuff
+## Phase 4: Feature Parity & Polish
 
-If you've never built an Android app before, here's what you actually need:
+*Goal: Remaining views, maps, widgets, animations. Open-ended — ship after Phase 3.*
 
-### What to Install (on your Mac)
+**Budget: Ongoing**
 
-1. **Android Studio** — Free download from [developer.android.com](https://developer.android.com/studio). This is the IDE (like VS Code but for Android). It includes the Android SDK, emulator, and build tools. ~2GB download, ~8GB installed.
+### 4.1 Remaining C CAPTN Views
+- Checklists view (interactive nested checklists)
+- Projects view (Kanban board with drag-drop)
+- Alerts/Alarms view (independent alerts board)
+- Indicators view (health data charts)
 
-2. **JDK** — Android Studio bundles one, but you may want a standalone JDK 17+ (via `brew install openjdk@17` if you use Homebrew).
+### 4.2 Maps Integration
+- Android MapView (Google Maps or OSM via osmdroid)
+- Chit location markers with color coding
+- Geocoding via existing backend proxy
 
-That's it for development. You can build and test entirely on the emulator without a physical device.
+### 4.3 Home Screen Widget
+- Quick-add chit widget
+- Today's calendar widget
+- Upcoming tasks widget
 
-### Do You Need a Google Developer Account?
+### 4.4 Polish
+- Animations and transitions
+- Pull-to-refresh
+- Swipe actions (archive, delete, snooze)
+- Search with boolean operators (port from web)
+- Recurrence expansion (port `shared-recurrence.js` to Kotlin)
 
-- **For development and personal use: No.** You can build the APK in Android Studio and sideload it onto your own phone (enable "Install from unknown sources" in Android settings). Since CWOC is a personal/self-hosted tool, you probably never need to publish to the Play Store.
+### 4.5 Future Considerations
+- Kotlin Multiplatform (KMP) extraction if iOS ever becomes a goal
+- Web UI for device management in Settings page
+- Conflict cherry-pick UI in the app (currently audit-log only)
 
-- **For Play Store distribution: Yes.** A Google Play Developer account costs a one-time $25 fee. You'd need this only if you wanted to distribute the app to other people via the Play Store. Given CWOC is self-hosted and personal, this is likely unnecessary.
+---
 
-- **⭐ Recommendation: Skip the developer account. Build the APK, sideload it to your phone.** You can always publish later if you want to. For a personal tool on your own device, sideloading is fine.
+## Architecture Decisions
 
-### First Steps (What to Tell the LLM)
+### Technology Stack
+| Layer | Choice | Rationale |
+|-------|--------|-----------|
+| Language | Kotlin | Official Android language, excellent LLM corpus coverage |
+| UI | Jetpack Compose | Modern declarative UI, Material 3 support |
+| Local DB | Room (SQLite) | Same engine as server, compile-time query verification |
+| Networking | Retrofit + OkHttp | Standard, well-supported, built-in WebSocket client |
+| DI | Hilt | Official Jetpack DI, minimal boilerplate |
+| Background | WorkManager | Survives app restarts, respects battery/network constraints |
+| Auth storage | EncryptedSharedPreferences | Backed by Android Keystore |
 
-When you're ready to start, give the LLM this prompt to scaffold the project:
+### Sync Strategy
+- **Field-level merge with LWW fallback** — non-conflicting field edits merge automatically; same-field conflicts resolved by latest `modified_datetime`
+- **Silent resolution + notification banner** — never interrupt the user at sync time; show banner on next chit open if conflict occurred
+- **Whole-chit transfer, field-level tracking** — push/pull entire chit JSON, but track `dirty_fields` locally for server-side merge logic
+- **Two modes**: live (WebSocket) when online, queued (WorkManager) when offline
 
-> "Create a new Android app project using Kotlin and Jetpack Compose. Target API 26+ (Android 8.0+). Set up:
-> - Hilt for dependency injection
-> - Room for local SQLite database
-> - Retrofit + OkHttp for API calls
-> - Compose Navigation for screen routing
-> - Material 3 theming with custom colors (browns/parchment: primary #6b4e31, background #fffaf0, surface #f5e6d3)
-> - A basic login screen that authenticates against `https://<server>/api/auth/login`
->
-> Project name: CWOC, package: com.cwoc.app"
+### Conflict Rules
+| Scenario | Resolution |
+|----------|-----------|
+| Same chit, different fields edited | Merge both (no conflict) |
+| Same chit, same field edited | LWW by `modified_datetime` |
+| Deleted on one side, edited on other | Delete wins |
+| Checklist reordered on both sides | LWW on entire checklist blob |
+| Settings changed on both sides | LWW on entire record |
+| Tag renamed on server | Apply rename to all local chits with old tag |
 
-That gives you the skeleton. From there you build screen by screen.
+### What NOT to Do
+- Don't share code between web (vanilla JS) and mobile (Kotlin) — share the API contract instead
+- Don't use CRDTs — overkill for single-user with rare conflicts
+- Don't use JWTs — long-lived device tokens are simpler and work offline
+- Don't try to ship all 6 C CAPTN views in v1 — Tasks + Notes + Calendar covers 80% of daily use
+- Don't build for iOS yet — if it ever happens, extract data layer via KMP later
 
-### Project Structure (What an Android App Looks Like)
+---
+
+## Project Structure
 
 ```
 app/
   src/main/
     java/com/cwoc/app/
-      di/                  # Dependency injection modules (Hilt)
+      di/                  # Hilt dependency injection modules
       data/
         local/             # Room database, DAOs, entities
         remote/            # Retrofit API service, DTOs
-        repository/        # Repository pattern (combines local + remote)
-        sync/              # Sync engine (WorkManager jobs, conflict resolution)
+        repository/        # Repository pattern (local + remote)
+        sync/              # Sync engine (WorkManager, conflict resolution)
       ui/
-        theme/             # Colors, typography, shapes (parchment theme)
+        theme/             # Colors, typography, shapes (parchment)
         navigation/        # Nav graph, screen routes
         screens/
           login/           # Login screen
@@ -347,48 +255,144 @@ app/
     res/
       values/              # Strings, colors, themes
       drawable/            # Icons, images
-    AndroidManifest.xml    # App permissions, activities
+    AndroidManifest.xml    # Permissions, activities
   build.gradle.kts         # Dependencies, SDK versions
 ```
 
-### Key Android Concepts (Quick Reference)
+---
 
-- **Activity** — A single screen container. Modern apps typically have ONE activity and use Compose Navigation for multiple screens.
-- **ViewModel** — Holds UI state, survives screen rotation. Each screen gets one.
-- **Repository** — Mediates between local DB and remote API. The sync logic lives here.
-- **WorkManager** — Schedules background work (sync jobs) that survives app restarts and respects battery/network constraints.
-- **Hilt** — Dependency injection. Wires everything together so you don't pass objects around manually.
-- **Room** — SQLite wrapper. You define entities (tables) and DAOs (queries) as Kotlin classes/interfaces, Room generates the implementation.
+## Server API Contract (What the App Talks To)
+
+All endpoints require `Authorization: Bearer <device_token>` header unless noted.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/auth/device-token` | POST | Authenticate with username/password, get device token (no auth required) |
+| `/api/sync/changes?since={v}&include=chits,contacts,settings` | GET | Pull all changes since version v |
+| `/api/sync/push` | POST | Push local changes (chits, contacts, settings arrays) |
+| `/api/chit/{id}/dismiss-conflict` | POST | Clear conflict notification flag |
+| `/api/devices` | GET | List registered devices |
+| `/api/devices/{id}` | DELETE | Revoke a device token |
+| `/api/devices/{id}` | PATCH | Rename a device |
+| `/ws/sync` | WS | Real-time change notifications |
+
+**Sync pull response shape:**
+```json
+{
+  "server_version": 4523,
+  "chits": [{ "id": "...", "sync_version": 4520, ... }],
+  "contacts": [{ "id": "...", "sync_version": 4521, ... }],
+  "settings": { "sync_version": 4522, ... }
+}
+```
+
+**Sync push request shape:**
+```json
+{
+  "chits": [{ "id": "...", "last_known_sync_version": 4500, ...all fields... }],
+  "contacts": [{ "id": "...", "last_known_sync_version": 4501, ... }],
+  "settings": { "last_known_sync_version": 4502, ... }
+}
+```
+
+**Sync push response shape:**
+```json
+{
+  "results": {
+    "chits": [
+      { "id": "uuid-1", "status": "accepted", "sync_version": 4524 },
+      { "id": "uuid-2", "status": "merged", "sync_version": 4525, "conflict_fields": ["title", "note"] },
+      { "id": "uuid-3", "status": "created", "sync_version": 4526 }
+    ],
+    "contacts": [...],
+    "settings": { "status": "accepted", "sync_version": 4527 }
+  },
+  "server_version": 4527
+}
+```
 
 ---
 
-## Open Questions — With Recommendations
+## Getting Started
 
-**Do you want iOS eventually?**
-> **⭐ Recommendation: Very low priority. Don't factor it into any decisions now.**
+### What to Install
+1. **Android Studio** — [developer.android.com/studio](https://developer.android.com/studio) (~2GB download, ~8GB installed). Includes SDK, emulator, build tools.
+2. **JDK 17+** — bundled with Android Studio, or `brew install openjdk@17`
+
+No Google Developer account needed. Build the APK, sideload to your phone.
+
+### Scaffold Prompt (Give This to the LLM)
+
+> "Create a new Android app project using Kotlin and Jetpack Compose. Target API 26+ (Android 8.0+). Set up:
+> - Hilt for dependency injection
+> - Room for local SQLite database
+> - Retrofit + OkHttp for API calls
+> - Compose Navigation for screen routing
+> - Material 3 theming with custom colors (browns/parchment: primary #6b4e31, background #fffaf0, surface #f5e6d3)
+> - A basic login screen that authenticates against `https://<server>/api/auth/device-token`
 >
-> Build for Android. If iOS ever becomes real (years from now), the data/sync layer can be extracted into a Kotlin Multiplatform (KMP) module and you'd write SwiftUI for the iOS UI. But don't let a hypothetical future iOS app influence your Android technology choices today. Go fully native Android without compromise.
+> Project name: CWOC, package: com.cwoc.app"
 
-**Is the 1940s parchment theme carrying over to the app?**
-> **⭐ Recommendation: Yes, but adapted for native.** Use Material 3 (Material You) as the structural foundation (navigation, cards, buttons, sheets) but skin it with your parchment colors, Lora font, and brown tones. This gives you proper Android UX patterns (back gestures, bottom nav, pull-to-refresh) while keeping the CWOC identity. Don't try to make the app look like a web page — make it look like a native app that happens to share CWOC's color palette and typography.
+### Porting JS Logic to Kotlin
+Feed these files to the LLM and ask for Kotlin equivalents (pure functions, no DOM):
+- `shared-recurrence.js` → recurrence expansion
+- `shared-tags.js` → tag tree building
+- `shared-checklist.js` → checklist nesting logic
+- `shared-indicators.js` → indicator display logic
 
-**How much JS logic needs rewriting?**
-> **⭐ Recommendation: Feed the JS to the LLM and ask it to port to Kotlin.** Recurrence expansion, tag tree building, checklist nesting logic — these are all pure functions with no DOM dependency. Give Claude your `shared-recurrence.js`, `shared-tags.js`, and `shared-checklist.js` and ask for Kotlin equivalents. The logic ports cleanly; it's just syntax translation. Budget a day or two for this, not weeks.
+---
 
-**Would a PWA with service workers be "good enough"?**
-> **⭐ Recommendation: No. Build the native app.**
->
-> PWA offline support is fragile — service workers have storage limits, can be evicted by the OS, and IndexedDB performance degrades with large datasets. You have potentially thousands of chits with rich metadata. A native app with Room/SQLite gives you reliable, fast, unlimited local storage. Plus: native notifications, background sync via WorkManager, home screen widgets, proper back-gesture handling, and no "Add to Home Screen" friction. The PWA path saves maybe 4 weeks of effort but gives you a permanently inferior experience. The web app (which already works on mobile browsers) remains available for anyone who doesn't want to install the native app — that covers the "I don't want to install anything" crowd.
+## Effort Estimate
 
-**What's the minimum viable feature set?**
-> **⭐ Recommendation: The MVP is:**
-> - Authentication + device registration
-> - Full chit list (all chits, searchable/filterable)
-> - Chit editor (create, edit, delete — all fields)
-> - Tasks view (status-based filtering)
-> - Notes view (markdown rendering)
-> - Calendar view (day + week)
-> - Offline CRUD + sync on reconnect
-> - Live sync via WebSocket when online
->
-> That's your "I can use this as my daily driver" threshold. Everything else is enhancement.
+| Component | Effort | Status |
+|-----------|--------|--------|
+| Server sync infrastructure | — | ✅ Complete |
+| Device auth (server) | — | ✅ Complete |
+| Android app shell + navigation | Medium | Phase 1 |
+| Local SQLite database + Room DAOs | Medium | Phase 1 |
+| Tasks + Notes + Calendar views | Large | Phase 1-2 |
+| Chit editor (all fields) | Large | Phase 2 |
+| Offline CRUD + dirty tracking | Medium | Phase 2 |
+| Sync engine (client-side) | Large | Phase 2-3 |
+| Live sync (WebSocket) | Medium | Phase 2 |
+| Conflict handling (client UI) | Medium | Phase 3 |
+| Local notifications | Medium | Phase 3 |
+| Contacts/settings sync | Small | Phase 3 |
+| Attachments sync | Medium | Phase 3-4 |
+| Remaining views (Checklists, Projects, Alerts, Indicators) | Large | Phase 4 |
+| Maps, widgets, polish | Medium | Phase 4 |
+| Integration testing | Large | Ongoing |
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|-----------|
+| CRUD | Create, Read, Update, Delete — the four basic data operations |
+| DAO | Data Access Object — a class providing database query methods (Room pattern) |
+| ORM | Object-Relational Mapping — maps database rows to code objects |
+| LWW | Last Write Wins — conflict resolution where the latest edit by timestamp is kept |
+| Tombstone | A soft-deleted record retained so other devices learn about the deletion during sync |
+| Dirty flag | A marker on a local record indicating unsaved changes that need pushing to the server |
+| Room | Android Jetpack's SQLite ORM — compile-time verified queries, entity/DAO pattern |
+| Hilt | Android's official dependency injection framework (built on Dagger) |
+| WorkManager | Android API for scheduling background work that survives app restarts |
+| Compose | Jetpack Compose — Android's modern declarative UI toolkit |
+| KMP | Kotlin Multiplatform — share Kotlin code across Android/iOS/desktop |
+| Material 3 | Google's latest design system for Android (Material You) |
+
+---
+
+## Key Android Concepts
+
+| Concept | What It Does |
+|---------|-------------|
+| Activity | Single screen container. Modern apps have ONE activity + Compose Navigation for screens |
+| ViewModel | Holds UI state, survives screen rotation. Each screen gets one |
+| Repository | Mediates between local DB and remote API. Sync logic lives here |
+| WorkManager | Schedules background sync jobs. Survives restarts, respects battery/network |
+| Hilt | Dependency injection. Wires everything together automatically |
+| Room | SQLite wrapper. Define entities (tables) and DAOs (queries) as Kotlin classes, Room generates the implementation |
+| ConnectivityManager | Android API that reports network state changes (online/offline transitions) |
+| EncryptedSharedPreferences | Secure key-value storage backed by Android Keystore (for tokens) |

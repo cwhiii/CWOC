@@ -25,6 +25,27 @@ bundles_router = APIRouter()
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 
+def _condition_tree_has_leaves(tree: dict) -> bool:
+    """Check if a condition tree contains at least one leaf condition.
+
+    An empty group (no children) or nested groups with no leaves would
+    evaluate to True via vacuous truth in evaluate_condition_tree, which
+    causes rules with no conditions to match every email. This helper
+    lets bundle classification skip such rules.
+    """
+    if not isinstance(tree, dict):
+        return False
+    node_type = tree.get("type")
+    if node_type == "leaf":
+        return True
+    if node_type == "group":
+        children = tree.get("children")
+        if not isinstance(children, list) or not children:
+            return False
+        return any(_condition_tree_has_leaves(child) for child in children)
+    return False
+
+
 def _query_bundles(cursor, owner_id: str) -> list:
     """Query all bundles for an owner, sorted by display_order ASC.
     Includes associated rule_ids for each bundle."""
@@ -976,6 +997,9 @@ def classify_email_into_bundle(chit: dict, owner_id: str):
 
                 if not conditions or not isinstance(conditions, dict):
                     continue
+                # Skip rules with empty condition trees (no leaves = vacuous truth match-all)
+                if not _condition_tree_has_leaves(conditions):
+                    continue
 
                 # Determine if this is a generic or specific rule
                 is_generic = _is_generic_condition(conditions)
@@ -1070,6 +1094,9 @@ def classify_email_into_bundles(chit: dict, owner_id: str):
                     conditions = conditions_raw
 
                 if not conditions or not isinstance(conditions, dict):
+                    continue
+                # Skip rules with empty condition trees (no leaves = vacuous truth match-all)
+                if not _condition_tree_has_leaves(conditions):
                     continue
 
                 # Evaluate condition tree against the email chit
