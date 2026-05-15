@@ -112,6 +112,8 @@ async function displayIndicatorsView() {
           if (objResp.ok) {
             objects = await objResp.json();
             window._indicatorObjects = objects;
+            // Also populate the ID set for visual indicator split
+            window._indicatorObjectIds = new Set(objects.map(function(o) { return o.id; }));
           }
         } catch (e) { /* use empty objects */ }
       }
@@ -830,7 +832,7 @@ async function _indicatorsLoad() {
               if (typeof chits !== 'undefined' && Array.isArray(chits)) {
                 for (var ci = chits.length - 1; ci >= 0; ci--) {
                   var c = chits[ci];
-                  if (c.health_indicators && c.health_indicators[indKey] != null) {
+                  if (c.health_data && c.health_data[indKey] != null) {
                     matchChit = c;
                     break;
                   }

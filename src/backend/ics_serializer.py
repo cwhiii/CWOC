@@ -1,12 +1,16 @@
-"""iCalendar (.ics) parser and printer for CWOC calendar import.
+"""iCalendar (.ics) parser and printer for CWOC calendar import/export.
 
-Provides ics_parse() and ics_print() following the same architectural
-pattern as the vCard serializer in serializers.py.  Uses Python stdlib
-only — no external libraries.
+Provides ics_parse() and ics_print() for round-tripping parsed component dicts,
+and ics_export_chits() for exporting CWOC chit dicts to RFC 5545 iCalendar format
+with full timezone support (VTIMEZONE components, TZID parameters).
+
+Uses Python stdlib only — no external libraries.
 """
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
+from zoneinfo import ZoneInfo
 
 
 def _unfold_lines(text: str) -> List[str]:
@@ -420,3 +424,368 @@ def _format_rrule(rrule: dict) -> Optional[str]:
         parts.append(f"COUNT={rrule['count']}")
 
     return ";".join(parts)
+
+
+# ── Chit Export with Timezone Support ────────────────────────────────────────
+
+
+def _build_vtimezone(tz_name: str, year: int) -> str:
+    """Generate a VTIMEZONE component for the given IANA timezone and year.
+
+    Uses zoneinfo to determine standard/daylight transitions by probing
+    UTC offsets hour-by-hour across the year. Returns empty string if
+    timezone is invalid.
+
+    Per RFC 5545, DTSTART in VTIMEZONE sub-components is the wall-clock
+    time at which the transition takes effect (in the "from" offset).
+    """
+    try:
+        tz = ZoneInfo(tz_name)
+    except (KeyError, Exception):
+        return ""
+
+    # Probe each hour of the year to find DST transitions
+    jan1 = datetime(year, 1, 1, tzinfo=timezone.utc)
+    transitions = []
+    prev_offset = None
+
+    # Check every hour for 366 days (covers leap years)
+    total_hours = 366 * 24
+    for hour_offset in range(total_hours):
+        dt_utc = jan1 + timedelta(hours=hour_offset)
+        dt_local = dt_utc.astimezone(tz)
+        current_offset = dt_local.utcoffset()
+
+        if prev_offset is not None and current_offset != prev_offset:
+            transitions.append({
+                "dt_utc": dt_utc,
+                "offset_from": prev_offset,
+                "offset_to": current_offset,
+            })
+        prev_offset = current_offset
+
+    # If no transitions found, this is a fixed-offset timezone
+    if not transitions:
+        # Emit a minimal VTIMEZONE with STANDARD only (fixed offset)
+        dt_local = jan1.astimezone(tz)
+        offset = dt_local.utcoffset()
+        offset_str = _format_utc_offset(offset)
+        lines = [
+            "BEGIN:VTIMEZONE",
+            f"TZID:{tz_name}",
+            "BEGIN:STANDARD",
+            f"DTSTART:{year}0101T000000",
+            f"TZOFFSETFROM:{offset_str}",
+            f"TZOFFSETTO:{offset_str}",
+            "TZNAME:STD",
+            "END:STANDARD",
+            "END:VTIMEZONE",
+        ]
+        return "\r\n".join(lines)
+
+    # Build VTIMEZONE with STANDARD and DAYLIGHT sub-components
+    lines = [
+        "BEGIN:VTIMEZONE",
+        f"TZID:{tz_name}",
+    ]
+
+    for trans in transitions:
+        offset_from = trans["offset_from"]
+        offset_to = trans["offset_to"]
+
+        # Determine if this is a transition TO daylight or TO standard
+        if offset_to > offset_from:
+            # Spring forward — entering daylight saving
+            comp_type = "DAYLIGHT"
+            tz_abbr = "DT"
+        else:
+            # Fall back — entering standard time
+            comp_type = "STANDARD"
+            tz_abbr = "ST"
+
+        # DTSTART per RFC 5545: the wall-clock time of the transition
+        # expressed in the "from" offset (the time just before the switch).
+        # For spring-forward (2:00 AM -> 3:00 AM), DTSTART is the local
+        # time when clocks change, which is the new time (3:00 AM in new offset).
+        # Actually per RFC 5545 Section 3.6.5, DTSTART is the effective
+        # date and local time at which the onset of the observance takes effect.
+        # This is the wall-clock time in the NEW offset.
+        dt_local = trans["dt_utc"].astimezone(tz)
+        dtstart_str = dt_local.strftime("%Y%m%dT%H%M%S")
+
+        lines.append(f"BEGIN:{comp_type}")
+        lines.append(f"DTSTART:{dtstart_str}")
+        lines.append(f"TZOFFSETFROM:{_format_utc_offset(offset_from)}")
+        lines.append(f"TZOFFSETTO:{_format_utc_offset(offset_to)}")
+        lines.append(f"TZNAME:{tz_abbr}")
+        lines.append(f"END:{comp_type}")
+
+    lines.append("END:VTIMEZONE")
+    return "\r\n".join(lines)
+
+
+def _format_utc_offset(offset: timedelta) -> str:
+    """Format a timedelta UTC offset as +HHMM or -HHMM string."""
+    total_seconds = int(offset.total_seconds())
+    sign = "+" if total_seconds >= 0 else "-"
+    total_seconds = abs(total_seconds)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    return f"{sign}{hours:02d}{minutes:02d}"
+
+
+def _chit_to_ical_datetime(dt_str: str, all_day: bool) -> str:
+    """Convert a chit datetime string to iCalendar format.
+
+    Input: '2025-06-15T10:00:00' or '2025-06-15'
+    Output: '20250615T100000' or '20250615'
+    """
+    if not dt_str:
+        return ""
+    s = dt_str.strip().rstrip('Z')
+
+    if all_day:
+        # Extract date portion only
+        return s[:10].replace('-', '')
+
+    if 'T' in s:
+        date_part, time_part = s.split('T', 1)
+        date_compact = date_part.replace('-', '')
+        time_compact = time_part.replace(':', '').replace('.', '')[:6]
+        # Ensure exactly 6 digits for time
+        time_compact = time_compact.ljust(6, '0')
+        return f"{date_compact}T{time_compact}"
+
+    # Date only
+    return s.replace('-', '')[:8]
+
+
+def _format_chit_rrule(recurrence_rule: dict) -> Optional[str]:
+    """Serialize a CWOC recurrence_rule dict to RFC 5545 RRULE string.
+
+    CWOC uses: { freq, interval, byDay, until, count }
+    RFC 5545 uses: FREQ=DAILY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20251231T235959Z
+    """
+    if not recurrence_rule or not recurrence_rule.get("freq"):
+        return None
+
+    parts = [f"FREQ={recurrence_rule['freq']}"]
+
+    interval = recurrence_rule.get("interval", 1)
+    if interval and interval != 1:
+        parts.append(f"INTERVAL={interval}")
+
+    by_day = recurrence_rule.get("byDay") or recurrence_rule.get("byday")
+    if by_day:
+        if isinstance(by_day, list):
+            parts.append(f"BYDAY={','.join(by_day)}")
+        else:
+            parts.append(f"BYDAY={by_day}")
+
+    until = recurrence_rule.get("until")
+    count = recurrence_rule.get("count")
+    if until:
+        # Convert ISO to iCal format if needed
+        until_str = until.replace('-', '').replace(':', '')
+        if 'T' not in until_str and len(until_str) == 8:
+            until_str += "T235959Z"
+        parts.append(f"UNTIL={until_str}")
+    elif count:
+        parts.append(f"COUNT={count}")
+
+    return ";".join(parts)
+
+
+def _format_exdates(exceptions: List[Dict[str, Any]], tz_name: Optional[str], all_day: bool) -> List[str]:
+    """Format recurrence exceptions as EXDATE lines.
+
+    Returns a list of EXDATE property lines.
+    """
+    if not exceptions:
+        return []
+
+    lines = []
+    for exc in exceptions:
+        date_val = exc.get("date")
+        if not date_val:
+            continue
+
+        if all_day:
+            # All-day: EXDATE;VALUE=DATE:YYYYMMDD
+            ical_date = date_val.replace('-', '')[:8]
+            lines.append(f"EXDATE;VALUE=DATE:{ical_date}")
+        elif tz_name:
+            # Anchored: EXDATE;TZID=...:YYYYMMDDTHHMMSS
+            # Exception dates are stored as YYYY-MM-DD; assume start of day
+            ical_date = date_val.replace('-', '')[:8] + "T000000"
+            lines.append(f"EXDATE;TZID={tz_name}:{ical_date}")
+        else:
+            # Floating: EXDATE:YYYYMMDDTHHMMSS (no TZID, no Z)
+            ical_date = date_val.replace('-', '')[:8] + "T000000"
+            lines.append(f"EXDATE:{ical_date}")
+
+    return lines
+
+
+def ics_export_chits(chits: List[dict]) -> str:
+    """Export a list of chit dicts to RFC 5545 iCalendar format.
+
+    - Anchored chits: DTSTART;TZID=..., VTIMEZONE component included
+    - Floating chits: DTSTART with naive local time (no TZID, no Z)
+    - All-day chits: DTSTART;VALUE=DATE:YYYYMMDD
+    - Chits without start_datetime or due_datetime: omitted
+    - One VTIMEZONE per unique timezone referenced
+    - Anchored chits with recurrence: RRULE and EXDATE with TZID context
+    - Conforms to RFC 5545 (VCALENDAR wrapper, VERSION:2.0)
+    """
+    # Collect unique timezones and determine the year for VTIMEZONE generation
+    timezones_used: Dict[str, int] = {}  # tz_name -> year (from first chit using it)
+    exportable_chits: List[dict] = []
+
+    for chit in chits:
+        # Skip chits with no start_datetime and no due_datetime
+        start_dt = chit.get("start_datetime")
+        due_dt = chit.get("due_datetime")
+        if not start_dt and not due_dt:
+            continue
+
+        exportable_chits.append(chit)
+
+        # Track timezone usage
+        tz_name = chit.get("timezone")
+        if tz_name:
+            if tz_name not in timezones_used:
+                # Determine year from the chit's start or due datetime
+                ref_dt = start_dt or due_dt
+                try:
+                    year = int(ref_dt[:4])
+                except (ValueError, TypeError):
+                    year = datetime.now().year
+                timezones_used[tz_name] = year
+
+    # Build output
+    lines: List[str] = []
+    lines.append("BEGIN:VCALENDAR")
+    lines.append("VERSION:2.0")
+    lines.append("PRODID:-//CWOC//EN")
+
+    # Emit one VTIMEZONE per unique timezone
+    for tz_name, year in timezones_used.items():
+        vtimezone = _build_vtimezone(tz_name, year)
+        if vtimezone:
+            lines.append(vtimezone)
+
+    # Emit VEVENTs for each exportable chit
+    for chit in exportable_chits:
+        is_all_day = bool(chit.get("all_day"))
+        tz_name = chit.get("timezone")
+        start_dt = chit.get("start_datetime")
+        end_dt = chit.get("end_datetime")
+        due_dt = chit.get("due_datetime")
+
+        lines.append("BEGIN:VEVENT")
+
+        # UID
+        chit_id = chit.get("id", "")
+        if chit_id:
+            lines.append(f"UID:{chit_id}@cwoc")
+
+        # SUMMARY
+        title = chit.get("title") or "Untitled"
+        lines.append(f"SUMMARY:{title}")
+
+        # DESCRIPTION (from note field)
+        note = chit.get("note")
+        if note:
+            # Escape newlines and special chars per RFC 5545
+            escaped_note = note.replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
+            lines.append(f"DESCRIPTION:{escaped_note}")
+
+        # LOCATION
+        location = chit.get("location")
+        if location:
+            lines.append(f"LOCATION:{location}")
+
+        # DTSTART
+        if start_dt:
+            if is_all_day:
+                ical_val = _chit_to_ical_datetime(start_dt, True)
+                lines.append(f"DTSTART;VALUE=DATE:{ical_val}")
+            elif tz_name:
+                ical_val = _chit_to_ical_datetime(start_dt, False)
+                lines.append(f"DTSTART;TZID={tz_name}:{ical_val}")
+            else:
+                # Floating: naive local time, no TZID, no Z
+                ical_val = _chit_to_ical_datetime(start_dt, False)
+                lines.append(f"DTSTART:{ical_val}")
+        elif due_dt:
+            # Use due_datetime as DTSTART if no start_datetime
+            if is_all_day:
+                ical_val = _chit_to_ical_datetime(due_dt, True)
+                lines.append(f"DTSTART;VALUE=DATE:{ical_val}")
+            elif tz_name:
+                ical_val = _chit_to_ical_datetime(due_dt, False)
+                lines.append(f"DTSTART;TZID={tz_name}:{ical_val}")
+            else:
+                ical_val = _chit_to_ical_datetime(due_dt, False)
+                lines.append(f"DTSTART:{ical_val}")
+
+        # DTEND
+        if end_dt:
+            if is_all_day:
+                ical_val = _chit_to_ical_datetime(end_dt, True)
+                lines.append(f"DTEND;VALUE=DATE:{ical_val}")
+            elif tz_name:
+                ical_val = _chit_to_ical_datetime(end_dt, False)
+                lines.append(f"DTEND;TZID={tz_name}:{ical_val}")
+            else:
+                ical_val = _chit_to_ical_datetime(end_dt, False)
+                lines.append(f"DTEND:{ical_val}")
+
+        # DUE (if different from start and present)
+        if due_dt and start_dt:
+            if is_all_day:
+                ical_val = _chit_to_ical_datetime(due_dt, True)
+                lines.append(f"DUE;VALUE=DATE:{ical_val}")
+            elif tz_name:
+                ical_val = _chit_to_ical_datetime(due_dt, False)
+                lines.append(f"DUE;TZID={tz_name}:{ical_val}")
+            else:
+                ical_val = _chit_to_ical_datetime(due_dt, False)
+                lines.append(f"DUE:{ical_val}")
+
+        # STATUS
+        status = chit.get("status")
+        if status:
+            # Map CWOC statuses to iCal statuses
+            status_map = {
+                "Complete": "COMPLETED",
+                "In Progress": "IN-PROCESS",
+                "Blocked": "IN-PROCESS",
+                "ToDo": "NEEDS-ACTION",
+            }
+            ical_status = status_map.get(status, status.upper())
+            lines.append(f"STATUS:{ical_status}")
+
+        # CATEGORIES (from tags)
+        tags = chit.get("tags")
+        if tags and isinstance(tags, list) and len(tags) > 0:
+            lines.append(f"CATEGORIES:{','.join(tags)}")
+
+        # RRULE
+        recurrence_rule = chit.get("recurrence_rule")
+        if recurrence_rule:
+            rrule_str = _format_chit_rrule(recurrence_rule)
+            if rrule_str:
+                lines.append(f"RRULE:{rrule_str}")
+
+            # EXDATE (recurrence exceptions)
+            recurrence_exceptions = chit.get("recurrence_exceptions")
+            if recurrence_exceptions:
+                exdate_lines = _format_exdates(recurrence_exceptions, tz_name, is_all_day)
+                lines.extend(exdate_lines)
+
+        lines.append("END:VEVENT")
+
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines)

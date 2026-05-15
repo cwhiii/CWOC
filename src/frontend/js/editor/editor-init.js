@@ -649,6 +649,11 @@ async function loadChitData(chitId) {
     // Sync All Day button appearance from checkbox state
     if (typeof _updateAllDayBtnState === 'function') _updateAllDayBtnState();
 
+    // Load timezone (anchored chit support)
+    if (typeof _loadTimezoneValue === 'function') {
+      _loadTimezoneValue(chit.timezone || null);
+    }
+
     // Update time input visibility for mobile
     if (typeof _updateTimeInputVisibility === 'function') _updateTimeInputVisibility();
 
@@ -731,6 +736,12 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Set notification (reminder) flag from chit data
+    var notifInput = document.getElementById("notification");
+    if (notifInput) {
+      notifInput.value = chit.notification ? "true" : "";
+    }
+
     // Initialize snooze state from loaded chit
     if (typeof _initSnooze === 'function') _initSnooze(chit);
 
@@ -778,9 +789,22 @@ async function loadChitData(chitId) {
 
     applyZoneStates(chit);
 
-    // Scroll to the source view's zone for existing chits
+    // If opened from Projects view, always expand the checklist zone
     var _sourceTab = 'Calendar';
     try { var _st = localStorage.getItem('cwoc_source_tab'); if (_st) _sourceTab = _st; } catch(e) {}
+    if (_sourceTab === 'Projects') {
+      var _clSection = document.getElementById('checklistSection');
+      var _clContent = document.getElementById('checklistContent');
+      if (_clSection && _clContent) {
+        _clContent.style.display = '';
+        _clSection.classList.remove('collapsed');
+        var _clIcon = _clSection.querySelector('.zone-toggle-icon');
+        if (_clIcon) _clIcon.textContent = '🔼';
+        _clSection.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function(btn) { btn.style.display = ''; });
+      }
+    }
+
+    // Scroll to the source view's zone for existing chits
     var _tabZoneScrollMap = {
       'Calendar': 'datesSection',
       'Checklists': 'checklistSection',
@@ -1219,6 +1243,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Wire up auto-deselect of All Day when a time is picked
   _wireAllDayAutoDeselect();
+
+  // Initialize timezone picker (populate datalist)
+  _initTimezonePicker();
 
   // Auto-colon mask for time inputs (HH:MM format) + snap dropdown
   // Time inputs are now handled by cwocTimePicker drum roller (see above)

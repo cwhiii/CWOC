@@ -578,6 +578,14 @@
                     margin-left: auto;
                 }
 
+                /* ── Timezone inputs: fill available space ── */
+                #default-timezone,
+                #timezone-override {
+                    flex: 1;
+                    min-width: 0;
+                    margin-left: auto;
+                }
+
                 /* ── Force ALL selects in settings to the same width ── */
                 .setting-group select {
                     width: 140px !important;
@@ -776,6 +784,25 @@
                 .arrange-views-grid .view-tab-item i {
                     font-size: 1.3em;
                     color: #6b4e31;
+                }
+                .view-tab-item-fixed {
+                    background-color: #8b5a2b !important;
+                    color: #fdf5e6 !important;
+                    border: 2px solid #5a3f2a !important;
+                    cursor: default !important;
+                    opacity: 1 !important;
+                    margin-right: 8px;
+                    position: relative;
+                }
+                .view-tab-item-fixed i {
+                    color: #fdf5e6 !important;
+                }
+                .view-tab-item-fixed::after {
+                    content: '🔒';
+                    font-size: 0.6em;
+                    position: absolute;
+                    top: 2px;
+                    right: 4px;
                 }
                 .arrange-views-hidden-label {
                     margin-top: 12px;
@@ -1260,9 +1287,66 @@
                             <div class="time-format-grid" id="time-format-grid"></div>
                             <div class="inactive-zone" id="inactive-zone"></div>
                         </div>
+
+                        <label class="setting-subheader">🌐 Timezone</label>
+                        <div class="setting-inline">
+                            <label for="default-timezone">Default Timezone</label>
+                            <input type="text" id="default-timezone" list="tz-list-default" placeholder="e.g. America/Denver" autocomplete="off" />
+                        </div>
+                        <p class="setting-hint">Your home timezone. Used as fallback when browser detection is unavailable.</p>
+
+                        <div class="setting-inline">
+                            <label for="timezone-override">Current Override</label>
+                            <input type="text" id="timezone-override" list="tz-list-override" placeholder="(use browser detection)" autocomplete="off" />
+                        </div>
+                        <p class="setting-hint">Override the auto-detected timezone. Leave empty to use browser detection.</p>
+                        <button type="button" class="standard-button" id="clear-tz-override-btn" onclick="_clearTimezoneOverride()" style="width:100%;margin-top:4px;">✕ Clear Override</button>
+
+                        <datalist id="tz-list-default"></datalist>
+                        <datalist id="tz-list-override"></datalist>
                     </div>
                     <div class="setting-group">
                         <h3>🎯 Display Options</h3>
+
+                        <label class="setting-subheader">Default View</label>
+                        <div class="setting-inline">
+                            <label for="default-view-select">Landing view</label>
+                            <select id="default-view-select" onchange="setSaveButtonUnsaved();">
+                                <option value="Omni">Omni</option>
+                                <option value="Calendar">Calendar</option>
+                                <option value="Checklists">Checklists</option>
+                                <option value="Alarms">Alerts</option>
+                                <option value="Projects">Projects</option>
+                                <option value="Tasks">Tasks</option>
+                                <option value="Notes">Notes</option>
+                                <option value="Email">Email</option>
+                                <option value="Indicators">Indicators</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">The view shown when you first open the site. Does not apply when returning from the editor or other pages.</p>
+
+                        <label class="setting-subheader">View Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
+                        <p class="setting-hint">Drag to reorder the tab bar on the dashboard. You can also hide views you don't use.</p>
+
+                        <label class="setting-subheader">Sort Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
+                        <p class="setting-hint">Resets all views back to their default sort (by date). Also clears any manual drag-to-reorder positioning you've set within individual views.</p>
+
+                        <label class="setting-subheader">Chit Options</label>
+                        <div class="checkbox-list">
+                            <label><input type="checkbox" id="checklist-autosave-toggle" name="checklist_autosave" checked /> ⚡ Checklist Auto-Save</label>
+                            <label><input type="checkbox" id="autosave-desktop-toggle" name="autosave_desktop" /> 💾 Auto-save on Desktop</label>
+                            <label><input type="checkbox" id="autosave-mobile-toggle" name="autosave_mobile" /> 💾 Auto-save on Mobile</label>
+                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
+                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
+                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
+                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
+                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
+                            <label><input type="checkbox" id="show-map-thumbnails" name="show_map_thumbnails" checked /> 📍 Show Map Thumbnails</label>
+                            <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
+                        </div>
 
                         <label class="setting-subheader">Visual Indicators</label>
                         <div class="indicator-list">
@@ -1280,31 +1364,9 @@
                             </div>
                             <div class="indicator-item"><span>🌤️ Weather</span><select name="weather_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                             <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>❤️ Indicators</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>📊 Custom Data</span><select name="custom_data_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                         </div>
-
-                        <label class="setting-subheader">Chit Options</label>
-                        <div class="checkbox-list">
-                            <label><input type="checkbox" id="checklist-autosave-toggle" name="checklist_autosave" checked /> ⚡ Checklist Auto-Save</label>
-                            <label><input type="checkbox" id="autosave-desktop-toggle" name="autosave_desktop" /> 💾 Auto-save on Desktop</label>
-                            <label><input type="checkbox" id="autosave-mobile-toggle" name="autosave_mobile" /> 💾 Auto-save on Mobile</label>
-                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
-                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
-                            <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
-                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
-                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
-                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
-                            <label><input type="checkbox" id="show-map-thumbnails" name="show_map_thumbnails" checked /> 📍 Show Map Thumbnails</label>
-                            <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
-                        </div>
-
-                        <label class="setting-subheader">View Order</label>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
-                        <p class="setting-hint">Drag to reorder the tab bar on the dashboard.</p>
-
-                        <label class="setting-subheader">Sort Order</label>
-                        <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
-                        <p class="setting-hint">Clears saved sort preferences and manual item ordering for all views.</p>
                     </div>
                     <div class="setting-group">
                         <h3>Custom Filters &amp; Sorting</h3>
@@ -2426,6 +2488,7 @@
             <!-- Footer is auto-injected by shared-page.js -->
             <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
             <script src="/frontend/js/shared/shared-auth.js"></script>
+        <script src="/frontend/js/shared/shared-tab-sync.js"></script>
             <script src="/frontend/js/shared/shared-utils.js"></script>
             <script src="/frontend/js/shared/shared-touch.js"></script>
             <script src="/frontend/js/shared/shared-checklist.js"></script>

@@ -1067,6 +1067,12 @@ async function _emailSaveAndSendArchive() {
 function initEmailZone(chit) {
   _emailCurrentChit = chit;
 
+  // Mark that this chit was loaded from the server as an email chit
+  // (used by _emailDiscardDraft to distinguish from user-activated email)
+  if (chit.email_status) {
+    _emailCurrentChit._loadedAsEmail = true;
+  }
+
   console.log('[Email] email_body_html:', chit.email_body_html ? 'present (' + chit.email_body_html.length + ' chars)' : 'missing');
 
   var fromEl = document.getElementById('emailFrom');
@@ -1755,44 +1761,168 @@ async function _emailCancelScheduled() {
 }
 
 /**
- * Discard (soft-delete) the current draft email chit.
- * Confirms with the user, then deletes and navigates back.
+ * Discard the current email draft.
+ *
+ * Behavior depends on context:
+ * - If the chit was ORIGINALLY an email chit (loaded from server with email_status),
+ *   soft-delete the entire chit and navigate back (old behavior).
+ * - If the user activated email on a regular chit (compose-from-chit), just clear
+ *   the email fields and hide the email zone. The chit itself is untouched.
+ *   If the chit is part of an email thread, keep the zone visible (collapsed)
+ *   so the thread remains accessible.
  */
 async function _emailDiscardDraft() {
-  var chitId = window.currentChitId;
-  if (!chitId) {
-    cwocToast('No draft to discard.', 'error');
-    return;
-  }
+  // Determine if this chit was originally an email chit (loaded from server)
+  // vs. user-activated email on a regular chit.
+  // A chit loaded as email will have email_message_id or was loaded with email_status
+  // from the server (initEmailZone was called with a chit that had email_status).
+  var isOriginalEmailChit = _emailCurrentChit &&
+    (_emailCurrentChit.email_message_id || _emailCurrentChit._loadedAsEmail);
 
-  // Confirm
-  var confirmed = await cwocConfirm('Discard this draft? It will be moved to Trash.');
-  if (!confirmed) return;
-
-  try {
-    var response = await fetch('/api/chits/' + encodeURIComponent(chitId), {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!response.ok) {
-      var errData;
-      try { errData = await response.json(); } catch(e) { errData = {}; }
-      cwocToast(errData.detail || 'Failed to discard draft.', 'error');
+  if (isOriginalEmailChit) {
+    // Original behavior: soft-delete the entire email chit
+    var chitId = window.currentChitId;
+    if (!chitId) {
+      cwocToast('No draft to discard.', 'error');
       return;
     }
 
-    cwocToast('Draft discarded.', 'success');
+    var confirmed = await cwocConfirm('Discard this draft? It will be moved to Trash.', {
+      title: 'Discard Email', confirmLabel: '🗑️ Discard', danger: true
+    });
+    if (!confirmed) return;
 
-    // Navigate back — use stored previous state or go to dashboard
-    if (typeof exitEditor === 'function') {
-      exitEditor();
-    } else {
-      window.location.href = '/';
+    try {
+      var response = await fetch('/api/chits/' + encodeURIComponent(chitId), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        var errData;
+        try { errData = await response.json(); } catch(e) { errData = {}; }
+        cwocToast(errData.detail || 'Failed to discard draft.', 'error');
+        return;
+      }
+
+      cwocToast('Draft discarded.', 'success');
+
+      if (typeof exitEditor === 'function') {
+        exitEditor();
+      } else {
+        window.location.href = '/';
+      }
+    } catch (err) {
+      console.error('[_emailDiscardDraft] Error:', err);
+      cwocToast('Failed to discard draft.', 'error');
     }
-  } catch (err) {
-    console.error('[_emailDiscardDraft] Error:', err);
-    cwocToast('Failed to discard draft.', 'error');
+  } else {
+    // User-activated email on a regular chit — just discard the draft fields
+    var toEl = document.getElementById('emailTo');
+    var bodyEl = document.getElementById('emailBody');
+    var hasContent = (toEl && toEl.value.trim()) || (bodyEl && bodyEl.value.trim());
+
+    if (hasContent) {
+      var confirmed2 = await cwocConfirm('Discard this email draft?', {
+        title: 'Discard Draft', confirmLabel: '🗑️ Discard', danger: true
+      });
+      if (!confirmed2) return;
+    }
+
+    // Clear all email compose fields
+    if (toEl) toEl.value = '';
+    var ccEl = document.getElementById('emailCc');
+    var bccEl = document.getElementById('emailBcc');
+    var subjectEl = document.getElementById('emailSubject');
+    if (ccEl) ccEl.value = '';
+    if (bccEl) bccEl.value = '';
+    if (subjectEl) subjectEl.value = '';
+    if (bodyEl) bodyEl.value = '';
+    var fromEl = document.getElementById('emailFrom');
+    if (fromEl) fromEl.textContent = '';
+
+    // Hide rendered output and reset toggle
+    var renderedEl = document.getElementById('emailBodyRendered');
+    if (renderedEl) renderedEl.style.display = 'none';
+    var bodyElForDisplay = document.getElementById('emailBody');
+    if (bodyElForDisplay) bodyElForDisplay.style.display = '';
+    _setEmailRenderToggleLabel(false);
+
+    // Clear email metadata from the in-memory chit
+    if (_emailCurrentChit) {
+      _emailCurrentChit.email_status = null;
+      _emailCurrentChit.email_folder = null;
+      _emailCurrentChit.email_from = null;
+      _emailCurrentChit.email_message_id = null;
+      _emailCurrentChit.email_date = null;
+      _emailCurrentChit.email_in_reply_to = null;
+      _emailCurrentChit.email_references = null;
+    }
+
+    // Check if there's an email thread — if so, keep zone visible but collapsed
+    var hasThread = !!document.getElementById('emailThreadSection');
+
+    var emailSection = document.getElementById('emailSection');
+    var emailContent = document.getElementById('emailContent');
+
+    if (hasThread) {
+      // Keep zone visible but collapse the compose area
+      if (emailSection && emailContent) {
+        emailContent.style.display = 'none';
+        emailSection.classList.add('collapsed');
+        emailSection.classList.remove('expanded');
+        var icon = emailSection.querySelector('.zone-toggle-icon');
+        if (icon) icon.textContent = '🔽';
+      }
+      // Show reply/forward buttons so user can start a new reply
+      _updateEmailButtons('received');
+    } else {
+      // No thread — hide the email zone entirely
+      if (emailSection && emailContent) {
+        emailContent.style.display = 'none';
+        emailSection.style.display = 'none';
+        emailSection.classList.add('collapsed');
+        emailSection.classList.remove('expanded');
+        var icon2 = emailSection.querySelector('.zone-toggle-icon');
+        if (icon2) icon2.textContent = '🔽';
+      }
+
+      // Move email zone back to column-two (its original position)
+      var colTwo = document.querySelector('.column-two');
+      if (emailSection && colTwo) {
+        colTwo.appendChild(emailSection);
+      }
+
+      // Reset buttons to non-email state
+      _updateEmailButtons('');
+    }
+
+    // Hide Cc/Bcc rows
+    var ccRow = document.getElementById('emailCcRow');
+    var bccRow = document.getElementById('emailBccRow');
+    var showCcBtn = document.getElementById('emailShowCcBtn');
+    var showBccBtn = document.getElementById('emailShowBccBtn');
+    if (ccRow) ccRow.style.display = 'none';
+    if (bccRow) bccRow.style.display = 'none';
+    if (showCcBtn) showCcBtn.style.display = '';
+    if (showBccBtn) showBccBtn.style.display = '';
+
+    // Restore normal save buttons
+    _showEmailSaveButtons(false);
+
+    // Unpatch the CwocSaveSystem
+    if (window._cwocSave && window._cwocSave._emailPatched) {
+      if (window._cwocSave._origMarkUnsaved) {
+        window._cwocSave.markUnsaved = window._cwocSave._origMarkUnsaved;
+      }
+      if (window._cwocSave._origMarkSaved) {
+        window._cwocSave.markSaved = window._cwocSave._origMarkSaved;
+      }
+      window._cwocSave._emailPatched = false;
+    }
+
+    // Do NOT mark the chit as dirty — email compose is independent of chit state
+    cwocToast('Draft discarded.', 'success');
   }
 }
 
@@ -2152,8 +2282,8 @@ function _getEmailFormatAction(e) {
  *                           'h1'/'h2'/'h3' (headings), 'ul' (bullet list), 'ol' (numbered list),
  *                           'q' (blockquote), 'code' (inline code), 'hr' (horizontal rule)
  */
-function _emailFormatBtn(action, textareaId) {
-  var textarea = document.getElementById(textareaId || 'emailExpandBody');
+function _emailFormatBtn(action, textareaId, textareaEl) {
+  var textarea = textareaEl || document.getElementById(textareaId || 'emailExpandBody');
   if (!textarea) return;
 
   var start = textarea.selectionStart;
@@ -2172,7 +2302,7 @@ function _emailFormatBtn(action, textareaId) {
       break;
     case 'i':
       if (!selected) return; // No selection — do nothing
-      replacement = '*' + selected + '*';
+      replacement = '_' + selected + '_';
       cursorEnd = start + replacement.length;
       break;
     case 'k':

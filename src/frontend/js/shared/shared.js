@@ -338,6 +338,7 @@ function showQuickEditModal(chit, onRefresh) {
         }
         close();
         if (typeof syncSend === 'function') syncSend('chits_changed', {});
+        if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
         if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
       } catch (e) {
         console.error('Quick edit save failed:', e);

@@ -11,7 +11,8 @@ import sqlite3
 import time
 import urllib.request
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, available_timezones
 
 from src.backend.db import DB_PATH, _update_lock, serialize_json_field
 from src.backend.cron_parser import parse_cron, matches
@@ -156,6 +157,273 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
             logger.debug(f"Ntfy skipped for chit {chit_id}: {result.get('reason')}")
     except Exception as e:
         logger.warning(f"Ntfy notification failed for chit {chit_id}: {e}")
+
+
+# --- Timezone-aware alert computation helpers ---
+
+def compute_alert_utc(wall_clock_naive: datetime, tz_name: str) -> datetime:
+    """Convert a naive wall-clock datetime to UTC using the given timezone.
+
+    Handles DST gaps by advancing to the first valid minute after the gap.
+    Handles DST ambiguity (fall-back) by selecting the first occurrence (fold=0).
+
+    Args:
+        wall_clock_naive: A naive datetime representing the intended wall-clock time.
+        tz_name: An IANA timezone name (e.g., "America/Denver").
+
+    Returns:
+        A timezone-aware datetime in UTC representing the absolute fire moment.
+    """
+    tz = ZoneInfo(tz_name)
+    # Localize with fold=0 to select the first occurrence during fall-back ambiguity
+    localized = wall_clock_naive.replace(tzinfo=tz, fold=0)
+
+    # Check for DST spring-forward gap: if the time doesn't exist, the UTC offset
+    # applied will be wrong. We detect this by round-tripping through UTC and back.
+    # If the round-trip produces a different wall-clock time, we're in a gap.
+    utc_dt = localized.astimezone(timezone.utc)
+    round_tripped = utc_dt.astimezone(tz)
+
+    if round_tripped.replace(tzinfo=None) != wall_clock_naive:
+        # We're in a DST gap — the time doesn't exist.
+        # Advance to the first valid minute after the gap.
+        # The round-tripped time (with fold=0 -> pre-transition offset) gives us
+        # the post-transition local time. The start of the post-transition period
+        # is the first valid instant. We use the round-tripped time's offset to
+        # find the gap boundary: the first valid instant is the transition point itself.
+        # With fold=0 in a gap, Python applies the pre-transition (standard) offset,
+        # so round_tripped is the actual wall-clock time that results. The first valid
+        # minute after the gap is when the new offset begins.
+        # Strategy: try fold=1 which uses the post-transition offset — this gives
+        # us the correct UTC for the "would-be" time if it existed in the new offset.
+        # But the requirement says advance to the FIRST valid minute (e.g., 3:00 AM).
+        # We find this by localizing with fold=1 and then converting back.
+        localized_post = wall_clock_naive.replace(tzinfo=tz, fold=1)
+        utc_post = localized_post.astimezone(timezone.utc)
+        local_post = utc_post.astimezone(tz)
+        # The first valid minute after the gap: take the round-tripped time from fold=1
+        # which gives us the correct post-transition interpretation. But we need the
+        # actual gap boundary. The gap boundary is where the offset changes.
+        # Simpler approach: walk forward minute by minute from the requested time
+        # until we find a time that round-trips correctly.
+        candidate = wall_clock_naive
+        for _ in range(120):  # Max 2 hours of gap (covers all real-world DST gaps)
+            candidate = candidate + timedelta(minutes=1)
+            cand_localized = candidate.replace(tzinfo=tz, fold=0)
+            cand_utc = cand_localized.astimezone(timezone.utc)
+            cand_rt = cand_utc.astimezone(tz)
+            if cand_rt.replace(tzinfo=None) == candidate:
+                # Found the first valid minute
+                return cand_utc
+        # Fallback: shouldn't happen, but return the post-transition interpretation
+        return utc_post
+
+    return utc_dt
+
+
+def get_user_current_timezone(user_id: str) -> str:
+    """Resolve the user's current timezone from settings.
+
+    Precedence: timezone_override (if set) → default_timezone → 'UTC' fallback.
+
+    Args:
+        user_id: The user's ID to look up settings for.
+
+    Returns:
+        A valid IANA timezone string.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT timezone_override, default_timezone FROM settings WHERE user_id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            override = row[0]
+            default_tz = row[1]
+            if override and override.strip():
+                return override.strip()
+            if default_tz and default_tz.strip():
+                return default_tz.strip()
+    except Exception as e:
+        logger.error(f"get_user_current_timezone error for user '{user_id}': {e}")
+
+    return "UTC"
+
+
+# --- Timezone-aware recurrence expansion helpers ---
+
+def resolve_recurrence_timezone(chit_timezone: str, user_id: str) -> str:
+    """Resolve the effective timezone for recurrence expansion.
+
+    - Anchored chits (chit_timezone is non-null): use chit's timezone if recognized,
+      otherwise fall back to user's default timezone.
+    - Floating chits (chit_timezone is None/empty): use user's current timezone.
+
+    Args:
+        chit_timezone: The chit's stored timezone field (may be None or invalid).
+        user_id: The user's ID for looking up their current timezone.
+
+    Returns:
+        A valid IANA timezone string to use for expansion.
+    """
+    if chit_timezone and chit_timezone.strip():
+        tz_name = chit_timezone.strip()
+        if tz_name in available_timezones():
+            return tz_name
+        # Unrecognized timezone: fall back to user's default timezone
+        logger.warning(
+            f"Unrecognized timezone '{tz_name}' for recurrence expansion, "
+            f"falling back to user's default timezone"
+        )
+    # Floating chit or unrecognized timezone: use user's current timezone
+    return get_user_current_timezone(user_id)
+
+
+def _localize_wall_clock(wall_clock_naive: datetime, tz_name: str) -> datetime:
+    """Localize a naive wall-clock datetime in the given timezone.
+
+    Handles DST gaps by shifting forward to the first valid instant.
+    Handles DST ambiguity (fall-back) by selecting the first occurrence (fold=0).
+
+    Args:
+        wall_clock_naive: A naive datetime representing the intended wall-clock time.
+        tz_name: An IANA timezone name.
+
+    Returns:
+        A timezone-aware datetime in the given timezone.
+    """
+    tz = ZoneInfo(tz_name)
+    # Localize with fold=0 to select the first occurrence during fall-back ambiguity
+    localized = wall_clock_naive.replace(tzinfo=tz, fold=0)
+
+    # Check for DST spring-forward gap by round-tripping through UTC
+    utc_dt = localized.astimezone(timezone.utc)
+    round_tripped = utc_dt.astimezone(tz)
+
+    if round_tripped.replace(tzinfo=None) != wall_clock_naive:
+        # We're in a DST gap — advance to the first valid minute after the gap
+        candidate = wall_clock_naive
+        for _ in range(120):  # Max 2 hours (covers all real-world DST gaps)
+            candidate = candidate + timedelta(minutes=1)
+            cand_localized = candidate.replace(tzinfo=tz, fold=0)
+            cand_utc = cand_localized.astimezone(timezone.utc)
+            cand_rt = cand_utc.astimezone(tz)
+            if cand_rt.replace(tzinfo=None) == candidate:
+                return cand_localized
+        # Fallback: return the round-tripped result (already past the gap)
+        return round_tripped
+
+    return localized
+
+
+def _advance_wall_clock(base_naive: datetime, freq: str, interval: int,
+                        occurrence_index: int) -> datetime:
+    """Advance a naive datetime by the given frequency and interval for daily+ recurrences.
+
+    Preserves wall-clock time (hour:minute) while advancing the date components.
+    Does NOT handle DST — caller must localize the result.
+
+    Args:
+        base_naive: The base naive datetime (starting point).
+        freq: One of 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'.
+        interval: The recurrence interval (e.g., every 2 days).
+        occurrence_index: Which occurrence to compute (0 = base, 1 = first recurrence, etc.)
+
+    Returns:
+        A naive datetime with the date advanced but time preserved.
+    """
+    if occurrence_index == 0:
+        return base_naive
+
+    year = base_naive.year
+    month = base_naive.month
+    day = base_naive.day
+
+    if freq == 'DAILY':
+        result = base_naive + timedelta(days=interval * occurrence_index)
+        # Preserve the original time components (timedelta on naive datetime is fine)
+        return result.replace(hour=base_naive.hour, minute=base_naive.minute,
+                              second=base_naive.second)
+    elif freq == 'WEEKLY':
+        result = base_naive + timedelta(weeks=interval * occurrence_index)
+        return result.replace(hour=base_naive.hour, minute=base_naive.minute,
+                              second=base_naive.second)
+    elif freq == 'MONTHLY':
+        # Advance month by interval * occurrence_index
+        total_months = (year * 12 + (month - 1)) + (interval * occurrence_index)
+        new_year = total_months // 12
+        new_month = (total_months % 12) + 1
+        # Clamp day to max days in the target month
+        import calendar
+        max_day = calendar.monthrange(new_year, new_month)[1]
+        new_day = min(day, max_day)
+        return base_naive.replace(year=new_year, month=new_month, day=new_day)
+    elif freq == 'YEARLY':
+        new_year = year + (interval * occurrence_index)
+        # Handle Feb 29 in non-leap years
+        import calendar
+        if month == 2 and day == 29 and not calendar.isleap(new_year):
+            return base_naive.replace(year=new_year, month=2, day=28)
+        return base_naive.replace(year=new_year)
+    else:
+        # Unknown frequency — treat as daily
+        result = base_naive + timedelta(days=interval * occurrence_index)
+        return result.replace(hour=base_naive.hour, minute=base_naive.minute,
+                              second=base_naive.second)
+
+
+def expand_occurrence_tz_aware(base_dt: datetime, tz_name: str, freq: str,
+                               interval: int, occurrence_index: int) -> datetime:
+    """Expand a single recurrence occurrence in the given timezone.
+
+    For DAILY/WEEKLY/MONTHLY/YEARLY: preserves wall-clock time in the timezone.
+    For HOURLY/MINUTELY: maintains uniform elapsed-time intervals (UTC-based).
+
+    DST gap: shifts forward to first valid instant.
+    DST ambiguity: selects first occurrence (fold=0).
+
+    Args:
+        base_dt: A naive datetime representing the base occurrence's wall-clock time
+                 in the given timezone.
+        tz_name: An IANA timezone name for expansion.
+        freq: Recurrence frequency — 'MINUTELY', 'HOURLY', 'DAILY', 'WEEKLY',
+              'MONTHLY', or 'YEARLY'.
+        interval: The recurrence interval (e.g., every 2 hours, every 3 days).
+        occurrence_index: Which occurrence to compute (0 = base, 1 = first recurrence, etc.)
+
+    Returns:
+        A timezone-aware datetime representing the occurrence in the given timezone.
+    """
+    freq_upper = freq.upper() if freq else 'DAILY'
+
+    if freq_upper in ('HOURLY', 'MINUTELY'):
+        # Sub-daily: maintain uniform elapsed-time intervals (UTC-based)
+        # First, localize the base datetime to get the absolute UTC starting point
+        base_localized = _localize_wall_clock(base_dt, tz_name)
+        base_utc = base_localized.astimezone(timezone.utc)
+
+        # Advance by absolute duration in UTC
+        if freq_upper == 'HOURLY':
+            delta = timedelta(hours=interval * occurrence_index)
+        else:  # MINUTELY
+            delta = timedelta(minutes=interval * occurrence_index)
+
+        result_utc = base_utc + delta
+        # Convert back to the expansion timezone for display
+        tz = ZoneInfo(tz_name)
+        return result_utc.astimezone(tz)
+
+    else:
+        # Daily+: preserve wall-clock time across DST transitions
+        # Advance the date components while keeping hour:minute:second the same
+        advanced_naive = _advance_wall_clock(base_dt, freq_upper, interval, occurrence_index)
+        # Localize in the timezone (handles DST gap/ambiguity)
+        return _localize_wall_clock(advanced_naive, tz_name)
 
 
 # --- Helper — get chit focus date ---
@@ -602,6 +870,235 @@ def _get_habit_cycle_end(chit, now):
     return None
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Timezone change — floating alert recalculation
+# ═══════════════════════════════════════════════════════════════════════════
+
+def recalculate_floating_alerts(user_id: str):
+    """Recalculate all pending floating chit alerts after a timezone change.
+
+    When the user's current timezone changes, floating chit alerts (timezone IS NULL)
+    need their fire times recomputed in the new timezone. If any recalculated fire
+    time falls in the past, the alert is fired immediately.
+
+    Anchored chit alerts (timezone IS NOT NULL) are NOT affected by timezone changes.
+
+    This function is designed to be called from a background task and completes
+    within 60 seconds of the timezone change being detected.
+
+    Args:
+        user_id: The user whose timezone changed.
+    """
+    try:
+        new_tz = get_user_current_timezone(user_id)
+        now_utc = datetime.now(timezone.utc)
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Query all non-deleted floating chits (timezone IS NULL) with alerts
+        # that belong to this user and have future-relevant dates
+        cursor.execute(
+            "SELECT id, title, start_datetime, end_datetime, due_datetime, "
+            "       point_in_time, alerts, status, habit, habit_goal, habit_success "
+            "FROM chits "
+            "WHERE (deleted = 0 OR deleted IS NULL) "
+            "AND owner_id = ? "
+            "AND (timezone IS NULL OR timezone = '') "
+            "AND alerts IS NOT NULL AND alerts != '' AND alerts != '[]'",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        floating_chits = [dict(zip(columns, row)) for row in rows]
+        conn.close()
+
+        if not floating_chits:
+            logger.info(f"recalculate_floating_alerts: no floating chits with alerts for user '{user_id}'")
+            return
+
+        fired_count = 0
+
+        for chit in floating_chits:
+            chit_id = chit.get("id")
+            chit_title = chit.get("title") or "CWOC Reminder"
+            start_dt = chit.get("start_datetime")
+            end_dt = chit.get("end_datetime")
+            due_dt = chit.get("due_datetime")
+            point_in_time_dt = chit.get("point_in_time")
+
+            # Check start_datetime fire time
+            if start_dt:
+                try:
+                    start_naive = datetime.fromisoformat(start_dt.replace("Z", "").split("+")[0])
+                    start_utc = compute_alert_utc(start_naive, new_tz)
+                    if start_utc <= now_utc:
+                        # Fire time is in the past — fire immediately
+                        try:
+                            time_str = start_naive.strftime("%I:%M %p").lstrip("0")
+                        except (ValueError, TypeError):
+                            time_str = start_dt
+                        _send_chit_push(user_id, chit_id, chit_title, "Starts at", time_str)
+                        try:
+                            _send_chit_ntfy(user_id, chit_id, chit_title, "Starts at", time_str)
+                        except Exception as e:
+                            logger.warning(f"Ntfy failed for recalc start {chit_id}: {e}")
+                        fired_count += 1
+                except Exception as e:
+                    logger.warning(f"recalculate_floating_alerts: error processing start_dt for chit {chit_id}: {e}")
+
+            # Check due_datetime fire time
+            if due_dt:
+                try:
+                    due_naive = datetime.fromisoformat(due_dt.replace("Z", "").split("+")[0])
+                    due_utc = compute_alert_utc(due_naive, new_tz)
+                    if due_utc <= now_utc:
+                        try:
+                            time_str = due_naive.strftime("%I:%M %p").lstrip("0")
+                        except (ValueError, TypeError):
+                            time_str = due_dt
+                        _send_chit_push(user_id, chit_id, chit_title, "Due at", time_str)
+                        try:
+                            _send_chit_ntfy(user_id, chit_id, chit_title, "Due at", time_str)
+                        except Exception as e:
+                            logger.warning(f"Ntfy failed for recalc due {chit_id}: {e}")
+                        fired_count += 1
+                except Exception as e:
+                    logger.warning(f"recalculate_floating_alerts: error processing due_dt for chit {chit_id}: {e}")
+
+            # Check notification-type alerts
+            alerts_raw = chit.get("alerts")
+            if not alerts_raw:
+                continue
+            try:
+                alerts = json.loads(alerts_raw) if isinstance(alerts_raw, str) else alerts_raw
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(alerts, list):
+                continue
+
+            for idx, alert in enumerate(alerts):
+                alert_type = alert.get("_type")
+
+                # Only process notification-type alerts (alarms are time-of-day based, not affected)
+                if alert_type != "notification":
+                    continue
+
+                value = alert.get("value")
+                unit = alert.get("unit")
+
+                # Skip weather notifications — not time-offset based
+                if unit == "weather":
+                    continue
+
+                if not value or not unit:
+                    continue
+
+                # "Only if undone" check
+                only_if_undone = alert.get("only_if_undone", True)
+                if only_if_undone:
+                    if chit.get("habit"):
+                        goal = chit.get("habit_goal") or 1
+                        success = chit.get("habit_success") or 0
+                        if isinstance(goal, str):
+                            try:
+                                goal = int(goal)
+                            except ValueError:
+                                goal = 1
+                        if isinstance(success, str):
+                            try:
+                                success = int(success)
+                            except ValueError:
+                                success = 0
+                        if success >= goal:
+                            continue
+                    elif chit.get("status") == "Complete":
+                        continue
+
+                # Compute offset
+                unit_seconds = {
+                    "minutes": 60, "hours": 3600,
+                    "days": 86400, "weeks": 604800
+                }
+                at_target = alert.get("atTarget", False)
+                offset_secs = 0 if at_target else int(value) * unit_seconds.get(unit, 60)
+
+                # Determine target datetime
+                target_type = alert.get("targetType", "start")
+                target_dt = None
+                if target_type == "cycle" and chit.get("habit"):
+                    target_dt = _get_habit_cycle_end(chit, datetime.utcnow())
+                elif target_type == "due":
+                    target_str = due_dt or start_dt
+                    if target_str:
+                        try:
+                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            pass
+                elif target_type == "end":
+                    target_str = end_dt or start_dt
+                    if target_str:
+                        try:
+                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            pass
+                elif target_type == "point":
+                    target_str = point_in_time_dt
+                    if target_str:
+                        try:
+                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            pass
+                else:
+                    target_str = start_dt or due_dt
+                    if target_str:
+                        try:
+                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            pass
+
+                if not target_dt:
+                    continue
+
+                # Compute fire time
+                after_target = alert.get("afterTarget", False)
+                if at_target:
+                    fire_dt = target_dt
+                elif after_target:
+                    fire_dt = target_dt + timedelta(seconds=offset_secs)
+                else:
+                    fire_dt = target_dt - timedelta(seconds=offset_secs)
+
+                # Convert to UTC using the new timezone
+                try:
+                    fire_utc = compute_alert_utc(fire_dt, new_tz)
+                except Exception:
+                    continue
+
+                # If fire time is now in the past, fire immediately
+                if fire_utc <= now_utc:
+                    if at_target:
+                        body = f"at {target_type}"
+                    else:
+                        direction = "after" if after_target else "before"
+                        body = f"{value} {unit} {direction} {target_type}"
+                    _send_chit_push(user_id, chit_id, chit_title, "Reminder:", body)
+                    try:
+                        _send_chit_ntfy(user_id, chit_id, chit_title, "Reminder:", body)
+                    except Exception as e:
+                        logger.warning(f"Ntfy failed for recalc notif {chit_id}[{idx}]: {e}")
+                    fired_count += 1
+
+        logger.info(
+            f"recalculate_floating_alerts: user '{user_id}', "
+            f"checked {len(floating_chits)} floating chits, "
+            f"fired {fired_count} past-due alerts (new tz: {new_tz})"
+        )
+
+    except Exception as e:
+        logger.error(f"recalculate_floating_alerts error for user '{user_id}': {e}")
+
+
 async def _alert_push_loop():
     """Background task: send push notifications for chit events, alarms, and notifications.
 
@@ -645,7 +1142,7 @@ async def _alert_push_loop():
                 cursor.execute(
                     "SELECT id, title, start_datetime, end_datetime, due_datetime, "
                     "       point_in_time, owner_id, alerts, recurrence, "
-                    "       status, habit, habit_goal, habit_success "
+                    "       status, habit, habit_goal, habit_success, timezone "
                     "FROM chits "
                     "WHERE (deleted = 0 OR deleted IS NULL) "
                     "AND owner_id IS NOT NULL AND owner_id != ''"
@@ -682,39 +1179,65 @@ async def _alert_push_loop():
                 if not owner_id:
                     continue
 
-                # ── 1. Start/due time notifications (existing) ──────────────
+                # ── 1. Start/due time notifications (timezone-aware) ───────
 
-                if start_dt and window_start_iso < start_dt <= now_iso:
-                    key = f"start-{chit_id}-{today_str}"
-                    if key not in _fired_keys:
-                        _fired_keys.add(key)
-                        try:
-                            dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
-                            time_str = dt.strftime("%I:%M %p").lstrip("0")
-                        except (ValueError, TypeError):
-                            time_str = start_dt
-                        _send_chit_push(owner_id, chit_id, chit_title, "Starts at", time_str)
-                        try:
-                            _send_chit_ntfy(owner_id, chit_id, chit_title, "Starts at", time_str)
-                        except Exception as e:
-                            logger.warning(f"Ntfy failed for chit {chit_id} start: {e}")
-                        sent_count += 1
+                # Convert stored start/due datetimes to UTC for comparison
+                chit_tz = chit.get("timezone")
+                _chit_tz_name = chit_tz.strip() if chit_tz and chit_tz.strip() else None
 
-                if due_dt and window_start_iso < due_dt <= now_iso:
-                    key = f"due-{chit_id}-{today_str}"
-                    if key not in _fired_keys:
-                        _fired_keys.add(key)
-                        try:
-                            dt = datetime.fromisoformat(due_dt.replace("Z", "+00:00"))
-                            time_str = dt.strftime("%I:%M %p").lstrip("0")
-                        except (ValueError, TypeError):
-                            time_str = due_dt
-                        _send_chit_push(owner_id, chit_id, chit_title, "Due at", time_str)
-                        try:
-                            _send_chit_ntfy(owner_id, chit_id, chit_title, "Due at", time_str)
-                        except Exception as e:
-                            logger.warning(f"Ntfy failed for chit {chit_id} due: {e}")
-                        sent_count += 1
+                if start_dt:
+                    try:
+                        start_naive = datetime.fromisoformat(start_dt.replace("Z", "").split("+")[0])
+                        if _chit_tz_name:
+                            start_utc = compute_alert_utc(start_naive, _chit_tz_name)
+                        else:
+                            _user_tz = get_user_current_timezone(owner_id)
+                            start_utc = compute_alert_utc(start_naive, _user_tz)
+                        start_utc_iso = start_utc.replace(tzinfo=None).isoformat()
+                    except Exception:
+                        start_utc_iso = start_dt
+                    if window_start_iso < start_utc_iso <= now_iso:
+                        key = f"start-{chit_id}-{today_str}"
+                        if key not in _fired_keys:
+                            _fired_keys.add(key)
+                            try:
+                                dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
+                                time_str = dt.strftime("%I:%M %p").lstrip("0")
+                            except (ValueError, TypeError):
+                                time_str = start_dt
+                            _send_chit_push(owner_id, chit_id, chit_title, "Starts at", time_str)
+                            try:
+                                _send_chit_ntfy(owner_id, chit_id, chit_title, "Starts at", time_str)
+                            except Exception as e:
+                                logger.warning(f"Ntfy failed for chit {chit_id} start: {e}")
+                            sent_count += 1
+
+                if due_dt:
+                    try:
+                        due_naive = datetime.fromisoformat(due_dt.replace("Z", "").split("+")[0])
+                        if _chit_tz_name:
+                            due_utc = compute_alert_utc(due_naive, _chit_tz_name)
+                        else:
+                            _user_tz = get_user_current_timezone(owner_id)
+                            due_utc = compute_alert_utc(due_naive, _user_tz)
+                        due_utc_iso = due_utc.replace(tzinfo=None).isoformat()
+                    except Exception:
+                        due_utc_iso = due_dt
+                    if window_start_iso < due_utc_iso <= now_iso:
+                        key = f"due-{chit_id}-{today_str}"
+                        if key not in _fired_keys:
+                            _fired_keys.add(key)
+                            try:
+                                dt = datetime.fromisoformat(due_dt.replace("Z", "+00:00"))
+                                time_str = dt.strftime("%I:%M %p").lstrip("0")
+                            except (ValueError, TypeError):
+                                time_str = due_dt
+                            _send_chit_push(owner_id, chit_id, chit_title, "Due at", time_str)
+                            try:
+                                _send_chit_ntfy(owner_id, chit_id, chit_title, "Due at", time_str)
+                            except Exception as e:
+                                logger.warning(f"Ntfy failed for chit {chit_id} due: {e}")
+                            sent_count += 1
 
                 # ── 2. Parse alerts JSON ────────────────────────────────────
 
@@ -1132,7 +1655,30 @@ async def _alert_push_loop():
                         else:
                             fire_dt = target_dt - timedelta(seconds=offset_secs)
 
-                        fire_iso = fire_dt.isoformat()
+                        # ── Timezone-aware fire time computation ────────────────
+                        # Convert the naive wall-clock fire_dt to UTC using the
+                        # appropriate timezone:
+                        #   - Anchored chits (timezone set): use chit's stored timezone
+                        #   - Floating chits (timezone null): use user's current timezone
+                        chit_tz = chit.get("timezone")
+                        if chit_tz and chit_tz.strip():
+                            # Anchored: fire time locked to chit's timezone
+                            try:
+                                fire_utc = compute_alert_utc(fire_dt, chit_tz.strip())
+                                fire_iso = fire_utc.replace(tzinfo=None).isoformat()
+                            except Exception:
+                                # Invalid timezone — fall back to treating as naive UTC
+                                fire_iso = fire_dt.isoformat()
+                        else:
+                            # Floating: fire time in user's current timezone
+                            user_tz = get_user_current_timezone(owner_id)
+                            try:
+                                fire_utc = compute_alert_utc(fire_dt, user_tz)
+                                fire_iso = fire_utc.replace(tzinfo=None).isoformat()
+                            except Exception:
+                                # Fallback to treating as naive UTC
+                                fire_iso = fire_dt.isoformat()
+
                         if window_start_iso < fire_iso <= now_iso:
                             key = f"notif-{chit_id}-{idx}-{fire_iso[:16]}"
                             if key in _fired_keys:
@@ -1316,6 +1862,94 @@ async def _email_send_later_loop():
             logger.error(f"[SendLater] Unexpected error: {e}")
 
 
+# ── Timezone Change Detection & Floating Alert Recalculation ─────────────
+
+# Cache of last-known timezone per user: {user_id: tz_name}
+_user_tz_cache = {}
+
+
+async def _timezone_change_detection_loop():
+    """Background task: detect timezone changes and recalculate floating chit alerts.
+
+    Runs every 30 seconds. For each user with settings, resolves their current
+    timezone and compares to a cached value. If different:
+    - Recalculates all pending floating chit alerts (timezone IS NULL) using the new timezone
+    - Does NOT recalculate anchored chit alerts (timezone IS NOT NULL)
+    - If a recalculated fire time falls in the past, fires the alert immediately
+
+    This loop provides a safety net in addition to the settings-save-triggered
+    recalculation. It ensures timezone changes are detected within 60 seconds
+    regardless of how the change occurred.
+
+    Requirement 6.3: Recalculate within 60 seconds of change detection.
+    Requirement 6.4: Do NOT recalculate anchored chit alerts.
+    Requirement 6.5: Fire immediately if recalculated time is in the past.
+    """
+    global _user_tz_cache
+
+    # Wait for server to fully start
+    await asyncio.sleep(5)
+
+    while True:
+        try:
+            await asyncio.sleep(30)  # Check every 30 seconds (well within 60s requirement)
+
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                # Get all users with settings
+                cursor.execute("SELECT user_id, timezone_override, default_timezone FROM settings")
+                user_rows = cursor.fetchall()
+                conn.close()
+            except Exception as e:
+                logger.error(f"[TZ-Detection] DB query error: {e}")
+                continue
+
+            for row in user_rows:
+                user_id = row[0]
+                override = row[1]
+                default_tz = row[2]
+
+                # Resolve current timezone (same logic as get_user_current_timezone)
+                if override and override.strip():
+                    current_tz = override.strip()
+                elif default_tz and default_tz.strip():
+                    current_tz = default_tz.strip()
+                else:
+                    current_tz = "UTC"
+
+                # Compare to cached value
+                last_tz = _user_tz_cache.get(user_id)
+                _user_tz_cache[user_id] = current_tz
+
+                if last_tz is None:
+                    # First time seeing this user — just cache, no recalculation
+                    continue
+
+                if last_tz == current_tz:
+                    # No change
+                    continue
+
+                # Timezone changed! Recalculate floating chit alerts.
+                logger.info(
+                    f"[TZ-Detection] Timezone change detected for user '{user_id}': "
+                    f"'{last_tz}' → '{current_tz}'. Recalculating floating alerts."
+                )
+
+                # Use the existing recalculate_floating_alerts function which handles:
+                # - Only floating chits (timezone IS NULL) — NOT anchored
+                # - Fires immediately if recalculated time is in the past
+                try:
+                    recalculate_floating_alerts(user_id)
+                except Exception as e:
+                    logger.error(f"[TZ-Detection] Recalculation failed for user '{user_id}': {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"[TZ-Detection] Unexpected error: {e}")
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -1333,7 +1967,8 @@ async def start_weather_schedulers():
     asyncio.create_task(_alert_push_loop())
     asyncio.create_task(_snooze_check_loop())
     asyncio.create_task(_email_send_later_loop())
-    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check + email send-later)")
+    asyncio.create_task(_timezone_change_detection_loop())
+    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check + email send-later + timezone detection)")
 
 
 # ══════════════════════════════════════════════════════════════════════════

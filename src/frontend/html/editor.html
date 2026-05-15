@@ -254,6 +254,9 @@
                                     </div>
                                 </div>
 
+                                <!-- Timezone abbreviation labels are injected into date rows by JS -->
+                                <!-- Timezone picker modal lives at bottom of page -->
+
                             </div>
                         </div>
                     </div>
@@ -1467,6 +1470,9 @@
             <button type="button" id="optMenuHideCalendar" class="editor-opt-menu-item" onclick="_optToggleHideCalendar()">
                 <i class="fas fa-calendar-xmark"></i> <span id="optMenuHideCalLabel">Hide in Calendar</span>
             </button>
+            <button type="button" id="optMenuReminder" class="editor-opt-menu-item" onclick="_optToggleReminder()">
+                <i class="fas fa-thumbtack"></i> <span id="optMenuReminderLabel">Mark as Reminder</span>
+            </button>
             <button type="button" id="optMenuNest" class="editor-opt-menu-item" onclick="_optNestClick()">
                 <img src="/static/nest.svg" style="height:1.2em;vertical-align:middle;margin-right:4px;" alt="" /> Nest into Thread
             </button>
@@ -1612,6 +1618,7 @@
         <script src="/frontend/js/editor/editor_checklists.js"></script>
         <script src="/frontend/js/editor/editor_projects.js"></script>
         <script src="/frontend/js/shared/shared-auth.js"></script>
+        <script src="/frontend/js/shared/shared-tab-sync.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <script src="/frontend/js/shared/shared-utils.js"></script>
         <script src="/frontend/js/shared/shared-touch.js"></script>
@@ -1660,5 +1667,20 @@
         <script src="/frontend/js/editor/editor-mobile-zones.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="/pwa/pwa-register.js"></script>
+        <!-- Timezone Picker Modal -->
+        <div id="tzPickerModal" class="cwoc-overlay" style="display:none;">
+            <div class="tz-picker-modal">
+                <h3>Set Timezone</h3>
+                <input type="text" id="chit-timezone" list="tz-list-editor" placeholder="Search timezone or address…" autocomplete="off" />
+                <datalist id="tz-list-editor"></datalist>
+                <p class="tz-picker-hint">(or enter address)</p>
+                <span id="timezoneDisplay"></span>
+                <div class="tz-picker-modal-actions">
+                    <button type="button" class="zone-button" id="tzModalClearBtn">Clear (floating)</button>
+                    <button type="button" class="zone-button" id="tzModalCancelBtn">Cancel</button>
+                </div>
+            </div>
+        </div>
+
     </body>
 </html>

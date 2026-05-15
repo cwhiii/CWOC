@@ -89,6 +89,9 @@ class Settings(BaseModel):
     email_read_receipts: Optional[str] = "never"       # "never", "always", "ask", "contacts_only"
     email_undo_send_delay: Optional[str] = "5"         # Seconds before send fires (undo window)
     email_group_by: Optional[str] = "date"             # "date" (Today/Yesterday/Last Week/Older) or "none"
+    default_timezone: Optional[str] = None               # User's default IANA timezone (e.g. "America/Denver")
+    timezone_override: Optional[str] = None              # Manual current timezone override (IANA timezone or null)
+    default_view: Optional[str] = "Calendar"             # Default dashboard view on fresh site entry (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alarms, Omni)
 
 class Chit(BaseModel):
     class Config:
@@ -124,6 +127,7 @@ class Chit(BaseModel):
     is_project_master: Optional[bool] = False  # New field
     child_chits: Optional[List[str]] = None    # New field
     all_day: Optional[bool] = False            # All-day event flag
+    timezone: Optional[str] = None             # IANA timezone (e.g., "America/Denver") or null for floating
     alerts: Optional[List[Dict[str, Any]]] = None  # Alarms, timers, stopwatches, notifications
     progress_percent: Optional[int] = None     # 0-100 progress percentage
     time_estimate: Optional[str] = None        # Free-text time estimate (e.g. "2h 30m")

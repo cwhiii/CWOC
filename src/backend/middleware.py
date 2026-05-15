@@ -154,7 +154,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             token = request.query_params.get("_token")
 
         if token:
-            # Look up session in database
+            # Look up session in database and validate it.
+            # We separate validation from call_next so that a DB error during
+            # the non-critical last_active update doesn't cause a false 401.
+            _authenticated_user_id = None
+            _authenticated_username = None
             conn = None
             try:
                 conn = sqlite3.connect(DB_PATH)
@@ -197,17 +201,19 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         session_inactive = (now - last_active).total_seconds() > _user_inactivity
 
                     if not session_expired and not session_inactive and row["is_active"]:
-                        # Valid session — update last_active and inject user info
-                        new_last_active = utcnow_iso()
-                        conn.execute(
-                            "UPDATE sessions SET last_active_datetime = ? WHERE token = ?",
-                            (new_last_active, token),
-                        )
-                        conn.commit()
+                        # Valid session — update last_active (non-fatal if it fails)
+                        try:
+                            new_last_active = utcnow_iso()
+                            conn.execute(
+                                "UPDATE sessions SET last_active_datetime = ? WHERE token = ?",
+                                (new_last_active, token),
+                            )
+                            conn.commit()
+                        except Exception as e:
+                            logger.warning(f"Auth middleware: failed to update last_active for {row['user_id']} on {path}: {e}")
 
-                        request.state.user_id = row["user_id"]
-                        request.state.username = row["username"]
-                        return await call_next(request)
+                        _authenticated_user_id = row["user_id"]
+                        _authenticated_username = row["username"]
                     else:
                         # Expired or inactive session — clean it up
                         if session_expired:
@@ -216,14 +222,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
                             logger.info(f"Session inactive for user {row['user_id']} on {path} (last_active={row['last_active_datetime']}, window={_user_inactivity}s)")
                         elif not row["is_active"]:
                             logger.info(f"User account deactivated: {row['user_id']} on {path}")
-                        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-                        conn.commit()
+                        try:
+                            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+                            conn.commit()
+                        except Exception as e:
+                            logger.warning(f"Auth middleware: failed to delete expired session on {path}: {e}")
 
             except Exception as e:
                 logger.error(f"Auth middleware error (path={path}, method={method}): {e}")
             finally:
                 if conn:
                     conn.close()
+
+            # If session was validated, proceed with the request
+            if _authenticated_user_id:
+                request.state.user_id = _authenticated_user_id
+                request.state.username = _authenticated_username
+                return await call_next(request)
 
         # No valid session — return appropriate error
         if path.startswith("/api/"):

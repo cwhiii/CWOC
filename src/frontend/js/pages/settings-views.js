@@ -18,6 +18,7 @@ var _viewMeta = {
   Tasks:       { icon: 'img', src: '/static/tasks.png', label: '<u>T</u>asks' },
   Projects:    { icon: 'img', src: '/static/projects.png', label: '<u>P</u>rojects' },
   Notes:       { icon: 'img', src: '/static/notes.png', label: '<u>N</u>otes' },
+  Notebook:    { icon: 'fa', cls: 'fas fa-book', label: 'Note<u>b</u>ook' },
   Email:       { icon: 'fa', cls: 'fas fa-envelope', label: '<u>E</u>mail' },
   Indicators:  { icon: 'fa', cls: 'fas fa-heartbeat', label: '<u>I</u>ndicators' },
   Alarms:      { icon: 'img', src: '/static/alerts.png', label: '<u>A</u>lerts' },
@@ -92,6 +93,18 @@ function _renderArrangeViewsGrid() {
   if (!grid || !hidden) return;
   grid.innerHTML = '';
   hidden.innerHTML = '';
+
+  // Omni is always fixed first (non-draggable)
+  var omniItem = document.createElement('div');
+  omniItem.className = 'view-tab-item view-tab-item-fixed';
+  omniItem.title = 'Omni is always the first view';
+  var omniIcon = document.createElement('i');
+  omniIcon.className = 'fas fa-layer-group';
+  omniItem.appendChild(omniIcon);
+  var omniLabel = document.createElement('span');
+  omniLabel.innerHTML = '<u>O</u>mni';
+  omniItem.appendChild(omniLabel);
+  grid.appendChild(omniItem);
 
   _currentViewOrder.forEach(function(viewName) {
     grid.appendChild(_createViewTabItem(viewName));
@@ -220,7 +233,7 @@ function _setupArrangeViewsDrag() {
     });
   }
 
-  grid.querySelectorAll('.view-tab-item').forEach(attachItemListeners);
+  grid.querySelectorAll('.view-tab-item:not(.view-tab-item-fixed)').forEach(attachItemListeners);
   hiddenZone.querySelectorAll('.view-tab-item').forEach(attachItemListeners);
 
   grid.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
@@ -378,14 +391,14 @@ function _setupArrangeViewsTouch(grid, hiddenZone) {
     });
   }
 
-  grid.querySelectorAll('.view-tab-item').forEach(attachTouchToItem);
+  grid.querySelectorAll('.view-tab-item:not(.view-tab-item-fixed)').forEach(attachTouchToItem);
   hiddenZone.querySelectorAll('.view-tab-item').forEach(attachTouchToItem);
 }
 
 /** Find the view-tab-item element at a given point across multiple containers */
 function _getViewItemAtPointAll(containers, x, y, exclude) {
   for (var c = 0; c < containers.length; c++) {
-    var items = containers[c].querySelectorAll('.view-tab-item');
+    var items = containers[c].querySelectorAll('.view-tab-item:not(.view-tab-item-fixed)');
     for (var i = 0; i < items.length; i++) {
       if (items[i] === exclude) continue;
       var rect = items[i].getBoundingClientRect();

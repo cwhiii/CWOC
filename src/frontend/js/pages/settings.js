@@ -64,6 +64,87 @@ const colorMap = {
   "#A8A2C6": "Muted Lilac",
 };
 
+// ── Timezone ─────────────────────────────────────────────────────────────────
+
+/**
+ * Populate timezone datalists with IANA timezone names from the browser.
+ */
+function _populateTimezoneDatalist() {
+  var tzList;
+  try {
+    tzList = Intl.supportedValuesOf('timeZone');
+  } catch (e) {
+    console.error('[Settings] Intl.supportedValuesOf not available:', e);
+    tzList = [];
+  }
+  var defaultList = document.getElementById('tz-list-default');
+  var overrideList = document.getElementById('tz-list-override');
+  if (!defaultList || !overrideList) return;
+  var fragment1 = document.createDocumentFragment();
+  var fragment2 = document.createDocumentFragment();
+  tzList.forEach(function(tz) {
+    var opt1 = document.createElement('option');
+    opt1.value = tz;
+    fragment1.appendChild(opt1);
+    var opt2 = document.createElement('option');
+    opt2.value = tz;
+    fragment2.appendChild(opt2);
+  });
+  defaultList.appendChild(fragment1);
+  overrideList.appendChild(fragment2);
+}
+
+/**
+ * Clear the timezone override field and mark settings as unsaved.
+ */
+function _clearTimezoneOverride() {
+  var input = document.getElementById('timezone-override');
+  if (input) {
+    input.value = '';
+    setSaveButtonUnsaved();
+  }
+}
+
+/**
+ * Validate a timezone value against the IANA timezone list.
+ * @param {string} value - The timezone string to validate
+ * @returns {boolean} True if valid IANA timezone or empty string
+ */
+function _isValidTimezone(value) {
+  if (!value || !value.trim()) return true; // empty is valid (means "not set")
+  var tzList;
+  try {
+    tzList = Intl.supportedValuesOf('timeZone');
+  } catch (e) {
+    // If Intl API unavailable, allow any non-empty value through
+    return true;
+  }
+  return tzList.indexOf(value.trim()) !== -1;
+}
+
+/**
+ * Validate timezone settings before save.
+ * @returns {boolean} True if valid, false if invalid (shows error toast)
+ */
+function _validateTimezoneSettings() {
+  var defaultTzInput = document.getElementById('default-timezone');
+  var overrideInput = document.getElementById('timezone-override');
+  var defaultVal = defaultTzInput ? defaultTzInput.value.trim() : '';
+  var overrideVal = overrideInput ? overrideInput.value.trim() : '';
+
+  if (defaultVal && !_isValidTimezone(defaultVal)) {
+    cwocToast('Invalid Default Timezone: "' + defaultVal + '" is not a recognized IANA timezone.', 'error');
+    if (defaultTzInput) defaultTzInput.focus();
+    return false;
+  }
+  if (overrideVal && !_isValidTimezone(overrideVal)) {
+    cwocToast('Invalid Timezone Override: "' + overrideVal + '" is not a recognized IANA timezone.', 'error');
+    if (overrideInput) overrideInput.focus();
+    return false;
+  }
+  return true;
+}
+
 // ── Saved Locations ──────────────────────────────────────────────────────────
 
 /**
@@ -1760,6 +1841,24 @@ class SettingsManager {
     document.getElementById("snooze-length").value = this.settings.snooze_length || "5 minutes";
     document.getElementById("calendar-snap").value = this.settings.calendar_snap || "15";
 
+    // Timezone fields
+    var defaultTzInput = document.getElementById("default-timezone");
+    if (defaultTzInput) {
+      var savedDefaultTz = this.settings.default_timezone || '';
+      if (!savedDefaultTz) {
+        // Pre-populate with browser-detected timezone on first load
+        try { savedDefaultTz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+      }
+      defaultTzInput.value = savedDefaultTz;
+    }
+    var tzOverrideInput = document.getElementById("timezone-override");
+    if (tzOverrideInput) {
+      tzOverrideInput.value = this.settings.timezone_override || '';
+    }
+
+    var defaultViewSel = document.getElementById("default-view-select");
+    if (defaultViewSel) defaultViewSel.value = this.settings.default_view || 'Calendar';
+
     var hideDeclinedCb = document.getElementById("hide-declined-toggle");
     if (hideDeclinedCb) hideDeclinedCb.checked = (this.settings.hide_declined === "1");
 
@@ -1887,6 +1986,7 @@ class SettingsManager {
     document.querySelector("select[name='weather_indicator']").value = vi.weather || "always";
     document.querySelector("select[name='people_indicator']").value = vi.people || "always";
     document.querySelector("select[name='indicators_indicator']").value = vi.indicators || "always";
+    document.querySelector("select[name='custom_data_indicator']").value = vi.custom_data || "always";
     document.querySelector("select[name='timer_indicator']").value = vi.timer || "always";
     document.querySelector("select[name='stopwatch_indicator']").value = vi.stopwatch || "always";
     document.querySelector("select[name='combined_alert_indicator']").value = vi.combined_alert || "always";
@@ -2020,6 +2120,7 @@ class SettingsManager {
         weather: document.querySelector("select[name='weather_indicator']").value,
         people: document.querySelector("select[name='people_indicator']").value,
         indicators: document.querySelector("select[name='indicators_indicator']").value,
+        custom_data: document.querySelector("select[name='custom_data_indicator']").value,
         combine_alerts: document.getElementById("combine-alerts-toggle").checked,
         combined_alert: document.querySelector("select[name='combined_alert_indicator']").value,
       },
@@ -2066,6 +2167,9 @@ class SettingsManager {
       ..._collectEmailPrivacySettings(),
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
+      default_timezone: (document.getElementById('default-timezone') || {}).value || null,
+      timezone_override: (document.getElementById('timezone-override') || {}).value || null,
+      default_view: (document.getElementById('default-view-select') || {}).value || 'Calendar',
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
       show_map_thumbnails: (document.getElementById('show-map-thumbnails') && document.getElementById('show-map-thumbnails').checked) ? '1' : '0',
       view_order: _collectViewOrder(),
@@ -2094,6 +2198,10 @@ class SettingsManager {
   }
 
   async save() {
+    // Validate timezone fields before proceeding
+    if (!_validateTimezoneSettings()) {
+      return false;
+    }
     document.getElementById("loader").style.display = "block";
     try {
       const settingsToSave = this.gatherSettings();
@@ -2209,6 +2317,7 @@ async function _resetSortOrders() {
 
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
+  _populateTimezoneDatalist();
 
   window._cwocSave = new CwocSaveSystem({
     singleBtnId: 'save-single-btn',
@@ -2265,10 +2374,11 @@ document.addEventListener("DOMContentLoaded", () => {
         'admin': 'admin', 'administration': 'admin',
         'data': 'admin', 'data-management': 'admin', 'dependent-apps': 'admin', 'network-access': 'admin',
         'home-assistant': 'admin', 'kiosk': 'admin', 'version': 'admin', 'updates': 'admin',
-        'views': 'views', 'omni-view': 'views', 'omni': 'views', 'map-settings': 'views', 'habits': 'views', 'periods': 'views',
+        'views': 'views', 'omni-view': 'views', 'omni': 'views', 'map-settings': 'views', 'habits': 'views', 'periods': 'views', 'default-view': 'views',
         'collections': 'collections', 'tags': 'collections', 'colors': 'collections', 'saved-locations': 'collections',
         'calendar': 'views',
         'clocks': 'general', 'visual-indicators': 'general', 'indicators': 'general',
+        'timezone': 'general',
         'custom-filters': 'general', 'install-app': 'general', 'pwa': 'general',
         'unit-system': 'general', 'units': 'general'
       };
@@ -2298,7 +2408,9 @@ document.addEventListener("DOMContentLoaded", () => {
         'visual-indicators': 'Visual Indicators',
         'indicators': 'Visual Indicators',
         'clocks': '🕰️ Time Format',
-        'custom-filters': 'Custom Filters & Sorting'
+        'timezone': '🌐 Timezone',
+        'custom-filters': 'Custom Filters & Sorting',
+        'default-view': '🏠 Default View'
       };
       var target = headingMap[hash];
       if (target) {

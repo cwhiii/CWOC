@@ -11,6 +11,7 @@ import threading
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
+from zoneinfo import available_timezones
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
@@ -106,6 +107,21 @@ def _send_assignment_notifications(assigned_to: str, chit_id: str, chit_title: s
 
 # --- Reserved tag namespace enforcement ---
 RESERVED_TAG_PREFIX = "cwoc_system/"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Timezone Validation
+# ═══════════════════════════════════════════════════════════════════════════
+
+def validate_timezone(tz_value):
+    """Validate that a timezone string is a recognized IANA timezone.
+
+    Returns True if valid (including None, which means floating chit).
+    Returns False if the value is a non-null string not in the IANA database.
+    """
+    if tz_value is None:
+        return True
+    return tz_value in available_timezones()
 
 
 def _validate_nest_thread_id(cursor, chit):
@@ -403,6 +419,13 @@ def create_chit(chit: Chit, request: Request):
         if chit.assigned_to and not chit.status:
             chit.status = "ToDo"
 
+        # Validate timezone field
+        if not validate_timezone(chit.timezone):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timezone: '{chit.timezone}' is not a recognized IANA timezone"
+            )
+
         # Validate nest_thread_id before saving
         _validate_nest_thread_id(cursor, chit)
 
@@ -412,7 +435,7 @@ def create_chit(chit: Chit, request: Request):
                 id, title, note, tags, start_datetime, end_datetime, due_datetime, point_in_time,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
-                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
+                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, timezone, alerts,
                 recurrence_rule, recurrence_exceptions, weather_data, health_data,
                 habit, habit_goal, habit_success, show_on_calendar,
                 habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
@@ -423,7 +446,7 @@ def create_chit(chit: Chit, request: Request):
                 email_status, email_read, email_in_reply_to, email_references,
                 attachments, availability, snoozed_until, prerequisites,
                 checklist_autosave, auto_complete_checklist
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -454,6 +477,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.is_project_master,
                 serialize_json_field(chit.child_chits),
                 chit.all_day if chit.all_day is not None else False,
+                chit.timezone,
                 serialize_json_field(chit.alerts),
                 serialize_json_field(chit.recurrence_rule),
                 serialize_json_field(chit.recurrence_exceptions),
@@ -692,6 +716,13 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             # Capture old state for audit diff
             old_chit_dict = existing_dict_check
 
+            # Validate timezone field
+            if not validate_timezone(chit.timezone):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid timezone: '{chit.timezone}' is not a recognized IANA timezone"
+                )
+
             # Validate nest_thread_id before saving
             _validate_nest_thread_id(cursor, chit)
 
@@ -726,7 +757,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?, point_in_time = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
-                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
+                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, timezone = ?, alerts = ?,
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
                     habit = ?, habit_goal = ?, habit_success = ?, show_on_calendar = ?,
                     habit_reset_period = ?, habit_last_action_date = ?, habit_hide_overall = ?, perpetual = ?,
@@ -765,6 +796,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
+                    chit.timezone,
                     serialize_json_field(chit.alerts),
                     serialize_json_field(chit.recurrence_rule),
                     serialize_json_field(chit.recurrence_exceptions),
@@ -905,6 +937,13 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             owner_display_name = user_row[0] if user_row else ""
             owner_username = user_row[1] if user_row else request.state.username
 
+            # Validate timezone field
+            if not validate_timezone(chit.timezone):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid timezone: '{chit.timezone}' is not a recognized IANA timezone"
+                )
+
             # Validate nest_thread_id before saving
             _validate_nest_thread_id(cursor, chit)
 
@@ -914,7 +953,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     id, title, note, tags, start_datetime, end_datetime, due_datetime, point_in_time,
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
-                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
+                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, timezone, alerts,
                     recurrence_rule, recurrence_exceptions, weather_data, health_data,
                     habit, habit_goal, habit_success, show_on_calendar,
                     habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
@@ -925,7 +964,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_status, email_read, email_in_reply_to, email_references,
                     attachments, availability, snoozed_until, prerequisites,
                     checklist_autosave, auto_complete_checklist
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -956,6 +995,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
+                    chit.timezone,
                     serialize_json_field(chit.alerts),
                     serialize_json_field(chit.recurrence_rule),
                     serialize_json_field(chit.recurrence_exceptions),

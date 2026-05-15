@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CWOC — Upgrading</title>
+    <style>
+        @font-face {
+            font-family: 'Lora';
+            src: url('/static/fonts/lora/Lora-VariableFont_wght.ttf') format('truetype');
+            font-weight: 400 700;
+            font-style: normal;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6d3;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2em;
+            color: #1a1208;
+        }
+        .container {
+            background: #fffaf0;
+            border: 2px solid #8b5a2b;
+            border-radius: 12px;
+            padding: 3em 2.5em;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(107, 78, 49, 0.15);
+        }
+        .icon {
+            font-size: 3em;
+            margin-bottom: 0.5em;
+        }
+        h1 {
+            font-size: 1.5em;
+            color: #6b4e31;
+            margin-bottom: 0.5em;
+        }
+        p {
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #3d2b1f;
+            margin-top: 0.5em;
+        }
+        .spinner {
+            margin-top: 1.5em;
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border: 3px solid #d4a574;
+            border-top-color: #6b4e31;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hint {
+            margin-top: 1em;
+            font-size: 0.9em;
+            color: #6b4e31;
+            opacity: 0.8;
+        }
+        .auto-refresh {
+            margin-top: 1.5em;
+            font-size: 0.85em;
+            color: #8b5a2b;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">⚙️</div>
+        <h1>CWOC is Upgrading</h1>
+        <p>The server is undergoing an upgrade and will be back shortly.</p>
+        <div class="spinner"></div>
+        <p class="hint">Please wait — this usually takes less than a minute.</p>
+        <p class="auto-refresh">This page will automatically refresh when the server is ready.</p>
+    </div>
+    <script>
+        // Auto-refresh every 5 seconds to detect when the server is back
+        setTimeout(function refresh() {
+            fetch('/api/health', { method: 'GET' })
+                .then(function(r) { if (r.ok) window.location.reload(); else setTimeout(refresh, 5000); })
+                .catch(function() { setTimeout(refresh, 5000); });
+        }, 5000);
+    </script>
+</body>
+</html>

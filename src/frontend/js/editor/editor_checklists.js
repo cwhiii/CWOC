@@ -14,6 +14,9 @@ class Checklist {
     this._undoStack = [];
     this._redoStack = [];
     this._maxUndoSize = 50;
+    // Multi-select state
+    this._selectedIds = new Set();
+    this._multiSelectMode = false;
 
     this.init();
     if (initialItems && Array.isArray(initialItems)) this.loadItems(initialItems);
@@ -23,6 +26,19 @@ class Checklist {
     this._createCountDisplay();
     this.createInput();
     this.render();
+    this._initMultiSelectEsc();
+  }
+
+  _initMultiSelectEsc() {
+    var self = this;
+    // ESC clears multi-select when in that mode (before other ESC handlers)
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && self._multiSelectMode) {
+        e.stopPropagation();
+        e.preventDefault();
+        self._clearSelection();
+      }
+    }, true); // capture phase so it fires before other ESC handlers
   }
 
   _createCountDisplay() {
@@ -267,7 +283,15 @@ class Checklist {
         e.preventDefault(); self.undo();
       } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
         e.preventDefault(); self.redo();
-      } else if (e.key === "Enter" && this.input.value.trim() !== "") {
+      } else if ((e.metaKey || e.ctrlKey) && typeof _getEmailFormatAction === 'function') {
+        var fmtAction = _getEmailFormatAction(e);
+        if (fmtAction) {
+          e.preventDefault();
+          _emailFormatBtn(fmtAction, null, this.input);
+          return;
+        }
+      }
+      if (e.key === "Enter" && this.input.value.trim() !== "") {
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
         if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
@@ -454,7 +478,11 @@ class Checklist {
     var cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = item.checked;
-    cb.addEventListener("change", () => this.toggleCheck(item, cb.checked));
+    cb.addEventListener("change", () => {
+      // Block checkbox toggle when in multi-select mode
+      if (this._multiSelectMode) { cb.checked = item.checked; return; }
+      this.toggleCheck(item, cb.checked);
+    });
     left.appendChild(cb);
 
     var tw = document.createElement("div");
@@ -506,8 +534,18 @@ class Checklist {
     sendIcon.title = "Send to another chit";
     sendIcon.style.visibility = "hidden";
     var self = this;
-    sendIcon.addEventListener("click", (e) => {
+    sendIcon.addEventListener("mousedown", (e) => {
       e.stopPropagation();
+      e.preventDefault(); // Prevent blur on the textarea
+      // Commit current edit text before sending
+      if (self.editingItem && self.editingItem.id === item.id) {
+        var ta = el.querySelector("textarea.checklist-edit-input");
+        if (ta) item.text = ta.value.trim();
+        self.editingItem = null;
+        if (ta) ta.remove();
+        var ts = el.querySelector(".checklist-text");
+        if (ts) { ts.style.display = ""; renderChecklistItemMarkdown(ts, item.text); }
+      }
       if (typeof _openSendItemPopup === 'function') _openSendItemPopup(e, item, self);
     });
     el.appendChild(sendIcon);
@@ -517,14 +555,79 @@ class Checklist {
     trash.textContent = "✕";
     trash.title = "Delete item";
     trash.style.visibility = "hidden";
-    trash.addEventListener("click", (e) => { e.stopPropagation(); this.deleteItem(item, el); });
+    trash.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      e.preventDefault(); // Prevent blur on the textarea
+      // Clear editing state if this item is being edited
+      if (self.editingItem && self.editingItem.id === item.id) {
+        self.editingItem = null;
+        var ta = el.querySelector("textarea.checklist-edit-input");
+        if (ta) ta.remove();
+        var ts = el.querySelector(".checklist-text");
+        if (ts) ts.style.display = "";
+      }
+      this.deleteItem(item, el);
+    });
     el.appendChild(trash);
 
     el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; sendIcon.style.visibility = "visible"; });
     el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; sendIcon.style.visibility = "hidden"; });
 
+    // Multi-select strip (right edge) — always clickable
+    var selectStrip = document.createElement("div");
+    selectStrip.className = "checklist-select-strip";
+    if (this._selectedIds.has(item.id)) selectStrip.classList.add('selected');
+    selectStrip.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this._toggleSelectItem(item.id);
+    });
+    el.appendChild(selectStrip);
+
+    // Multi-select: use mousedown so it fires before pointer-events:none blocks click
+    el.addEventListener("mousedown", (e) => {
+      // Always let checkbox, trash, send, strip handle themselves
+      if (e.target.closest('input[type="checkbox"], .trash-icon, .checklist-send-icon, .checklist-select-strip')) return;
+
+      // Ctrl/Cmd+click ANYWHERE on the row: toggle this item's selection
+      if (e.ctrlKey || e.metaKey) {
+        e.stopPropagation();
+        e.preventDefault();
+        this._toggleSelectItem(item.id);
+        return;
+      }
+
+      // Shift+click: range select from anchor to here (only if we have an anchor)
+      if (e.shiftKey && this._lastSelectedId) {
+        e.stopPropagation();
+        e.preventDefault();
+        this._rangeSelectTo(item.id);
+        return;
+      }
+
+      // When in multi-select mode:
+      if (this._multiSelectMode) {
+        // Allow drag handle to initiate drag on selected items
+        if (e.target.closest('.checklist-drag-handle') && this._selectedIds.has(item.id)) {
+          return; // Let the native drag start
+        }
+        // Block everything else (no editing)
+        e.stopPropagation();
+        e.preventDefault();
+        return;
+      }
+    });
+
     if (!isGhost) {
-      el.addEventListener("dragstart", (e) => this.onDragStart(e, item));
+      el.addEventListener("dragstart", (e) => {
+        // In multi-select mode: drag all selected items as a unit
+        if (this._multiSelectMode) {
+          if (!this._selectedIds.has(item.id)) { e.preventDefault(); return; }
+          this._startMultiDrag(e, item);
+          return;
+        }
+        this.onDragStart(e, item);
+      });
       el.addEventListener("dragover", (e) => this.onDragOver(e, item));
       el.addEventListener("dragleave", (e) => this.onDragLeave(e, item));
       el.addEventListener("drop", (e) => this.onDrop(e, item));
@@ -649,6 +752,7 @@ class Checklist {
 
   startEditing(item, textSpan, clickEvent) {
     if (this.editingItem) return;
+    if (this._multiSelectMode) return; // Don't edit while in multi-select mode
     this.editingItem = item;
 
     // Disable draggable on the parent item so clicks work normally in the textarea
@@ -709,14 +813,12 @@ class Checklist {
     var finishEditing = function(save) {
       if (!self.editingItem) return;
       if (save) {
-        if (ta.value.trim() !== "") {
-          item.text = ta.value.trim();
+        // Always preserve the item text (even if empty) — only remove on explicit delete
+        item.text = ta.value.trim();
+        if (item.text !== "") {
           self._notifyChange();
-        } else {
-          // Empty text on save — remove the item silently (no undo push for empty cleanup)
-          var idx = self.items.findIndex(function(i) { return i.id === item.id; });
-          if (idx !== -1) self.items.splice(idx, 1);
         }
+        // Note: empty items are NOT auto-removed here. Use "Clean up empty items" from the Data menu.
       }
       // Re-enable draggable
       if (itemEl) itemEl.setAttribute("draggable", "true");
@@ -731,6 +833,8 @@ class Checklist {
       var cursorPos = ta.selectionStart;
       var textBefore = ta.value.substring(0, cursorPos);
       var textAfter = ta.value.substring(cursorPos);
+      // If the entire item is empty and cursor is at start, don't create another empty item
+      if (!ta.value.trim()) return;
       // Snapshot with the full textarea content as the item text (what user sees now)
       item.text = ta.value;
       self._pushUndoState();
@@ -770,14 +874,9 @@ class Checklist {
         for (var i = idx + 1; i < self.items.length; i++) { if (!self.items[i].checked) { target = self.items[i]; break; } }
       }
       if (target) {
-        if (ta.value.trim() !== "") {
-          item.text = ta.value.trim();
-          self._notifyChange();
-        } else {
-          // Empty item — remove it
-          var removeIdx = self.items.findIndex(function(i) { return i.id === item.id; });
-          if (removeIdx !== -1) self.items.splice(removeIdx, 1);
-        }
+        // Save current item text (preserve even if empty)
+        item.text = ta.value.trim();
+        if (item.text !== "") self._notifyChange();
         // Clear editingItem BEFORE removing textarea to prevent blur handler from firing
         self.editingItem = null;
         ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text);
@@ -815,6 +914,17 @@ class Checklist {
         e.preventDefault();
         document.execCommand('redo');
         return;
+      }
+
+      // ── Markdown hotkeys (reuse _getEmailFormatAction from editor-email.js) ──
+      if ((e.metaKey || e.ctrlKey) && typeof _getEmailFormatAction === 'function') {
+        var fmtAction = _getEmailFormatAction(e);
+        if (fmtAction) {
+          e.preventDefault();
+          _emailFormatBtn(fmtAction, null, ta);
+          setTimeout(autoSize, 0);
+          return;
+        }
       }
       if (e.key === "Enter" && e.shiftKey) {
         // Shift+Enter: insert newline (default textarea behavior — do nothing)
@@ -918,6 +1028,27 @@ class Checklist {
     this._pushUndoState();
     item.checked = checked;
     this.updateCheckedStateForSubtree(item, checked);
+
+    if (checked) {
+      // Animate: checkmark → strikethrough → fade → move to done
+      var el = this.container.querySelector('[data-id="' + item.id + '"]');
+      if (el) {
+        el.classList.add('checklist-checking');
+        var self = this;
+        setTimeout(function() {
+          el.classList.add('checklist-checking-fade');
+          setTimeout(function() {
+            self.render();
+            self._updateCount();
+            if (typeof self.onChangeCallback === "function") self.onChangeCallback(self.getChecklistData());
+            self._updateUndoRedoButtons();
+            _checkAutoCompleteChecklist(self);
+          }, 150);
+        }, 100);
+        return; // Don't render immediately — animation handles it
+      }
+    }
+
     this.render();
     this._updateCount();
     if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
@@ -1014,26 +1145,45 @@ class Checklist {
     if (!this.draggedItem) return;
     if (this.draggedSubtree.some(s => s.id === item.id)) { this.draggedItem = null; this.draggedSubtree = []; return; }
     this._pushUndoState();
+    var isMultiDrag = this._multiSelectMode && this._selectedIds.size > 1;
     this.items = this.items.filter(i => !this.draggedSubtree.some(s => s.id === i.id));
     var ti = this.items.findIndex(i => i.id === item.id);
-    if (this.dragOverPosition === "on") {
-      var newRootLevel = item.level + 1;
-      this._updateSubLevels(this.draggedSubtree, newRootLevel);
-      this.draggedItem.parent = item.id;
-      var ii = ti + 1; while (ii < this.items.length && this._isDesc(this.items[ii], item)) ii++;
-      this.items.splice(ii, 0, ...this.draggedSubtree);
-    } else if (this.dragOverPosition === "above") {
-      this._updateSubLevels(this.draggedSubtree, item.level);
-      this.draggedItem.parent = item.parent;
-      this.items.splice(ti, 0, ...this.draggedSubtree);
-    } else if (this.dragOverPosition === "below") {
-      this._updateSubLevels(this.draggedSubtree, item.level);
-      this.draggedItem.parent = item.parent;
-      var ii = ti + 1; while (ii < this.items.length && this.items[ii].level > item.level) ii++;
-      this.items.splice(ii, 0, ...this.draggedSubtree);
+
+    if (isMultiDrag) {
+      // Multi-drag: keep items at their original levels, just reposition
+      var insertIdx;
+      if (this.dragOverPosition === "above") {
+        insertIdx = ti;
+      } else if (this.dragOverPosition === "below") {
+        insertIdx = ti + 1;
+        while (insertIdx < this.items.length && this.items[insertIdx].level > item.level) insertIdx++;
+      } else { // "on" — insert as children
+        var levelDelta = (item.level + 1) - this.draggedSubtree[0].level;
+        this.draggedSubtree.forEach(function(si) { si.level = Math.min(si.level + levelDelta, MAX_INDENT_LEVEL); });
+        insertIdx = ti + 1;
+        while (insertIdx < this.items.length && this._isDesc(this.items[insertIdx], item)) insertIdx++;
+      }
+      this.items.splice(insertIdx, 0, ...this.draggedSubtree);
+    } else {
+      // Single-item drag (original behavior)
+      if (this.dragOverPosition === "on") {
+        var newRootLevel = item.level + 1;
+        this._updateSubLevels(this.draggedSubtree, newRootLevel);
+        this.draggedItem.parent = item.id;
+        var ii = ti + 1; while (ii < this.items.length && this._isDesc(this.items[ii], item)) ii++;
+        this.items.splice(ii, 0, ...this.draggedSubtree);
+      } else if (this.dragOverPosition === "above") {
+        this._updateSubLevels(this.draggedSubtree, item.level);
+        this.draggedItem.parent = item.parent;
+        this.items.splice(ti, 0, ...this.draggedSubtree);
+      } else if (this.dragOverPosition === "below") {
+        this._updateSubLevels(this.draggedSubtree, item.level);
+        this.draggedItem.parent = item.parent;
+        var ii = ti + 1; while (ii < this.items.length && this.items[ii].level > item.level) ii++;
+        this.items.splice(ii, 0, ...this.draggedSubtree);
+      }
     }
     // Update checked state when moving between zones (active ↔ completed)
-    // If the target item's checked state differs from the dragged item, adopt the target's state
     if (item.checked !== this.draggedItem.checked) {
       this.draggedSubtree.forEach(function(si) { si.checked = item.checked; });
     }
@@ -1045,6 +1195,30 @@ class Checklist {
       el.classList.remove("drag-over-above", "drag-over-below", "drag-over-on", "dragging");
     });
   }
+
+  /**
+   * Start dragging all selected items as a single unit.
+   * Collects selected items in list order, marks them all as dragging,
+   * and sets up the drag data so onDrop moves them all together.
+   */
+  _startMultiDrag(e, triggerItem) {
+    // Collect all selected items in their current list order
+    var selectedItems = this.items.filter(i => this._selectedIds.has(i.id));
+    if (selectedItems.length === 0) { e.preventDefault(); return; }
+
+    this.draggedItem = triggerItem;
+    this.draggedSubtree = selectedItems; // Treat all selected as the "subtree"
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", triggerItem.id);
+
+    // Mark all selected items as dragging visually
+    var self = this;
+    this._selectedIds.forEach(function(id) {
+      var el = self.container.querySelector('[data-id="' + id + '"]');
+      if (el) el.classList.add("dragging");
+    });
+  }
+
   _updateSubLevels(sub, newRootLevel) {
     // Calculate delta from the CURRENT root level (before any modification)
     // and apply it to all items in the subtree uniformly.
@@ -1112,6 +1286,264 @@ class Checklist {
   _notifyChangeQuiet() {
     this._updateCount();
     if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
+  }
+
+  /* ── Multi-Select ───────────────────────────────────────────────────────── */
+
+  /**
+   * Toggle a single item's selection (Ctrl+click or plain click in multi-select mode).
+   * Inverts that particular item. Sets it as the anchor for future Shift+clicks.
+   */
+  _toggleSelectItem(itemId, e) {
+    if (this._selectedIds.has(itemId)) {
+      this._selectedIds.delete(itemId);
+    } else {
+      this._selectedIds.add(itemId);
+    }
+    // Always update anchor to the most recently clicked item
+    this._lastSelectedId = itemId;
+    this._multiSelectMode = this._selectedIds.size > 0;
+    this._updateSelectVisuals();
+    this._updateMultiSelectToolbar();
+  }
+
+  /**
+   * Shift+click: select the range from the anchor (_lastSelectedId) to the clicked item.
+   * Clears previous selection and replaces it with the range (file-manager style).
+   * If no anchor exists, just selects the clicked item.
+   */
+  _rangeSelectTo(itemId) {
+    var unchecked = this.items.filter(function(i) { return !i.checked; });
+
+    if (!this._lastSelectedId) {
+      // No anchor — just select this item and set it as anchor
+      this._selectedIds.clear();
+      this._selectedIds.add(itemId);
+      this._lastSelectedId = itemId;
+    } else {
+      var startIdx = unchecked.findIndex(i => i.id === this._lastSelectedId);
+      var endIdx = unchecked.findIndex(i => i.id === itemId);
+      if (startIdx === -1 || endIdx === -1) return;
+      // Clear and set the range (anchor stays the same — don't move it)
+      this._selectedIds.clear();
+      var from = Math.min(startIdx, endIdx);
+      var to = Math.max(startIdx, endIdx);
+      for (var i = from; i <= to; i++) {
+        this._selectedIds.add(unchecked[i].id);
+      }
+    }
+    this._multiSelectMode = this._selectedIds.size > 0;
+    this._updateSelectVisuals();
+    this._updateMultiSelectToolbar();
+  }
+
+  _clearSelection() {
+    this._selectedIds.clear();
+    this._multiSelectMode = false;
+    this._lastSelectedId = null;
+    this._updateSelectVisuals();
+    this._updateMultiSelectToolbar();
+  }
+
+  _selectAll() {
+    var self = this;
+    this.items.forEach(function(item) {
+      if (!item.checked) self._selectedIds.add(item.id);
+    });
+    this._multiSelectMode = this._selectedIds.size > 0;
+    this._updateSelectVisuals();
+    this._updateMultiSelectToolbar();
+  }
+
+  _updateSelectVisuals() {
+    var self = this;
+    // Toggle container-level class for CSS pointer-events/user-select control
+    if (this._multiSelectMode) {
+      this.container.classList.add('checklist-multiselect-active');
+    } else {
+      this.container.classList.remove('checklist-multiselect-active');
+    }
+    this.container.querySelectorAll('.checklist-item, .completed-checklist-item, .ghost-checklist-item').forEach(function(el) {
+      var id = el.dataset.id;
+      var strip = el.querySelector('.checklist-select-strip');
+      if (self._selectedIds.has(id)) {
+        el.classList.add('checklist-multi-selected');
+        if (strip) strip.classList.add('selected');
+      } else {
+        el.classList.remove('checklist-multi-selected');
+        if (strip) strip.classList.remove('selected');
+      }
+      // In multi-select mode: only selected items are draggable
+      if (self._multiSelectMode) {
+        el.setAttribute('draggable', self._selectedIds.has(id) ? 'true' : 'false');
+      } else {
+        el.setAttribute('draggable', 'true');
+      }
+    });
+  }
+
+  _updateMultiSelectToolbar() {
+    var existing = this.container.querySelector('.checklist-multiselect-toolbar');
+    if (this._selectedIds.size === 0) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    if (!existing) {
+      existing = document.createElement('div');
+      existing.className = 'checklist-multiselect-toolbar';
+      this.container.insertBefore(existing, this.input.nextSibling);
+    }
+
+    var count = this._selectedIds.size;
+    var self = this;
+    existing.innerHTML = '';
+
+    var countSpan = document.createElement('span');
+    countSpan.className = 'multiselect-count';
+    countSpan.textContent = count + ' selected';
+    existing.appendChild(countSpan);
+
+    var selectAllBtn = document.createElement('button');
+    selectAllBtn.className = 'zone-button';
+    selectAllBtn.textContent = 'All';
+    selectAllBtn.title = 'Select all unchecked items';
+    selectAllBtn.addEventListener('click', function(e) { e.stopPropagation(); self._selectAll(); });
+    existing.appendChild(selectAllBtn);
+
+    var checkBtn = document.createElement('button');
+    checkBtn.className = 'zone-button';
+    checkBtn.innerHTML = '<i class="fas fa-check"></i> Check';
+    checkBtn.title = 'Mark selected as checked';
+    checkBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._pushUndoState();
+      self._selectedIds.forEach(function(id) {
+        var item = self.items.find(function(i) { return i.id === id; });
+        if (item) { item.checked = true; self.updateCheckedStateForSubtree(item, true); }
+      });
+      self._clearSelection();
+      self.render();
+      self._notifyChange();
+    });
+    existing.appendChild(checkBtn);
+
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'zone-button';
+    deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+    deleteBtn.title = 'Delete selected items';
+    deleteBtn.addEventListener('click', async function(e) {
+      e.stopPropagation();
+      var confirmed = typeof cwocConfirm === 'function'
+        ? await cwocConfirm('Delete ' + count + ' selected item' + (count > 1 ? 's' : '') + '?', { title: 'Delete Selected', danger: true, confirmLabel: 'Delete' })
+        : false;
+      if (!confirmed) return;
+      self._pushUndoState();
+      self.items = self.items.filter(function(i) { return !self._selectedIds.has(i.id); });
+      self._clearSelection();
+      self.render();
+      self._notifyChange();
+    });
+    existing.appendChild(deleteBtn);
+
+    var moveBtn = document.createElement('button');
+    moveBtn.className = 'zone-button';
+    moveBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Move';
+    moveBtn.title = 'Move selected items to another chit';
+    moveBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._multiSelectSendToChit();
+    });
+    existing.appendChild(moveBtn);
+
+    var indentBtn = document.createElement('button');
+    indentBtn.className = 'zone-button';
+    indentBtn.innerHTML = '<i class="fas fa-indent"></i>';
+    indentBtn.title = 'Indent selected';
+    indentBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._pushUndoState();
+      self._selectedIds.forEach(function(id) {
+        var item = self.items.find(function(i) { return i.id === id; });
+        if (item && item.level < MAX_INDENT_LEVEL) {
+          var idx = self.items.indexOf(item);
+          var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
+          if (idx > 0 && item.level <= prevLevel) {
+            item.level++;
+            item.parent = null;
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+          }
+        }
+      });
+      self.render();
+      self._notifyChange();
+      self._updateSelectVisuals();
+    });
+    existing.appendChild(indentBtn);
+
+    var outdentBtn = document.createElement('button');
+    outdentBtn.className = 'zone-button';
+    outdentBtn.innerHTML = '<i class="fas fa-outdent"></i>';
+    outdentBtn.title = 'Outdent selected';
+    outdentBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._pushUndoState();
+      self._selectedIds.forEach(function(id) {
+        var item = self.items.find(function(i) { return i.id === id; });
+        if (item && item.level > 0) {
+          item.level--;
+          item.parent = null;
+          var idx = self.items.indexOf(item);
+          for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+        }
+      });
+      self.render();
+      self._notifyChange();
+      self._updateSelectVisuals();
+    });
+    existing.appendChild(outdentBtn);
+
+    var clearBtn = document.createElement('button');
+    clearBtn.className = 'zone-button';
+    clearBtn.textContent = '✕';
+    clearBtn.title = 'Clear selection';
+    clearBtn.addEventListener('click', function(e) { e.stopPropagation(); self._clearSelection(); });
+    existing.appendChild(clearBtn);
+  }
+
+  _multiSelectSendToChit() {
+    // Collect selected items and open the send-content modal
+    var selectedItems = [];
+    var self = this;
+    this._selectedIds.forEach(function(id) {
+      var item = self.items.find(function(i) { return i.id === id; });
+      if (item) selectedItems.push(item);
+    });
+    if (selectedItems.length === 0) return;
+
+    // Use the first selected item as the "target" for the send popup
+    // but pass all selected items
+    if (typeof _openSendItemPopup === 'function') {
+      // Create a synthetic item that represents the batch
+      var batchItem = {
+        id: '__batch__',
+        text: selectedItems.map(function(i) { return i.text; }).join(', '),
+        level: 0,
+        checked: false,
+        parent: null,
+        _batchItems: selectedItems
+      };
+      // Override getSubtree temporarily for batch operations
+      var origGetSubtree = self.getSubtree.bind(self);
+      self.getSubtree = function(item) {
+        if (item.id === '__batch__') return selectedItems;
+        return origGetSubtree(item);
+      };
+      _sendItemTarget = { item: batchItem, checklist: self };
+      _openSendItemSearchModal();
+      // Restore getSubtree after a tick
+      setTimeout(function() { self.getSubtree = origGetSubtree; }, 100);
+    }
   }
 }
 

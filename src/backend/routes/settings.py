@@ -8,8 +8,9 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 from uuid import uuid4
+from zoneinfo import available_timezones
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
@@ -142,7 +143,7 @@ def get_settings(user_id: str, request: Request):
             conn.close()
 
 @router.post("/api/settings")
-async def save_settings(request: Request):
+async def save_settings(request: Request, background_tasks: BackgroundTasks):
     """Partial-update settings save. Only fields present in the request body are
     updated — omitted fields are left untouched in the database. This prevents
     partial saves from wiping unrelated settings."""
@@ -167,6 +168,23 @@ async def save_settings(request: Request):
                     status_code=400,
                     detail="Tags starting with 'CWOC_System/' are reserved for system use and cannot be created manually."
                 )
+
+    # Validate timezone fields against IANA timezone database
+    _valid_timezones = available_timezones()
+    if "default_timezone" in body:
+        tz_val = body["default_timezone"]
+        if tz_val is not None and tz_val != "" and tz_val not in _valid_timezones:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timezone: '{tz_val}' is not a recognized IANA timezone"
+            )
+    if "timezone_override" in body:
+        tz_val = body["timezone_override"]
+        if tz_val is not None and tz_val != "" and tz_val not in _valid_timezones:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timezone: '{tz_val}' is not a recognized IANA timezone"
+            )
 
     # Fields that need JSON serialization before storage
     JSON_FIELDS = {
@@ -195,6 +213,8 @@ async def save_settings(request: Request):
         "show_map_thumbnails", "session_lifetime", "omni_layout",
         "omni_locked_filters", "omni_hst_clock_mode", "omni_email_count",
         "omni_normalize_colors", "custom_view_filters",
+        "default_timezone", "timezone_override",
+        "default_view",
     }
 
     conn = None
@@ -311,6 +331,32 @@ async def save_settings(request: Request):
                 _run_auto_prune()
         except Exception as e:
             logger.error(f"Auto-prune after settings save failed: {str(e)}")
+
+        # ── Timezone change detection: recalculate floating alerts ──
+        # If timezone_override or default_timezone changed, trigger recalculation
+        # of all pending floating chit alerts in a background task (within 60s).
+        try:
+            _tz_changed = False
+            if old_settings_dict:
+                old_override = (old_settings_dict.get("timezone_override") or "").strip()
+                old_default = (old_settings_dict.get("default_timezone") or "").strip()
+                new_override = (update_dict.get("timezone_override", old_override) or "").strip() if "timezone_override" in update_dict else old_override
+                new_default = (update_dict.get("default_timezone", old_default) or "").strip() if "default_timezone" in update_dict else old_default
+                # Determine effective timezone before and after
+                old_effective = old_override if old_override else (old_default if old_default else "UTC")
+                new_effective = new_override if new_override else (new_default if new_default else "UTC")
+                if old_effective != new_effective:
+                    _tz_changed = True
+            elif "timezone_override" in update_dict or "default_timezone" in update_dict:
+                # New user row — any timezone setting is a "change" from default UTC
+                _tz_changed = True
+
+            if _tz_changed:
+                from src.backend.schedulers import recalculate_floating_alerts
+                background_tasks.add_task(recalculate_floating_alerts, authenticated_user_id)
+                logger.info(f"Timezone change detected for user '{authenticated_user_id}' — scheduled floating alert recalculation")
+        except Exception as e:
+            logger.error(f"Timezone change detection failed: {str(e)}")
 
         return {"user_id": authenticated_user_id, "status": "ok"}
     except Exception as e:

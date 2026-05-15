@@ -106,6 +106,9 @@ function onDateModeChange() {
   // Update recurrence labels when date context changes
   _updateRecurrenceLabels();
 
+  // Show/hide timezone row based on date mode
+  _updateTimezoneRowVisibility();
+
   // Auto-populate default notifications for NEW chits when a date mode is first activated
   if (!_dateModeSuppressUnsaved && window.isNewChit && mode !== 'none') {
     _applyDefaultNotifications(mode);
@@ -911,4 +914,563 @@ function _wireAllDayAutoDeselect() {
       });
     }
   });
+}
+
+// ── Timezone picker (modal-based) ────────────────────────────────────────────
+
+/**
+ * Get the short timezone abbreviation for today's date in the given timezone.
+ * Uses Intl.DateTimeFormat with timeZoneName: 'short'.
+ * @param {string} ianaTimezone - IANA timezone identifier
+ * @returns {string} Short abbreviation (e.g., "MST", "PST") or empty string
+ */
+function _getTimezoneAbbreviation(ianaTimezone) {
+  try {
+    var now = new Date();
+    var formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: ianaTimezone,
+      timeZoneName: 'short'
+    });
+    var parts = formatter.formatToParts(now);
+    var tzPart = parts.find(function(p) { return p.type === 'timeZoneName'; });
+    return tzPart ? tzPart.value : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Get the long timezone name for a given IANA timezone.
+ * Uses Intl.DateTimeFormat with timeZoneName: 'long'.
+ * @param {string} ianaTimezone - IANA timezone identifier
+ * @returns {string} Long name (e.g., "Mountain Standard Time") or empty string
+ */
+function _getTimezoneLongName(ianaTimezone) {
+  try {
+    var now = new Date();
+    var formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: ianaTimezone,
+      timeZoneName: 'long'
+    });
+    var parts = formatter.formatToParts(now);
+    var tzPart = parts.find(function(p) { return p.type === 'timeZoneName'; });
+    return tzPart ? tzPart.value : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Common timezone abbreviation entries to add to the datalist.
+ * Maps representative IANA timezone to its full name for display.
+ * Only the currently active abbreviation (based on today) is shown.
+ */
+var _COMMON_TZ_ENTRIES = [
+  { iana: 'America/New_York', name: 'Eastern Time' },
+  { iana: 'America/Chicago', name: 'Central Time' },
+  { iana: 'America/Denver', name: 'Mountain Time' },
+  { iana: 'America/Los_Angeles', name: 'Pacific Time' },
+  { iana: 'America/Anchorage', name: 'Alaska Time' },
+  { iana: 'Pacific/Honolulu', name: 'Hawaii Time' },
+  { iana: 'Europe/London', name: 'United Kingdom' },
+  { iana: 'Europe/Paris', name: 'Central European Time' },
+  { iana: 'Europe/Helsinki', name: 'Eastern European Time' },
+  { iana: 'Europe/Moscow', name: 'Moscow Time' },
+  { iana: 'Asia/Dubai', name: 'Gulf Standard Time' },
+  { iana: 'Asia/Kolkata', name: 'India Standard Time' },
+  { iana: 'Asia/Bangkok', name: 'Indochina Time' },
+  { iana: 'Asia/Shanghai', name: 'China Standard Time' },
+  { iana: 'Asia/Tokyo', name: 'Japan Standard Time' },
+  { iana: 'Australia/Sydney', name: 'Australian Eastern Time' },
+  { iana: 'Australia/Adelaide', name: 'Australian Central Time' },
+  { iana: 'Australia/Perth', name: 'Australian Western Time' },
+  { iana: 'Pacific/Auckland', name: 'New Zealand Time' }
+];
+
+/**
+ * Initialize the timezone picker modal in the editor.
+ * Populates the datalist with IANA timezone names + common abbreviation entries.
+ * Injects timezone abbreviation labels into date rows.
+ * Wires modal buttons and ESC handler.
+ * Called once from editor-init.js after DOM is ready.
+ */
+function _initTimezonePicker() {
+  var datalist = document.getElementById('tz-list-editor');
+  if (!datalist) return;
+
+  // Build common abbreviation entries first (at top of datalist)
+  var fragment = document.createDocumentFragment();
+  _COMMON_TZ_ENTRIES.forEach(function(entry) {
+    var abbrev = _getTimezoneAbbreviation(entry.iana);
+    if (abbrev) {
+      var opt = document.createElement('option');
+      opt.value = entry.iana;
+      opt.textContent = abbrev + ' - ' + entry.name + ' (' + entry.iana + ')';
+      fragment.appendChild(opt);
+    }
+  });
+
+  // Add all IANA timezones
+  var tzList;
+  try {
+    tzList = Intl.supportedValuesOf('timeZone');
+  } catch (e) {
+    console.error('[EditorDates] Intl.supportedValuesOf not available:', e);
+    tzList = [];
+  }
+  tzList.forEach(function(tz) {
+    var opt = document.createElement('option');
+    opt.value = tz;
+    fragment.appendChild(opt);
+  });
+  datalist.appendChild(fragment);
+
+  // Wire up the modal input events
+  var input = document.getElementById('chit-timezone');
+  if (input) {
+    input.addEventListener('change', _onTimezoneModalInputChange);
+    input.addEventListener('input', _onTimezoneModalInputChange);
+    // Address geocoding on Enter key
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        _onTimezoneInputSubmit();
+      }
+    });
+  }
+
+  // Wire modal buttons
+  var clearBtn = document.getElementById('tzModalClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', _onTzModalClear);
+  var cancelBtn = document.getElementById('tzModalCancelBtn');
+  if (cancelBtn) cancelBtn.addEventListener('click', _closeTzPickerModal);
+
+  // Click outside modal content closes it (cancel behavior)
+  var overlay = document.getElementById('tzPickerModal');
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) _closeTzPickerModal();
+    });
+  }
+
+  // ESC handler in capture phase — closes modal without propagating
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('tzPickerModal');
+      if (modal && modal.style.display !== 'none') {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        _closeTzPickerModal();
+      }
+    }
+  }, true);
+
+  // Inject abbreviation labels into date rows
+  _injectTzAbbrevLabels();
+}
+
+/**
+ * Inject timezone abbreviation labels at the end of each date-mode-fields div.
+ * Creates or updates the labels based on current timezone state.
+ */
+function _injectTzAbbrevLabels() {
+  var fieldIds = ['startEndFields', 'dueFields', 'pointInTimeFields'];
+  fieldIds.forEach(function(id) {
+    var container = document.getElementById(id);
+    if (!container) return;
+    // Check if label already exists
+    var existing = container.querySelector('.tz-abbrev-label');
+    if (!existing) {
+      var label = document.createElement('span');
+      label.className = 'tz-abbrev-label';
+      label.addEventListener('click', _onTzAbbrevClick);
+      container.appendChild(label);
+    }
+  });
+  // Update the text/state of all labels
+  _updateTzAbbrevLabels();
+}
+
+/**
+ * Build a multi-line title string with all forms of the timezone name.
+ * Format: "MST\nMountain Standard Time\nAmerica/Denver"
+ * @param {string} ianaTimezone - IANA timezone identifier
+ * @returns {string} Multi-line title for tooltip
+ */
+function _buildTzTooltip(ianaTimezone) {
+  var abbrev = _getTimezoneAbbreviation(ianaTimezone);
+  var longName = _getTimezoneLongName(ianaTimezone);
+  var parts = [];
+  if (abbrev) parts.push(abbrev);
+  if (longName) parts.push(longName);
+  parts.push(ianaTimezone);
+  return parts.join('\n');
+}
+
+/**
+ * Update all timezone abbreviation labels based on current timezone state.
+ * Floating = user's current timezone (muted), Anchored = chit's timezone (full).
+ * Tooltip shows all forms of the timezone name on hover.
+ */
+function _updateTzAbbrevLabels() {
+  var labels = document.querySelectorAll('.tz-abbrev-label');
+  if (!labels.length) return;
+
+  var chitTz = window._chitTimezone || null;
+
+  if (chitTz) {
+    // Anchored — show chit's timezone abbreviation
+    var abbrev = _getTimezoneAbbreviation(chitTz);
+    var tooltip = _buildTzTooltip(chitTz);
+    labels.forEach(function(label) {
+      label.textContent = abbrev || chitTz;
+      label.className = 'tz-abbrev-label tz-abbrev-anchored';
+      label.title = tooltip;
+    });
+  } else {
+    // Floating — show user's current timezone abbreviation (muted)
+    if (typeof getCurrentTimezone === 'function') {
+      getCurrentTimezone().then(function(userTz) {
+        var abbrev = _getTimezoneAbbreviation(userTz);
+        var tooltip = _buildTzTooltip(userTz) + '\n(assumed — click to set)';
+        labels.forEach(function(label) {
+          label.textContent = abbrev || userTz;
+          label.className = 'tz-abbrev-label tz-abbrev-floating';
+          label.title = tooltip;
+        });
+      });
+    } else {
+      // Fallback if getCurrentTimezone not available
+      var browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      var abbrev = _getTimezoneAbbreviation(browserTz);
+      var tooltip = _buildTzTooltip(browserTz) + '\n(assumed — click to set)';
+      labels.forEach(function(label) {
+        label.textContent = abbrev || browserTz;
+        label.className = 'tz-abbrev-label tz-abbrev-floating';
+        label.title = tooltip;
+      });
+    }
+  }
+}
+
+/**
+ * Handle click on a timezone abbreviation label — open the timezone picker modal.
+ */
+function _onTzAbbrevClick(e) {
+  e.preventDefault();
+  _openTzPickerModal();
+}
+
+/**
+ * Open the timezone picker modal.
+ * Pre-fills the input if a timezone is already set.
+ */
+function _openTzPickerModal() {
+  var modal = document.getElementById('tzPickerModal');
+  if (!modal) return;
+
+  var input = document.getElementById('chit-timezone');
+  var display = document.getElementById('timezoneDisplay');
+
+  // Pre-fill with current timezone if anchored
+  if (window._chitTimezone && input) {
+    input.value = window._chitTimezone;
+    if (display) display.textContent = '✓ ' + window._chitTimezone;
+  } else {
+    if (input) input.value = '';
+    if (display) display.textContent = '';
+  }
+
+  modal.style.display = '';
+  // Focus input after a tick for immediate typing
+  setTimeout(function() { if (input) input.focus(); }, 50);
+}
+
+/**
+ * Close the timezone picker modal without applying changes (cancel).
+ */
+function _closeTzPickerModal() {
+  var modal = document.getElementById('tzPickerModal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Handle timezone input change inside the modal — validate and auto-close on valid selection.
+ */
+function _onTimezoneModalInputChange() {
+  var input = document.getElementById('chit-timezone');
+  if (!input) return;
+  var val = input.value.trim();
+  var display = document.getElementById('timezoneDisplay');
+
+  if (!val) {
+    if (display) display.textContent = '';
+    return;
+  }
+
+  // Validate against the datalist options
+  var valid = _isValidTimezone(val);
+  if (valid) {
+    if (display) display.textContent = '✓ ' + val;
+    // Auto-close after brief delay so user sees confirmation
+    setTimeout(function() {
+      _onTzModalSelect(val);
+    }, 200);
+  } else {
+    if (display) display.textContent = '';
+  }
+}
+
+/**
+ * Apply a timezone selection from the modal and close it.
+ * @param {string} tz - Valid IANA timezone to apply
+ */
+function _onTzModalSelect(tz) {
+  window._chitTimezone = tz;
+  _updateTzAbbrevLabels();
+  setSaveButtonUnsaved();
+  _closeTzPickerModal();
+}
+
+/**
+ * Handle the Clear button in the modal — remove timezone, revert to floating, close modal.
+ */
+function _onTzModalClear() {
+  window._chitTimezone = null;
+  _updateTzAbbrevLabels();
+  setSaveButtonUnsaved();
+  _closeTzPickerModal();
+}
+
+/**
+ * Handle Enter on timezone input — attempt address geocoding if value
+ * doesn't match a known timezone.
+ */
+function _onTimezoneInputSubmit() {
+  var input = document.getElementById('chit-timezone');
+  if (!input) return;
+  var val = input.value.trim();
+  if (!val) return;
+
+  // If it's already a valid timezone, do nothing (handled by _onTimezoneModalInputChange)
+  if (_isValidTimezone(val)) return;
+
+  // Attempt geocoding
+  _geocodeForTimezone(val);
+}
+
+/**
+ * Geocode an address/place name and detect its timezone.
+ * Calls /api/geocode?q=... then _detectTimezoneFromCoords.
+ * On success, applies the timezone and closes the modal.
+ * @param {string} query - Address or place name to geocode
+ */
+async function _geocodeForTimezone(query) {
+  var input = document.getElementById('chit-timezone');
+  var display = document.getElementById('timezoneDisplay');
+
+  if (display) display.textContent = '🔍 Looking up…';
+
+  try {
+    var response = await fetch('/api/geocode?q=' + encodeURIComponent(query));
+    if (!response.ok) {
+      if (display) display.textContent = '⚠️ Lookup failed';
+      setTimeout(function() { if (display) display.textContent = ''; }, 3000);
+      return;
+    }
+    var data = await response.json();
+    if (!data.results || data.results.length === 0) {
+      if (display) display.textContent = '⚠️ No results for "' + query + '"';
+      setTimeout(function() { if (display) display.textContent = ''; }, 3000);
+      return;
+    }
+
+    var result = data.results[0];
+    var lat = result.lat;
+    var lon = result.lon;
+    var country = result.country_code || null;
+
+    // Detect timezone from coordinates
+    if (typeof _detectTimezoneFromCoords !== 'function') {
+      if (display) display.textContent = '⚠️ Timezone detection unavailable';
+      setTimeout(function() { if (display) display.textContent = ''; }, 3000);
+      return;
+    }
+
+    var detectedTz = _detectTimezoneFromCoords(lat, lon, country);
+    if (detectedTz && _isValidTimezone(detectedTz)) {
+      // Show confirmation then auto-close
+      if (input) input.value = detectedTz;
+      if (display) display.textContent = '✓ ' + detectedTz + ' (from "' + query + '")';
+
+      // Also populate the location field with the address
+      var locationInput = document.getElementById('location');
+      if (locationInput) {
+        var displayName = result.display_name || result.name || query;
+        locationInput.value = displayName;
+        setSaveButtonUnsaved();
+
+        // Expand the location zone so the user sees the populated field
+        var locSection = document.getElementById('locationSection');
+        var locContent = document.getElementById('locationContent');
+        if (locSection && locContent) {
+          locContent.style.display = '';
+          locSection.classList.remove('collapsed');
+          var icon = locSection.querySelector('.zone-toggle-icon');
+          if (icon) icon.textContent = '🔼';
+          locSection.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function(btn) { btn.style.display = ''; });
+        }
+
+        // Trigger weather/map refresh if available
+        if (typeof _refreshWeatherOnDateChange === 'function') {
+          _refreshWeatherOnDateChange();
+        }
+        if (typeof _updateViewInContextBtn === 'function') {
+          _updateViewInContextBtn();
+        }
+      }
+
+      setTimeout(function() {
+        _onTzModalSelect(detectedTz);
+      }, 200);
+    } else {
+      if (display) display.textContent = '⚠️ Could not determine timezone';
+      setTimeout(function() { if (display) display.textContent = ''; }, 3000);
+    }
+  } catch (e) {
+    console.error('[EditorDates] Geocode for timezone failed:', e);
+    if (display) display.textContent = '⚠️ Lookup error';
+    setTimeout(function() { if (display) display.textContent = ''; }, 3000);
+  }
+}
+
+/**
+ * Check if a timezone string is valid (present in Intl.supportedValuesOf).
+ * @param {string} tz - Timezone string to validate
+ * @returns {boolean}
+ */
+function _isValidTimezone(tz) {
+  if (!tz) return false;
+  try {
+    var list = Intl.supportedValuesOf('timeZone');
+    return list.indexOf(tz) !== -1;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Update timezone visibility — now just injects/updates abbreviation labels.
+ * The inline row was removed; this is kept for backward compatibility with onDateModeChange().
+ */
+function _updateTimezoneRowVisibility() {
+  _injectTzAbbrevLabels();
+}
+
+/**
+ * Load a timezone value (used when opening an anchored chit).
+ * Sets the global state and updates abbreviation labels.
+ * @param {string|null} tz - IANA timezone or null
+ */
+function _loadTimezoneValue(tz) {
+  window._chitTimezone = tz || null;
+  _updateTzAbbrevLabels();
+}
+
+/**
+ * Handle the Clear action — remove timezone, revert to floating.
+ * Legacy function kept for compatibility with suggestion prompt.
+ */
+function _onTimezoneClear() {
+  _onTzModalClear();
+}
+
+/**
+ * Get the current timezone value from the picker.
+ * @returns {string|null} IANA timezone or null (floating)
+ */
+function _getTimezoneValue() {
+  return window._chitTimezone || null;
+}
+
+// ── Timezone suggestion prompt (location-based) ──────────────────────────────
+
+/**
+ * Show the timezone suggestion prompt when location geocode detects a different TZ.
+ * Inserts a prompt into the date zone with accept/dismiss buttons.
+ * Does NOT show if chit already has an explicit timezone set.
+ * Does NOT show if date mode is "none" (no dates = no timezone relevance).
+ * @param {string} detectedTz - IANA timezone from geocode detection
+ */
+function _showTimezoneSuggestion(detectedTz) {
+  if (!detectedTz) return;
+
+  // Do not show if chit already has an explicit timezone
+  if (window._chitTimezone) return;
+
+  // Do not show if date mode is "none" (timezone row is hidden)
+  var mode = document.querySelector('input[name="dateMode"]:checked');
+  var modeVal = mode ? mode.value : 'none';
+  if (modeVal === 'none') return;
+
+  // Remove any existing suggestion prompt
+  _dismissTimezoneSuggestion();
+
+  // Find a date-mode-fields container to attach the suggestion to
+  var container = document.getElementById('startEndFields') ||
+                  document.getElementById('dueFields') ||
+                  document.getElementById('pointInTimeFields');
+  if (!container) return;
+
+  var prompt = document.createElement('div');
+  prompt.className = 'tz-suggestion';
+  prompt.id = 'tzSuggestionPrompt';
+
+  var text = document.createElement('span');
+  text.className = 'tz-suggestion-text';
+  text.textContent = '📍 Detected: ' + detectedTz;
+
+  var acceptBtn = document.createElement('button');
+  acceptBtn.type = 'button';
+  acceptBtn.className = 'tz-suggestion-btn tz-suggestion-accept';
+  acceptBtn.textContent = 'Use';
+  acceptBtn.title = 'Set chit timezone to ' + detectedTz;
+  acceptBtn.onclick = function() {
+    _acceptTimezoneSuggestion(detectedTz);
+  };
+
+  var dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'tz-suggestion-btn tz-suggestion-dismiss';
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.title = 'Keep timezone unchanged';
+  dismissBtn.onclick = function() {
+    _dismissTimezoneSuggestion();
+  };
+
+  prompt.appendChild(text);
+  prompt.appendChild(acceptBtn);
+  prompt.appendChild(dismissBtn);
+  container.appendChild(prompt);
+}
+
+/**
+ * Accept the timezone suggestion — set chit.timezone to detected value, dismiss prompt.
+ * @param {string} detectedTz - IANA timezone to apply
+ */
+function _acceptTimezoneSuggestion(detectedTz) {
+  // Set the timezone via the picker
+  _loadTimezoneValue(detectedTz);
+  setSaveButtonUnsaved();
+
+  // Remove the suggestion prompt
+  _dismissTimezoneSuggestion();
+}
+
+/**
+ * Dismiss the timezone suggestion prompt — leave timezone unchanged, hide prompt.
+ */
+function _dismissTimezoneSuggestion() {
+  var prompt = document.getElementById('tzSuggestionPrompt');
+  if (prompt) prompt.remove();
 }

@@ -103,10 +103,22 @@ function _sharedFetchData() {
   if (typeof chits !== 'undefined' && Array.isArray(chits)) {
     window._sharedChits = chits;
   }
-  // Always fetch fresh from API too (covers non-dashboard pages and stale data)
-  fetch('/api/chits').then(function(r) { return r.json(); }).then(function(data) {
-    if (Array.isArray(data) && data.length > 0) window._sharedChits = data;
-  }).catch(function() {});
+
+  // If this tab is a follower with recent data from the leader, skip the API fetch.
+  // The leader broadcasts chit data — followers receive it via BroadcastChannel.
+  var skipChitFetch = false;
+  if (typeof cwocTabSyncIsLeader === 'function' && !cwocTabSyncIsLeader() &&
+      window._cwocTabSync && window._cwocTabSync.lastBroadcastTs > 0 &&
+      (Date.now() - window._cwocTabSync.lastBroadcastTs) < 15000) {
+    skipChitFetch = true;
+  }
+
+  if (!skipChitFetch) {
+    // Always fetch fresh from API too (covers non-dashboard pages and stale data)
+    fetch('/api/chits').then(function(r) { return r.json(); }).then(function(data) {
+      if (Array.isArray(data) && data.length > 0) window._sharedChits = data;
+    }).catch(function() {});
+  }
 
   if (typeof _independentAlerts !== 'undefined' && Array.isArray(_independentAlerts)) {
     window._sharedIndependentAlerts = _independentAlerts;

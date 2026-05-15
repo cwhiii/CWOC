@@ -1,5 +1,6 @@
 # Chit Editor
 
+- [Timezone Picker](#timezone-picker)
 - [Alerts Zone](#alerts-zone)
 - [Independent Alerts Board](#independent-alerts-board)
 - [Task Zone](#task-zone)
@@ -11,6 +12,21 @@
 Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see [Habits](/frontend/html/help.html#habits)). An "📜 [Audit Log](/frontend/html/audit-log.html)" button at the bottom links to the filtered [audit log](/frontend/html/audit-log.html) for the current chit. 📱 QR button generates data or link QR codes.
 
 When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the [Notes view](/frontend/html/help.html#notes)). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits. Creating from the [Indicators view](/frontend/html/help.html#indicators) auto-sets Point in Time to the current date/time and marks the chit Complete.
+
+## Timezone Picker
+
+The Dates & Times zone includes a **Set timezone** link for anchoring a chit to a specific IANA timezone. This keeps the common case (floating chits) uncluttered while giving you quick access when needed.
+
+- The "Set timezone" link appears whenever a date mode other than "None" is active
+- Clicking it reveals a searchable timezone dropdown — type to filter the list
+- Selecting a timezone anchors the chit: its times are locked to that timezone and displayed converted to your local time
+- A **✕** clear button reverts the chit to floating and collapses the picker back to the link
+- When editing an already-anchored chit, the picker is shown pre-filled (no link needed)
+- Changing the date mode to "None" hides the picker and link automatically
+
+**Location-based suggestions:** When you set a location on a chit and the geocoded timezone differs from your current timezone, a suggestion prompt appears offering to anchor the chit to the location's timezone. Accept to set it, or dismiss to keep the chit floating. The suggestion won't appear if the chit already has an explicit timezone.
+
+For full details on floating vs anchored chits, timezone settings, and display behavior, see [Timezones](/frontend/html/help.html#timezones).
 
 ## Alerts Zone
 
@@ -59,6 +75,64 @@ The checklist zone header includes a **Data** menu (⋮) with clipboard and mana
 - **Auto-save toggle** — Enable/disable automatic saving on checklist changes.
 
 Additionally, the header has **Undo/Redo** buttons (↺/↻) and the **🏁 Auto-Complete** cycle: Off → Auto-Complete (marks chit "Complete" when last item is checked) → Auto-Complete + Archive (also archives the chit) → Off.
+
+### Inline Editing
+
+Click any checklist item text to edit it inline. While editing:
+
+- **Enter** — Split the item at the cursor and create a new item below
+- **Shift+Enter** — Insert a newline within the item (multi-line items)
+- **Tab** / **Shift+Tab** — Indent / outdent the item
+- **Cmd+[** / **Cmd+]** — Indent / outdent (single item)
+- **Cmd+Shift+(** / **Cmd+Shift+)** — Indent / outdent item and all children
+- **Arrow Up/Down** — Navigate to previous/next item
+- **Escape** — Stop editing
+
+Empty items are preserved during editing and navigation. Use "Clean up empty items" from the Data menu to remove them in bulk.
+
+### Markdown Hotkeys
+
+While editing a checklist item, the same markdown formatting shortcuts available in the Notes zone work here too:
+
+- `Ctrl+B` / `Cmd+B` — Bold (`**text**`)
+- `Ctrl+I` / `Cmd+I` — Italic (`*text*`)
+- `Ctrl+K` / `Cmd+K` — Link (`[text](url)`)
+- `Ctrl+E` / `Cmd+E` — Inline Code (`` `text` ``)
+- `Ctrl+Shift+X` / `Cmd+Shift+X` — Strikethrough (`~~text~~`)
+
+Select text first, then press the shortcut to wrap it in the formatting markers.
+
+### Checkbox Animation
+
+When you check off an item, it animates: the text gets a strikethrough, the row briefly highlights green, then fades out and moves to the Completed section. This provides clear visual feedback that the item was marked done.
+
+### Multi-Select
+
+Select multiple items for batch operations:
+
+- **Click the right-edge strip** on any item to select/deselect it
+- **Ctrl+Click** / **Cmd+Click** on an item row to toggle selection
+- **Shift+Click** to select a range from the last selected item
+
+When items are selected, a toolbar appears with batch actions:
+
+- **All** — Select all unchecked items
+- **Check** — Mark all selected items as checked
+- **Delete** — Delete all selected items (with confirmation)
+- **Move** — Move all selected items to another chit
+- **Indent / Outdent** — Adjust indentation of all selected items
+- **✕** — Clear the selection
+
+### Send to Another Chit
+
+Each item has a 📤 icon (visible on hover) to send it to another chit. The popup shows the 3 most recently edited chits for quick access, plus a search button for the full list. Actions:
+
+- **📋 Copy** — Duplicate the item (and children) to the target chit
+- **📤 Move** — Move the item (and children) to the target chit, with an **undo** toast
+- **Copy/Move to New** — Create a brand new chit pre-populated with the item
+- **Enter key** — When a chit is selected in the search modal, pressing Enter triggers Move (the default action)
+
+The chit list is pre-cached for instant popup loading.
 
 ## Notes Zone
 

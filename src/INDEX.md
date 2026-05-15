@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, and `migrate_omni_view_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, `migrate_omni_view_settings()`, and `migrate_add_timezone_column()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -47,8 +47,8 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, omni_layout (JSON string — Omni View section layout config), omni_locked_filters (JSON string — locked filter defaults for Omni View), etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), nest_thread_id (Optional[str] — ID of an email chit in the target thread for nesting non-email chits into email threads), etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, omni_layout (JSON string — Omni View section layout config), omni_locked_filters (JSON string — locked filter defaults for Omni View), default_timezone (Optional[str] — user's default IANA timezone), timezone_override (Optional[str] — manual current timezone override), default_view (Optional[str] — user's preferred landing view, defaults to 'Calendar'), etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), nest_thread_id (Optional[str] — ID of an email chit in the target thread for nesting non-email chits into email threads), timezone (Optional[str] — IANA timezone identifier for anchored chits, null for floating), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color, shared_to_vault |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -164,6 +164,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_smart_actions_config()` | Add `smart_actions_config` (TEXT) column to settings table for badges/smart action preferences and custom detectors. Fully idempotent |
 | `migrate_add_habit_mode_to_rules()` | Add `habit_mode` (BOOLEAN DEFAULT 0) and `habit_history` (TEXT) columns to rules table. Uses column-existence-check pattern. Fully idempotent |
 | `migrate_add_custom_view_filters()` | Add `custom_view_filters` (TEXT) column to settings table for per-view custom filter/sort defaults. Fully idempotent |
+| `migrate_add_timezone_column()` | Add `timezone` (TEXT DEFAULT NULL) column to chits table for anchored/floating timezone support. Uses column-existence-check pattern. Fully idempotent |
+| `migrate_add_default_view()` | Add `default_view` (TEXT DEFAULT 'Calendar') column to settings table for user's preferred landing view. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -189,6 +191,12 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `_format_dt_property(prop_name, value, tzid, all_day)` | Format a datetime property for iCalendar output |
 | `_iso_to_ical(iso_str, all_day)` | Convert ISO date/datetime string back to iCalendar format |
 | `_format_rrule(rrule)` | Serialize an RRULE dict back into RFC 5545 RRULE format string |
+| `_build_vtimezone(tz_name, year)` | Generate a VTIMEZONE component for the given IANA timezone and year. Uses `zoneinfo` to determine standard/daylight transitions. Returns empty string if timezone has no transitions (fixed offset) |
+| `_format_utc_offset(offset)` | Format a `timedelta` UTC offset as `+HHMM` or `-HHMM` string |
+| `_chit_to_ical_datetime(dt_str, all_day)` | Convert a chit datetime string to iCalendar format (`YYYYMMDD` for all-day, `YYYYMMDDTHHMMSS` for timed) |
+| `_format_chit_rrule(recurrence_rule)` | Serialize a CWOC `recurrence_rule` dict to RFC 5545 RRULE string. Returns None if rule is empty or invalid |
+| `_format_exdates(exceptions, tz_name, all_day)` | Format recurrence exceptions as EXDATE lines with optional TZID context |
+| `ics_export_chits(chits)` | Export a list of chit dicts to RFC 5545 iCalendar format. Anchored chits: VTIMEZONE + TZID; floating chits: naive local times; all-day: VALUE=DATE. Omits chits without start_datetime or due_datetime. One VTIMEZONE per unique timezone |
 
 ### 1.7 `src/backend/schedulers.py` — Weather API, Schedulers & Push Notifications
 
@@ -220,6 +228,11 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `_check_habit_due_rule(due_rule, now, cursor, conn)` | Check if a single habit_due rule should fire based on its offset config. Compares current time against source habit's scheduled time plus/minus offset |
 | `_rules_scheduled_loop()` | Background loop — runs every 60 seconds, loads all enabled scheduled rules, checks if each is due, queries matching entities (chits or contacts), evaluates condition tree, executes or queues actions, inserts execution log entries, updates rule metadata. Records habit history after execution for habit-mode rules. Fires habit_achieved trigger on success. On first iteration runs after 5-second delay to catch overdue rules after restart |
 | `start_rules_scheduler()` | Register the background rules scheduler task and habit_due loop as asyncio tasks. Called from `main.py` on startup |
+| `compute_alert_utc(wall_clock_naive, tz_name)` | Convert a naive wall-clock datetime to UTC using the given timezone. Handles DST gaps by advancing to the next valid minute. Handles DST ambiguity by selecting the first (pre-transition) instance (fold=0) |
+| `get_user_current_timezone(user_id)` | Resolve the user's current timezone from settings. Precedence: `timezone_override` → `default_timezone` → `'UTC'` fallback |
+| `_localize_wall_clock(wall_clock_naive, tz_name)` | Localize a naive wall-clock datetime in the given timezone. Handles DST gaps (advance to first valid minute) and ambiguity (fold=0) |
+| `_advance_wall_clock(base_naive, freq, interval, occurrence_index)` | Advance a naive datetime by the given frequency and interval for daily+ recurrences. Preserves wall-clock time across DST transitions |
+| `expand_occurrence_tz_aware(base_dt, tz_name, freq, interval, occurrence_index)` | Expand a single recurrence occurrence in the given timezone. Daily+: preserves wall-clock time. Sub-daily (HOURLY/MINUTELY): maintains uniform elapsed-time intervals (UTC-based). Handles DST gap/ambiguity |
 
 ### 1.8 `src/backend/test_audit.py` — Audit Diff Property Tests
 
@@ -420,6 +433,25 @@ Property-based tests for the habits overhaul feature. Uses Python stdlib only (u
 | `TestProperty16MigrationIdempotency` | Migration idempotency — running `migrate_habits_overhaul()` multiple times produces no errors, new columns exist, `hide_when_instance_done` does not exist (100+ iterations). **Validates: Property 16** |
 | `TestProperty17CrudRoundTrip` | CRUD round-trip — saving and loading a chit with random `habit`, `habit_goal`, `habit_success`, `show_on_calendar` values returns the same values (100+ iterations). **Validates: Property 17** |
 
+### 1.17d `src/backend/test_timezone.py` — Timezone Support Property Tests
+
+Property-based tests for the timezone support feature. Uses Python stdlib only (unittest + random + zoneinfo) — no external libraries. Each property test runs 100+ iterations with randomly generated inputs.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty1InvalidTimezoneRejection` | Invalid timezone rejection — random non-IANA strings are rejected; valid IANA values are accepted (100+ iterations). **Validates: Requirements 1.3, 2.6** |
+| `TestProperty2TimezoneResolutionPrecedence` | Timezone resolution precedence — override always wins over browser detection and default; result is always a valid IANA timezone string (100+ iterations). **Validates: Requirements 1.4, 5.5, 9.1** |
+| `TestProperty3TimezonePersistenceRoundTrip` | Timezone persistence round-trip — saving a valid IANA timezone string to chit or settings and reading back returns the identical string (100+ iterations). **Validates: Requirements 1.8, 2.5** |
+| `TestProperty5TimeDisplayConversion` | Time display conversion correctness — anchored chit times are correctly converted; floating chit times remain unchanged (100+ iterations). **Validates: Requirements 5.1, 5.2, 5.4** |
+| `TestProperty6AlertFireTimeComputation` | Alert fire-time computation — anchored alerts compute correctly from chit timezone; floating from user timezone; changing user timezone does not affect anchored alert times (100+ iterations). **Validates: Requirements 6.1, 6.2, 6.4** |
+| `TestProperty7DSTGapAlertHandling` | DST gap alert handling — alerts in spring-forward gaps advance to first valid minute (100+ iterations). **Validates: Requirements 6.7** |
+| `TestProperty8RecurrenceWallClockPreservation` | Recurrence wall-clock preservation across DST — daily+ anchored recurrences maintain same wall-clock time across DST boundaries (100+ iterations). **Validates: Requirements 7.1, 7.3** |
+| `TestProperty9RecurrenceDSTGapShiftForward` | Recurrence DST gap shift-forward — occurrences in spring-forward gaps shift to first valid instant (100+ iterations). **Validates: Requirements 7.4** |
+| `TestProperty10RecurrenceFallBackFirstInstance` | Recurrence fall-back first-instance selection — ambiguous fall-back times select first occurrence (fold=0) (100+ iterations). **Validates: Requirements 7.5** |
+| `TestProperty11SubDailyUniformIntervals` | Sub-daily recurrence uniform elapsed-time intervals — HOURLY/MINUTELY recurrences maintain exact UTC duration between occurrences across DST (100+ iterations). **Validates: Requirements 7.7** |
+| `TestProperty12ICSTimezoneAnnotation` | ICS timezone annotation correctness — anchored → VTIMEZONE + TZID; floating → naive; all-day → VALUE=DATE (100+ iterations). **Validates: Requirements 8.1, 8.2, 8.3** |
+| `TestProperty14ICSOmitsDatelessChits` | ICS omits dateless chits — chits without start_datetime or due_datetime produce no VEVENT (100+ iterations). **Validates: Requirements 8.5** |
+
 ---
 
 ### 1.18 `src/backend/routes/__init__.py`
@@ -444,6 +476,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 
 | Function | Description |
 |----------|-------------|
+| `validate_timezone(tz_value)` | Validate that a timezone string is a recognized IANA timezone. Returns True for valid IANA values or None; False for invalid non-null values. Uses `zoneinfo.available_timezones()` |
 | `_strip_reserved_tags(tags)` | Remove user-submitted tags with reserved `CWOC_System/` prefix |
 | `_validate_tag_name(name)` | Return `False` if tag name uses reserved prefix |
 | `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs |
@@ -492,7 +525,7 @@ All trash endpoints are user-scoped: regular users see/act on only their own del
 
 ### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
-Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags`, `hide_declined`, map settings (`map_default_lat`, `map_default_lon`, `map_default_zoom`, `map_auto_zoom`), and `email_account` serialization in settings read/save paths. Tag creation validates against the reserved `CWOC_System/` prefix (returns 400 if violated).
+Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags`, `hide_declined`, map settings (`map_default_lat`, `map_default_lon`, `map_default_zoom`, `map_auto_zoom`), and `email_account` serialization in settings read/save paths. Tag creation validates against the reserved `CWOC_System/` prefix (returns 400 if violated). Timezone fields (`default_timezone`, `timezone_override`) are validated against `zoneinfo.available_timezones()` on save — returns 400 if invalid.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -1337,6 +1370,19 @@ Frontend authentication guard for all CWOC pages. Loads BEFORE `shared-utils.js`
 On load: calls `GET /api/auth/me`. If 401: stores current URL in `localStorage` as `cwoc_auth_return`, redirects to `/login`.
 
 
+#### shared-tab-sync.js
+
+Cross-tab data sharing with leader election. Uses BroadcastChannel to share chit data between open tabs so only one tab (the "leader") fetches from the API. Leader election uses the Web Locks API — when the leader tab closes, the lock is released and another tab automatically acquires it. Loads after `shared-auth.js`, before `shared-utils.js`.
+
+| Function | Description |
+|----------|-------------|
+| `cwocTabSyncInvalidate()` | Notify all tabs that data has changed. Leader re-fetches and broadcasts; follower tells the leader to re-fetch |
+| `cwocTabSyncIsLeader()` | Returns true if this tab is the leader (responsible for API fetches) |
+| `cwocTabSyncBroadcastChits(chitsData)` | Called by `fetchChits()` after completion — broadcasts fresh data to follower tabs (leader only) |
+
+Internal state on `window._cwocTabSync`: `{ isLeader, channel, tabId, lastBroadcastTs, leaderHeartbeatTimer, followerTimeoutTimer, initialized }`.
+
+
 #### shared-utils.js
 
 Core utility functions shared across all CWOC pages. Must load after `shared-auth.js` (uses `waitForAuth()` for user-scoped settings).
@@ -1378,6 +1424,10 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `cwocContactMatchesFilter(contact, query)` | Check if a contact matches a search query across all fields (name, email, phone, address, org, tags, etc.) |
 | `_cwocGetHabitCycleEnd(freq)` | Calculate the end-of-cycle datetime for a habit based on its recurrence frequency (DAILY, WEEKLY, MONTHLY, YEARLY) |
 | `cwocHighlightMatch(text, query)` | HTML-escape text and highlight matching query substrings with `<mark>` tags |
+| `_detectBrowserTimezone()` | Detect browser timezone via `Intl.DateTimeFormat().resolvedOptions().timeZone`. Returns IANA timezone string or null if unavailable |
+| `getCurrentTimezone()` | Resolve the user's current timezone. Precedence: settings `timezone_override` → browser detection via `_detectBrowserTimezone()` → `default_timezone` from settings → `'UTC'` fallback. Returns a Promise resolving to a valid IANA timezone string |
+| `convertTimezoneForDisplay(isoString, fromTz, toTz, opts)` | Convert a naive datetime string from one IANA timezone to another for display using `Intl.DateTimeFormat` with `timeZone` option. Used by dashboard and calendar for anchored chit time display |
+| `getChitDisplayTime(chit, field, currentTz)` | Get the display time for a chit, converting if anchored. Floating chits (timezone == null): returns time as-is. Anchored chits: converts from `chit.timezone` to `currentTz`. Handles invalid/unrecognized timezone gracefully (display unconverted with ⚠️ indicator). Returns `{ date, warning }` or null |
 
 #### shared-touch.js
 
@@ -1437,7 +1487,7 @@ Visual indicator helpers for chit cards and calendar events — alert type detec
 | `_ALERT_ICON_MAP` | Object mapping alert types to their emoji icons |
 | `_STATUS_ICONS` | Object mapping task status strings to Font Awesome HTML icon strings |
 | `_getAlertIndicators(chit, settings, context)` | Return alert indicator icon string based on visual_indicators settings and rendering context |
-| `_getAllIndicators(chit, settings, context)` | Return all visual indicator icons (alerts + people + health + recurrence + attachments) for a chit; attachment 📎 is last/lowest priority |
+| `_getAllIndicators(chit, settings, context)` | Return all visual indicator icons (alerts + people + indicators + custom data + recurrence + attachments) for a chit; uses `window._indicatorObjectIds` to split health_data into ❤️ (indicators zone) vs 📊 (custom zones); attachment 📎 is last/lowest priority |
 | `_shouldShow(mode, context)` | Return true if a display mode ("always"/"never"/"space") permits showing in a given context |
 | `_chitAlertTypesPresent(chit)` | Return an object mapping each alert type to true/false for presence on a chit |
 | `_computePrerequisiteFlags(allChits)` | Compute `_hasIncompletePrereqs` flag on each chit for the ⛓️ chain indicator |
@@ -1520,6 +1570,7 @@ Shared geocoding with progressive fallback via the backend Nominatim proxy. Incl
 | `getGeocodeCached(address)` | Get cached `{lat, lon}` for an address, or null if not cached |
 | `setGeocodeCache(address, lat, lon)` | Store a geocode result in the shared cache and persist to localStorage |
 | `_geocodeAddress(address)` | Geocode an address with progressive fallback (full → no zip → city/state); checks shared cache first, caches results; returns `{lat, lon}` |
+| `_detectTimezoneFromCoords(lat, lon, country)` | Detect timezone from coordinates using a longitude-band heuristic combined with country/region data. Returns IANA timezone string or null on failure |
 
 #### shared-sidebar-filter.js
 
@@ -2323,6 +2374,21 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `_updateResetUnitOptions()` | Update the reset period unit dropdown options based on the habit's cycle frequency — limits units to one level smaller than the cycle (e.g., WEEKLY → Day(s) only, MONTHLY → Day(s)/Week(s), YEARLY → Day(s)/Week(s)/Month(s)) |
 | `setPointInTimeNow()` | Set the Point in Time date and time fields to the current moment |
 | `clearPointInTime()` | Clear the Point in Time date and time fields |
+| `_initTimezonePicker()` | Initialize the timezone picker. Populates datalist with common abbreviation entries (active today) + all IANA timezones. Injects abbreviation labels into date rows. Wires up geocoding on Enter/blur |
+| `_getTimezoneAbbreviation(ianaTimezone)` | Get the short timezone abbreviation for today's date in the given timezone using `Intl.DateTimeFormat` with `timeZoneName: 'short'` |
+| `_getTimezoneLongName(ianaTimezone)` | Get the long timezone name using `Intl.DateTimeFormat` with `timeZoneName: 'long'` |
+| `_buildTzTooltip(ianaTimezone)` | Build a multi-line title string with abbreviation, long name, and IANA identifier for hover tooltip |
+| `_injectTzAbbrevLabels()` | Inject/update `.tz-abbrev-label` spans at the end of each visible date-mode-fields div (startEnd, due, pointInTime) |
+| `_updateTzAbbrevLabels()` | Update all timezone abbreviation labels — floating (muted, user's TZ) or anchored (full opacity, chit's TZ). Tooltip shows all name forms |
+| `_onTzAbbrevClick(e)` | Handle click on abbreviation label — open the timezone picker modal |
+| `_openTzPickerModal()` | Open the timezone picker modal, pre-fill input if timezone is already set |
+| `_closeTzPickerModal()` | Close the timezone picker modal without applying changes (cancel) |
+| `_onTimezoneModalInputChange()` | Handle input change inside the modal — validate and auto-close on valid selection after 200ms |
+| `_onTzModalSelect(tz)` | Apply a timezone selection from the modal and close it |
+| `_onTzModalClear()` | Clear timezone (revert to floating) and close the modal |
+| `_onTimezoneInputSubmit()` | Handle Enter on timezone input — attempt address geocoding if value doesn't match a known timezone |
+| `_geocodeForTimezone(query)` | Geocode an address via `/api/geocode?q=...` then call `_detectTimezoneFromCoords` to auto-select timezone and close modal |
+| `_showTimezoneSuggestion(detectedTz)` | Show the timezone suggestion prompt when location geocode detects a different timezone. Accept sets `chit.timezone` to detected value; dismiss hides prompt |
 
 #### editor-habits.js
 
@@ -2927,7 +2993,7 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `Checklist.render()` | Re-render all checklist items — unchecked above, completed below (collapsible, collapsed by default) with ghost parents; updates count |
 | `Checklist.createItemElement(item, isCompleted, isGhost)` | Create a DOM element for a checklist item with checkbox, text, trash, and drag events |
 | `Checklist.startEditing(item, textSpan, clickEvent)` | Start inline editing — cursor positioned at click point via canvas measurement; Enter/Tab/Arrow key navigation |
-| `Checklist.toggleCheck(item, checked)` | Toggle an item's checked state and propagate to subtree |
+| `Checklist.toggleCheck(item, checked)` | Toggle an item's checked state and propagate to subtree; animates check-off with strikethrough + fade |
 | `Checklist.updateCheckedStateForSubtree(item, checked)` | Recursively set checked state on all children |
 | `Checklist.getParent(item)` | Find the parent item of a given item |
 | `Checklist.getChildren(item)` | Find all direct children of a given item |
@@ -2939,8 +3005,16 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `Checklist.cleanUpEmptyItems()` | Remove all items with empty or whitespace-only text |
 | `Checklist._showUndoCountdown(removedItems, label)` | Show an inline undo countdown bar (8s) with Undo button; restores items if clicked |
 | `Checklist._notifyChange()` | Call the external change callback with current checklist data |
+| `Checklist._toggleSelectItem(itemId, e)` | Toggle multi-select state for an item |
+| `Checklist._rangeSelectTo(itemId)` | Select a range of items from last selected to target |
+| `Checklist._clearSelection()` | Clear all multi-select state |
+| `Checklist._selectAll()` | Select all unchecked items |
+| `Checklist._updateSelectVisuals()` | Update DOM classes for selected items |
+| `Checklist._updateMultiSelectToolbar()` | Show/hide/update the multi-select batch action toolbar |
+| `Checklist._multiSelectSendToChit()` | Open send-to-chit modal for batch-selected items |
 | `_pasteClipboardAsChecklistItems(checklist)` | Async — read clipboard text and create each line as a checklist item (same parsing as note-to-checklist) |
 | `_copyIncompleteToClipboard(checklist)` | Copy all unchecked items to clipboard as markdown checklist lines |
+| `_prefetchSendItemChits()` | Pre-fetch chit list in background for instant send-item popup loading |
 
 #### editor_projects.js
 
@@ -3010,6 +3084,10 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 
 | Symbol | Description |
 |--------|-------------|
+| `_populateTimezoneDatalist()` | Populate timezone datalists with IANA timezone names from the browser using `Intl.supportedValuesOf('timeZone')` |
+| `_clearTimezoneOverride()` | Clear the timezone override field and mark settings as unsaved |
+| `_isValidTimezone(value)` | Validate a timezone value against the IANA timezone list. Returns true for valid IANA timezone or empty string |
+| `_validateTimezoneSettings()` | Validate timezone settings before save. Returns true if valid, false if invalid (shows error toast) |
 | `renderLocationsSection(locations)` | Render saved location rows into `#locations-list` from data array |
 | `_appendLocationRow(container, label, address, isDefault)` | Append a single location row to the container |
 | `addLocationRow()` | Global function called by the "+" button — adds an empty location row |
@@ -4488,8 +4566,10 @@ Scripts are loaded via `<script>` tags. Later scripts depend on globals defined 
 ```
 shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForAuth — auth guard)
   │
-  └── shared-utils.js      ← loads after shared-auth.js (getCachedSettings uses waitForAuth)
+  └── shared-tab-sync.js   ← loads after shared-auth.js (BroadcastChannel + Web Locks leader election)
         │
+        └── shared-utils.js      ← loads after shared-auth.js (getCachedSettings uses waitForAuth)
+              │
         ├── shared-touch.js         (standalone — enableTouchDrag, enableTouchGesture)
         ├── shared-checklist.js     (uses fetch, DOM — no shared-utils deps)
         ├── shared-sort.js          (uses localStorage — no shared-utils deps)
@@ -4574,6 +4654,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
 
 **Key rules:**
 - `shared-auth.js` must always load first among app scripts (checks auth, provides `getCurrentUser`, `isAdmin`, `waitForAuth`)
+- `shared-tab-sync.js` must load after `shared-auth.js` (no deps on shared-utils; provides cross-tab data sharing)
 - `shared-utils.js` must load after `shared-auth.js` (uses `waitForAuth()` for user-scoped settings)
 - `shared.js` must load after all other `shared-*.js` sub-scripts
 - `shared-sidebar-filter.js` must load after `shared.js` (uses DOM utilities)

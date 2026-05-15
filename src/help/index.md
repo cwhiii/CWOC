@@ -25,6 +25,7 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Mouse Interactions](/frontend/html/help.html#mouse) — Click, shift-click, drag behaviors
 - [Keyboard Shortcuts](/frontend/html/help.html#hotkeys) — Dashboard and editor hotkeys
 - [Recurrence](/frontend/html/help.html#recurrence) — Repeating chits and patterns
+- [Timezones](/frontend/html/help.html#timezones) — Floating vs anchored chits, timezone picker, display conversion
 - [Tags](/frontend/html/help.html#tags) — Hierarchical tags, favorites, system tags
 - [Filtering & Sorting](/frontend/html/help.html#filters) — Sidebar filters, sort options, custom defaults
 - [Contacts](/frontend/html/people.html) — Contact editor, PGP, Signal, vault

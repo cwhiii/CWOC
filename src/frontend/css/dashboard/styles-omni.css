@@ -1,6 +1,8 @@
 /* ── Omni View Styles ─────────────────────────────────────────────────────── */
 /* Created for Omni View sections. Additional styles added in task 12. */
 
+
+
 /* ── Two-Column Grid Layout ──────────────────────────────────────────────── */
 
 .omni-view {
@@ -26,6 +28,13 @@
     padding: 0 !important;
     border: none;
     overflow: hidden;
+}
+
+/* Remove borders from all chit cards in Omni View (overdue/blocked borders still applied inline) */
+.omni-view .itinerary-event,
+.omni-view .chit-card {
+    border: none;
+}
 }
 
 .omni-grid {

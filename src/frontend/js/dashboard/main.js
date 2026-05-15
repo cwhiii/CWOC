@@ -58,6 +58,10 @@ let _globalSearchQuery = '';
 /* ── Global week start day (0=Sun, 1=Mon, etc.) ─────────────────────────── */
 let _weekStartDay = 0;
 
+/* ── Timezone state ───────────────────────────────────────────────────────── */
+// Resolved IANA timezone string (set on page load via getCurrentTimezone())
+let _currentTimezone = null;
+
 /* ── Timezone offset (for debug logging) ─────────────────────────────────── */
 const userTimezoneOffset = new Date().getTimezoneOffset();
 console.debug("User timezone offset: " + userTimezoneOffset + " minutes");

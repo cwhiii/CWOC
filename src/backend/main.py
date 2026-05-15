@@ -201,6 +201,8 @@ from src.backend.migrations import (
     migrate_add_custom_view_filters,
     migrate_add_email_privacy_and_send_later,
     migrate_add_habit_trigger_config,
+    migrate_add_timezone_column,
+    migrate_add_default_view,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -287,6 +289,8 @@ migrate_add_habit_mode_to_rules()
 migrate_add_custom_view_filters()
 migrate_add_email_privacy_and_send_later()
 migrate_add_habit_trigger_config()
+migrate_add_timezone_column()
+migrate_add_default_view()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)

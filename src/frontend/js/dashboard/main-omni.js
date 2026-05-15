@@ -127,6 +127,8 @@ function displayOmniView(filteredChits) {
     var omniContainer = document.createElement("div");
     omniContainer.className = "omni-view";
 
+
+
     // 7. Render sections in position order, interleaving full-width and half-width.
     //    Consecutive half-width sections are grouped into a two-column grid.
     //    Full-width sections break the grid and render standalone.
@@ -224,19 +226,22 @@ function _buildOmniSection(sectionConfig, widthClass) {
  * Each chit appears in exactly one section.
  *
  * Algorithm:
+ *   0. Separate reminder chits (notification=true, not complete, not archived):
+ *      - point_in_time is today → Reminders
+ *      - pinned=true → Reminders (regardless of date)
  *   1. Separate email chits → email section only
  *   2. Categorize remaining into itinerary buckets (same logic as displayItineraryView):
  *      - Has time today → Chrono Anchored
  *      - All-day today / untimed due today / habit due today → On Deck
  *      - Due this week (not today) → Soon
- *   3. Track all chit IDs placed in steps 1-2
+ *   3. Track all chit IDs placed in steps 0-2
  *   4. For pinned chits NOT already placed:
  *      - Has checklist items → Pinned Checklists
  *      - Otherwise → Pinned Notes
  *   5. Each chit appears in exactly one section
  *
  * @param {Array} filteredChits - The filtered chits array
- * @returns {Object} { email: [], chrono: [], ondeck: [], soon: [], pinned_notes: [], pinned_checklists: [] }
+ * @returns {Object} { email: [], reminders: [], chrono: [], ondeck: [], soon: [], pinned_notes: [], pinned_checklists: [] }
  */
 function _omniDeduplicateChits(filteredChits) {
     var result = {
@@ -261,11 +266,16 @@ function _omniDeduplicateChits(filteredChits) {
     var weekEnd = new Date(today);
     weekEnd.setDate(weekEnd.getDate() + 7);
 
-    // ── Step 0: Separate reminder chits (today, not complete) ────────────────
+    // ── Step 0: Separate reminder chits (today + all pinned reminders) ───────
     filteredChits.forEach(function(chit) {
-        if (chit.notification && chit.point_in_time && chit.status !== 'Complete' && !chit.archived) {
-            var pitDate = new Date(chit.point_in_time);
-            if (pitDate >= today && pitDate <= todayEnd) {
+        if (chit.notification && chit.status !== 'Complete' && !chit.archived) {
+            var isToday = false;
+            if (chit.point_in_time) {
+                var pitDate = new Date(chit.point_in_time);
+                isToday = (pitDate >= today && pitDate <= todayEnd);
+            }
+            // Show if reminder is for today OR if it's pinned
+            if (isToday || chit.pinned) {
                 result.reminders.push(chit);
                 placedIds.add(chit.id);
             }
@@ -369,12 +379,12 @@ function _omniDeduplicateChits(filteredChits) {
                 if (ed < today) return;
             }
             if (hasDue && !hasStart) {
-                var dd = new Date(chit.due_datetime);
+                var dd = chit._due_datetime_obj || new Date(chit.due_datetime);
                 if (dd < today) return;
             }
             if (hasStart && hasDue) {
                 var sd2 = chit.start_datetime_obj || new Date(chit.start_datetime);
-                var dd2 = new Date(chit.due_datetime);
+                var dd2 = chit._due_datetime_obj || new Date(chit.due_datetime);
                 if (sd2 < today && dd2 < today) return;
             }
         }
@@ -415,7 +425,7 @@ function _omniDeduplicateChits(filteredChits) {
 
         // Due today with a specific time → Chrono Anchored
         if (hasDue) {
-            var dueDate = new Date(chit.due_datetime);
+            var dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
             var dueHour = dueDate.getHours();
             var dueMin = dueDate.getMinutes();
             if ((dueHour > 0 || dueMin > 0) && dueDate >= today && dueDate <= todayEnd) {
@@ -429,7 +439,7 @@ function _omniDeduplicateChits(filteredChits) {
 
         // Due today (no specific time) → On Deck
         if (hasDue) {
-            var dueDate = new Date(chit.due_datetime);
+            var dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
             if (dueDate >= today && dueDate <= todayEnd) {
                 result.ondeck.push({ type: 'task', chit: chit });
                 placedIds.add(chit.id);
@@ -620,6 +630,7 @@ var _omniNormalizedColorMap = {
     birthday:  '#d8a8d8',  // medium orchid (contact birthdays)
     email:     '#a89070',  // dark mocha (email chits)
     habit:     '#f0e87a',  // light yellow (habits)
+    reminder:  '#c47a76',  // dusty rose-red (reminders)
 };
 
 /**
@@ -661,6 +672,8 @@ function _applyOmniNormalizedColors() {
                 color = _omniNormalizedColorMap.checklist;
             } else if (sectionId === 'email') {
                 color = _omniNormalizedColorMap.email;
+            } else if (sectionId === 'reminders') {
+                color = _omniNormalizedColorMap.reminder;
             } else if (chit) {
                 color = _omniGetNormalizedColor(chit);
             } else {
@@ -677,6 +690,8 @@ function _applyOmniNormalizedColors() {
  * Determine the normalized color for a chit based on its type.
  */
 function _omniGetNormalizedColor(chit) {
+    // Reminder
+    if (chit.notification) return _omniNormalizedColorMap.reminder;
     // Email
     if (chit.email_message_id || chit.email_status) return _omniNormalizedColorMap.email;
     // Birthday (contact-generated birthday/anniversary chits)
@@ -818,59 +833,137 @@ function _renderOmniReminders(contentEl, reminderChits, viSettings) {
         return;
     }
 
-    // Sort by point_in_time ascending
-    reminderChits.sort(function(a, b) {
+    var now = new Date();
+    var today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    var todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Separate into today's reminders and pinned (non-today) reminders
+    var todayReminders = [];
+    var pinnedReminders = [];
+    reminderChits.forEach(function(chit) {
+        var isToday = false;
+        if (chit.point_in_time) {
+            var pitDate = new Date(chit.point_in_time);
+            isToday = (pitDate >= today && pitDate <= todayEnd);
+        }
+        if (isToday) {
+            todayReminders.push(chit);
+        } else {
+            pinnedReminders.push(chit);
+        }
+    });
+
+    // Sort today's by point_in_time ascending
+    todayReminders.sort(function(a, b) {
         return (a.point_in_time || '').localeCompare(b.point_in_time || '');
     });
 
-    reminderChits.forEach(function(chit) {
-        var card = document.createElement('div');
-        card.className = 'chit-card reminder-card';
-        card.style.cssText = 'margin-bottom:4px;padding:8px 12px;cursor:pointer;position:relative;display:flex;align-items:center;gap:8px;';
-        card.dataset.chitId = chit.id;
-        if (typeof applyChitColors === 'function') applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+    // Sort pinned by title
+    pinnedReminders.sort(function(a, b) {
+        return (a.title || '').localeCompare(b.title || '');
+    });
 
-        // Complete button (check circle)
+    // Render today's reminders first, then pinned
+    var allOrdered = todayReminders.concat(pinnedReminders);
+
+    allOrdered.forEach(function(chit) {
+        var card = document.createElement('div');
+        card.className = 'itinerary-event reminder-card';
+        card.dataset.chitId = chit.id;
+        card.style.cssText = 'display:flex;align-items:center;padding:8px 10px;border-radius:5px;margin:4px 20px;';
+        var bgColor = (typeof chitColor === 'function') ? chitColor(chit) : '#fdf6e3';
+        if (!bgColor || bgColor === 'transparent' || bgColor === 'rgba(0,0,0,0)') bgColor = '#fdf6e3';
+        if (typeof applyChitColors === 'function') applyChitColors(card, bgColor);
+
+        // Icon (left) — pushpin for reminders
+        var iconEl = document.createElement('span');
+        iconEl.style.cssText = 'font-size:1em;flex-shrink:0;margin-right:6px;';
+        iconEl.textContent = '📌';
+        card.appendChild(iconEl);
+
+        // Time column (matches Chrono pattern)
+        var timeColumn = document.createElement('div');
+        timeColumn.className = 'time-column';
+        timeColumn.style.cssText = 'width:90px;margin-right:10px;flex-shrink:0;font-size:0.85em;';
+        if (chit.point_in_time) {
+            var pitDate = new Date(chit.point_in_time);
+            var isToday = (pitDate >= today && pitDate <= todayEnd);
+            if (isToday) {
+                timeColumn.textContent = (typeof formatTime === 'function') ? formatTime(pitDate) : (String(pitDate.getHours()).padStart(2, '0') + ':' + String(pitDate.getMinutes()).padStart(2, '0'));
+            } else {
+                timeColumn.textContent = pitDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            }
+        } else {
+            timeColumn.textContent = '—';
+        }
+        card.appendChild(timeColumn);
+
+        // Title (flex:1)
+        var titleEl = document.createElement('div');
+        titleEl.className = 'details-column';
+        titleEl.style.cssText = 'text-align:left;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        titleEl.innerHTML = '<span style="font-weight:bold;font-size:1.05em;">' + (chit.title || '(Untitled)') + '</span>';
+        card.appendChild(titleEl);
+
+        // Time-until badge (supports negative for past reminders)
+        if (chit.point_in_time) {
+            var reminderTime = new Date(chit.point_in_time);
+            var badge = _buildReminderTimeUntilBadge(reminderTime, now);
+            if (badge) card.appendChild(badge);
+        }
+
+        // Complete button (right side)
         var completeBtn = document.createElement('button');
         completeBtn.className = 'email-hover-btn';
         completeBtn.title = 'Mark Complete';
         completeBtn.innerHTML = '<i class="fas fa-check-circle"></i>';
-        completeBtn.style.cssText = 'opacity:0.5;flex-shrink:0;';
-        completeBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            card.style.transition = 'opacity 0.3s, transform 0.3s';
-            card.style.opacity = '0.3';
-            card.style.transform = 'translateX(20px)';
-            cwocUndoToast('✓ ' + (chit.title || 'Reminder'), {
-                onExpire: function() {
-                    fetch('/api/chits/' + encodeURIComponent(chit.id), {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'Complete', archived: true })
-                    }).then(function(r) { if (r.ok) { card.remove(); if (typeof displayChits === 'function') displayChits(); } });
-                },
-                onUndo: function() { card.style.opacity = ''; card.style.transform = ''; },
-                id: 'emailUndoToast'
+        completeBtn.style.cssText = 'opacity:0.5;flex-shrink:0;margin-left:8px;background:none;border:none;cursor:pointer;font-size:1.1em;';
+        (function(chitRef, cardRef) {
+            completeBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                cardRef.style.transition = 'opacity 0.3s, transform 0.3s';
+                cardRef.style.opacity = '0.3';
+                cardRef.style.transform = 'translateX(20px)';
+                cwocUndoToast('✓ ' + (chitRef.title || 'Reminder'), {
+                    duration: 5000,
+                    onExpire: function() {
+                        fetch('/api/chits/' + encodeURIComponent(chitRef.id) + '/fields', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'Complete', archived: true })
+                        }).then(function(r) {
+                            if (r.ok) {
+                                cardRef.remove();
+                                if (typeof fetchChits === 'function') fetchChits();
+                            } else {
+                                cardRef.style.opacity = '';
+                                cardRef.style.transform = '';
+                                cwocToast('Failed to complete reminder', 'error');
+                            }
+                        }).catch(function() {
+                            cardRef.style.opacity = '';
+                            cardRef.style.transform = '';
+                            cwocToast('Failed to complete reminder', 'error');
+                        });
+                    },
+                    onUndo: function() {
+                        cardRef.style.opacity = '';
+                        cardRef.style.transform = '';
+                    }
+                });
             });
-        });
+        })(chit, card);
         card.appendChild(completeBtn);
 
-        // Title
-        var titleEl = document.createElement('a');
-        titleEl.href = '/editor?id=' + chit.id;
-        titleEl.textContent = chit.title || '(Untitled)';
-        titleEl.style.cssText = 'flex:1;color:#4a2c2a;text-decoration:none;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        titleEl.addEventListener('click', function(e) { e.preventDefault(); if (typeof storePreviousState === 'function') storePreviousState(); window.location.href = this.href; });
-        card.appendChild(titleEl);
-
-        // Time
-        var pitDate = new Date(chit.point_in_time);
-        var timeStr = String(pitDate.getHours()).padStart(2, '0') + ':' + String(pitDate.getMinutes()).padStart(2, '0');
-        var timeEl = document.createElement('span');
-        timeEl.style.cssText = 'font-size:0.85em;color:#6b4e31;white-space:nowrap;';
-        timeEl.textContent = timeStr;
-        card.appendChild(timeEl);
-
+        // Click interactions
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('button')) return;
+            if (typeof storePreviousState === 'function') storePreviousState();
+            window.location.href = '/editor?id=' + chit.id;
+        });
         card.addEventListener('dblclick', function() {
             if (typeof storePreviousState === 'function') storePreviousState();
             window.location.href = '/editor?id=' + chit.id;
@@ -878,6 +971,46 @@ function _renderOmniReminders(contentEl, reminderChits, viSettings) {
 
         contentEl.appendChild(card);
     });
+}
+
+/**
+ * Builds a time-until badge for reminders. Shows negative time if past.
+ * Format: "now" (within 5 min), "in Xm", "in Xh Ym", "-Xm ago", "-Xh Ym ago"
+ *
+ * @param {Date} targetTime - The reminder time
+ * @param {Date} now - Current time
+ * @returns {HTMLElement} The badge span element
+ */
+function _buildReminderTimeUntilBadge(targetTime, now) {
+    var diffMs = targetTime - now;
+    var isPast = diffMs < 0;
+    var absDiffMin = Math.round(Math.abs(diffMs) / 60000);
+
+    var text;
+    if (absDiffMin <= 5 && !isPast) {
+        text = 'now';
+    } else if (absDiffMin < 60) {
+        text = isPast ? ('-' + absDiffMin + 'm') : ('in ' + absDiffMin + 'm');
+    } else {
+        var hours = Math.floor(absDiffMin / 60);
+        var mins = absDiffMin % 60;
+        if (mins === 0) {
+            text = isPast ? ('-' + hours + 'h') : ('in ' + hours + 'h');
+        } else {
+            text = isPast ? ('-' + hours + 'h ' + mins + 'm') : ('in ' + hours + 'h ' + mins + 'm');
+        }
+    }
+
+    var badge = document.createElement('span');
+    badge.className = 'omni-time-badge';
+    badge.dataset.startTime = targetTime.toISOString();
+    badge.textContent = text;
+    if (isPast) {
+        badge.style.border = '1px solid #b22222';
+        badge.style.borderRadius = '3px';
+        badge.style.padding = '1px 4px';
+    }
+    return badge;
 }
 
 /**

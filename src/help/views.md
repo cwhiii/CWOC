@@ -1,9 +1,16 @@
 # Views
 
+- [Default View](#default-view)
 - [Sidebar Layout](#sidebar-layout)
 
 
 The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a [Global Search](/frontend/html/help.html#global-search) view (magnifying glass icon). The **[Omni View](/frontend/html/help.html#omni-view)** (click "Omni" in the header or press `O`) provides a command-center dashboard fusing today's itinerary, pinned chits, and unread email. The **sidebar** (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.
+
+## Default View
+
+By default, the dashboard opens to the Calendar view when you first visit the site. You can change this in [Settings → Default View](/frontend/html/settings.html#default-view) to any of the available views: Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alerts, or Omni.
+
+This setting only applies on a **fresh site entry** — when you navigate directly to the dashboard without any prior session state. It does not override the view you were on when returning from the chit editor, settings, or other pages (those always restore your previous position).
 
 ## Sidebar Layout
 

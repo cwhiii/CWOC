@@ -28,6 +28,38 @@ var _cwocHotkeyTabMap = {
 };
 
 /**
+ * Resolve a hotkey to the correct tab, accounting for the Notebook view.
+ * When Notebook is in the active view order, 'n' and 'h' both map to Notebook
+ * (and Notes/Checklists are hidden). Otherwise, use the default mapping.
+ * @param {string} keyLower — the lowercase key pressed
+ * @returns {string|null} — tab name or null if not a tab key
+ */
+function _resolveHotkeyTab(keyLower) {
+  // Check if Notebook is in the active view order
+  var notebookActive = false;
+  if (typeof _cwocIsDashboard === 'function' && _cwocIsDashboard()) {
+    // On dashboard, check the tab bar for a visible Notebook tab
+    var nbTab = document.querySelector(".tab[onclick=\"filterChits('Notebook')\"]");
+    if (nbTab && nbTab.style.display !== 'none') notebookActive = true;
+  } else {
+    // On secondary pages, check localStorage for view_order
+    try {
+      var settings = JSON.parse(localStorage.getItem('cwoc_settings_cache') || '{}');
+      var vo = settings.view_order;
+      if (typeof vo === 'string') vo = JSON.parse(vo);
+      if (Array.isArray(vo) && vo.indexOf('Notebook') !== -1) notebookActive = true;
+    } catch (e) {}
+  }
+
+  // If Notebook is active, n and h both go to Notebook
+  if (notebookActive && (keyLower === 'n' || keyLower === 'h')) {
+    return 'Notebook';
+  }
+
+  return _cwocHotkeyTabMap[keyLower] || null;
+}
+
+/**
  * Returns true if we're on the main dashboard (index.html).
  */
 function _cwocIsDashboard() {
@@ -163,9 +195,10 @@ function _cwocDispatchHotkey(e) {
   }
 
   // Tab switching
-  if (_cwocHotkeyTabMap[keyLower] && !e.shiftKey) {
+  var resolvedTab = _resolveHotkeyTab(keyLower);
+  if (resolvedTab && !e.shiftKey) {
     e.preventDefault();
-    _cwocSwitchTab(_cwocHotkeyTabMap[keyLower]);
+    _cwocSwitchTab(resolvedTab);
     return true;
   }
 

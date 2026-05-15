@@ -21,7 +21,8 @@ Visual indicators are small icons displayed alongside chit titles in all views t
 - ⏲️ **Stopwatch** — Chit has stopwatch alerts
 - 🌤️ **Weather** — Chit has a location with weather data
 - 👥 **People** — Chit has people assigned
-- ❤️ **Health** — Chit has health indicator data
+- ❤️ **Indicators** — Chit has data from objects assigned to the Indicators zone (health metrics, vitals, etc.)
+- 📊 **Custom Data** — Chit has data from objects assigned to custom zones (any user-created zone other than Indicators)
 
 ## Combine Alerts Toggle
 
@@ -32,7 +33,7 @@ The **Combine Alerts** checkbox in Visual Indicators switches between two displa
 
 ## Calendar Views
 
-Calendar views (Week, Day, Month, Itinerary, Seven-Day, X-Day) always use combined mode for alerts since calendar cells are space-constrained. Weather, People, and Health indicators still respect their individual settings.
+Calendar views (Week, Day, Month, Itinerary, Seven-Day, X-Day) always use combined mode for alerts since calendar cells are space-constrained. Weather, People, Indicators, and Custom Data indicators still respect their individual settings.
 
 ## Card Views
 

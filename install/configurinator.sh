@@ -39,6 +39,28 @@ log_warn() { echo "[WARN] $1"; }
 log_error() { echo "[ERROR] $1" >&2; if [[ -n "$2" ]]; then echo "[HINT]  $2" >&2; fi; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Phase: Upgrade page management
+# ---------------------------------------------------------------------------
+
+# Swap the 502 error page to show "upgrading" message during upgrades
+enable_upgrade_page() {
+    if [[ -f "$APP_DIR/src/static/upgrading.html" ]]; then
+        cp "$APP_DIR/src/static/upgrading.html" "$APP_DIR/src/static/cwoc-502.html"
+        log_ok "Upgrade page enabled — users will see 'upgrading' message."
+    fi
+}
+
+# Swap back to the normal "unavailable" 502 page and bake in the hostname
+disable_upgrade_page() {
+    if [[ -f "$APP_DIR/src/static/502.html" ]]; then
+        local hostname_val
+        hostname_val=$(hostname 2>/dev/null || echo "cwoc-server")
+        sed "s/__HOSTNAME__/$hostname_val/g" "$APP_DIR/src/static/502.html" > "$APP_DIR/src/static/cwoc-502.html"
+        log_ok "Normal 502 page restored (hostname: $hostname_val)."
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Phase: Guards
 # ---------------------------------------------------------------------------
 
@@ -486,6 +508,13 @@ server {
     ssl_certificate     /etc/ssl/cwoc/cwoc.crt;
     ssl_certificate_key /etc/ssl/cwoc/cwoc.key;
 
+    # Custom 502 error page (shows upgrade or unavailable message)
+    error_page 502 /cwoc-502.html;
+    location = /cwoc-502.html {
+        root /app/src/static;
+        internal;
+    }
+
     location /ws/ {
         proxy_pass http://127.0.0.1:3333;
         proxy_http_version 1.1;
@@ -496,6 +525,11 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 3600s;
+    }
+
+    # Serve static files directly for error page assets (fonts, images)
+    location /static/ {
+        alias /app/src/static/;
     }
 
     location / {
@@ -780,6 +814,7 @@ main() {
     if [[ -d "$APP_DIR/src/backend" ]] && [[ -d "$APP_DIR/backend" ]]; then
         log_warn "Detected mixed old/new layout — old configurinator deployed new code."
         log_step "Running cleanup and reconfiguration..."
+        enable_upgrade_page
         cleanup_legacy
         install_python_deps
         configure_service
@@ -787,6 +822,7 @@ main() {
         install_tailscale
         install_ntfy
         deploy_ha_integration
+        disable_upgrade_page
         start_and_verify
         echo "============================================="
         echo " Post-upgrade fixup complete."
@@ -799,6 +835,7 @@ main() {
 
     if [[ -f "$APP_DIR/src/backend/main.py" ]] && [[ -f "$APP_DIR/venv/bin/python" ]]; then
         log_ok "Existing CWOC installation detected — running upgrade only."
+        enable_upgrade_page
 
         local missing=""
         for cmd in wget unzip nginx openssl; do
@@ -825,6 +862,7 @@ main() {
         install_tailscale
         install_ntfy
         deploy_ha_integration
+        disable_upgrade_page
         start_and_verify
     else
         log_step "No existing installation found — running full provisioning."
@@ -838,6 +876,7 @@ main() {
         install_tailscale
         install_ntfy
         deploy_ha_integration
+        disable_upgrade_page
         start_and_verify
     fi
 

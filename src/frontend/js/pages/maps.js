@@ -2107,8 +2107,8 @@ function _buildPopupContent(chit) {
     if (Array.isArray(ppl) && ppl.length > 0) icons.push('<span title="Has people" style="cursor:pointer;">👥</span>');
   }
   // Health indicators
-  if (chit.health_indicators && typeof chit.health_indicators === 'object' && Object.keys(chit.health_indicators).length > 0) {
-    icons.push('<span title="Health data" style="cursor:pointer;">❤️</span>');
+  if (chit.health_data && typeof chit.health_data === 'object' && Object.keys(chit.health_data).length > 0) {
+    icons.push('<span title="Indicators" style="cursor:pointer;">❤️</span>');
   }
   // Habit
   if (chit.habit) icons.push('<span title="Habit" style="cursor:pointer;">🎯</span>');

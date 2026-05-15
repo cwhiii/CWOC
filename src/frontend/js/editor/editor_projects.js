@@ -617,6 +617,7 @@ function createChildChitCard(chit) {
   openBtn.title = "Open chit in new tab";
   openBtn.innerHTML = '<i class="fas fa-external-link-alt" aria-hidden="true"></i>';
   openBtn.addEventListener("click", () => {
+    try { localStorage.setItem('cwoc_source_tab', 'Projects'); } catch(e) {}
     window.open('/editor?id=' + chit.id, "_blank");
   });
   rightContainer.appendChild(openBtn);

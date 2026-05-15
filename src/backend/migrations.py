@@ -3207,3 +3207,68 @@ def migrate_add_habit_trigger_config():
     finally:
         if conn:
             conn.close()
+
+
+# ── Timezone Support: migration ──────────────────────────────────────────
+
+def migrate_add_timezone_column():
+    """Add nullable timezone column to chits table and default_timezone/timezone_override to settings."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Chits table: timezone column for per-chit anchored timezone
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "timezone" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN timezone TEXT DEFAULT NULL")
+            logger.info("Added timezone column to chits table")
+
+        # Settings table: default_timezone and timezone_override
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [row[1] for row in cursor.fetchall()]
+        if "default_timezone" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_timezone TEXT")
+            logger.info("Added default_timezone column to settings table")
+        if "timezone_override" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN timezone_override TEXT")
+            logger.info("Added timezone_override column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in timezone migration: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Default View: migration ──────────────────────────────────────────────
+
+def migrate_add_default_view():
+    """Add default_view column to settings table.
+
+    Stores the user's preferred default dashboard view (Calendar, Checklists,
+    Tasks, Projects, Notes, Email, Indicators, Alarms, Omni).
+    Defaults to 'Calendar' if not set.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "default_view" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_view TEXT DEFAULT 'Calendar'")
+            logger.info("Added default_view column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in default_view migration: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

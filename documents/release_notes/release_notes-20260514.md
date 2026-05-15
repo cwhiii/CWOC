@@ -6,6 +6,10 @@ UI Feedback Consolidation complete — consolidated ~15 distinct UI feedback mec
 
 Added context-aware smart inputs to the Rule Editor condition builder — dropdowns for priority/status/severity/boolean fields, contact autocomplete for email/people fields, location combobox, color swatches, weather condition evaluation, and Create Chit action type.
 
+## 20260514.1923
+
+Added table of contents to all help documentation files (24 files). Each file now has a clickable index at the top listing all H2 and H3 headers with anchor links for quick navigation.
+
 ## 20260514.1917
 
 Updated help index and settings help page to explicitly mention Google Tasks and Google Keep importers in the Data Management entry, improving discoverability via search.

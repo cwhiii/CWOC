@@ -38,12 +38,17 @@ h1 {
     text-decoration: none;
     color: inherit;
     font-family: inherit;
-    transition: color 0.2s ease, text-decoration 0.2s ease;
+    transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(107, 78, 49, 0.08);
+    border-bottom: 2px solid rgba(107, 78, 49, 0.25);
 }
 
 .omni-header-btn:hover {
     color: var(--aged-brown-medium, #8b4513);
-    text-decoration: underline;
+    background: rgba(107, 78, 49, 0.15);
+    border-bottom-color: rgba(107, 78, 49, 0.5);
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */

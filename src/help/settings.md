@@ -13,6 +13,7 @@ Settings are organized into groups. Labels and controls are placed inline where 
 - **Custom Filters & Sorting** — Per-view custom filter and sort defaults. Click a view button to open a modal with the full sidebar filter UI (status, priority, display toggles, text search, sort). Save to auto-apply those filters every time you switch to that view. Reset to Defaults reverts to system defaults.
 - **Visual Indicators** — Per-indicator visibility (Always / Never / If Space), combine alerts toggle
 - **Habits** — Success rate window (7/30/90 days or all time), default show habits on calendar toggle
+- **Default View** — Choose which dashboard view loads when you first open the site (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alerts, or Omni). Found under the Views tab in [Settings → Default View](/frontend/html/settings.html#default-view)
 - **Version & Updates** — Current version, upgrade button, update log, restart service (admin only)
 - **Data** — Audit log link, trash link, [audit log](/frontend/html/audit-log.html) pruning limits
 - **[Data Management](/frontend/html/help.html#data-management)** — JSON export/import for chit data and user data (add or replace modes), plus iCalendar (.ics) import for Google Calendar, Google Tasks import, and Google Keep import

@@ -333,6 +333,9 @@
                     <div class="tab" onclick="filterChits('Notes')" title="Notes">
                         <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
                     </div>
+                    <div class="tab" onclick="filterChits('Notebook')" title="Notebook (Notes + Checklists)" style="display:none;">
+                        <i class="fas fa-book" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i><span class="tab-label"> Note<u>b</u>ook</span>
+                    </div>
                     <div class="tab" onclick="filterChits('Email')" title="Email">
                         <img src="/static/email.png" /><span class="tab-label"> <u>E</u>mail</span><span id="email-unread-badge" class="email-unread-badge" style="display:none;"></span>
                     </div>
@@ -393,6 +396,7 @@
         </template>
 
         <script src="/frontend/js/shared/shared-auth.js"></script>
+        <script src="/frontend/js/shared/shared-tab-sync.js"></script>
         <script src="/frontend/js/shared/shared-utils.js"></script>
         <script src="/frontend/js/shared/shared-touch.js"></script>
         <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -422,6 +426,7 @@
         <script src="/frontend/js/dashboard/main-views-tasks.js"></script>
         <script src="/frontend/js/dashboard/main-views-habits.js"></script>
         <script src="/frontend/js/dashboard/main-views-notes.js"></script>
+        <script src="/frontend/js/dashboard/main-views-notebook.js"></script>
         <script src="/frontend/js/dashboard/main-views-projects.js"></script>
         <script src="/frontend/js/dashboard/main-views-alarms.js"></script>
         <script src="/frontend/js/dashboard/main-views-indicators.js"></script>

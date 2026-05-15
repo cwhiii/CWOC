@@ -32,7 +32,7 @@ function getCalendarDateInfo(chit) {
   const isAllDay = !!(chit.all_day || chit.allDay);
 
   if (hasDue) {
-    const dueDate = new Date(chit.due_datetime);
+    const dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
     if (isNaN(dueDate.getTime())) return { hasDate: false };
     if (isAllDay) {
       return { start: dueDate, end: dueDate, isAllDay: true, isDueOnly: true, isPointInTime: false, hasDate: true };
@@ -153,7 +153,10 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
     return chipHtml;
   }
 
-  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}${ownerBadge}</span>`;
+  // Timezone warning indicator for unrecognized timezone
+  var tzWarnIcon = chit._tzWarning ? '<span title="Timezone could not be resolved" style="margin-right:2px;">⚠️</span>' : '';
+
+  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${tzWarnIcon}${chit.title || '(Untitled)'}${ownerBadge}</span>`;
 }
 
 /**

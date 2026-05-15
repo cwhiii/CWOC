@@ -254,8 +254,8 @@ function _applySort(chitList) {
       var bTerminal = (b.status === 'Complete' || b.status === 'Rejected');
       if (aTerminal && !bTerminal) return 1;
       if (bTerminal && !aTerminal) return -1;
-      const aDate = a.due_datetime ? new Date(a.due_datetime).getTime() : (a.start_datetime ? new Date(a.start_datetime).getTime() : Infinity);
-      const bDate = b.due_datetime ? new Date(b.due_datetime).getTime() : (b.start_datetime ? new Date(b.start_datetime).getTime() : Infinity);
+      const aDate = a.due_datetime ? (a._due_datetime_obj || new Date(a.due_datetime)).getTime() : (a.start_datetime ? (a.start_datetime_obj || new Date(a.start_datetime)).getTime() : Infinity);
+      const bDate = b.due_datetime ? (b._due_datetime_obj || new Date(b.due_datetime)).getTime() : (b.start_datetime ? (b.start_datetime_obj || new Date(b.start_datetime)).getTime() : Infinity);
       return aDate - bDate;
     });
   }
@@ -269,11 +269,11 @@ function _applySort(chitList) {
       if (valA === null) return 1;
       if (valB === null) return -1;
     } else if (currentSortField === 'start') {
-      valA = a.start_datetime ? new Date(a.start_datetime).getTime() : nullLast;
-      valB = b.start_datetime ? new Date(b.start_datetime).getTime() : nullLast;
+      valA = a.start_datetime ? (a.start_datetime_obj || new Date(a.start_datetime)).getTime() : nullLast;
+      valB = b.start_datetime ? (b.start_datetime_obj || new Date(b.start_datetime)).getTime() : nullLast;
     } else if (currentSortField === 'due') {
-      valA = a.due_datetime ? new Date(a.due_datetime).getTime() : nullLast;
-      valB = b.due_datetime ? new Date(b.due_datetime).getTime() : nullLast;
+      valA = a.due_datetime ? (a._due_datetime_obj || new Date(a.due_datetime)).getTime() : nullLast;
+      valB = b.due_datetime ? (b._due_datetime_obj || new Date(b.due_datetime)).getTime() : nullLast;
     } else if (currentSortField === 'updated') {
       valA = a.modified_datetime ? new Date(a.modified_datetime).getTime() : nullLast;
       valB = b.modified_datetime ? new Date(b.modified_datetime).getTime() : nullLast;
@@ -475,6 +475,9 @@ function _restoreUIState() {
     // Restore email sidebar visibility
     if (typeof _updateEmailSidebarVisibility === 'function') _updateEmailSidebarVisibility(currentTab);
 
+    // Update favicon to match restored tab
+    if (typeof _updateFavicon === 'function') _updateFavicon(currentTab);
+
     return true;
   } catch (e) {
     return false;
@@ -506,6 +509,15 @@ function _checkPendingDeleteUndo() {
 /* ── Data loading and display orchestration ──────────────────────────────── */
 function fetchChits() {
   console.debug("Fetching chits...");
+
+  // If this tab is a follower, don't fetch from the API — ask the leader to fetch and broadcast.
+  // Exception: on initial page load (chits.length === 0), always fetch to avoid blank screen.
+  if (typeof cwocTabSyncIsLeader === 'function' && !cwocTabSyncIsLeader() && chits.length > 0) {
+    console.debug('[fetchChits] Follower tab — requesting leader to broadcast');
+    if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
+    return;
+  }
+
   // Show loading spinner on first load (when chit-list is empty)
   const listEl = document.getElementById("chit-list");
   if (listEl && chits.length === 0) {
@@ -555,10 +567,43 @@ function fetchChits() {
       chits = ownedChits;
       window._projectChildNotFound = null; // Reset missing-child cache on fresh fetch
       chits.forEach(function(chit) {
-        if (chit.start_datetime)
-          chit.start_datetime_obj = new Date(chit.start_datetime);
-        if (chit.end_datetime)
-          chit.end_datetime_obj = new Date(chit.end_datetime);
+        // Apply timezone conversion for display
+        if (_currentTimezone && typeof getChitDisplayTime === 'function') {
+          // start_datetime
+          if (chit.start_datetime) {
+            var startResult = getChitDisplayTime(chit, 'start_datetime', _currentTimezone);
+            if (startResult) {
+              chit.start_datetime_obj = startResult.date;
+              if (startResult.warning) chit._tzWarning = true;
+            } else {
+              chit.start_datetime_obj = new Date(chit.start_datetime);
+            }
+          }
+          // end_datetime
+          if (chit.end_datetime) {
+            var endResult = getChitDisplayTime(chit, 'end_datetime', _currentTimezone);
+            if (endResult) {
+              chit.end_datetime_obj = endResult.date;
+              if (endResult.warning) chit._tzWarning = true;
+            } else {
+              chit.end_datetime_obj = new Date(chit.end_datetime);
+            }
+          }
+          // due_datetime — store converted object for display
+          if (chit.due_datetime) {
+            var dueResult = getChitDisplayTime(chit, 'due_datetime', _currentTimezone);
+            if (dueResult) {
+              chit._due_datetime_obj = dueResult.date;
+              if (dueResult.warning) chit._tzWarning = true;
+            }
+          }
+        } else {
+          // Fallback: no timezone resolved yet, use raw dates
+          if (chit.start_datetime)
+            chit.start_datetime_obj = new Date(chit.start_datetime);
+          if (chit.end_datetime)
+            chit.end_datetime_obj = new Date(chit.end_datetime);
+        }
       });
 
       // Compute _hasIncompletePrereqs flag for prerequisite chain indicator
@@ -578,6 +623,8 @@ function fetchChits() {
       if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
       // Execute weather flash if navigating from weather page
       _executeWeatherFlash();
+      // Broadcast chit data to other tabs (leader only)
+      if (typeof cwocTabSyncBroadcastChits === 'function') cwocTabSyncBroadcastChits(chits);
     })
     .catch(function(err) {
       console.error("Error fetching chits:", err);
@@ -640,7 +687,8 @@ function displayChits() {
     const now = new Date();
     filteredChits = filteredChits.filter(c => {
       if (!c.due_datetime || c.status === 'Complete' || c.status === 'Rejected') return true;
-      return new Date(c.due_datetime) >= now;
+      var dueDate = c._due_datetime_obj || new Date(c.due_datetime);
+      return dueDate >= now;
     });
   }
 
@@ -740,6 +788,9 @@ function displayChits() {
       break;
     case "Notes":
       displayNotesView(filteredChits);
+      break;
+    case "Notebook":
+      displayNotebookView(filteredChits);
       break;
     case "Alarms":
       displayAlarmsView(filteredChits);
@@ -890,7 +941,7 @@ function _applyChitDisplayOptions() {
       const chit = chits.find(c => c.id === chitId);
       if (!chit) return;
 
-      const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
+      const dueTime = chit.due_datetime ? (chit._due_datetime_obj || new Date(chit.due_datetime)) : null;
       const isOverdue = highlightOverdue && dueTime && dueTime < now && chit.status !== 'Complete' && chit.status !== 'Rejected';
       const isBlocked = highlightBlocked && chit.status === 'Blocked';
 
@@ -948,7 +999,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // Try to restore previous UI state (from editor return)
   const restored = _restoreUIState();
   if (!restored) {
-    currentTab = "Calendar";
+    // No saved state — will apply default_view from settings once loaded below
+    currentTab = "Calendar"; // temporary fallback until settings load
   }
   // Update mobile Views button to reflect restored tab
   if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
@@ -1051,6 +1103,21 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // Apply custom view/tab order
     _applyViewOrder(s.view_order);
+
+    // Apply user's default view preference (only on fresh site entry, not editor return)
+    if (!restored && s.default_view) {
+      currentTab = s.default_view;
+      // Update tab highlight for the new default
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      if (currentTab === 'Omni') {
+        _omniViewActive = true;
+      } else {
+        var defTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+        if (defTab) defTab.classList.add('active');
+      }
+      if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
+    }
+
     // Now fetch chits and render with correct settings
     _applyEnabledPeriods();
 
@@ -1110,6 +1177,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // Convert ?tab= to hash URL and clean query string
         _updateUrlHash();
         history.replaceState(null, '', window.location.pathname + window.location.hash);
+        // Update favicon for URL-specified tab
+        if (typeof _updateFavicon === 'function') _updateFavicon(currentTab);
       }
     } catch(e) {}
 
@@ -1147,6 +1216,8 @@ document.addEventListener("DOMContentLoaded", function () {
           var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
           if (activeTab) activeTab.classList.add('active');
         }
+        // Update favicon for hash-specified tab
+        if (typeof _updateFavicon === 'function') _updateFavicon(currentTab);
       }
     } catch(e) {}
 
@@ -1183,8 +1254,31 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    fetchChits();
+    // Resolve the user's current timezone before fetching chits
+    if (typeof getCurrentTimezone === 'function') {
+      getCurrentTimezone().then(function(tz) {
+        _currentTimezone = tz;
+        console.debug('[Timezone] Resolved current timezone:', _currentTimezone);
+        fetchChits();
+      }).catch(function() {
+        _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        console.debug('[Timezone] Fallback timezone:', _currentTimezone);
+        fetchChits();
+      });
+    } else {
+      fetchChits();
+    }
     updateDateRange();
+
+    // Pre-fetch indicator object IDs for visual indicator split (indicators vs custom data)
+    fetch('/api/custom-objects/zone/indicators_zone').then(function(r) {
+      if (!r.ok) return [];
+      return r.json();
+    }).then(function(objects) {
+      if (Array.isArray(objects) && objects.length > 0) {
+        window._indicatorObjectIds = new Set(objects.map(function(o) { return o.id; }));
+      }
+    }).catch(function() { /* non-critical — fallback shows ❤️ for all health_data */ });
     // Check for pending delete-undo from editor
     _checkPendingDeleteUndo();
     // Prefetch weather for all saved locations (async, non-blocking)
@@ -1213,7 +1307,19 @@ document.addEventListener("DOMContentLoaded", function () {
       }, msUntilNext);
     })();
   }).catch(() => {
-    fetchChits();
+    // Settings failed to load — still resolve timezone before fetching chits
+    if (typeof getCurrentTimezone === 'function') {
+      getCurrentTimezone().then(function(tz) {
+        _currentTimezone = tz;
+        fetchChits();
+      }).catch(function() {
+        _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        fetchChits();
+      });
+    } else {
+      _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      fetchChits();
+    }
     updateDateRange();
   });
   restoreSidebarState();
@@ -1779,4 +1885,26 @@ document.addEventListener("DOMContentLoaded", function () {
     var el = document.getElementById('cwoc-footer-copyright');
     if (el && d.version) el.title = 'Version ' + d.version;
   }).catch(function() {});
+});
+
+/* ── Timezone change detection on visibility change ──────────────────────── */
+// When the user returns to the tab (e.g., after changing settings on another page,
+// or after the device crosses a timezone boundary), re-resolve the current timezone.
+// If it differs from the cached _currentTimezone, invalidate settings cache and re-fetch chits.
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  if (typeof getCurrentTimezone !== 'function') return;
+
+  // Invalidate settings cache so getCurrentTimezone() picks up any override changes
+  if (typeof _invalidateSettingsCache === 'function') _invalidateSettingsCache();
+
+  getCurrentTimezone().then(function(newTz) {
+    if (newTz && newTz !== _currentTimezone) {
+      console.debug('[Timezone] Detected timezone change:', _currentTimezone, '→', newTz);
+      _currentTimezone = newTz;
+      fetchChits();
+    }
+  }).catch(function(err) {
+    console.error('[Timezone] Error re-resolving timezone on visibility change:', err);
+  });
 });

@@ -218,6 +218,15 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     left.appendChild(icon);
   }
 
+  // Timezone warning indicator — unrecognized timezone on anchored chit
+  if (chit._tzWarning) {
+    const tzWarnIcon = document.createElement('span');
+    tzWarnIcon.textContent = '⚠️';
+    tzWarnIcon.title = 'Timezone "' + (chit.timezone || '') + '" could not be resolved — time shown unconverted';
+    tzWarnIcon.className = 'tz-warning-indicator';
+    left.appendChild(tzWarnIcon);
+  }
+
   // Stealth indicator — visible only to the owner (Requirement 6.5)
   if (chit.stealth) {
     var _stealthUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
@@ -365,7 +374,7 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
 
   // Due date — colored + bold if overdue, using configurable color with contrast background
   if (chit.due_datetime) {
-    const dueDate = new Date(chit.due_datetime);
+    const dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
     const isOverdue = dueDate < new Date() && chit.status !== 'Complete' && chit.status !== 'Rejected';
     const s = document.createElement('span');
     if (isOverdue) {
@@ -385,7 +394,7 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     right.appendChild(s);
   }
 
-  if (chit.start_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
+  if (chit.start_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Start: ${formatDate(chit.start_datetime_obj || new Date(chit.start_datetime))}`, 'start');
   if (chit.point_in_time && !chit.email_message_id && !chit.email_status) addMeta(`📌 ${formatDate(new Date(chit.point_in_time))}`, 'point-in-time');
   if (chit.modified_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
   if (chit.created_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
@@ -662,6 +671,9 @@ function displayChecklistView(chitsToDisplay) {
 
   // Only apply default sort if no global sort is active
   const sortedChits = currentSortField ? checklistChits : [...checklistChits].sort((a, b) => {
+    // Pinned items always sort to the top
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
     const dateA = new Date(
       a.last_edited || a.created_datetime || a.start_datetime || 0,
     );
@@ -677,7 +689,6 @@ function displayChecklistView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "chit-card";
-      chitElement.draggable = true;
       chitElement.dataset.chitId = chit.id;
       applyChitColors(chitElement, chitColor(chit));
       if (chit.archived) chitElement.classList.add("archived-chit");
@@ -744,14 +755,51 @@ function displayChecklistView(chitsToDisplay) {
 
   chitList.appendChild(checklistView);
 
-  // Build long-press map for unified touch gesture (drag + quick-edit)
-  var _clLongPressMap = {};
-  sortedChits.forEach(function (chit) {
-    if (!_isViewerRole(chit)) {
-      _clLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+  // Restore saved column assignments from localStorage
+  var savedOrder = getManualOrder('Checklists');
+  if (Array.isArray(savedOrder) && savedOrder.length > 0 && typeof savedOrder[0] === 'object') {
+    var allCol0 = savedOrder.every(function(e) { return e.col === 0; });
+    if (!allCol0) {
+      var colMap = {};
+      savedOrder.forEach(function(entry) { if (entry.id && entry.col !== undefined) colMap[entry.id] = entry.col; });
+      checklistView.querySelectorAll('.chit-card').forEach(function(card) {
+        var id = card.dataset.chitId;
+        if (id in colMap) card.dataset.col = colMap[id];
+      });
     }
-  });
-  enableDragToReorder(checklistView, 'Checklists', () => displayChits(), _clLongPressMap);
+  }
+
+  // Apply column-persistent masonry layout (same as Notes view)
+  setTimeout(function() {
+    applyNotesLayout(checklistView);
+    setTimeout(function() { applyNotesLayout(checklistView); }, 200);
+    setTimeout(function() { applyNotesLayout(checklistView); }, 500);
+  }, 50);
+
+  // Re-layout on window resize
+  var _clResizeHandler = function() {
+    if (currentTab === 'Checklists') {
+      var cv = document.querySelector('.checklist-view');
+      if (cv) applyNotesLayout(cv);
+    }
+  };
+  window.removeEventListener('resize', window._checklistsResizeHandler);
+  window._checklistsResizeHandler = _clResizeHandler;
+  window.addEventListener('resize', _clResizeHandler);
+
+  // On mobile (single column), use flat drag system; on desktop, use masonry-aware drag
+  var _clMobileMode = (window.innerWidth <= 480);
+  if (_clMobileMode) {
+    var _clLongPressMap = {};
+    sortedChits.forEach(function (chit) {
+      if (!_isViewerRole(chit)) {
+        _clLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+      }
+    });
+    enableDragToReorder(checklistView, 'Checklists', function() { displayChits(); }, _clLongPressMap);
+  } else {
+    enableNotesDragReorder(checklistView, 'Checklists', function() { displayChits(); });
+  }
 }
 
 
@@ -779,10 +827,33 @@ function _restoreViewModeButtons() {
   if (tAssignedBtn) { tAssignedBtn.style.background = _tasksViewMode === 'assigned' ? 'ivory' : ''; tAssignedBtn.style.color = _tasksViewMode === 'assigned' ? '#3b1f0a' : ''; }
 }
 
+// ─── Favicon per view ───
+var _viewFavicons = {
+  Calendar: '/static/calendar.png',
+  Checklists: '/static/checklists.png',
+  Tasks: '/static/tasks.png',
+  Projects: '/static/projects.png',
+  Notes: '/static/notes.png',
+  Alarms: '/static/alerts.png',
+  Email: '/static/email.png',
+  Indicators: '/static/Indicators.png',
+  Search: '/static/cwod_logo-favicon.png',
+  Omni: '/static/cwod_logo-favicon.png'
+};
+
+function _updateFavicon(tab) {
+  var href = _viewFavicons[tab] || '/static/cwod_logo-favicon.png';
+  var link = document.querySelector('link[rel="icon"]');
+  if (link) link.href = href;
+}
+
 function filterChits(tab) {
   storePreviousState();
 
   currentTab = tab;
+
+  // Update favicon to match the active view
+  _updateFavicon(tab);
 
   // Update URL hash to reflect current tab + mode (enables bookmarking/pinning)
   _updateUrlHash();

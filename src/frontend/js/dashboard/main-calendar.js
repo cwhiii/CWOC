@@ -981,7 +981,7 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
     const chitEnd = chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
     timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
   } else if (chit.due_datetime) {
-    const dueDate = new Date(chit.due_datetime);
+    const dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
     timeColumn.innerHTML = `${formatTime(dueDate)}`;
   } else if (chit.point_in_time) {
     const pitDate = new Date(chit.point_in_time);
@@ -1143,13 +1143,13 @@ function displayItineraryView(chitsToDisplay) {
         if (ed < today) return;
       }
       if (hasDue && !hasStart) {
-        var dd = new Date(chit.due_datetime);
+        var dd = chit._due_datetime_obj || new Date(chit.due_datetime);
         // If due date is before today, skip (past due from other days)
         if (dd < today) return;
       }
       if (hasStart && hasDue) {
         var sd = chit.start_datetime_obj || new Date(chit.start_datetime);
-        var dd = new Date(chit.due_datetime);
+        var dd = chit._due_datetime_obj || new Date(chit.due_datetime);
         // If both are before today, skip
         if (sd < today && dd < today) return;
       }
@@ -1190,7 +1190,7 @@ function displayItineraryView(chitsToDisplay) {
 
     // Due today with a specific time → Chrono Anchored
     if (hasDue) {
-      var dueDate = new Date(chit.due_datetime);
+      var dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
       var dueHour = dueDate.getHours();
       var dueMin = dueDate.getMinutes();
       // Has a meaningful time (not midnight) and is today
@@ -1205,7 +1205,7 @@ function displayItineraryView(chitsToDisplay) {
 
     // Due today (no specific time or timed but treated as deadline) → On Deck
     if (hasDue) {
-      var dueDate = new Date(chit.due_datetime);
+      var dueDate = chit._due_datetime_obj || new Date(chit.due_datetime);
       if (dueDate >= today && dueDate <= todayEnd) {
         onDeckItems.push({ type: 'task', chit: chit });
         return;
@@ -1633,9 +1633,9 @@ function displayYearView(chitsToDisplay) {
         const startDateMatch =
           chit.start_datetime_obj &&
           chit.start_datetime_obj.toDateString() === dayDate.toDateString();
-        const dueDateObj = chit.due_datetime
+        const dueDateObj = chit._due_datetime_obj || (chit.due_datetime
           ? new Date(chit.due_datetime)
-          : null;
+          : null);
         const dueDateMatch =
           dueDateObj && dueDateObj.toDateString() === dayDate.toDateString();
         return startDateMatch || dueDateMatch;

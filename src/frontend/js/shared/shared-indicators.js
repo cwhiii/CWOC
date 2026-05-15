@@ -126,9 +126,27 @@ function _getAllIndicators(chit, settings, context) {
   }
 
   // Health indicator — show when chit has any health data
-  if (chit.health_indicators && typeof chit.health_indicators === 'object' && Object.keys(chit.health_indicators).length > 0) {
+  if (chit.health_data && typeof chit.health_data === 'object' && Object.keys(chit.health_data).length > 0) {
     var healthMode = s.indicators || 'always';
-    if (_shouldShow(healthMode, context)) result += '❤️ ';
+    var customDataMode = s.custom_data || 'always';
+    var indicatorIds = window._indicatorObjectIds;
+    if (indicatorIds && indicatorIds.size > 0) {
+      // We have cached indicator IDs — split into indicators vs custom data
+      var hasIndicator = false;
+      var hasCustomData = false;
+      var hdKeys = Object.keys(chit.health_data);
+      for (var hi = 0; hi < hdKeys.length; hi++) {
+        if (chit.health_data[hdKeys[hi]] == null) continue;
+        if (indicatorIds.has(hdKeys[hi])) { hasIndicator = true; }
+        else { hasCustomData = true; }
+        if (hasIndicator && hasCustomData) break;
+      }
+      if (hasIndicator && _shouldShow(healthMode, context)) result += '❤️ ';
+      if (hasCustomData && _shouldShow(customDataMode, context)) result += '📊 ';
+    } else {
+      // No cached indicator IDs yet — show ❤️ for any health_data (legacy behavior)
+      if (_shouldShow(healthMode, context)) result += '❤️ ';
+    }
   }
 
   // Habit / Recurrence indicator

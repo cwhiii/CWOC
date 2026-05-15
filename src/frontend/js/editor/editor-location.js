@@ -15,6 +15,37 @@ async function _getCoordinates(address) {
   return _geocodeAddress(address);
 }
 
+// ── Location-based timezone detection ────────────────────────────────────────
+
+/**
+ * Check if the geocoded location's timezone differs from the user's current timezone.
+ * If different and chit has no explicit timezone, show a suggestion prompt.
+ * @param {number} lat - Latitude from geocode
+ * @param {number} lon - Longitude from geocode
+ * @param {string|null} countryCode - ISO country code from geocode
+ */
+async function _checkLocationTimezone(lat, lon, countryCode) {
+  if (!countryCode) return;
+
+  // Detect timezone from coordinates
+  var detectedTz = _detectTimezoneFromCoords(lat, lon, countryCode);
+  if (!detectedTz) return;
+
+  // Do not show if chit already has an explicit timezone
+  if (window._chitTimezone) return;
+
+  // Compare to user's current timezone
+  try {
+    var currentTz = await getCurrentTimezone();
+    if (detectedTz === currentTz) return;
+
+    // Different timezone detected — show suggestion prompt
+    _showTimezoneSuggestion(detectedTz);
+  } catch (e) {
+    // getCurrentTimezone failed — don't show suggestion
+  }
+}
+
 async function _fetchWeatherData(address) {
   const compactWeatherSection = document.getElementById("compactWeatherSection");
   const cacheKey = 'cwoc_weather_editor_' + address.toLowerCase().trim();
@@ -473,9 +504,10 @@ function searchLocationMap(event) {
       cws.classList.add('weather-placeholder');
       cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Add a date for weather</div>`;
     }
-    // Still show the map
+    // Still show the map and check timezone
     _getCoordinates(address).then((coords) => {
       _displayMapInUI(coords.lat, coords.lon, address);
+      _checkLocationTimezone(coords.lat, coords.lon, coords.country_code);
     }).catch(() => {});
     return;
   }
@@ -490,6 +522,11 @@ function searchLocationMap(event) {
       console.error("Error fetching location data:", error);
       cwocToast('Error fetching location data: ' + error.message, 'error');
     });
+
+  // Also trigger timezone detection from geocode
+  _getCoordinates(address).then((coords) => {
+    _checkLocationTimezone(coords.lat, coords.lon, coords.country_code);
+  }).catch(() => {});
 }
 
 function openLocationInNewTab(event) {

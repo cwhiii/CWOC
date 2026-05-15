@@ -129,7 +129,6 @@
 }
 
 /* ── Consistent spacing for all non-calendar views ────────────────────────── */
-.checklist-view,
 .alarms-view,
 .projects-view {
     padding: 0.75em;
@@ -144,12 +143,32 @@
     color: #2b1e0f;
     overscroll-behavior: contain;
 }
-.checklist-view .chit-card,
 .alarms-view .chit-card,
 .projects-view .chit-card {
     overflow: visible;
     font-size: 0.95em;
     line-height: 1.5;
+}
+
+/* ── Checklist view — masonry column layout (same as Notes) ───────────────── */
+.checklist-view {
+    padding: 0.75em;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+}
+.checklist-view .chit-card {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: visible;
+    font-size: 0.95em;
+    line-height: 1.5;
+    cursor: grab;
 }
 
 /* ── Projects list view child items (draggable) ───────────────────────────── */
@@ -365,6 +384,98 @@ li.cwoc-dragging {
     border-radius: 2px;
     z-index: 90;
     pointer-events: none;
+}
+
+/* ── Notebook view (combined Notes + Checklists) — masonry layout ─────────── */
+.notebook-view {
+    padding: 0.75em;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+}
+.notebook-view .chit-card {
+    position: absolute;
+    box-sizing: border-box;
+    overflow-y: auto;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    cursor: grab;
+}
+.notebook-view .note-content {
+    overflow-y: auto;
+    max-height: calc(100vh - 260px);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-size: 0.95em;
+    line-height: 1.6;
+    padding: 0.5em 0.7em;
+    background: #fff8dc;
+    border-radius: 4px;
+    margin-top: 4px;
+    color: #2b1e0f !important;
+}
+.notebook-view .note-content * {
+    color: inherit !important;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+.notebook-view .note-content p {
+    margin: 0.5em 0;
+}
+.notebook-view .note-content h1,
+.notebook-view .note-content h2,
+.notebook-view .note-content h3,
+.notebook-view .note-content h4,
+.notebook-view .note-content h5,
+.notebook-view .note-content h6 {
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin: 0.6em 0 0.3em 0 !important;
+    height: auto !important;
+    width: auto !important;
+    display: block !important;
+    color: #2b1e0f !important;
+    line-height: 1.3 !important;
+}
+.notebook-view .note-content h1 { font-size: 1.6em !important; }
+.notebook-view .note-content h2 { font-size: 1.35em !important; }
+.notebook-view .note-content h3 { font-size: 1.15em !important; }
+.notebook-view .note-content h4 { font-size: 1.05em !important; }
+.notebook-view .note-content ul, .notebook-view .note-content ol {
+    padding-left: 1.5em;
+    margin: 0.4em 0;
+}
+.notebook-view .note-content code {
+    background: rgba(0,0,0,0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+.notebook-view .note-content pre {
+    background: rgba(0,0,0,0.06);
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.notebook-view .note-content img {
+    max-width: 100%;
+    height: auto;
+}
+.notebook-view .note-content blockquote {
+    border-left: 3px solid #8b5a2b;
+    margin: 0.5em 0;
+    padding: 0.3em 0.8em;
+    opacity: 0.85;
 }
 
 /* ── Quick Editor People Chips ────────────────────────────────────────────── */

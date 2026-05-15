@@ -61,12 +61,39 @@ Chits store dates/times as naive strings with no timezone info. The backend stor
 
 ---
 
-## UX Decisions (Decide Before Building)
+## UX Decisions (DECIDED)
 
-1. **Display policy**: Show times in the chit's timezone, the user's local timezone, or both? Travel apps often show "event timezone" with a small "(3pm your time)" annotation.
-2. **Default behavior**: Should the timezone picker be hidden by default and only shown when the user explicitly wants a non-local timezone? Keeps the common case simple.
-3. **Location integration**: Auto-suggest timezone from the chit's location? Already have geocoding — just need a timezone lookup from coordinates (free APIs exist, or a static shapefile approach).
-4. **Existing chits**: Assume they're all in the user's default timezone? Or prompt to confirm?
+1. **Display policy**: Show times in the **user's current local timezone only** — no annotation, no dual display. Simple and clean.
+2. **Timezone picker**: **Hidden by default** in the editor dates zone. User clicks a "Set timezone" link to reveal it. Common case stays uncluttered.
+3. **Location integration**: **Suggestion prompt** — when a chit's location is in a different timezone, show something like "This location is in America/Denver — use it?" User can accept or dismiss.
+4. **Existing chits**: Assume they're all in the user's default timezone. No migration prompt needed.
+
+---
+
+## Core Concept: Floating vs. Anchored
+
+This is the fundamental model that drives everything:
+
+### Floating chits (no timezone set)
+- Time "floats" with the user. "Take meds at 8am" fires at 8am wherever you are.
+- Stored as naive time. Displayed and triggered relative to the user's current timezone.
+- This is the default for most chits — daily routines, generic reminders, etc.
+
+### Anchored chits (timezone explicitly set)
+- Time is locked to a specific timezone. "Meeting at noon in San Diego" is always noon Pacific.
+- Stored with an explicit IANA timezone. Displayed converted to the user's current local time, but fires at the correct absolute moment.
+- Use case: travel events, meetings in other cities, anything where the *place* determines the time.
+
+### How the user's "current timezone" is determined
+1. **Browser auto-detection** (default) — `Intl.DateTimeFormat().resolvedOptions().timeZone` gives the device's current timezone. When you fly to Denver, your laptop/phone shifts automatically.
+2. **Manual override** — A "Current timezone" setting the user can set explicitly. Useful for: VPN masking real location, previewing schedule in a future travel timezone, or devices that report wrong timezone.
+3. **Precedence**: Manual override (if set) → browser detection (fallback).
+
+### Smart behavior
+- When a chit has a **location** in a different timezone than the user's current timezone, CWOC prompts: "This location is in America/Denver — use it?" Accepting anchors the chit.
+- The timezone picker pre-selects the detected timezone from location when available.
+- Alarms/alerts on **anchored** chits fire at the correct wall-clock time in the chit's timezone (absolute moment). Alarms on **floating** chits fire at the wall-clock time in the user's current timezone.
+- Calendar display always converts anchored chit times to the user's current local time — so you see "when do I need to be ready" not "what time is it there."
 
 ---
 
@@ -89,12 +116,12 @@ Chits store dates/times as naive strings with no timezone info. The backend stor
 
 ## Implementation Order (Suggested)
 
-1. User default timezone setting (settings table + settings page UI)
+1. User default timezone setting + "current timezone" override (settings table + settings page UI)
 2. `timezone` column on chits + migration
-3. Editor timezone picker (hidden by default, expandable)
-4. Display conversion in dashboard/calendar using `Intl.DateTimeFormat`
-5. Timezone indicator on chit cards when non-local
-6. ICS export with VTIMEZONE support
-7. Recurrence expansion in correct timezone
-8. Alert/alarm scheduling with timezone awareness
-9. Location-based timezone auto-suggestion (optional enhancement)
+3. Frontend timezone detection helper (override → browser fallback)
+4. Editor timezone picker (hidden by default, expandable)
+5. Location-based timezone suggestion prompt (geocode → timezone lookup)
+6. Display conversion in dashboard/calendar using `Intl.DateTimeFormat`
+7. Alert/alarm scheduling: floating (fire at local wall-clock) vs anchored (fire at absolute moment)
+8. Recurrence expansion in correct timezone (anchored chits expand in their TZ)
+9. ICS export with VTIMEZONE support

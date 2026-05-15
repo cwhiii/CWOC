@@ -29,9 +29,22 @@ Use the C CAPTN tab bar or hotkeys to switch between Calendar, Checklists, Alert
 
 - `Ctrl+S` / `Cmd+S` — Save
 - `Escape` — Exit (with save check)
-- `Ctrl+B` / `Cmd+B` — Bold (in notes/email)
-- `Ctrl+I` / `Cmd+I` — Italic (in notes/email)
-- `Ctrl+K` / `Cmd+K` — Link (in notes/email)
+- `Ctrl+B` / `Cmd+B` — Bold (in notes/email/checklist items)
+- `Ctrl+I` / `Cmd+I` — Italic (in notes/email/checklist items)
+- `Ctrl+K` / `Cmd+K` — Link (in notes/email/checklist items)
+- `Ctrl+E` / `Cmd+E` — Inline code (in notes/email/checklist items)
+- `Ctrl+Shift+X` / `Cmd+Shift+X` — Strikethrough (in notes/email/checklist items)
+
+### Checklist-Specific
+
+- `Enter` — Split item at cursor, create new item below
+- `Shift+Enter` — Insert newline within item
+- `Tab` / `Shift+Tab` — Indent / outdent item
+- `Cmd+[` / `Cmd+]` — Indent / outdent (single item)
+- `Cmd+Shift+(` / `Cmd+Shift+)` — Indent / outdent item + children
+- `Arrow Up/Down` — Navigate between items
+- `Ctrl+Click` / `Cmd+Click` — Toggle multi-select on item
+- `Shift+Click` — Range select items
 
 ---
 

@@ -74,6 +74,220 @@ function _invalidateSettingsCache() {
   window._cwocSettings = undefined;
 }
 
+// ── Timezone Detection ───────────────────────────────────────────────────────
+// Resolves the user's current IANA timezone using a defined precedence chain.
+// Used by dashboard, calendar, editor, and any component that needs local time.
+
+/**
+ * Detect browser timezone via Intl API.
+ * @returns {string|null} IANA timezone or null if unavailable
+ */
+function _detectBrowserTimezone() {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return (tz && tz.trim()) ? tz : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Resolve the user's current timezone.
+ * Precedence: settings timezone_override → browser detection → default_timezone → 'UTC'.
+ * @returns {Promise<string>} Valid IANA timezone string
+ */
+function getCurrentTimezone() {
+  return getCachedSettings()
+    .then(function(settings) {
+      // 1. Manual override from settings
+      if (settings && settings.timezone_override && settings.timezone_override.trim()) {
+        return settings.timezone_override.trim();
+      }
+      // 2. Browser detection
+      var browserTz = _detectBrowserTimezone();
+      if (browserTz) return browserTz;
+      // 3. Default timezone from settings
+      if (settings && settings.default_timezone && settings.default_timezone.trim()) {
+        return settings.default_timezone.trim();
+      }
+      // 4. UTC fallback
+      return 'UTC';
+    })
+    .catch(function() {
+      // Settings cache failed — fall back to browser detection
+      return _detectBrowserTimezone() || 'UTC';
+    });
+}
+
+/**
+ * Convert a naive datetime string from one timezone to another for display.
+ * Parses the ISO string as if it's in fromTz, then formats it in toTz.
+ * Used by dashboard and calendar for anchored chit time display.
+ * @param {string} isoString - Naive ISO datetime (e.g., "2025-06-15T14:00:00")
+ * @param {string} fromTz - Source IANA timezone
+ * @param {string} toTz - Target IANA timezone
+ * @param {object} [opts] - Intl.DateTimeFormat options (default: hour/minute 12h)
+ * @returns {string} Formatted time string in target timezone
+ */
+function convertTimezoneForDisplay(isoString, fromTz, toTz, opts) {
+  opts = opts || { hour: '2-digit', minute: '2-digit', hour12: true };
+
+  // Build a formatter in the SOURCE timezone to extract UTC-equivalent parts
+  var sourceParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: fromTz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  }).formatToParts(new Date(isoString + 'Z'));
+
+  // Extract parts from the source-tz interpretation
+  var parts = {};
+  sourceParts.forEach(function(p) { parts[p.type] = p.value; });
+
+  // The naive isoString interpreted in fromTz: we need to find the UTC instant
+  // that corresponds to isoString wall-clock in fromTz.
+  // Strategy: parse isoString as UTC, then compute the offset fromTz applies at that moment,
+  // and adjust to get the true UTC instant.
+
+  // Parse the naive datetime components
+  var match = isoString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return isoString; // Can't parse, return as-is
+
+  var year = parseInt(match[1], 10);
+  var month = parseInt(match[2], 10) - 1; // 0-indexed
+  var day = parseInt(match[3], 10);
+  var hour = parseInt(match[4], 10);
+  var minute = parseInt(match[5], 10);
+  var second = match[6] ? parseInt(match[6], 10) : 0;
+
+  // Create a UTC date with these components as a reference point
+  var utcGuess = new Date(Date.UTC(year, month, day, hour, minute, second));
+
+  // Format that UTC instant in fromTz to see what wall-clock time it maps to
+  var fromFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: fromTz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  });
+  var fromParts = {};
+  fromFormatter.formatToParts(utcGuess).forEach(function(p) { fromParts[p.type] = p.value; });
+
+  // Compute the offset: wall-clock-in-fromTz minus UTC = offset
+  var wallInFromTz = new Date(
+    parseInt(fromParts.year, 10),
+    parseInt(fromParts.month, 10) - 1,
+    parseInt(fromParts.day, 10),
+    parseInt(fromParts.hour, 10) === 24 ? 0 : parseInt(fromParts.hour, 10),
+    parseInt(fromParts.minute, 10),
+    parseInt(fromParts.second, 10)
+  );
+  var utcRef = new Date(year, month, day, hour, minute, second);
+  var offsetMs = wallInFromTz.getTime() - utcRef.getTime();
+
+  // The true UTC instant for the naive isoString in fromTz
+  var trueUtc = new Date(utcGuess.getTime() - offsetMs);
+
+  // Now format that UTC instant in the target timezone
+  var targetFormatter = new Intl.DateTimeFormat('en-US', Object.assign({}, opts, { timeZone: toTz }));
+  return targetFormatter.format(trueUtc);
+}
+
+/**
+ * Get the display time for a chit, converting if anchored.
+ * For floating chits (timezone == null): returns the raw date value as-is.
+ * For anchored chits: converts from chit.timezone to currentTz.
+ * If the chit's timezone is invalid/unrecognized, returns unconverted with warning flag.
+ * @param {object} chit - Chit object with timezone field
+ * @param {string} field - 'start_datetime', 'end_datetime', or 'due_datetime'
+ * @param {string} currentTz - User's resolved current timezone
+ * @returns {object|null} { date: Date, warning: boolean } or null if field is empty
+ */
+function getChitDisplayTime(chit, field, currentTz) {
+  var rawValue = chit[field];
+  if (!rawValue) return null;
+
+  // Parse the raw datetime value
+  var rawDate = new Date(rawValue);
+  if (isNaN(rawDate.getTime())) return null;
+
+  // Floating chit: no timezone set, display as-is
+  if (!chit.timezone) {
+    return { date: rawDate, warning: false };
+  }
+
+  // Anchored chit: convert from chit.timezone to currentTz
+  try {
+    // Validate the chit's timezone by attempting to use it with Intl
+    // This will throw a RangeError if the timezone is unrecognized
+    var testFormatter = new Intl.DateTimeFormat('en-US', { timeZone: chit.timezone });
+
+    // Parse the naive datetime components from the raw value
+    var match = rawValue.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) {
+      // Can't parse as ISO — return raw date without conversion
+      return { date: rawDate, warning: true };
+    }
+
+    var year = parseInt(match[1], 10);
+    var month = parseInt(match[2], 10) - 1;
+    var day = parseInt(match[3], 10);
+    var hour = parseInt(match[4], 10);
+    var minute = parseInt(match[5], 10);
+    var second = match[6] ? parseInt(match[6], 10) : 0;
+
+    // Find the UTC instant that corresponds to this wall-clock time in chit.timezone
+    var utcGuess = new Date(Date.UTC(year, month, day, hour, minute, second));
+
+    var fromFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: chit.timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+    var fromParts = {};
+    fromFormatter.formatToParts(utcGuess).forEach(function(p) { fromParts[p.type] = p.value; });
+
+    var wallInFromTz = new Date(
+      parseInt(fromParts.year, 10),
+      parseInt(fromParts.month, 10) - 1,
+      parseInt(fromParts.day, 10),
+      parseInt(fromParts.hour, 10) === 24 ? 0 : parseInt(fromParts.hour, 10),
+      parseInt(fromParts.minute, 10),
+      parseInt(fromParts.second, 10)
+    );
+    var utcRef = new Date(year, month, day, hour, minute, second);
+    var offsetMs = wallInFromTz.getTime() - utcRef.getTime();
+
+    // True UTC instant for the naive datetime in chit.timezone
+    var trueUtc = new Date(utcGuess.getTime() - offsetMs);
+
+    // Now convert that UTC instant to the user's currentTz
+    var targetFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: currentTz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+    var targetParts = {};
+    targetFormatter.formatToParts(trueUtc).forEach(function(p) { targetParts[p.type] = p.value; });
+
+    var convertedDate = new Date(
+      parseInt(targetParts.year, 10),
+      parseInt(targetParts.month, 10) - 1,
+      parseInt(targetParts.day, 10),
+      parseInt(targetParts.hour, 10) === 24 ? 0 : parseInt(targetParts.hour, 10),
+      parseInt(targetParts.minute, 10),
+      parseInt(targetParts.second, 10)
+    );
+
+    return { date: convertedDate, warning: false };
+  } catch (e) {
+    // Invalid/unrecognized timezone — return unconverted with warning
+    return { date: rawDate, warning: true };
+  }
+}
+
 // ── Shared Utility Functions ─────────────────────────────────────────────────
 
 /**

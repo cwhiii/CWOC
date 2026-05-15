@@ -355,6 +355,11 @@ async function buildChitObject() {
     chit.point_in_time = null;
   }
 
+  // Timezone — anchored chit if set, floating if null
+  chit.timezone = (typeof _getTimezoneValue === 'function') ? _getTimezoneValue() : null;
+  // Clear timezone when date mode is "none" (no dates = no timezone)
+  if (dateMode === 'none') chit.timezone = null;
+
   // Read tags from the live selection state maintained by renderTags
   chit.tags = Array.isArray(window._currentTagSelection)
     ? [...window._currentTagSelection]
@@ -364,9 +369,10 @@ async function buildChitObject() {
 
   // Collect alerts from the live alerts state
   chit.alerts = _alertsToArray();
-  // Set alarm/notification flags based on whether any exist
+  // Set alarm/notification flags based on whether any exist or manually set
   chit.alarm = window._alertsData.alarms.length > 0;
-  chit.notification = window._alertsData.notifications.length > 0;
+  var notifHidden = document.getElementById('notification');
+  chit.notification = (window._alertsData.notifications.length > 0) || (notifHidden && notifHidden.value === 'true');
 
   const projectMasterInput = document.getElementById("isProjectMaster");
   chit.is_project_master = projectMasterInput
@@ -619,6 +625,7 @@ async function saveChitData() {
     await _createDesktopNotifications(updatedChit.id, updatedChit.title);
 
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
+    if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
     _editorSavedBeforeLeave = true;
     window.location.href = _getEditorReturnUrl();
   } catch (error) {
@@ -664,6 +671,7 @@ async function saveChitAndStay() {
       });
       if (!resp.ok) throw new Error(await resp.text());
       if (typeof syncSend === 'function') syncSend('chits_changed', {});
+      if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
       setSaveButtonSaved();
     } catch (error) {
       console.error("[saveChitAndStay] Instance error:", error);
@@ -719,6 +727,7 @@ async function saveChitAndStay() {
     await _createDesktopNotifications(updatedChit.id, updatedChit.title);
 
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
+    if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
     setSaveButtonSaved();
     _showAssignmentToast(updatedChit);
   } catch (error) {
@@ -753,6 +762,7 @@ function performDeleteChit() {
     })
     .then(function () {
       if (typeof syncSend === 'function') syncSend('chits_changed', {});
+      if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
       // Store undo info for the dashboard to pick up
       try {
         sessionStorage.setItem('cwoc_pending_undo', JSON.stringify({
@@ -1072,6 +1082,12 @@ function _toggleOptionsMenu(event) {
   if (archiveLabel && archivedVal) {
     archiveLabel.textContent = archivedVal.value === "true" ? "Unarchive" : "Archive";
   }
+  // Update reminder label
+  var reminderLabel = document.getElementById("optMenuReminderLabel");
+  var notifVal = document.getElementById("notification");
+  if (reminderLabel && notifVal) {
+    reminderLabel.textContent = notifVal.value === "true" ? "Remove Reminder" : "Mark as Reminder";
+  }
   // Hide email option if already an email chit
   var emailOpt = document.getElementById("optMenuEmail");
   if (emailOpt) {
@@ -1135,6 +1151,16 @@ function _optPrintChit() {
 function _optArchive() {
   _closeOptionsMenu();
   if (typeof toggleArchived === 'function') toggleArchived();
+}
+
+function _optToggleReminder() {
+  _closeOptionsMenu();
+  var hidden = document.getElementById('notification');
+  if (!hidden) return;
+  var current = (hidden.value === 'true');
+  hidden.value = current ? '' : 'true';
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  cwocToast(current ? 'Reminder flag removed' : 'Marked as Reminder', 'success');
 }
 
 function _optSnooze() {

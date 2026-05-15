@@ -28,7 +28,29 @@ var _sendItemTarget = null; // { item, checklist }
 var _sendItemRecentChits = []; // cached recent chits
 var _sendItemChitsCache = null; // cached full chit list for popup/search
 var _sendItemChitsCacheTime = 0; // timestamp of last cache
-var _SEND_ITEM_CACHE_TTL = 30000; // 30 seconds cache TTL
+var _SEND_ITEM_CACHE_TTL = 120000; // 2 minutes cache TTL
+
+/* ── Pre-fetch chit list for instant popup loading ────────────────────────── */
+
+/**
+ * Pre-fetch the chit list in the background so the send-item popup opens instantly.
+ * Called after editor initialization completes.
+ */
+function _prefetchSendItemChits() {
+  if (_sendItemChitsCache && (Date.now() - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) return;
+  fetch('/api/chits').then(function(resp) {
+    if (resp.ok) return resp.json();
+    return null;
+  }).then(function(data) {
+    if (data) {
+      _sendItemChitsCache = data;
+      _sendItemChitsCacheTime = Date.now();
+    }
+  }).catch(function() { /* silent — non-critical prefetch */ });
+}
+
+// Pre-fetch after a short delay to not block page load
+setTimeout(_prefetchSendItemChits, 2000);
 
 /* ── Open the per-item send popup ─────────────────────────────────────────── */
 
@@ -139,6 +161,15 @@ function _renderSendItemPopup(allChits) {
   var html = '<div class="send-item-header">Send item to...</div>';
   html += '<div class="send-item-recent">';
 
+  // "New Chit" as a line item at the top of the list
+  html += '<div class="send-item-chit-row send-item-new-line" data-chit-id="__new__">';
+  html += '<span class="send-item-chit-title send-item-new-label"><i class="fas fa-plus"></i> New Chit</span>';
+  html += '<span class="send-item-actions send-item-new-actions" style="display:none;">';
+  html += '<button class="send-item-btn send-item-move-new" title="Move item to a new chit">📤 Move</button>';
+  html += '<button class="send-item-btn send-item-copy-new" title="Copy item to a new chit">📋 Copy</button>';
+  html += '</span>';
+  html += '</div>';
+
   if (_sendItemRecentChits.length === 0) {
     html += '<div class="send-item-empty">No other chits available</div>';
   } else {
@@ -158,15 +189,23 @@ function _renderSendItemPopup(allChits) {
   html += '</div>';
   html += '<div class="send-item-footer">';
   html += '<button class="send-item-search-btn" title="Search all chits"><i class="fas fa-search"></i> Search...</button>';
-  html += '<div class="send-item-new-row">';
-  html += '<button class="send-item-new-chit-btn send-item-copy-new" title="Copy item to a new chit"><i class="fas fa-copy"></i> Copy to New</button>';
-  html += '<button class="send-item-new-chit-btn send-item-move-new" title="Move item to a new chit"><i class="fas fa-arrow-right"></i> Move to New</button>';
-  html += '</div>';
   html += '</div>';
 
   _sendItemPopup.innerHTML = html;
 
-  // Attach event listeners
+  // "New Chit" line item — click to reveal Move/Copy buttons
+  var newLine = _sendItemPopup.querySelector('.send-item-new-line');
+  var newLabel = _sendItemPopup.querySelector('.send-item-new-label');
+  var newActions = _sendItemPopup.querySelector('.send-item-new-actions');
+  if (newLine && newLabel && newActions) {
+    newLabel.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      newLabel.style.display = 'none';
+      newActions.style.display = 'flex';
+    });
+  }
+
+  // Attach event listeners for recent chits
   _sendItemPopup.querySelectorAll('.send-item-copy').forEach(function(btn) {
     btn.addEventListener('click', function(ev) {
       ev.stopPropagation();
@@ -185,6 +224,22 @@ function _renderSendItemPopup(allChits) {
     });
   });
 
+  // New chit buttons
+  var copyNewBtn = _sendItemPopup.querySelector('.send-item-copy-new');
+  if (copyNewBtn) {
+    copyNewBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _sendItemSpawnNewChit('copy');
+    });
+  }
+  var moveNewBtn = _sendItemPopup.querySelector('.send-item-move-new');
+  if (moveNewBtn) {
+    moveNewBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _sendItemSpawnNewChit('move');
+    });
+  }
+
   var searchBtn = _sendItemPopup.querySelector('.send-item-search-btn');
   if (searchBtn) {
     searchBtn.addEventListener('click', function(ev) {
@@ -194,22 +249,6 @@ function _renderSendItemPopup(allChits) {
       _closeSendItemPopup();
       _sendItemTarget = preservedTarget;
       _openSendItemSearchModal();
-    });
-  }
-
-  var copyNewBtn = _sendItemPopup.querySelector('.send-item-copy-new');
-  if (copyNewBtn) {
-    copyNewBtn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _sendItemSpawnNewChit('copy');
-    });
-  }
-
-  var moveNewBtn = _sendItemPopup.querySelector('.send-item-move-new');
-  if (moveNewBtn) {
-    moveNewBtn.addEventListener('click', function(ev) {
-      ev.stopPropagation();
-      _sendItemSpawnNewChit('move');
     });
   }
 
@@ -261,17 +300,28 @@ function _openSendItemSearchModal() {
       + '</table>'
       + '</div>'
       + '<div class="modal-footer-new">'
-      + '<span id="sendItemSelectedName" style="font-size:0.85em;opacity:0.7;flex:1;"></span>'
+      + '<span id="sendItemNewChitGroup" class="send-item-modal-new-group">'
+      + '<button class="modal-button-new" id="sendItemNewBtn" style="background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-plus"></i> New</button>'
+      + '<button class="modal-button-new" id="sendItemMoveNewBtn" style="display:none;background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-arrow-right"></i> Move</button>'
+      + '<button class="modal-button-new" id="sendItemCopyNewBtn" style="display:none;background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-copy"></i> Copy</button>'
+      + '</span>'
+      + '<span id="sendItemSelectedName" style="font-size:0.85em;opacity:0.7;flex:1;text-align:center;"></span>'
       + '<button class="modal-button-new cancel" id="sendItemCancelBtn">Cancel</button>'
-      + '<button class="modal-button-new" id="sendItemCopyNewBtn" style="background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-copy"></i> Copy to New</button>'
-      + '<button class="modal-button-new" id="sendItemMoveNewBtn" style="background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-arrow-right"></i> Move to New</button>'
       + '<button class="modal-button-new" id="sendItemCopyBtn" disabled>&#x1F4CB; Copy</button>'
       + '<button class="modal-button-new" id="sendItemMoveBtn" disabled>&#x1F4E4; Move</button>'
       + '</div>'
       + '</div>';
 
     document.getElementById('sendItemSearchInput').addEventListener('keydown', function(ev) {
-      if (ev.key === 'Enter') { ev.preventDefault(); _sendItemDoSearch(); }
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        // If a chit is selected, Enter = Move (default action)
+        if (_sendItemSearchModal._selectedChit) {
+          _executeSendItem('move', _sendItemSearchModal._selectedChit);
+        } else {
+          _sendItemDoSearch();
+        }
+      }
     });
     document.getElementById('sendItemGoBtn').addEventListener('click', function() {
       _sendItemDoSearch();
@@ -283,6 +333,12 @@ function _openSendItemSearchModal() {
       _sendItemDebounce = setTimeout(_sendItemDoSearch, 300);
     });
     document.getElementById('sendItemCancelBtn').addEventListener('click', function() { _closeSendItemSearchModal(); });
+    // "New" button expands to show Move/Copy
+    document.getElementById('sendItemNewBtn').addEventListener('click', function() {
+      this.style.display = 'none';
+      document.getElementById('sendItemMoveNewBtn').style.display = '';
+      document.getElementById('sendItemCopyNewBtn').style.display = '';
+    });
     document.getElementById('sendItemCopyNewBtn').addEventListener('click', function() {
       _closeSendItemSearchModal();
       _sendItemSpawnNewChit('copy');
@@ -324,6 +380,14 @@ function _openSendItemSearchModal() {
   _sendItemSearchModalOpen = true;
   _sendItemSearchModal._selectedChit = null;
   _sendItemSearchUpdateButtons();
+
+  // Reset "New" button group to collapsed state
+  var newBtn = document.getElementById('sendItemNewBtn');
+  var moveNewBtn = document.getElementById('sendItemMoveNewBtn');
+  var copyNewBtn = document.getElementById('sendItemCopyNewBtn');
+  if (newBtn) newBtn.style.display = '';
+  if (moveNewBtn) moveNewBtn.style.display = 'none';
+  if (copyNewBtn) copyNewBtn.style.display = 'none';
 
   // Fetch and render chits
   _fetchChitsForItemSearch();
@@ -561,7 +625,60 @@ async function _executeSendItem(mode, targetChit) {
     var actionLabel = mode === 'copy' ? 'Copied' : 'Moved';
     var itemCount = subtree.length;
     var itemLabel = itemCount === 1 ? 'item' : itemCount + ' items';
-    cwocToast(actionLabel + ' ' + itemLabel + ' to "' + (targetChit.title || 'Untitled') + '"', 'success');
+
+    if (mode === 'move') {
+      // Show undo toast for move operations
+      var undoSubtree = JSON.parse(JSON.stringify(subtree));
+      var undoInsertIdx = checklist.items.length; // Will be appended at end on undo
+      // Find original position for undo
+      var origIdx = checklist.items.findIndex(function(i) { return i.id === item.id; });
+      if (origIdx === -1) origIdx = checklist.items.length;
+
+      cwocUndoToast(actionLabel + ' ' + itemLabel + ' to "' + (targetChit.title || 'Untitled') + '"', {
+        duration: 8000,
+        onUndo: async function() {
+          try {
+            // Restore items to source checklist at original position
+            undoSubtree.forEach(function(si, i) {
+              checklist.items.splice(origIdx + i, 0, si);
+            });
+            checklist.render();
+            checklist._notifyChange();
+
+            // Remove items from target chit
+            var resp2 = await fetch('/api/chit/' + encodeURIComponent(targetChit.id));
+            if (resp2.ok) {
+              var targetData = await resp2.json();
+              if (Array.isArray(targetData.checklist)) {
+                // Remove the items we added (match by text since IDs were regenerated)
+                var newItemIds = newItems.map(function(ni) { return ni.id; });
+                targetData.checklist = targetData.checklist.filter(function(ci) {
+                  return newItemIds.indexOf(ci.id) === -1;
+                });
+                delete targetData.effective_role;
+                delete targetData.assigned_to_display_name;
+                if (targetData.weather_data && typeof targetData.weather_data === 'object') targetData.weather_data = JSON.stringify(targetData.weather_data);
+                if (targetData.health_data && typeof targetData.health_data === 'object') targetData.health_data = JSON.stringify(targetData.health_data);
+                if (targetData.email_to && typeof targetData.email_to === 'object') targetData.email_to = JSON.stringify(targetData.email_to);
+                if (targetData.email_cc && typeof targetData.email_cc === 'object') targetData.email_cc = JSON.stringify(targetData.email_cc);
+                if (targetData.email_bcc && typeof targetData.email_bcc === 'object') targetData.email_bcc = JSON.stringify(targetData.email_bcc);
+                await fetch('/api/chits/' + encodeURIComponent(targetChit.id), {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(targetData)
+                });
+              }
+            }
+            cwocToast('Move undone', 'success');
+          } catch (undoErr) {
+            console.error('Undo move failed:', undoErr);
+            cwocToast('Undo failed: ' + undoErr.message, 'error');
+          }
+        }
+      });
+    } else {
+      cwocToast(actionLabel + ' ' + itemLabel + ' to "' + (targetChit.title || 'Untitled') + '"', 'success');
+    }
 
   } catch (err) {
     console.error('Error sending checklist item:', err);

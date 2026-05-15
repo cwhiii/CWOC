@@ -609,7 +609,10 @@ async function deleteChit() {
   });
   // Persist to server
   fetch(`/api/chits/${delId}`, { method: "DELETE" })
-    .then(function() { if (typeof syncSend === 'function') syncSend('chits_changed', {}); })
+    .then(function() {
+      if (typeof syncSend === 'function') syncSend('chits_changed', {});
+      if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
+    })
     .catch((err) => {
       console.error("Error deleting chit:", err);
     });

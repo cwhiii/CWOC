@@ -3569,6 +3569,190 @@ input.location {
     cursor: pointer;
 }
 
+/* Inline link styled for the parchment theme (used in timezone picker, etc.) */
+.cwoc-inline-link {
+    color: #6b4e31;
+    text-decoration: underline;
+    font-size: 0.9em;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+}
+.cwoc-inline-link:hover {
+    color: #4a2c2a;
+}
+
+/* ── Timezone Abbreviation Label ────────────────────────────────────────── */
+
+/* Clickable timezone abbreviation shown at end of each date row */
+.tz-abbrev-label {
+    display: inline-flex;
+    align-items: center;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    white-space: nowrap;
+    transition: background-color 0.2s, color 0.2s;
+    min-width: 28px;
+    min-height: 24px;
+    justify-content: center;
+}
+.tz-abbrev-label:hover {
+    background: rgba(139, 90, 43, 0.1);
+}
+
+/* Floating state — muted to indicate assumed timezone */
+.tz-abbrev-floating {
+    color: var(--aged-brown-medium, #8b5a2b);
+    opacity: 0.55;
+}
+
+/* Anchored state — full visibility to indicate explicit timezone */
+.tz-abbrev-anchored {
+    color: var(--aged-brown-dark, #1a1208);
+    opacity: 1;
+    font-weight: 500;
+}
+
+/* ── Timezone Picker (legacy inline styles kept for reference, modal styles below) ── */
+
+/* Timezone suggestion prompt (location-based) */
+.tz-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-top: 6px;
+    background: rgba(0, 128, 128, 0.06);
+    border: 1px solid rgba(0, 128, 128, 0.3);
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: var(--aged-brown-dark, #1a1208);
+    font-family: 'Lora', Georgia, serif;
+}
+.tz-suggestion-text {
+    flex: 1;
+}
+.tz-suggestion-btn {
+    padding: 3px 10px;
+    font-size: 0.85em;
+    font-family: 'Lora', Georgia, serif;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px outset var(--aged-brown-medium, #8b5a2b);
+    transition: background-color 0.2s;
+}
+.tz-suggestion-accept {
+    background: var(--accent-teal, teal);
+    color: var(--parchment-light, #fffaf0);
+}
+.tz-suggestion-accept:hover {
+    background: #006666;
+}
+.tz-suggestion-dismiss {
+    background: var(--button-bg, #f5ebe0);
+    color: var(--aged-brown-dark, #1a1208);
+}
+.tz-suggestion-dismiss:hover {
+    background: var(--button-hover, #e8d5c0);
+}
+
+/* ── Timezone Picker Modal ──────────────────────────────────────────────── */
+
+.tz-picker-modal {
+    background: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 300px;
+    max-width: 400px;
+    width: 90%;
+    font-family: 'Lora', Georgia, serif;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.tz-picker-modal h3 {
+    margin: 0 0 16px 0;
+    color: #4a2c2a;
+    font-size: 1.1em;
+    font-family: 'Lora', Georgia, serif;
+}
+.tz-picker-modal #chit-timezone {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1em;
+    color: #1a1208;
+    background: #fff8f0;
+    border: 1px solid #a0522d;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+.tz-picker-modal #chit-timezone::placeholder {
+    color: #c9b896;
+    font-style: italic;
+}
+.tz-picker-modal #chit-timezone:focus {
+    outline: none;
+    border-color: teal;
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.2);
+}
+.tz-picker-hint {
+    margin: 6px 0 12px 0;
+    font-size: 0.85em;
+    color: #8b5a2b;
+    font-style: italic;
+}
+.tz-picker-modal #timezoneDisplay {
+    display: block;
+    min-height: 1.2em;
+    margin-bottom: 12px;
+    color: #2e7d32;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+.tz-picker-modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* ── Timezone Picker — Mobile ──────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .tz-abbrev-label {
+        min-height: 32px;
+        min-width: 36px;
+        padding: 4px 8px;
+        font-size: 0.85em;
+    }
+    .tz-picker-modal {
+        min-width: 0;
+        width: 95%;
+        padding: 16px;
+    }
+    .tz-picker-modal #chit-timezone {
+        min-height: 38px;
+        font-size: 16px; /* prevent iOS zoom on focus */
+    }
+    .tz-picker-modal-actions {
+        flex-direction: column;
+    }
+    .tz-picker-modal-actions .zone-button {
+        width: 100%;
+        min-height: 38px;
+    }
+    .tz-suggestion {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+    .tz-suggestion-btn {
+        text-align: center;
+        padding: 8px 12px;
+        min-height: 38px;
+    }
+}
 /* ── Author Footer ──────────────────────────────────────────────────────── */
 .author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
 .author-info a { color: #4a2c2a; text-decoration: underline; }
@@ -5249,7 +5433,30 @@ input.location {
 .send-item-new-row {
     display: flex;
     gap: 6px;
-    margin-top: 6px;
+    justify-content: flex-start;
+}
+
+/* "New Chit" line item in the popup list */
+.send-item-new-line {
+    border-bottom: 1px solid rgba(139, 90, 43, 0.15);
+}
+.send-item-new-label {
+    cursor: pointer;
+    color: var(--accent-teal, #008080);
+    font-weight: 600;
+}
+.send-item-new-label i {
+    margin-right: 4px;
+}
+.send-item-new-actions {
+    gap: 4px;
+}
+
+/* "New" button group in the search modal footer */
+.send-item-modal-new-group {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 /* Send icon on checklist items (appears on hover, next to trash) */
@@ -5288,6 +5495,123 @@ input.location {
 .checklist-add-flash-hide {
     opacity: 0;
     transform: translateY(-50%) translateY(12px);
+}
+
+/* ── Checklist Checkbox Animation (check → strikethrough → fade) ───────── */
+.checklist-checking .checklist-text {
+    text-decoration: line-through;
+    color: var(--aged-brown-medium, #8b5a2b);
+}
+.checklist-checking {
+    transition: opacity 0.15s ease, background-color 0.1s ease;
+    background-color: rgba(0, 128, 0, 0.06);
+}
+.checklist-checking-fade {
+    opacity: 0;
+    transform: translateX(10px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* ── Multi-Select Strip (right edge of each item) ─────────────────────── */
+.checklist-select-strip {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 18px;
+    cursor: pointer;
+    border-radius: 0 4px 4px 0;
+    background: rgba(0, 128, 128, 0.04);
+    border-left: 2px solid rgba(0, 128, 128, 0.2);
+    transition: background-color 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.checklist-select-strip::after {
+    content: "⋮";
+    font-size: 0.9em;
+    color: rgba(0, 128, 128, 0.4);
+    transition: color 0.15s;
+}
+.checklist-select-strip:hover {
+    background: rgba(0, 128, 128, 0.12);
+    border-left-color: rgba(0, 128, 128, 0.5);
+}
+.checklist-select-strip:hover::after {
+    color: rgba(0, 128, 128, 0.8);
+}
+.checklist-select-strip.selected {
+    background: var(--accent-teal, #008080);
+    border-left-color: var(--accent-teal, #008080);
+}
+.checklist-select-strip.selected::after {
+    content: "✓";
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.75em;
+}
+.checklist-select-strip.selected:hover {
+    opacity: 0.85;
+}
+
+/* Item row needs relative positioning for the strip */
+.checklist-item,
+.completed-checklist-item,
+.ghost-checklist-item {
+    position: relative;
+    padding-right: 20px;
+}
+
+/* Selected item highlight */
+.checklist-multi-selected {
+    background: rgba(0, 128, 128, 0.06) !important;
+    border-radius: 4px;
+    outline: 1px solid rgba(0, 128, 128, 0.2);
+}
+
+/* When in multi-select mode, disable text selection on items */
+.checklist-multiselect-active .checklist-item,
+.checklist-multiselect-active .completed-checklist-item {
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+.checklist-multiselect-active .checklist-text {
+    pointer-events: none;
+}
+.checklist-multiselect-active .text-wrapper {
+    pointer-events: none;
+}
+/* Drag handle stays active for selected items in multi-select mode */
+.checklist-multiselect-active .checklist-multi-selected .checklist-drag-handle {
+    pointer-events: auto;
+    cursor: grab;
+    opacity: 1;
+    color: var(--accent-teal, #008080);
+}
+
+/* Multi-select toolbar */
+.checklist-multiselect-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    margin: 6px 0;
+    background: rgba(0, 128, 128, 0.08);
+    border: 1px solid rgba(0, 128, 128, 0.3);
+    border-radius: 6px;
+    flex-wrap: wrap;
+}
+.checklist-multiselect-toolbar .multiselect-count {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--accent-teal, #008080);
+    margin-right: 4px;
+}
+.checklist-multiselect-toolbar .zone-button {
+    font-size: 0.8em;
+    padding: 3px 8px;
 }
 
 @media (max-width: 600px) {
@@ -6307,6 +6631,25 @@ input.location {
         display: flex;
         align-items: center;
         gap: 4px;
+    }
+
+    /* Timezone picker: full-width input in mobile zone mode */
+    body.mobile-zone-mode #timezoneRow #timezonePicker {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 6px;
+    }
+    body.mobile-zone-mode #timezoneRow #chit-timezone {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        min-height: 38px;
+        font-size: 16px;
+    }
+    body.mobile-zone-mode #timezoneRow #timezoneDisplay {
+        width: 100%;
+        margin-left: 0;
     }
 
     /* ── Location Zone: full width inputs ─────────────────────────────────── */
