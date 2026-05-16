@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.cwoc.app"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.cwoc.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "m20260515.1758"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

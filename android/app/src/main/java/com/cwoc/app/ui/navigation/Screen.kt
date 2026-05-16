@@ -1,12 +1,12 @@
 package com.cwoc.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Task
-import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -32,10 +32,10 @@ data class BottomNavItem(
 )
 
 val bottomNavItems = listOf(
-    BottomNavItem(Screen.Calendar, "Calendar", Icons.Default.CalendarMonth),
-    BottomNavItem(Screen.Checklists, "Checklists", Icons.Default.Checklist),
-    BottomNavItem(Screen.Alarms, "Alarms", Icons.Default.Alarm),
-    BottomNavItem(Screen.Projects, "Projects", Icons.Default.AccountTree),
-    BottomNavItem(Screen.Tasks, "Tasks", Icons.Default.Task),
-    BottomNavItem(Screen.Notes, "Notes", Icons.Default.Notes)
+    BottomNavItem(Screen.Calendar, "Calendar", Icons.Default.DateRange),
+    BottomNavItem(Screen.Checklists, "Checklists", Icons.Default.Done),
+    BottomNavItem(Screen.Alarms, "Alarms", Icons.Default.Notifications),
+    BottomNavItem(Screen.Projects, "Projects", Icons.Default.Star),
+    BottomNavItem(Screen.Tasks, "Tasks", Icons.Default.List),
+    BottomNavItem(Screen.Notes, "Notes", Icons.Default.Edit)
 )

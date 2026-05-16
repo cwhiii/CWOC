@@ -70,7 +70,34 @@ class AuthRepository @Inject constructor(
                 device_name = deviceName
             )
 
-            val response = apiService.authenticate(request)
+            // Build a one-off Retrofit instance with the user-provided URL
+            // (the singleton Retrofit was created at app startup with the old/default URL)
+            val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            })
+            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+
+            val loginClient = okhttp3.OkHttpClient.Builder()
+                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
+                .hostnameVerifier { _, _ -> true }
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+
+            val loginRetrofit = retrofit2.Retrofit.Builder()
+                .baseUrl(serverUrl.trimEnd('/') + "/")
+                .client(loginClient)
+                .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+                .build()
+
+            val loginApi = loginRetrofit.create(com.cwoc.app.data.remote.CwocApiService::class.java)
+            android.util.Log.d("CWOC_LOGIN", "Attempting login to: ${serverUrl.trimEnd('/')}/api/auth/device-token")
+            android.util.Log.d("CWOC_LOGIN", "Username: $username, Device: $deviceName")
+            val response = loginApi.authenticate(request)
+            android.util.Log.d("CWOC_LOGIN", "Response code: ${response.code()}")
 
             when {
                 response.isSuccessful -> {
@@ -90,15 +117,20 @@ class AuthRepository @Inject constructor(
                 }
             }
         } catch (e: java.net.UnknownHostException) {
-            AuthResult.NetworkError
+            android.util.Log.e("CWOC_LOGIN", "UnknownHostException: ${e.message}", e)
+            AuthResult.Error("DNS lookup failed: ${e.message}")
         } catch (e: java.net.ConnectException) {
-            AuthResult.NetworkError
+            android.util.Log.e("CWOC_LOGIN", "ConnectException: ${e.message}", e)
+            AuthResult.Error("Connection refused: ${e.message}")
         } catch (e: java.net.SocketTimeoutException) {
-            AuthResult.NetworkError
+            android.util.Log.e("CWOC_LOGIN", "SocketTimeoutException: ${e.message}", e)
+            AuthResult.Error("Connection timed out: ${e.message}")
         } catch (e: java.io.IOException) {
-            AuthResult.NetworkError
+            android.util.Log.e("CWOC_LOGIN", "IOException: ${e.message}", e)
+            AuthResult.Error("Network error: ${e.message}")
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Unknown error")
+            android.util.Log.e("CWOC_LOGIN", "Exception: ${e.javaClass.simpleName}: ${e.message}", e)
+            AuthResult.Error("${e.javaClass.simpleName}: ${e.message}")
         }
     }
 

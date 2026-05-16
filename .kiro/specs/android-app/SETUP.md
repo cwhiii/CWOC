@@ -4,7 +4,8 @@
 
 ```bash
 # Required system packages for Android Studio and the emulator
-sudo dnf install -y java-17-openjdk java-17-openjdk-devel \
+# Note: Fedora 42+ ships Java 21 (Java 17 was removed from repos)
+sudo dnf install -y java-21-openjdk java-21-openjdk-devel \
     unzip wget git \
     zlib-devel ncurses-libs bzip2-libs \
     libstdc++ libX11 libXrender libXext mesa-libGL
@@ -69,7 +70,7 @@ source ~/.bashrc
 
 If Gradle sync fails with a JDK error:
 - Go to **File → Settings → Build → Gradle**
-- Set "Gradle JDK" to the bundled JDK 17 (or your system `java-17-openjdk`)
+- Set "Gradle JDK" to the bundled JDK (recommended) or your system `java-21-openjdk`
 
 ## 6. Create an Emulator (or Use Your Phone)
 

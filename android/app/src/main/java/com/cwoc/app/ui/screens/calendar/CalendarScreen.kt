@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -145,7 +145,7 @@ private fun DateNavigationHeader(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onPrevious) {
-            Icon(Icons.Default.ChevronLeft, contentDescription = "Previous")
+            Icon(Icons.Default.ArrowBack, contentDescription = "Previous")
         }
 
         Text(
@@ -158,11 +158,11 @@ private fun DateNavigationHeader(
         )
 
         IconButton(onClick = onToday) {
-            Icon(Icons.Default.Today, contentDescription = "Today")
+            Icon(Icons.Default.Home, contentDescription = "Today")
         }
 
         IconButton(onClick = onNext) {
-            Icon(Icons.Default.ChevronRight, contentDescription = "Next")
+            Icon(Icons.Default.ArrowForward, contentDescription = "Next")
         }
     }
 }
