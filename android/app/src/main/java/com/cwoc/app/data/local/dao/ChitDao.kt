@@ -36,4 +36,28 @@ interface ChitDao {
 
     @Query("SELECT * FROM chits LIMIT 5")
     suspend fun getFirstFive(): List<ChitEntity>
+
+    // Phase 2 — Dirty tracking queries
+
+    @Query("SELECT * FROM chits WHERE isDirty = 1")
+    suspend fun getDirtyChits(): List<ChitEntity>
+
+    @Query("SELECT COUNT(*) FROM chits WHERE isDirty = 1")
+    suspend fun getDirtyCount(): Int
+
+    @Query("UPDATE chits SET isDirty = :isDirty, dirtyFields = :dirtyFields WHERE id = :id")
+    suspend fun updateDirtyState(id: String, isDirty: Boolean, dirtyFields: String)
+
+    // Phase 2 — CRUD queries
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(chit: ChitEntity)
+
+    @Query("UPDATE chits SET deleted = 1, modifiedDatetime = :now WHERE id = :id")
+    suspend fun markDeleted(id: String, now: String)
+
+    // Phase 2 — Sync version update
+
+    @Query("UPDATE chits SET syncVersion = :version WHERE id = :id")
+    suspend fun updateSyncVersion(id: String, version: Int)
 }

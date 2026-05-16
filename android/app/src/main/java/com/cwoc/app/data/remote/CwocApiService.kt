@@ -3,6 +3,8 @@ package com.cwoc.app.data.remote
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
 import com.cwoc.app.data.remote.dto.DeviceTokenResponse
 import com.cwoc.app.data.remote.dto.SyncResponseDto
+import com.cwoc.app.data.remote.dto.SyncPushRequestDto
+import com.cwoc.app.data.remote.dto.SyncPushResponseDto
 import com.cwoc.app.data.remote.dto.ClientLogRequest
 import com.cwoc.app.data.remote.dto.ClientLogResponse
 import retrofit2.Response
@@ -35,6 +37,15 @@ interface CwocApiService {
         @Query("since") since: Int,
         @Query("include") include: String = "chits,contacts,settings"
     ): Response<SyncResponseDto>
+
+    /**
+     * Push locally-modified (dirty) chits to the server.
+     * Returns per-chit results (accepted, created, merged, error) and updated server version.
+     */
+    @POST("/api/sync/push")
+    suspend fun pushChanges(
+        @Body request: SyncPushRequestDto
+    ): Response<SyncPushResponseDto>
 
     /**
      * Post a client log entry to the server for remote diagnostics.

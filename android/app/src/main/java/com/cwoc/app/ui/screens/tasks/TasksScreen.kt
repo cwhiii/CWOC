@@ -1,5 +1,6 @@
 package com.cwoc.app.ui.screens.tasks
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,38 +30,62 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.ui.components.ChitListScaffold
+import com.cwoc.app.ui.components.SwipeableChitCard
+import com.cwoc.app.ui.navigation.Screen
 import com.cwoc.app.ui.util.DateUtils
 
 /**
  * Tasks screen displaying chits grouped by status (ToDo, In Progress, Blocked, Complete).
+ * Uses ChitListScaffold for FAB + sync indicator, SwipeableChitCard for swipe-to-delete,
+ * and navigates to the Editor on card click.
+ *
+ * Validates: Requirements 2.1, 4.1, 4.2, 4.3, 4.4, 12.1, 12.2
  */
 @Composable
 fun TasksScreen(
+    onNavigateToEditor: (String) -> Unit,
     viewModel: TasksViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
-    when {
-        uiState.isLoading -> {
-            TasksLoadingSkeleton()
-        }
-        uiState.tasks.isEmpty() -> {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    ChitListScaffold(
+        title = "Tasks",
+        syncState = syncState,
+        onFabClick = { onNavigateToEditor(Screen.Editor.NEW_CHIT_ID) }
+    ) { paddingValues ->
+        when {
+            uiState.isLoading -> {
+                TasksLoadingSkeleton()
+            }
+            uiState.tasks.isEmpty() -> {
                 TasksEmptyState()
             }
-        }
-        else -> {
-            TasksList(groupedTasks = uiState.groupedTasks)
+            else -> {
+                TasksList(
+                    groupedTasks = uiState.groupedTasks,
+                    onDeleteTask = { chitId -> viewModel.softDelete(chitId) },
+                    onClickTask = { chitId -> onNavigateToEditor(chitId) },
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun TasksList(groupedTasks: Map<String, List<ChitEntity>>) {
+private fun TasksList(
+    groupedTasks: Map<String, List<ChitEntity>>,
+    onDeleteTask: (String) -> Unit,
+    onClickTask: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val statusOrder = listOf("ToDo", "In Progress", "Blocked", "Complete")
 
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -79,7 +104,14 @@ private fun TasksList(groupedTasks: Map<String, List<ChitEntity>>) {
                     )
                 }
                 items(tasks, key = { it.id }) { task ->
-                    TaskCard(task = task)
+                    SwipeableChitCard(
+                        onDelete = { onDeleteTask(task.id) }
+                    ) {
+                        TaskCard(
+                            task = task,
+                            onClick = { onClickTask(task.id) }
+                        )
+                    }
                 }
             }
         }
@@ -97,7 +129,14 @@ private fun TasksList(groupedTasks: Map<String, List<ChitEntity>>) {
                     )
                 }
                 items(tasks, key = { it.id }) { task ->
-                    TaskCard(task = task)
+                    SwipeableChitCard(
+                        onDelete = { onDeleteTask(task.id) }
+                    ) {
+                        TaskCard(
+                            task = task,
+                            onClick = { onClickTask(task.id) }
+                        )
+                    }
                 }
             }
         }
@@ -105,9 +144,11 @@ private fun TasksList(groupedTasks: Map<String, List<ChitEntity>>) {
 }
 
 @Composable
-private fun TaskCard(task: ChitEntity) {
+private fun TaskCard(task: ChitEntity, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -193,7 +234,7 @@ private fun TasksEmptyState() {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Tasks will appear here after syncing",
+                text = "Tap + to create a new task",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

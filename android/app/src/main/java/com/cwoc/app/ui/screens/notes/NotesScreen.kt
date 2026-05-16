@@ -1,5 +1,6 @@
 package com.cwoc.app.ui.screens.notes
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,34 +27,58 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.ChitListScaffold
+import com.cwoc.app.ui.components.SwipeableChitCard
 import com.cwoc.app.ui.util.MarkdownRenderer
 
 /**
  * Notes screen displaying note chits with title and markdown preview.
+ * Uses ChitListScaffold for FAB + sync indicator, SwipeableChitCard for swipe-to-delete,
+ * and click-to-edit navigation.
+ *
+ * Validates: Requirements 2.1, 4.1, 4.2, 4.3, 4.4, 12.1
  */
 @Composable
 fun NotesScreen(
+    onNavigateToEditor: (String) -> Unit,
     viewModel: NotesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
-    when {
-        uiState.isLoading -> {
-            NotesLoadingSkeleton()
-        }
-        uiState.notes.isEmpty() -> {
-            NotesEmptyState()
-        }
-        else -> {
-            NotesList(notes = uiState.notes)
+    ChitListScaffold(
+        title = "Notes",
+        syncState = syncState,
+        onFabClick = { onNavigateToEditor("new") }
+    ) { paddingValues ->
+        when {
+            uiState.isLoading -> {
+                NotesLoadingSkeleton()
+            }
+            uiState.notes.isEmpty() -> {
+                NotesEmptyState()
+            }
+            else -> {
+                NotesList(
+                    notes = uiState.notes,
+                    onNoteClick = { chitId -> onNavigateToEditor(chitId) },
+                    onNoteDelete = { chitId -> viewModel.softDelete(chitId) },
+                    modifier = Modifier.padding(paddingValues)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun NotesList(notes: List<ChitEntity>) {
+private fun NotesList(
+    notes: List<ChitEntity>,
+    onNoteClick: (String) -> Unit,
+    onNoteDelete: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -61,7 +86,14 @@ private fun NotesList(notes: List<ChitEntity>) {
         item { Spacer(modifier = Modifier.height(8.dp)) }
 
         items(notes, key = { it.id }) { note ->
-            NoteCard(note = note)
+            SwipeableChitCard(
+                onDelete = { onNoteDelete(note.id) }
+            ) {
+                NoteCard(
+                    note = note,
+                    onClick = { onNoteClick(note.id) }
+                )
+            }
         }
 
         item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -69,9 +101,14 @@ private fun NotesList(notes: List<ChitEntity>) {
 }
 
 @Composable
-private fun NoteCard(note: ChitEntity) {
+private fun NoteCard(
+    note: ChitEntity,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),

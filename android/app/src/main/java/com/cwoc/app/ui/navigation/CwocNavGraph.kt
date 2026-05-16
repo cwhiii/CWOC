@@ -3,10 +3,13 @@ package com.cwoc.app.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.cwoc.app.ui.screens.calendar.CalendarScreen
 import com.cwoc.app.ui.screens.debug.DebugScreen
+import com.cwoc.app.ui.screens.editor.ChitEditorScreen
 import com.cwoc.app.ui.screens.login.LoginScreen
 import com.cwoc.app.ui.screens.notes.NotesScreen
 import com.cwoc.app.ui.screens.placeholder.PlaceholderScreen
@@ -47,11 +50,19 @@ fun CwocNavGraph(
         }
 
         composable(Screen.Tasks.route) {
-            TasksScreen()
+            TasksScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
         }
 
         composable(Screen.Notes.route) {
-            NotesScreen()
+            NotesScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
         }
 
         composable(Screen.Calendar.route) {
@@ -68,6 +79,17 @@ fun CwocNavGraph(
 
         composable(Screen.Projects.route) {
             PlaceholderScreen(title = "Projects")
+        }
+
+        composable(
+            route = Screen.Editor.route,
+            arguments = listOf(navArgument("chitId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val chitId = backStackEntry.arguments?.getString("chitId") ?: return@composable
+            ChitEditorScreen(
+                chitId = chitId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }

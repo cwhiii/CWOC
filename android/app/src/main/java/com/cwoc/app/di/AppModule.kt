@@ -10,6 +10,7 @@ import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
+import com.cwoc.app.data.local.migration.MIGRATION_1_2
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -60,7 +61,9 @@ object AppModule {
             context,
             CwocDatabase::class.java,
             "cwoc.db"
-        ).build()
+        )
+        .addMigrations(MIGRATION_1_2)
+        .build()
     }
 
     @Provides

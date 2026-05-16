@@ -20,7 +20,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
         SettingsEntity::class,
         SyncMetadataEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

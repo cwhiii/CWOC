@@ -80,5 +80,19 @@ REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checkli
 
 **Never leave the user guessing.** Every fix summary ends with a clear deployment instruction.
 
+### Deployment Quick-Reference Table
+
+| Instruction | Server Push? | Android Studio Action | Phone Action |
+|---|---|---|---|
+| Server push only | Yes (`systemctl restart cwoc`) | Nothing | Nothing |
+| Mobile: build → update | No | Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
+| Mobile: clean build → update | No | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
+| Mobile: build → uninstall + reinstall | No | Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
+| Mobile: clean build → uninstall + reinstall | No | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
+| Server push + mobile: clean build → update | Yes (`systemctl restart cwoc`) | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
+| Server push + mobile: clean build → uninstall + reinstall | Yes (`systemctl restart cwoc`) | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
+
+**MANDATORY:** After completing ANY task or set of changes, the LAST thing said MUST be one full row from the table above. No exceptions. Do not abbreviate. Do not paraphrase. Copy the exact row that applies.
+
 ## EncryptedSharedPreferences & Keystore
 The app uses `EncryptedSharedPreferences` with Android Keystore for secure token storage. The Keystore key can become corrupted/invalidated after repeated uninstall/reinstall cycles. The `AppModule.provideEncryptedSharedPreferences()` has a try/catch that handles this by deleting the corrupted prefs file and recreating. If you ever see a crash with `KeyStoreException: Signature/MAC verification failed`, this is the cause — the recovery logic should handle it automatically. If it doesn't, a full uninstall clears the Keystore entry.

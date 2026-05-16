@@ -58,5 +58,9 @@ data class ChitEntity(
     val snoozedUntil: String?,
     val prerequisites: List<String>?,
     val syncVersion: Int,
-    val lastSyncedAt: String?
+    val lastSyncedAt: String?,
+
+    // Phase 2 — dirty tracking
+    val isDirty: Boolean = false,
+    val dirtyFields: String? = "[]"
 )

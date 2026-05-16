@@ -22,6 +22,11 @@ sealed class Screen(val route: String) {
     data object Checklists : Screen("checklists")
     data object Alarms : Screen("alarms")
     data object Projects : Screen("projects")
+
+    data object Editor : Screen("editor/{chitId}") {
+        const val NEW_CHIT_ID = "new"
+        fun createRoute(chitId: String) = "editor/$chitId"
+    }
 }
 
 /**
