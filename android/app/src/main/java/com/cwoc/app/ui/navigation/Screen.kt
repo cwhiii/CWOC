@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
  */
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
+    data object Debug : Screen("debug")
     data object Tasks : Screen("tasks")
     data object Notes : Screen("notes")
     data object Calendar : Screen("calendar")
@@ -23,7 +25,7 @@ sealed class Screen(val route: String) {
 }
 
 /**
- * Bottom navigation tab definitions matching the C CAPTN view order.
+ * Bottom navigation tab definitions — Debug first, then C CAPTN view order.
  */
 data class BottomNavItem(
     val screen: Screen,
@@ -37,5 +39,6 @@ val bottomNavItems = listOf(
     BottomNavItem(Screen.Alarms, "Alarms", Icons.Default.Notifications),
     BottomNavItem(Screen.Projects, "Projects", Icons.Default.Star),
     BottomNavItem(Screen.Tasks, "Tasks", Icons.Default.List),
-    BottomNavItem(Screen.Notes, "Notes", Icons.Default.Edit)
+    BottomNavItem(Screen.Notes, "Notes", Icons.Default.Edit),
+    BottomNavItem(Screen.Debug, "Debug", Icons.Default.Info)
 )

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.AuthResult
+import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.sync.SyncEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,17 +82,37 @@ class LoginViewModel @Inject constructor(
 
             when (result) {
                 is AuthResult.Success -> {
+                    syncEngine.reportLog("Login success: user=${state.username}", "info")
                     // Trigger initial sync after successful login
-                    syncEngine.performSync(since = 0)
-                    _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                    val syncResult = syncEngine.performSync(since = 0)
+                    android.util.Log.d("CWOC_LOGIN", "Sync result: $syncResult")
+                    when (syncResult) {
+                        is SyncResult.Success -> {
+                            android.util.Log.d("CWOC_LOGIN", "Sync success! server_version=${syncResult.serverVersion}")
+                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                        }
+                        is SyncResult.Error -> {
+                            android.util.Log.e("CWOC_LOGIN", "Sync error: ${syncResult.code} ${syncResult.message}")
+                            // Still navigate — sync can retry later
+                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                        }
+                        is SyncResult.NetworkError -> {
+                            android.util.Log.e("CWOC_LOGIN", "Sync network error: ${syncResult.message}")
+                            // Still navigate — sync can retry later
+                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                        }
+                    }
                 }
                 is AuthResult.InvalidCredentials -> {
+                    syncEngine.reportLog("Login failed: invalid credentials for user=${state.username}", "error")
                     _uiState.update { it.copy(isLoading = false, error = "Invalid username or password") }
                 }
                 is AuthResult.NetworkError -> {
+                    syncEngine.reportLog("Login failed: network error reaching ${state.serverUrl}", "error")
                     _uiState.update { it.copy(isLoading = false, error = "Cannot reach server. Check the URL and your connection.") }
                 }
                 is AuthResult.Error -> {
+                    syncEngine.reportLog("Login failed: ${result.message}", "error")
                     _uiState.update { it.copy(isLoading = false, error = result.message) }
                 }
             }

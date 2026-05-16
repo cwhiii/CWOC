@@ -217,13 +217,18 @@ Ensure that any time you change or add a feature that has or should have, docume
 ## Versioning
 
 Version numbering is: 
-YYYYMMDD.time, with time in format HHMM.
+sYYYYMMDD.HHMM for the server (in src/VERSION), mYYYYMMDD.HHMM for mobile (versionName in android/app/build.gradle.kts). Time is in format HHMM.
 
-As the last step of any change, call the real time and use that to  Update the version number every time you make changes. (via  src/VERSION)
+As the last step of any change, call the real time and use that to update the version number every time you make changes.
 
 NEVER guess the time! always run date "+%Y%m%d.%H%M", and use the returned value. 
 
 ALSO: only do this ONCE at the VERY END of any set of work/tasks. Not multiple times throught the task.
+
+**Which version to bump:** At the end of every set of changes, ALWAYS tell the user which version(s) need updating:
+- Server-only changes → bump src/VERSION
+- Mobile-only changes → bump versionName in android/app/build.gradle.kts (and increment versionCode if it's a release)
+- Changes to both → bump both
 
 ## The Mega Index
 There is an index. It contains a complete map of where every function is, and what it does. If this is helpful, use it for finding where to do work. Anytime you change something that would impact this, make sure you update the index. But only at the end of the task.

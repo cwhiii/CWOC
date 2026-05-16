@@ -76,6 +76,21 @@ private fun CwocApp(authRepository: AuthRepository) {
     CwocTheme {
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            topBar = {
+                if (currentRoute != null && currentRoute != Screen.Login.route) {
+                    androidx.compose.material3.TopAppBar(
+                        title = {
+                            androidx.compose.material3.Text(
+                                text = "CWOC  m20260515.2249",
+                                style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+                            )
+                        },
+                        colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface
+                        )
+                    )
+                }
+            },
             bottomBar = {
                 // Hide bottom nav on login screen
                 if (currentRoute != null && currentRoute != Screen.Login.route) {

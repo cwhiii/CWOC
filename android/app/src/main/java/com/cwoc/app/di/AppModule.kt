@@ -27,13 +27,28 @@ object AppModule {
         @ApplicationContext context: Context
     ): SharedPreferences {
         val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
-        return EncryptedSharedPreferences.create(
-            "cwoc_secure_prefs",
-            masterKeyAlias,
-            context,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        return try {
+            EncryptedSharedPreferences.create(
+                "cwoc_secure_prefs",
+                masterKeyAlias,
+                context,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Keystore key was invalidated (e.g., after uninstall/reinstall).
+            // Delete the corrupted prefs file and create fresh.
+            context.getSharedPreferences("cwoc_secure_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+            val prefsFile = java.io.File(context.filesDir.parent, "shared_prefs/cwoc_secure_prefs.xml")
+            if (prefsFile.exists()) prefsFile.delete()
+            EncryptedSharedPreferences.create(
+                "cwoc_secure_prefs",
+                masterKeyAlias,
+                context,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
     }
 
     @Provides

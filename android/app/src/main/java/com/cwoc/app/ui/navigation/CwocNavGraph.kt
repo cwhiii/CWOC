@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.cwoc.app.ui.screens.calendar.CalendarScreen
+import com.cwoc.app.ui.screens.debug.DebugScreen
 import com.cwoc.app.ui.screens.login.LoginScreen
 import com.cwoc.app.ui.screens.notes.NotesScreen
 import com.cwoc.app.ui.screens.placeholder.PlaceholderScreen
@@ -39,6 +40,10 @@ fun CwocNavGraph(
                     }
                 }
             )
+        }
+
+        composable(Screen.Debug.route) {
+            DebugScreen()
         }
 
         composable(Screen.Tasks.route) {

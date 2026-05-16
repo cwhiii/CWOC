@@ -368,6 +368,7 @@ from src.backend.routes.custom_zones import router as custom_zones_router
 from src.backend.routes.devices import devices_router
 from src.backend.routes.sync import sync_router
 from src.backend.routes.docs import router as docs_router
+from src.backend.routes.client_log import router as client_log_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -398,6 +399,7 @@ app.include_router(custom_zones_router)
 app.include_router(devices_router)
 app.include_router(sync_router)
 app.include_router(docs_router)
+app.include_router(client_log_router)
 
 # ── Bundle reclassification is triggered by rule changes, not on startup ──
 # Triggers: rule update (PUT), rule association (POST), bundle delete (DELETE)

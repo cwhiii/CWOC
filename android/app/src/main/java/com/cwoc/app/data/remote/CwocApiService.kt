@@ -3,6 +3,8 @@ package com.cwoc.app.data.remote
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
 import com.cwoc.app.data.remote.dto.DeviceTokenResponse
 import com.cwoc.app.data.remote.dto.SyncResponseDto
+import com.cwoc.app.data.remote.dto.ClientLogRequest
+import com.cwoc.app.data.remote.dto.ClientLogResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -33,4 +35,13 @@ interface CwocApiService {
         @Query("since") since: Int,
         @Query("include") include: String = "chits,contacts,settings"
     ): Response<SyncResponseDto>
+
+    /**
+     * Post a client log entry to the server for remote diagnostics.
+     * No auth required — works even before device authentication.
+     */
+    @POST("/api/client-log")
+    suspend fun postClientLog(
+        @Body entry: ClientLogRequest
+    ): Response<ClientLogResponse>
 }

@@ -33,4 +33,7 @@ interface ChitDao {
 
     @Query("SELECT COUNT(*) FROM chits")
     suspend fun getCount(): Int
+
+    @Query("SELECT * FROM chits LIMIT 5")
+    suspend fun getFirstFive(): List<ChitEntity>
 }

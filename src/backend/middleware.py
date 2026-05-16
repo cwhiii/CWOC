@@ -102,6 +102,12 @@ def _is_excluded(path: str, method: str) -> bool:
     if (path.startswith("/api/docs") and method == "GET"):
         return True
 
+    # Client log & server log — device diagnostics need to work pre-auth
+    if path == "/api/client-log":
+        return True
+    if path == "/api/server-log" and method == "GET":
+        return True
+
     return False
 
 

@@ -43,3 +43,42 @@ Migrations are run inline at startup in `src/backend/main.py` (calling functions
 
 ## API Pattern
 REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checklist`, `people`, `child_chits`, `alerts`, `recurrence_rule`, `recurrence_exceptions` are stored as JSON strings in SQLite and serialized/deserialized via helper functions.
+
+## Deployment
+
+**Server-only changes** (backend Python code):
+- Push code to server and restart: the configurinator or `systemctl restart cwoc` handles it.
+
+**Android app changes** (Kotlin code under `android/`):
+- Rebuild the APK in Android Studio and install on device.
+
+**When a fix spans both** (e.g., server sends wrong data format that the app chokes on):
+- Push the server fix first, then reinstall the app (reinstall wipes the local Room DB and SharedPreferences, forcing a fresh login + full sync from `since=0`).
+- Always state clearly in the fix summary: "push server, reinstall app" when both sides are involved or when the local DB has stale/corrupt data from the bug.
+
+**Android app install types:**
+- **Update (clean build → install over top):** Use when code changes don't affect the Room DB schema version or SharedPreferences key structure. The existing DB and login state are preserved. This is the default for most code changes.
+- **Uninstall + reinstall (clean build → uninstall → install):** Required when:
+  - Room `@Database(version = N)` is incremented without a migration
+  - SharedPreferences keys are renamed or restructured
+  - The local DB has corrupt/stale data from a bug that a fresh sync would fix
+  - You need to force a fresh `since=0` full sync
+- **Always state which one** in the fix summary. Don't just say "reinstall" — say "clean build → update" or "clean build → uninstall + reinstall" explicitly.
+- **EVERY mobile deploy requires a build.** A regular build (Run button) is sufficient for most changes. A **clean build** is only needed when adding/removing Hilt-annotated classes, changing Room DAO interfaces or entities, or when the build cache seems stale. Always say "build → ..." or "clean build → ..." before the install instruction.
+
+**Fetching remote logs for debugging:**
+- Run `bash fetch-logs.sh` from a terminal on this machine to pull `/api/client-log` and `/api/server-log` into `.kiro/client-log.json` and `.kiro/server-log.json` (readable by Kiro's file tools).
+- The terminal sandbox cannot reach 192.168.1.111 directly (macOS firewall/sandbox restriction), so always use the fetch-logs script or ask the user to run it.
+
+## Deployment Communication (MANDATORY)
+**After EVERY code change, explicitly state what needs to be deployed:**
+- "Server push only" — only backend Python changed
+- "Mobile: clean build → update" — only Android code changed, no schema/prefs changes
+- "Mobile: clean build → uninstall + reinstall" — Android code changed AND Room schema version bumped or local data is stale
+- "Server push + mobile: clean build → update" — both changed, no local data issues
+- "Server push + mobile: clean build → uninstall + reinstall" — both changed AND local DB has stale/corrupt data
+
+**Never leave the user guessing.** Every fix summary ends with a clear deployment instruction.
+
+## EncryptedSharedPreferences & Keystore
+The app uses `EncryptedSharedPreferences` with Android Keystore for secure token storage. The Keystore key can become corrupted/invalidated after repeated uninstall/reinstall cycles. The `AppModule.provideEncryptedSharedPreferences()` has a try/catch that handles this by deleting the corrupted prefs file and recreating. If you ever see a crash with `KeyStoreException: Signature/MAC verification failed`, this is the cause — the recovery logic should handle it automatically. If it doesn't, a full uninstall clears the Keystore entry.

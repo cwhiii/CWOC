@@ -144,7 +144,7 @@ fun LoginScreen(
 
         // Version pinned to bottom center
         Text(
-            text = "m20260515.1758",
+            text = "m20260515.2249",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier

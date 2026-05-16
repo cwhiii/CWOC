@@ -1,0 +1,1 @@
+{"lines":["[2026-05-16 12:37:26] [ERROR] [android-sync] Sync Exception: JsonSyntaxException: java.lang.IllegalStateException: Expected a boolean but was NUMBER at line 1 column 284 path $.chits[0].alarm"],"count":1}

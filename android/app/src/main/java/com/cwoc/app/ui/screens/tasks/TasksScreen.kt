@@ -45,7 +45,9 @@ fun TasksScreen(
             TasksLoadingSkeleton()
         }
         uiState.tasks.isEmpty() -> {
-            TasksEmptyState()
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                TasksEmptyState()
+            }
         }
         else -> {
             TasksList(groupedTasks = uiState.groupedTasks)

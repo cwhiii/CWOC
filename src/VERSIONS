@@ -1,0 +1,19 @@
+# CWOC Version Registry
+# All version numbers are defined here in one place.
+# Format: KEY=VALUE (one per line, # for comments)
+#
+# Naming convention:
+#   Server:  sN.YYYYMMDD.HHMM  (N = backend schema migration count)
+#   Android: mN.YYYYMMDD.HHMM  (N = Room DB version)
+#
+# The server version is ALSO stored in src/VERSION (read by the backend at startup).
+# When updating, change BOTH this file and src/VERSION.
+
+# Server version
+SERVER=s85.20260516.0705
+
+# Android app version name
+ANDROID_VERSION_NAME=m1.20260515.2249
+
+# Android app version code (integer, increments with each release)
+ANDROID_VERSION_CODE=1

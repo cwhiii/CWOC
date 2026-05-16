@@ -17,7 +17,6 @@ data class TasksUiState(
     val tasks: List<ChitEntity> = emptyList(),
     val error: String? = null
 ) {
-    /** Tasks grouped by status for display. */
     val groupedTasks: Map<String, List<ChitEntity>>
         get() = tasks.groupBy { it.status ?: "Unknown" }
 }
@@ -34,7 +33,10 @@ class TasksViewModel @Inject constructor(
         viewModelScope.launch {
             chitRepository.getTaskChits().collect { tasks ->
                 _uiState.update {
-                    it.copy(isLoading = false, tasks = tasks)
+                    it.copy(
+                        isLoading = false,
+                        tasks = tasks
+                    )
                 }
             }
         }
