@@ -1,7 +1,11 @@
 package com.cwoc.app.data.sync
 
 import com.cwoc.app.data.local.dao.ChitDao
+import com.cwoc.app.data.local.dao.ContactDao
+import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.local.entity.ContactEntity
+import com.cwoc.app.data.local.entity.SettingsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -24,13 +28,17 @@ import kotlin.random.Random
 class DirtyTrackerPropertyTest {
 
     private lateinit var fakeDao: FakeChitDao
+    private lateinit var fakeContactDao: FakeContactDao
+    private lateinit var fakeSettingsDao: FakeSettingsDao
     private lateinit var dirtyTracker: DirtyTrackerImpl
     private val gson = Gson()
 
     @Before
     fun setup() {
         fakeDao = FakeChitDao()
-        dirtyTracker = DirtyTrackerImpl(fakeDao)
+        fakeContactDao = FakeContactDao()
+        fakeSettingsDao = FakeSettingsDao()
+        dirtyTracker = DirtyTrackerImpl(fakeDao, fakeContactDao, fakeSettingsDao)
     }
 
     // ─── Property 5: Dirty fields set semantics — no duplicates ───────────────
@@ -345,4 +353,79 @@ class FakeChitDao : ChitDao {
         val entity = store[id] ?: return
         store[id] = entity.copy(syncVersion = version)
     }
+}
+
+/**
+ * Fake ContactDao implementation for unit testing DirtyTracker.
+ * Stores entities in-memory and supports the subset of DAO methods
+ * used by DirtyTrackerImpl.
+ */
+class FakeContactDao : ContactDao {
+
+    private val store = mutableMapOf<String, ContactEntity>()
+
+    fun store(entity: ContactEntity) {
+        store[entity.id] = entity
+    }
+
+    override suspend fun getById(id: String): ContactEntity? = store[id]
+
+    override suspend fun updateDirtyState(id: String, isDirty: Boolean, dirtyFields: String) {
+        val entity = store[id] ?: return
+        store[id] = entity.copy(isDirty = isDirty, dirtyFields = dirtyFields)
+    }
+
+    override suspend fun upsert(contact: ContactEntity) {
+        store[contact.id] = contact
+    }
+
+    override suspend fun upsertAll(contacts: List<ContactEntity>) {
+        contacts.forEach { store[it.id] = it }
+    }
+
+    override fun getAllActive(): Flow<List<ContactEntity>> = flowOf(store.values.filter { !it.deleted }.toList())
+    override fun search(query: String): Flow<List<ContactEntity>> = flowOf(emptyList())
+    override suspend fun getDirtyContacts(): List<ContactEntity> = store.values.filter { it.isDirty }
+    override suspend fun markDeleted(id: String, now: String) {
+        val entity = store[id] ?: return
+        store[id] = entity.copy(deleted = true, modifiedDatetime = now)
+    }
+    override suspend fun updateSyncVersion(id: String, version: Int) {
+        val entity = store[id] ?: return
+        store[id] = entity.copy(syncVersion = version)
+    }
+    override suspend fun setConflictState(id: String, fields: String) {
+        val entity = store[id] ?: return
+        store[id] = entity.copy(hasUnviewedConflict = true, conflictFields = fields)
+    }
+    override fun getAllContacts(): Flow<List<ContactEntity>> = flowOf(store.values.toList())
+}
+
+/**
+ * Fake SettingsDao implementation for unit testing DirtyTracker.
+ * Stores a single settings entity in-memory.
+ */
+class FakeSettingsDao : SettingsDao {
+
+    private var settings: SettingsEntity? = null
+
+    fun store(entity: SettingsEntity) {
+        settings = entity
+    }
+
+    override suspend fun get(): SettingsEntity? = settings
+    override fun getSettings(): Flow<SettingsEntity?> = flowOf(settings)
+    override suspend fun update(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun clearDirty() {
+        settings = settings?.copy(isDirty = false)
+    }
+    override suspend fun markDirty() {
+        settings = settings?.copy(isDirty = true)
+    }
+    override suspend fun updateSyncVersion(version: Int) {
+        settings = settings?.copy(syncVersion = version)
+    }
+    override suspend fun replace(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun upsert(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun getSettingsOnce(): SettingsEntity? = settings
 }

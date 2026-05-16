@@ -62,5 +62,8 @@ data class ChitEntity(
 
     // Phase 2 — dirty tracking
     val isDirty: Boolean = false,
-    val dirtyFields: String? = "[]"
+    val dirtyFields: String? = "[]",
+
+    // Phase 3 — conflict field tracking
+    val conflictFields: String? = null
 )

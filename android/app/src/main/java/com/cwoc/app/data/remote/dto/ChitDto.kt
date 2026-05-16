@@ -58,5 +58,5 @@ data class ChitDto(
     val availability: String?,
     val snoozed_until: String?,
     val prerequisites: List<String>?,
-    val sync_version: Int
+    val sync_version: Int = 0
 )

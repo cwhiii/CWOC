@@ -89,7 +89,7 @@ fun ChitDto.toEntity(syncedAt: String, gson: Gson): ChitEntity {
 fun ContactDto.toEntity(syncedAt: String, gson: Gson): ContactEntity {
     return ContactEntity(
         id = id,
-        givenName = given_name,
+        givenName = given_name ?: "",
         surname = surname,
         middleNames = middle_names,
         prefix = prefix,

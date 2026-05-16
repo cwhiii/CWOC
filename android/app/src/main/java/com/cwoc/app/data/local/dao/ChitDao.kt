@@ -60,4 +60,33 @@ interface ChitDao {
 
     @Query("UPDATE chits SET syncVersion = :version WHERE id = :id")
     suspend fun updateSyncVersion(id: String, version: Int)
+
+    // Phase 3 — Conflict state queries
+
+    @Query("UPDATE chits SET hasUnviewedConflict = 0, conflictFields = NULL WHERE id = :id")
+    suspend fun clearConflictFlag(id: String)
+
+    @Query("UPDATE chits SET hasUnviewedConflict = 1, conflictFields = :fields WHERE id = :id")
+    suspend fun setConflictState(id: String, fields: String)
+
+    // Phase 3 — Notification scheduling queries
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND alerts IS NOT NULL AND alerts != ''")
+    suspend fun getChitsWithAlerts(): List<ChitEntity>
+
+    // Phase 3 — Edge case handling queries
+
+    /**
+     * Finds all non-deleted chits whose tags JSON contains the given tag string.
+     * Uses LIKE with the tag wrapped in quotes to match JSON array elements.
+     */
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND tags LIKE '%' || '\"' || :tag || '\"' || '%'")
+    suspend fun getChitsWithTag(tag: String): List<ChitEntity>
+
+    /**
+     * Upserts a chit without triggering dirty tracking.
+     * Used for server-originated changes (tag renames, checklist LWW).
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWithoutDirty(chit: ChitEntity)
 }

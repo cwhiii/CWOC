@@ -2,11 +2,14 @@ package com.cwoc.app.data.remote.dto
 
 /**
  * Request body for POST /api/sync/push.
- * Contains all dirty chits to push to the server.
- * Matches the server's expected schema: {"chits": [...]}.
+ * Contains all dirty entities to push to the server.
+ * Matches the server's expected schema: {"chits": [...], "contacts": [...], "settings": {...}}.
+ * Nullable lists/objects are omitted from the JSON when null (Gson default behavior).
  */
 data class SyncPushRequestDto(
-    val chits: List<ChitPushDto>
+    val chits: List<ChitPushDto>? = null,
+    val contacts: List<ContactPushDto>? = null,
+    val settings: SettingsPushDto? = null
 )
 
 /**
@@ -67,4 +70,54 @@ data class ChitPushDto(
     val availability: String?,
     val snoozed_until: String?,
     val prerequisites: List<String>?
+)
+
+/**
+ * DTO for a single contact being pushed to the server.
+ * Fields use snake_case to match server field names.
+ * Includes last_known_sync_version for server-side conflict detection
+ * and dirty_fields to indicate which fields were locally modified.
+ */
+data class ContactPushDto(
+    val id: String,
+    val last_known_sync_version: Int,
+    val given_name: String?,
+    val surname: String?,
+    val middle_names: String?,
+    val prefix: String?,
+    val suffix: String?,
+    val nickname: String?,
+    val display_name: String?,
+    val phones: Any?,
+    val emails: Any?,
+    val addresses: Any?,
+    val call_signs: Any?,
+    val x_handles: Any?,
+    val websites: Any?,
+    val dates: Any?,
+    val has_signal: Boolean?,
+    val signal_username: String?,
+    val pgp_key: String?,
+    val favorite: Boolean?,
+    val color: String?,
+    val organization: String?,
+    val social_context: String?,
+    val image_url: String?,
+    val notes: String?,
+    val tags: List<String>?,
+    val shared_to_vault: Boolean?,
+    val deleted: Boolean?,
+    val created_datetime: String?,
+    val modified_datetime: String?,
+    val dirty_fields: List<String>?
+)
+
+/**
+ * DTO for pushing settings to the server.
+ * Contains the full settings blob and sync version for conflict detection.
+ * The server uses LWW (last-writer-wins) on the entire settings record.
+ */
+data class SettingsPushDto(
+    val last_known_sync_version: Int,
+    val settings: Map<String, Any?>
 )

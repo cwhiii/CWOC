@@ -9,9 +9,12 @@ import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.data.mapper.detectChangedFields
 import com.cwoc.app.data.mapper.toEntity
 import com.cwoc.app.data.mapper.toFormState
+import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +32,9 @@ import javax.inject.Inject
  *   - null or "new" → creation mode (generates a UUID)
  *   - any other value → edit mode (loads existing entity from Room)
  *
- * Validates: Requirements 1.1, 1.2, 1.4, 1.5, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4
+ * Phase 3 additions: conflict banner display and dismiss logic.
+ *
+ * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4
  */
 @HiltViewModel
 class ChitEditorViewModel @Inject constructor(
@@ -37,6 +42,7 @@ class ChitEditorViewModel @Inject constructor(
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
+    private val apiService: CwocApiService,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -67,6 +73,15 @@ class ChitEditorViewModel @Inject constructor(
     /** Set to true after save or discard to trigger navigation back. */
     val isSaved: StateFlow<Boolean> = _isSaved.asStateFlow()
 
+    // Phase 3 — Conflict banner state
+    private val _showConflictBanner = MutableStateFlow(false)
+    /** True when the chit has an unviewed conflict that should display a banner. */
+    val showConflictBanner: StateFlow<Boolean> = _showConflictBanner.asStateFlow()
+
+    private val _conflictFields = MutableStateFlow<List<String>>(emptyList())
+    /** List of field names that had conflicts during the last server merge. */
+    val conflictFields: StateFlow<List<String>> = _conflictFields.asStateFlow()
+
     init {
         if (!isNew) {
             loadExistingChit()
@@ -75,6 +90,7 @@ class ChitEditorViewModel @Inject constructor(
 
     /**
      * Loads an existing chit from Room and populates the form state.
+     * Also loads conflict state for the conflict banner.
      * Sets isLoading to false when complete.
      */
     private fun loadExistingChit() {
@@ -83,8 +99,58 @@ class ChitEditorViewModel @Inject constructor(
             if (entity != null) {
                 originalEntity = entity
                 _formState.value = entity.toFormState()
+
+                // Phase 3: Load conflict state for banner display
+                _showConflictBanner.value = entity.hasUnviewedConflict
+                _conflictFields.value = parseConflictFields(entity.conflictFields)
             }
             _isLoading.value = false
+        }
+    }
+
+    /**
+     * Dismisses the conflict banner for the current chit.
+     *
+     * Flow:
+     * 1. Hide the banner immediately (optimistic UI)
+     * 2. Clear the local conflict flag in Room
+     * 3. Attempt to notify the server via POST /api/chit/{id}/dismiss-conflict
+     * 4. If the server call fails (network error or non-2xx), that's acceptable —
+     *    the server will clear the flag on the next successful sync cycle.
+     *
+     * Validates: Requirements 1.3, 1.4, 1.5
+     */
+    fun dismissConflict() {
+        val id = chitId ?: return
+
+        viewModelScope.launch {
+            // Immediately hide the banner
+            _showConflictBanner.value = false
+            _conflictFields.value = emptyList()
+
+            // Clear local conflict state in Room
+            chitDao.clearConflictFlag(id)
+
+            // Attempt server dismiss (best-effort, fire-and-forget)
+            try {
+                apiService.dismissConflict(id)
+                // Success or failure doesn't affect local state — banner is already hidden
+            } catch (_: Exception) {
+                // Network failure is fine — server will clear on next sync
+            }
+        }
+    }
+
+    /**
+     * Parses the JSON conflict fields string into a list of field names.
+     * Returns an empty list if the input is null, blank, or invalid JSON.
+     */
+    private fun parseConflictFields(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            Gson().fromJson(json, object : TypeToken<List<String>>() {}.type)
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

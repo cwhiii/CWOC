@@ -33,6 +33,13 @@ data class ContactEntity(
     val sharedToVault: Boolean,
     val createdDatetime: String?,
     val modifiedDatetime: String?,
-    val syncVersion: Int,
-    val lastSyncedAt: String?
+    val syncVersion: Int = 0,
+    val lastSyncedAt: String?,
+
+    // Phase 3 — dirty tracking and conflict state
+    val isDirty: Boolean = false,
+    val dirtyFields: String? = "[]",
+    val deleted: Boolean = false,
+    val hasUnviewedConflict: Boolean = false,
+    val conflictFields: String? = null
 )

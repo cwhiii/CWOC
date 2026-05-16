@@ -38,5 +38,5 @@ data class SettingsDto(
     val default_timezone: String?,
     val default_view: String?,
     val view_order: Any?,
-    val sync_version: Int
+    val sync_version: Int = 0
 )

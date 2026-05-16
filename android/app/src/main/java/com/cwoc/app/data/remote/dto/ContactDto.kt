@@ -8,7 +8,7 @@ package com.cwoc.app.data.remote.dto
  */
 data class ContactDto(
     val id: String,
-    val given_name: String,
+    val given_name: String?,
     val surname: String?,
     val middle_names: String?,
     val prefix: String?,
@@ -35,5 +35,5 @@ data class ContactDto(
     val shared_to_vault: Boolean?,
     val created_datetime: String?,
     val modified_datetime: String?,
-    val sync_version: Int
+    val sync_version: Int = 0
 )

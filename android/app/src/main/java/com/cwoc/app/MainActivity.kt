@@ -81,7 +81,7 @@ private fun CwocApp(authRepository: AuthRepository) {
                     androidx.compose.material3.TopAppBar(
                         title = {
                             androidx.compose.material3.Text(
-                                text = "CWOC  m20260515.2249",
+                                text = "CWOC  ${BuildConfig.VERSION_NAME}",
                                 style = androidx.compose.material3.MaterialTheme.typography.titleMedium
                             )
                         },

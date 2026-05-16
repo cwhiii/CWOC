@@ -41,6 +41,20 @@ journalctl -u cwoc -f
 ## Database Migrations
 Migrations are run inline at startup in `src/backend/main.py` (calling functions from `src/backend/migrations.py`) using `ALTER TABLE` statements. Each migration checks if the column already exists before adding it. There is no migration framework — just sequential function calls at module load time.
 
+### Android Room Migrations
+- Room migrations live in `android/app/src/main/java/com/cwoc/app/data/local/migration/`.
+- **A deployed migration is burned.** Once a migration runs on a device, it never runs again. Never modify an already-deployed migration file — always create a new version (e.g., `MIGRATION_3_4`) to fix schema issues.
+- **Every entity field must have a corresponding column in the migration SQL.** When adding fields to an entity, the migration that creates or alters that table MUST include those columns. If multiple subagents touch the same entity and migration, verify consistency before building.
+- Register all migrations in `AppModule.provideCwocDatabase()` via `.addMigrations(...)`.
+- Use `try/catch` around `ALTER TABLE ADD COLUMN` statements for idempotent migrations (safe to re-run if column already exists).
+
+### Subagent Verification (MANDATORY)
+After dispatching multiple subagents that touch related files (e.g., entities + migrations + DAOs), **always verify consistency before declaring the work complete**:
+1. Compare every entity's fields against the migration SQL that creates its table — every field must have a matching column with correct type, nullability, and default.
+2. Check that all DAOs reference only columns that exist in the migration.
+3. Check that all Hilt bindings exist for new interfaces/implementations.
+4. If any mismatch is found, fix it immediately — do not leave it for the user to discover at runtime.
+
 ## API Pattern
 REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checklist`, `people`, `child_chits`, `alerts`, `recurrence_rule`, `recurrence_exceptions` are stored as JSON strings in SQLite and serialized/deserialized via helper functions.
 
@@ -85,12 +99,12 @@ REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checkli
 | Instruction | Server Push? | Android Studio Action | Phone Action |
 |---|---|---|---|
 | Server push only | Yes (`systemctl restart cwoc`) | Nothing | Nothing |
-| Mobile: build → update | No | Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
-| Mobile: clean build → update | No | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
-| Mobile: build → uninstall + reinstall | No | Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
-| Mobile: clean build → uninstall + reinstall | No | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
-| Server push + mobile: clean build → update | Yes (`systemctl restart cwoc`) | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Install APK over existing app |
-| Server push + mobile: clean build → uninstall + reinstall | Yes (`systemctl restart cwoc`) | Build → Clean Project, then Build → Build Bundle(s) / APK(s) → Build APK(s) | Uninstall app first, then install APK |
+| Mobile: build → update | No | Build | Update |
+| Mobile: clean build → update | No | Clean Build | Update |
+| Mobile: build → uninstall + reinstall | No | Build | Reinstall |
+| Mobile: clean build → uninstall + reinstall | No | Clean Build | Reinstall |
+| Server push + mobile: clean build → update | Yes (`systemctl restart cwoc`) | Clean Build | Update |
+| Server push + mobile: clean build → uninstall + reinstall | Yes (`systemctl restart cwoc`) | Clean Build | Reinstall |
 
 **MANDATORY:** After completing ANY task or set of changes, the LAST thing said MUST be one full row from the table above. No exceptions. Do not abbreviate. Do not paraphrase. Copy the exact row that applies.
 

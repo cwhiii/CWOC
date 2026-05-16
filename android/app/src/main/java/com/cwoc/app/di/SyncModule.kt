@@ -1,15 +1,27 @@
 package com.cwoc.app.di
 
+import com.cwoc.app.data.attachment.AttachmentCache
+import com.cwoc.app.data.attachment.AttachmentCacheImpl
+import com.cwoc.app.data.attachment.AttachmentManager
+import com.cwoc.app.data.attachment.AttachmentManagerImpl
+import com.cwoc.app.data.repository.ContactRepository
+import com.cwoc.app.data.repository.ContactRepositoryImpl
+import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.data.repository.SettingsRepositoryImpl
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.ConnectivityMonitorImpl
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.DirtyTrackerImpl
+import com.cwoc.app.data.sync.EdgeCaseHandler
+import com.cwoc.app.data.sync.EdgeCaseHandlerImpl
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncPushEngineImpl
 import com.cwoc.app.data.sync.SyncStateManager
 import com.cwoc.app.data.sync.SyncStateManagerImpl
 import com.cwoc.app.data.sync.WebSocketClient
 import com.cwoc.app.data.sync.WebSocketClientImpl
+import com.cwoc.app.notification.NotificationScheduler
+import com.cwoc.app.notification.NotificationSchedulerImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -61,4 +73,40 @@ abstract class SyncModule {
     abstract fun bindSyncPushEngine(
         impl: SyncPushEngineImpl
     ): SyncPushEngine
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(
+        impl: SettingsRepositoryImpl
+    ): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindContactRepository(
+        impl: ContactRepositoryImpl
+    ): ContactRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationScheduler(
+        impl: NotificationSchedulerImpl
+    ): NotificationScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindAttachmentCache(
+        impl: AttachmentCacheImpl
+    ): AttachmentCache
+
+    @Binds
+    @Singleton
+    abstract fun bindAttachmentManager(
+        impl: AttachmentManagerImpl
+    ): AttachmentManager
+
+    @Binds
+    @Singleton
+    abstract fun bindEdgeCaseHandler(
+        impl: EdgeCaseHandlerImpl
+    ): EdgeCaseHandler
 }

@@ -6,11 +6,14 @@ import androidx.room.Room
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.cwoc.app.data.local.CwocDatabase
+import com.cwoc.app.data.local.dao.AttachmentMetadataDao
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.migration.MIGRATION_1_2
+import com.cwoc.app.data.local.migration.MIGRATION_2_3
+import com.cwoc.app.data.local.migration.MIGRATION_3_4
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -62,7 +65,7 @@ object AppModule {
             CwocDatabase::class.java,
             "cwoc.db"
         )
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
         .build()
     }
 
@@ -77,4 +80,7 @@ object AppModule {
 
     @Provides
     fun provideSyncMetadataDao(db: CwocDatabase): SyncMetadataDao = db.syncMetadataDao()
+
+    @Provides
+    fun provideAttachmentMetadataDao(db: CwocDatabase): AttachmentMetadataDao = db.attachmentMetadataDao()
 }

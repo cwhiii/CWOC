@@ -15,9 +15,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class LoginUiState(
-    val serverUrl: String = "",
-    val username: String = "",
-    val password: String = "",
+    val serverUrl: String = "http://192.168.1.111:3333",
+    val username: String = "admin",
+    val password: String = "cwoc",
     val isLoading: Boolean = false,
     val error: String? = null,
     val loginSuccess: Boolean = false
@@ -83,25 +83,28 @@ class LoginViewModel @Inject constructor(
             when (result) {
                 is AuthResult.Success -> {
                     syncEngine.reportLog("Login success: user=${state.username}", "info")
-                    // Trigger initial sync after successful login
-                    val syncResult = syncEngine.performSync(since = 0)
-                    android.util.Log.d("CWOC_LOGIN", "Sync result: $syncResult")
-                    when (syncResult) {
-                        is SyncResult.Success -> {
-                            android.util.Log.d("CWOC_LOGIN", "Sync success! server_version=${syncResult.serverVersion}")
-                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                    // Trigger initial sync after successful login — wrapped in try/catch
+                    // so a sync failure can never crash the app
+                    try {
+                        val syncResult = syncEngine.performSync(since = 0)
+                        android.util.Log.d("CWOC_LOGIN", "Sync result: $syncResult")
+                        when (syncResult) {
+                            is SyncResult.Success -> {
+                                android.util.Log.d("CWOC_LOGIN", "Sync success! server_version=${syncResult.serverVersion}")
+                            }
+                            is SyncResult.Error -> {
+                                android.util.Log.e("CWOC_LOGIN", "Sync error: ${syncResult.code} ${syncResult.message}")
+                            }
+                            is SyncResult.NetworkError -> {
+                                android.util.Log.e("CWOC_LOGIN", "Sync network error: ${syncResult.message}")
+                            }
                         }
-                        is SyncResult.Error -> {
-                            android.util.Log.e("CWOC_LOGIN", "Sync error: ${syncResult.code} ${syncResult.message}")
-                            // Still navigate — sync can retry later
-                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
-                        }
-                        is SyncResult.NetworkError -> {
-                            android.util.Log.e("CWOC_LOGIN", "Sync network error: ${syncResult.message}")
-                            // Still navigate — sync can retry later
-                            _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
-                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("CWOC_LOGIN", "Sync crashed: ${e.javaClass.simpleName}: ${e.message}", e)
+                        // Non-fatal — sync will retry later
                     }
+                    // Always navigate to main screen after successful auth
+                    _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
                 }
                 is AuthResult.InvalidCredentials -> {
                     syncEngine.reportLog("Login failed: invalid credentials for user=${state.username}", "error")

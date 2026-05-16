@@ -1,9 +1,14 @@
 package com.cwoc.app.data.sync
 
 import com.cwoc.app.data.local.dao.ChitDao
+import com.cwoc.app.data.local.dao.ContactDao
+import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.local.entity.ContactEntity
+import com.cwoc.app.data.local.entity.SettingsEntity
 import com.cwoc.app.data.local.entity.SyncMetadataEntity
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.remote.dto.*
 import com.google.gson.Gson
@@ -38,6 +43,9 @@ class SyncPushEnginePropertyTest {
     private lateinit var fakeDirtyTracker: FakeDirtyTracker
     private lateinit var fakeSyncMetadataDao: FakeSyncMetadataDao
     private lateinit var fakeSyncStateManager: FakeSyncStateManager
+    private lateinit var fakeContactDao: FakePushContactDao
+    private lateinit var fakeSettingsDao: FakePushSettingsDao
+    private lateinit var fakeSettingsConflictResolver: FakePushSettingsConflictResolver
     private lateinit var pushEngine: SyncPushEngineImpl
     private val gson = Gson()
 
@@ -48,12 +56,18 @@ class SyncPushEnginePropertyTest {
         fakeDirtyTracker = FakeDirtyTracker(fakeChitDao)
         fakeSyncMetadataDao = FakeSyncMetadataDao()
         fakeSyncStateManager = FakeSyncStateManager()
+        fakeContactDao = FakePushContactDao()
+        fakeSettingsDao = FakePushSettingsDao()
+        fakeSettingsConflictResolver = FakePushSettingsConflictResolver()
         pushEngine = SyncPushEngineImpl(
             apiService = fakeApiService,
             chitDao = fakeChitDao,
+            contactDao = fakeContactDao,
+            settingsDao = fakeSettingsDao,
             dirtyTracker = fakeDirtyTracker,
             syncMetadataDao = fakeSyncMetadataDao,
             syncStateManager = fakeSyncStateManager,
+            settingsConflictResolver = fakeSettingsConflictResolver,
             gson = gson
         )
     }
@@ -639,7 +653,7 @@ class FakeCwocApiService : CwocApiService {
             )
         }
 
-        val results = request.chits.map { pushDto ->
+        val results = request.chits?.map { pushDto ->
             responseConfigs[pushDto.id] ?: ChitPushResultDto(
                 id = pushDto.id,
                 status = "accepted",
@@ -721,6 +735,16 @@ class FakePushChitDao : ChitDao {
     override fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> = flowOf(emptyList())
     override suspend fun getCount(): Int = entities.size
     override suspend fun getFirstFive(): List<ChitEntity> = entities.values.take(5)
+
+    override suspend fun setConflictState(id: String, fields: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(hasUnviewedConflict = true, conflictFields = fields)
+    }
+
+    override suspend fun clearConflictFlag(id: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(hasUnviewedConflict = false, conflictFields = null)
+    }
 }
 
 /**
@@ -751,6 +775,22 @@ class FakeDirtyTracker(private val chitDao: ChitDao) : DirtyTracker {
     override suspend fun clearDirtyWithMerge(chitId: String, mergedEntity: ChitEntity) {
         val cleanEntity = mergedEntity.copy(isDirty = false, dirtyFields = "[]")
         chitDao.upsert(cleanEntity)
+    }
+
+    override suspend fun markContactDirty(contactId: String, changedFields: Set<String>) {
+        // No-op for push engine tests (contacts not tested here)
+    }
+
+    override suspend fun clearContactDirty(contactId: String) {
+        // No-op for push engine tests
+    }
+
+    override suspend fun markSettingsDirty() {
+        // No-op for push engine tests
+    }
+
+    override suspend fun clearSettingsDirty() {
+        // No-op for push engine tests
     }
 
     private fun parseDirtyFields(json: String?): Set<String> {
@@ -805,5 +845,86 @@ class FakeSyncStateManager : SyncStateManager {
     override fun setIdle() {
         idleCount++
         _syncState.value = SyncState.ONLINE_IDLE
+    }
+}
+
+/**
+ * Fake ContactDao for push engine tests.
+ * Returns empty dirty contacts by default (contacts not the focus of these chit-centric tests).
+ */
+class FakePushContactDao : ContactDao {
+
+    private val entities = mutableMapOf<String, ContactEntity>()
+
+    override fun getAllActive(): Flow<List<ContactEntity>> = flowOf(emptyList())
+    override fun search(query: String): Flow<List<ContactEntity>> = flowOf(emptyList())
+    override suspend fun getById(id: String): ContactEntity? = entities[id]
+    override suspend fun getDirtyContacts(): List<ContactEntity> =
+        entities.values.filter { it.isDirty }
+    override suspend fun upsert(contact: ContactEntity) { entities[contact.id] = contact }
+    override suspend fun upsertAll(contacts: List<ContactEntity>) {
+        contacts.forEach { entities[it.id] = it }
+    }
+    override suspend fun markDeleted(id: String, now: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(deleted = true, modifiedDatetime = now)
+    }
+    override suspend fun updateDirtyState(id: String, isDirty: Boolean, dirtyFields: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(isDirty = isDirty, dirtyFields = dirtyFields)
+    }
+    override suspend fun updateSyncVersion(id: String, version: Int) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(syncVersion = version)
+    }
+    override suspend fun setConflictState(id: String, fields: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(hasUnviewedConflict = true, conflictFields = fields)
+    }
+    override fun getAllContacts(): Flow<List<ContactEntity>> = flowOf(emptyList())
+}
+
+/**
+ * Fake SettingsDao for push engine tests.
+ * Returns non-dirty settings by default (settings not the focus of these chit-centric tests).
+ */
+class FakePushSettingsDao : SettingsDao {
+
+    private var settings: SettingsEntity? = null
+
+    override suspend fun get(): SettingsEntity? = settings
+    override fun getSettings(): Flow<SettingsEntity?> = flowOf(settings)
+    override suspend fun update(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun clearDirty() {
+        settings = settings?.copy(isDirty = false)
+    }
+    override suspend fun markDirty() {
+        settings = settings?.copy(isDirty = true)
+    }
+    override suspend fun updateSyncVersion(version: Int) {
+        settings = settings?.copy(syncVersion = version)
+    }
+    override suspend fun replace(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun upsert(settings: SettingsEntity) { this.settings = settings }
+    override suspend fun getSettingsOnce(): SettingsEntity? = settings
+}
+
+/**
+ * Fake SettingsConflictResolver for push engine tests.
+ * Records resolve calls without performing actual repository operations.
+ */
+class FakePushSettingsConflictResolver : SettingsConflictResolver(
+    settingsRepository = object : SettingsRepository {
+        override val settings: Flow<SettingsEntity> = flowOf()
+        override suspend fun get(): SettingsEntity? = null
+        override suspend fun update(settings: SettingsEntity) {}
+        override suspend fun replaceWithServerVersion(settings: SettingsEntity) {}
+        override suspend fun clearDirty() {}
+    }
+) {
+    var resolvedSettings: SettingsEntity? = null
+
+    override suspend fun resolve(serverSettings: SettingsEntity) {
+        resolvedSettings = serverSettings
     }
 }

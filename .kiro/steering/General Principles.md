@@ -259,3 +259,24 @@ Release notes are collated into **daily files** named `release_notes-YYYYMMDD.md
 - The configurator should check whether prerequisites are already installed before attempting to install them (idempotent).
 
 Ensure all new features are mobile-frienldy from the get go.
+
+## Cross-Platform Parity (Active after Phase 6 completion)
+Once Phase 6 of the mobile app project is complete, **every change must be available on all platforms**: desktop web, mobile web, and Android app. This is the default — not the exception.
+
+- **Assume parity.** Unless a feature is explicitly called out as platform-specific (e.g., BOOT_COMPLETED receiver is Android-only by nature), implement it everywhere.
+- **Never silently omit a platform.** If there's a reason a feature can't or shouldn't exist on one platform (hardware limitation, OS API dependency, UX mismatch), **stop and ask the user** before proceeding. Explain why and get explicit approval to skip it.
+- **Don't decide on your own.** Even if something seems obviously platform-specific, flag it. The user decides what's platform-specific, not the agent.
+- **Deployment instructions must cover all affected platforms.** If a change touches server + web + Android, the deployment summary must address all three.
+- **Feature completeness check.** Before marking any feature done, verify: does this work on desktop web? Mobile web? Android app? If any platform is missing, it's not done.
+
+**Examples of things that ARE platform-specific (no need to ask):**
+- Android notification channels, AlarmManager, BOOT_COMPLETED — these are OS-level Android APIs with no web equivalent
+- PWA install prompts — web-only by nature
+- Touch-specific gestures that have keyboard equivalents on desktop
+
+**Examples of things that MUST be on all platforms (always ask if you think otherwise):**
+- New CRUD features (contacts, settings, chits)
+- UI views and pages
+- Filtering, sorting, search capabilities
+- Data display and formatting changes
+- New settings or preferences

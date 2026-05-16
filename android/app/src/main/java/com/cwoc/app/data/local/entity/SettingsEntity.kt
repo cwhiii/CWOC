@@ -37,6 +37,10 @@ data class SettingsEntity(
     val defaultTimezone: String?,
     val defaultView: String?,
     val viewOrder: String?,
-    val syncVersion: Int,
-    val lastSyncedAt: String?
+    val syncVersion: Int = 0,
+    val lastSyncedAt: String?,
+
+    // Phase 3 — dirty tracking for sync
+    val isDirty: Boolean = false,
+    val lastModified: String? = null
 )

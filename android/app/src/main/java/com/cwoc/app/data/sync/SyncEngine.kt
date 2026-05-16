@@ -10,6 +10,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.remote.dto.ClientLogRequest
+import com.cwoc.app.notification.NotificationScheduler
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,6 +36,8 @@ class SyncEngine @Inject constructor(
     private val contactDao: ContactDao,
     private val settingsDao: SettingsDao,
     private val syncMetadataDao: SyncMetadataDao,
+    private val edgeCaseHandler: EdgeCaseHandler,
+    private val notificationScheduler: NotificationScheduler,
     private val gson: Gson,
     private val prefs: SharedPreferences
 ) {
@@ -125,18 +128,43 @@ class SyncEngine @Inject constructor(
 
             val now = Instant.now().toString()
 
-            // Upsert chits
+            // Process chits — handle deletions via EdgeCaseHandler, upsert others, schedule alarms
             body.chits?.let { chits ->
                 if (chits.isNotEmpty()) {
-                    Log.d(TAG, "Upserting ${chits.size} chits")
-                    val entities = chits.map { it.toEntity(now, gson) }
-                    // Log first chit for debugging
-                    entities.firstOrNull()?.let { first ->
-                        Log.d(TAG, "First chit: id=${first.id}, title=${first.title}, status=${first.status}, deleted=${first.deleted}, archived=${first.archived}")
+                    Log.d(TAG, "Processing ${chits.size} chits")
+
+                    val deletedChits = chits.filter { it.deleted == true }
+                    val activeChits = chits.filter { it.deleted != true }
+
+                    // Handle server deletions via EdgeCaseHandler (delete wins over local edits)
+                    if (deletedChits.isNotEmpty()) {
+                        Log.d(TAG, "Handling ${deletedChits.size} server deletions")
+                        deletedChits.forEach { chitDto ->
+                            edgeCaseHandler.handleServerDeletion(chitDto.id)
+                        }
                     }
-                    chitDao.upsertAll(entities)
+
+                    // Upsert non-deleted chits
+                    if (activeChits.isNotEmpty()) {
+                        Log.d(TAG, "Upserting ${activeChits.size} active chits")
+                        val entities = activeChits.map { it.toEntity(now, gson) }
+                        // Log first chit for debugging
+                        entities.firstOrNull()?.let { first ->
+                            Log.d(TAG, "First chit: id=${first.id}, title=${first.title}, status=${first.status}, deleted=${first.deleted}, archived=${first.archived}")
+                        }
+                        chitDao.upsertAll(entities)
+
+                        // Schedule/reschedule alarms for chits with alerts
+                        entities.forEach { entity ->
+                            if (!entity.alerts.isNullOrBlank() && entity.alerts != "[]" && entity.alerts != "null") {
+                                Log.d(TAG, "Scheduling alarms for chit ${entity.id}")
+                                notificationScheduler.scheduleAlarms(entity)
+                            }
+                        }
+                    }
+
                     val dbCount = chitDao.getCount()
-                    Log.d(TAG, "Chits upserted successfully. DB now has $dbCount total chits")
+                    Log.d(TAG, "Chits processed successfully. DB now has $dbCount total chits")
                 } else {
                     Log.d(TAG, "Server returned empty chits list")
                 }
@@ -152,11 +180,24 @@ class SyncEngine @Inject constructor(
                 }
             }
 
-            // Upsert settings
+            // Replace settings with server version
             body.settings?.let { settings ->
-                Log.d(TAG, "Upserting settings")
+                Log.d(TAG, "Replacing settings with server version")
                 val entity = settings.toEntity(now, gson)
-                settingsDao.upsert(entity)
+                settingsDao.replace(entity)
+                Log.d(TAG, "Settings replaced successfully")
+            }
+
+            // Process tag renames — propagate to all local chits without dirtying
+            body.tag_renames?.let { tagRenames ->
+                if (tagRenames.isNotEmpty()) {
+                    Log.d(TAG, "Processing ${tagRenames.size} tag renames")
+                    tagRenames.forEach { rename ->
+                        Log.d(TAG, "Applying tag rename: '${rename.old_tag}' -> '${rename.new_tag}'")
+                        edgeCaseHandler.applyTagRename(rename.old_tag, rename.new_tag)
+                    }
+                    Log.d(TAG, "Tag renames applied successfully")
+                }
             }
 
             // Update high-water mark
@@ -165,7 +206,7 @@ class SyncEngine @Inject constructor(
 
             val finalDbCount = chitDao.getCount()
             Log.d(TAG, "Sync complete. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
-            reportLog("Sync success: version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, db_chit_count=$finalDbCount", "info")
+            reportLog("Sync success: version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
             return SyncResult.Success(body.server_version)
 
         } catch (e: IOException) {
