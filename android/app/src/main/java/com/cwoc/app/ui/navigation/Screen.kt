@@ -22,6 +22,9 @@ sealed class Screen(val route: String) {
     data object Checklists : Screen("checklists")
     data object Alarms : Screen("alarms")
     data object Projects : Screen("projects")
+    data object Indicators : Screen("indicators")
+    data object Map : Screen("map")
+    data object Contacts : Screen("contacts")
 
     data object Editor : Screen("editor/{chitId}") {
         const val NEW_CHIT_ID = "new"

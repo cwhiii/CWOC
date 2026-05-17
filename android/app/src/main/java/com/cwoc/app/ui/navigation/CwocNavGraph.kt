@@ -7,12 +7,15 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.cwoc.app.ui.screens.alerts.AlertsScreen
 import com.cwoc.app.ui.screens.calendar.CalendarScreen
+import com.cwoc.app.ui.screens.checklists.ChecklistsScreen
 import com.cwoc.app.ui.screens.debug.DebugScreen
 import com.cwoc.app.ui.screens.editor.ChitEditorScreen
+import com.cwoc.app.ui.screens.indicators.IndicatorsScreen
 import com.cwoc.app.ui.screens.login.LoginScreen
 import com.cwoc.app.ui.screens.notes.NotesScreen
-import com.cwoc.app.ui.screens.placeholder.PlaceholderScreen
+import com.cwoc.app.ui.screens.projects.ProjectsScreen
 import com.cwoc.app.ui.screens.tasks.TasksScreen
 
 /**
@@ -70,15 +73,45 @@ fun CwocNavGraph(
         }
 
         composable(Screen.Checklists.route) {
-            PlaceholderScreen(title = "Checklists")
+            ChecklistsScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
         }
 
         composable(Screen.Alarms.route) {
-            PlaceholderScreen(title = "Alarms")
+            AlertsScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
         }
 
         composable(Screen.Projects.route) {
-            PlaceholderScreen(title = "Projects")
+            ProjectsScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
+        }
+
+        composable(Screen.Indicators.route) {
+            IndicatorsScreen()
+        }
+
+        composable(Screen.Contacts.route) {
+            com.cwoc.app.ui.screens.contacts.ContactListScreen(
+                onNavigateToContact = { /* TODO: contact editor */ }
+            )
+        }
+
+        composable(Screen.Map.route) {
+            com.cwoc.app.ui.screens.map.MapScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
+            )
         }
 
         composable(

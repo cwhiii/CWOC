@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "m20260516.1659"
+        versionName = "m20260516.1937"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -68,7 +68,7 @@ android {
 
 dependencies {
     // Compose BOM — manages all Compose library versions
-    val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
+    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
@@ -77,6 +77,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
@@ -111,6 +112,9 @@ dependencies {
 
     // WorkManager — Background sync
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // osmdroid — OpenStreetMap map tiles
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 
     // EncryptedSharedPreferences — Secure token storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

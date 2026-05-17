@@ -1,9 +1,35 @@
 package com.cwoc.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "chits")
+@Entity(
+    tableName = "chits",
+    indices = [
+        Index(
+            name = "idx_chits_checklist",
+            value = ["deleted", "archived"]
+        ),
+        Index(
+            name = "idx_chits_project_master",
+            value = ["deleted", "archived", "isProjectMaster"]
+        ),
+        Index(
+            name = "idx_chits_alerts",
+            value = ["deleted", "archived"]
+        ),
+        Index(
+            name = "idx_chits_health_data",
+            value = ["deleted", "archived"]
+        ),
+        Index(
+            name = "idx_chits_location",
+            value = ["deleted", "archived"]
+        )
+    ]
+)
 data class ChitEntity(
     @PrimaryKey val id: String,
     val title: String?,
@@ -61,9 +87,12 @@ data class ChitEntity(
     val lastSyncedAt: String?,
 
     // Phase 2 — dirty tracking
+    @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,
+    @ColumnInfo(defaultValue = "[]")
     val dirtyFields: String? = "[]",
 
     // Phase 3 — conflict field tracking
+    @ColumnInfo(defaultValue = "NULL")
     val conflictFields: String? = null
 )

@@ -1,5 +1,6 @@
 package com.cwoc.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -41,6 +42,7 @@ data class SettingsEntity(
     val lastSyncedAt: String?,
 
     // Phase 3 — dirty tracking for sync
+    @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,
     val lastModified: String? = null
 )

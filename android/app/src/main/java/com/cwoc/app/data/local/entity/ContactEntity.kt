@@ -1,9 +1,19 @@
 package com.cwoc.app.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "contacts")
+@Entity(
+    tableName = "contacts",
+    indices = [
+        Index(
+            name = "idx_contacts_name",
+            value = ["givenName", "surname"]
+        )
+    ]
+)
 data class ContactEntity(
     @PrimaryKey val id: String,
     val givenName: String,
@@ -37,9 +47,13 @@ data class ContactEntity(
     val lastSyncedAt: String?,
 
     // Phase 3 — dirty tracking and conflict state
+    @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,
+    @ColumnInfo(defaultValue = "[]")
     val dirtyFields: String? = "[]",
+    @ColumnInfo(defaultValue = "0")
     val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
     val hasUnviewedConflict: Boolean = false,
     val conflictFields: String? = null
 )

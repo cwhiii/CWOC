@@ -59,4 +59,9 @@
     <string name="loading">Loading…</string>
     <string name="error_generic">Something went wrong</string>
     <string name="session_expired">Session expired. Please log in again.</string>
+
+    <!-- Widgets -->
+    <string name="widget_quick_add_desc">Quick-add a new chit</string>
+    <string name="widget_today_calendar_desc">Today\'s calendar events</string>
+    <string name="widget_upcoming_tasks_desc">Upcoming tasks</string>
 </resources>

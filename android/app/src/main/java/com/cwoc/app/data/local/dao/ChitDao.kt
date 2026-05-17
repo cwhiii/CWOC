@@ -69,6 +69,37 @@ interface ChitDao {
     @Query("UPDATE chits SET hasUnviewedConflict = 1, conflictFields = :fields WHERE id = :id")
     suspend fun setConflictState(id: String, fields: String)
 
+    // Phase 4 — View queries
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND checklist IS NOT NULL AND checklist != '' AND checklist != '[]'")
+    fun getChecklistChits(): Flow<List<ChitEntity>>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND isProjectMaster = 1")
+    fun getProjectMasterChits(): Flow<List<ChitEntity>>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND id IN (:ids)")
+    suspend fun getChitsByIds(ids: List<String>): List<ChitEntity>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND alerts IS NOT NULL AND alerts != '' AND alerts != '[]'")
+    fun getAlertChits(): Flow<List<ChitEntity>>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND healthData IS NOT NULL AND healthData != '' AND healthData != '[]'")
+    fun getIndicatorChits(): Flow<List<ChitEntity>>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND location IS NOT NULL AND location != ''")
+    fun getLocationChits(): Flow<List<ChitEntity>>
+
+    @Query("UPDATE chits SET isDirty = 1, dirtyFields = :dirtyFields, modifiedDatetime = :now WHERE id = :id")
+    suspend fun markDirty(id: String, dirtyFields: String, now: String)
+
+    // Phase 4 — Widget suspend queries (non-Flow for RemoteViews context)
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd)) ORDER BY startDatetime ASC")
+    suspend fun getChitsForDaySuspend(dayStart: String, dayEnd: String): List<ChitEntity>
+
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND status IN ('ToDo', 'In Progress') ORDER BY dueDatetime ASC LIMIT 5")
+    suspend fun getUpcomingTasksSuspend(): List<ChitEntity>
+
     // Phase 3 — Notification scheduling queries
 
     @Query("SELECT * FROM chits WHERE deleted = 0 AND alerts IS NOT NULL AND alerts != ''")
