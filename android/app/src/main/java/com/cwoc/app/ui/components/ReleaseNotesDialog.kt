@@ -145,7 +145,17 @@ fun ReleaseNotesDialog(
                 else -> {
                     val currentNote = notes[currentIndex]
 
-                    // Date header with navigation
+                    // Date header formatted nicely
+                    Text(
+                        text = formatReleaseNoteDate(currentNote.date),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Navigation row with Older/Newer buttons and counter
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -163,10 +173,11 @@ fun ReleaseNotesDialog(
                             Text("Older")
                         }
 
+                        // "{current} / {total}" counter
                         Text(
-                            text = currentNote.date,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                            text = "${currentIndex + 1} / ${notes.size}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         // Newer button (go to previous index = newer)
@@ -234,5 +245,32 @@ private suspend fun fetchReleaseNotes(
         }
     } catch (_: Exception) {
         null
+    }
+}
+
+/**
+ * Formats a release note date string (YYYYMMDD) into a human-readable format.
+ * e.g., "20250115" → "January 15, 2025"
+ */
+private fun formatReleaseNoteDate(dateStr: String): String {
+    return try {
+        if (dateStr.length == 8) {
+            val year = dateStr.substring(0, 4).toInt()
+            val month = dateStr.substring(4, 6).toInt()
+            val day = dateStr.substring(6, 8).toInt()
+            val monthName = when (month) {
+                1 -> "January"; 2 -> "February"; 3 -> "March"
+                4 -> "April"; 5 -> "May"; 6 -> "June"
+                7 -> "July"; 8 -> "August"; 9 -> "September"
+                10 -> "October"; 11 -> "November"; 12 -> "December"
+                else -> "Unknown"
+            }
+            "$monthName $day, $year"
+        } else {
+            // If it's already a formatted date or different format, return as-is
+            dateStr
+        }
+    } catch (_: Exception) {
+        dateStr
     }
 }

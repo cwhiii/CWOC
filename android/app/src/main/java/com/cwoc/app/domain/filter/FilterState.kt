@@ -4,6 +4,11 @@ package com.cwoc.app.domain.filter
  * Represents the current filter state for list views.
  * Empty sets mean "any" (no filtering on that dimension).
  * This state is held in-memory (not persisted to Room).
+ *
+ * Display toggle defaults match the web sidebar:
+ *   Pinned=true, Archived=false, Snoozed=false, Unmarked=true,
+ *   PastDue=true, Complete=true, Declined=true, Habits=true,
+ *   EmailReceived=false, EmailSent=false, SharedWithMe=false, SharedByMe=false
  */
 data class FilterState(
     val statuses: Set<String> = emptySet(),
@@ -11,19 +16,34 @@ data class FilterState(
     val tags: Set<String> = emptySet(),
     val tagMatchMode: TagMatchMode = TagMatchMode.ANY,
     val people: Set<String> = emptySet(),
-    val showArchived: Boolean = false,
+    // Display toggles — group 1 (pin/archive state)
     val showPinned: Boolean = true,
+    val showArchived: Boolean = false,
     val showSnoozed: Boolean = false,
+    val showUnmarked: Boolean = true,
+    // Display toggles — group 2 (status/type visibility)
     val showPastDue: Boolean = true,
-    // V2: Show/hide declined (rejected) items
-    val showDeclined: Boolean = false,
-    // V3: Color filter
+    val showComplete: Boolean = true,
+    val showDeclined: Boolean = true,
+    val showHabits: Boolean = true,
+    val showEmailReceived: Boolean = false,
+    val showEmailSent: Boolean = false,
+    // Display toggles — group 3 (sharing)
+    val sharedWithMe: Boolean = false,
+    val sharedByMe: Boolean = false,
+    // Color filter
     val colors: Set<String> = emptySet(),
-    // V4: Date range filter
+    // Date range filter
     val dateRangeStart: String? = null,
-    val dateRangeEnd: String? = null
+    val dateRangeEnd: String? = null,
+    // Text search filter
+    val searchText: String = "",
+    // Project filter: null=no filter, "__any__"=has project, "__none__"=no project, or specific ID
+    val projectFilter: String? = null
 ) {
-    // V5: Active filter count (number of non-default filter dimensions)
+    /**
+     * Count of non-default filter dimensions. Used to show/hide the "Clear" button.
+     */
     val activeFilterCount: Int get() {
         var count = 0
         if (statuses.isNotEmpty()) count++
@@ -35,8 +55,17 @@ data class FilterState(
         if (showArchived) count++
         if (!showPinned) count++
         if (showSnoozed) count++
+        if (!showUnmarked) count++
         if (!showPastDue) count++
-        if (showDeclined) count++
+        if (!showComplete) count++
+        if (!showDeclined) count++
+        if (!showHabits) count++
+        if (showEmailReceived) count++
+        if (showEmailSent) count++
+        if (sharedWithMe) count++
+        if (sharedByMe) count++
+        if (searchText.isNotEmpty()) count++
+        if (projectFilter != null) count++
         return count
     }
 }

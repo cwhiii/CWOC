@@ -1,216 +1,111 @@
 package com.cwoc.app.ui.screens.contacts
 
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
-import com.google.gson.reflect.TypeToken
+import com.cwoc.app.data.local.entity.ContactEntity
+import com.cwoc.app.data.repository.ContactRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.MediaType.Companion.toMediaType
 import javax.inject.Inject
 
-// ─── Data Models ────────────────────────────────────────────────────────────────
-
-data class DeletedContact(
-    val id: String,
-    @SerializedName("first_name") val firstName: String?,
-    @SerializedName("last_name") val lastName: String?,
-    @SerializedName("display_name") val displayName: String?,
-    @SerializedName("deleted_datetime") val deletedDatetime: String?
+data class TrashUiState(
+    val selectedIds: Set<String> = emptySet(),
+    val isProcessing: Boolean = false,
+    val message: String? = null
 )
-
-// ─── ViewModel ──────────────────────────────────────────────────────────────────
 
 @HiltViewModel
 class ContactTrashViewModel @Inject constructor(
-    private val okHttpClient: OkHttpClient,
-    private val prefs: SharedPreferences,
-    private val gson: Gson
+    private val contactRepository: ContactRepository
 ) : ViewModel() {
 
-    // ─── UI State ───────────────────────────────────────────────────────────
+    val trashContacts: StateFlow<List<ContactEntity>> = contactRepository.getTrashContacts()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _contacts = MutableStateFlow<List<DeletedContact>>(emptyList())
-    val contacts: StateFlow<List<DeletedContact>> = _contacts.asStateFlow()
+    private val _uiState = MutableStateFlow(TrashUiState())
+    val uiState: StateFlow<TrashUiState> = _uiState.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
-
-    private val _actionMessage = MutableStateFlow<String?>(null)
-    val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
-
-    init {
-        loadDeletedContacts()
+    fun toggleSelection(contactId: String) {
+        val current = _uiState.value.selectedIds.toMutableSet()
+        if (contactId in current) current.remove(contactId) else current.add(contactId)
+        _uiState.value = _uiState.value.copy(selectedIds = current)
     }
 
-    // ─── Public API ─────────────────────────────────────────────────────────
+    fun selectAll(contacts: List<ContactEntity>) {
+        _uiState.value = _uiState.value.copy(selectedIds = contacts.map { it.id }.toSet())
+    }
 
-    fun loadDeletedContacts() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
-            try {
-                fetchDeletedContacts()
-            } finally {
-                _isLoading.value = false
-            }
-        }
+    fun deselectAll() {
+        _uiState.value = _uiState.value.copy(selectedIds = emptySet())
+    }
+
+    fun isSelected(contactId: String): Boolean = contactId in _uiState.value.selectedIds
+
+    fun isAllSelected(contacts: List<ContactEntity>): Boolean =
+        contacts.isNotEmpty() && _uiState.value.selectedIds.size == contacts.size
+
+    fun toggleSelectAll(contacts: List<ContactEntity>) {
+        if (isAllSelected(contacts)) deselectAll() else selectAll(contacts)
     }
 
     fun restoreContact(contactId: String) {
         viewModelScope.launch {
-            _error.value = null
-            try {
-                val success = postRestoreContact(contactId)
-                if (success) {
-                    _actionMessage.value = "Contact restored"
-                    loadDeletedContacts()
-                }
-            } catch (e: Exception) {
-                _error.value = "Failed to restore contact: ${e.message}"
-            }
+            _uiState.value = _uiState.value.copy(isProcessing = true)
+            contactRepository.restoreFromTrash(contactId)
+            val newSelected = _uiState.value.selectedIds - contactId
+            _uiState.value = _uiState.value.copy(
+                isProcessing = false,
+                selectedIds = newSelected,
+                message = "Contact restored"
+            )
         }
     }
 
     fun purgeContact(contactId: String) {
         viewModelScope.launch {
-            _error.value = null
-            try {
-                val success = deletePurgeContact(contactId)
-                if (success) {
-                    _actionMessage.value = "Contact permanently deleted"
-                    loadDeletedContacts()
-                }
-            } catch (e: Exception) {
-                _error.value = "Failed to purge contact: ${e.message}"
-            }
+            _uiState.value = _uiState.value.copy(isProcessing = true)
+            contactRepository.purgeFromTrash(contactId)
+            val newSelected = _uiState.value.selectedIds - contactId
+            _uiState.value = _uiState.value.copy(
+                isProcessing = false,
+                selectedIds = newSelected,
+                message = "Contact permanently deleted"
+            )
         }
     }
 
-    fun restoreAll() {
+    fun bulkRestore() {
         viewModelScope.launch {
-            _error.value = null
-            try {
-                val currentContacts = _contacts.value
-                var successCount = 0
-                for (contact in currentContacts) {
-                    val success = postRestoreContact(contact.id)
-                    if (success) successCount++
-                }
-                _actionMessage.value = "Restored $successCount contact(s)"
-                loadDeletedContacts()
-            } catch (e: Exception) {
-                _error.value = "Failed to restore all: ${e.message}"
-            }
+            _uiState.value = _uiState.value.copy(isProcessing = true)
+            val ids = _uiState.value.selectedIds.toList()
+            ids.forEach { contactRepository.restoreFromTrash(it) }
+            _uiState.value = _uiState.value.copy(
+                isProcessing = false,
+                selectedIds = emptySet(),
+                message = "${ids.size} contact(s) restored"
+            )
         }
     }
 
-    fun purgeAll() {
+    fun bulkPurge() {
         viewModelScope.launch {
-            _error.value = null
-            try {
-                val currentContacts = _contacts.value
-                var successCount = 0
-                for (contact in currentContacts) {
-                    val success = deletePurgeContact(contact.id)
-                    if (success) successCount++
-                }
-                _actionMessage.value = "Permanently deleted $successCount contact(s)"
-                loadDeletedContacts()
-            } catch (e: Exception) {
-                _error.value = "Failed to purge all: ${e.message}"
-            }
+            _uiState.value = _uiState.value.copy(isProcessing = true)
+            val ids = _uiState.value.selectedIds.toList()
+            ids.forEach { contactRepository.purgeFromTrash(it) }
+            _uiState.value = _uiState.value.copy(
+                isProcessing = false,
+                selectedIds = emptySet(),
+                message = "${ids.size} contact(s) permanently deleted"
+            )
         }
     }
 
-    fun clearActionMessage() {
-        _actionMessage.value = null
-    }
-
-    // ─── Private Network Calls ──────────────────────────────────────────────
-
-    private suspend fun fetchDeletedContacts() {
-        withContext(Dispatchers.IO) {
-            try {
-                val serverUrl = prefs.getString("server_url", null)
-                if (serverUrl.isNullOrBlank()) {
-                    _error.value = "No server URL configured"
-                    return@withContext
-                }
-
-                val url = serverUrl.trimEnd('/') + "/api/trash/contacts"
-                val request = Request.Builder().url(url).get().build()
-                val response = okHttpClient.newCall(request).execute()
-
-                if (response.isSuccessful) {
-                    val body = response.body?.string()
-                    if (body != null) {
-                        val listType = object : TypeToken<List<DeletedContact>>() {}.type
-                        val contactList: List<DeletedContact> = gson.fromJson(body, listType)
-                        _contacts.value = contactList
-                    } else {
-                        _error.value = "Empty response from server"
-                    }
-                } else {
-                    _error.value = "Unable to load deleted contacts (${response.code})"
-                }
-            } catch (e: Exception) {
-                _error.value = "Network error: ${e.message ?: "Unable to reach server"}"
-            }
-        }
-    }
-
-    private suspend fun postRestoreContact(contactId: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            val serverUrl = prefs.getString("server_url", null)
-            if (serverUrl.isNullOrBlank()) {
-                _error.value = "No server URL configured"
-                return@withContext false
-            }
-
-            val url = serverUrl.trimEnd('/') + "/api/trash/contacts/$contactId/restore"
-            val requestBody = "".toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(url).post(requestBody).build()
-            val response = okHttpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                _error.value = "Failed to restore contact (${response.code})"
-                return@withContext false
-            }
-            true
-        }
-    }
-
-    private suspend fun deletePurgeContact(contactId: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            val serverUrl = prefs.getString("server_url", null)
-            if (serverUrl.isNullOrBlank()) {
-                _error.value = "No server URL configured"
-                return@withContext false
-            }
-
-            val url = serverUrl.trimEnd('/') + "/api/trash/contacts/$contactId/purge"
-            val request = Request.Builder().url(url).delete().build()
-            val response = okHttpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                _error.value = "Failed to purge contact (${response.code})"
-                return@withContext false
-            }
-            true
-        }
+    fun clearMessage() {
+        _uiState.value = _uiState.value.copy(message = null)
     }
 }

@@ -52,6 +52,7 @@ import com.cwoc.app.ui.components.PeopleChipsRow
 import com.cwoc.app.ui.components.SharingIndicators
 import com.cwoc.app.ui.components.ArchiveSnoozeIndicators
 import com.cwoc.app.ui.components.chitColorBorder
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.sortPinnedFirst
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
@@ -212,6 +213,12 @@ private fun ChecklistChitCard(
 ) {
     val items = ChecklistOperations.parseChecklist(chit.checklist)
 
+    // Filter out system tags — only show user-created tags
+    val SYSTEM_TAGS = listOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes")
+    val userTags = chit.tags?.filter { tag ->
+        tag !in SYSTEM_TAGS && !tag.startsWith("CWOC_System/") && !tag.startsWith("cwoc_system/")
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -221,9 +228,9 @@ private fun ChecklistChitCard(
                 onClick = onCardTap,
                 onLongClick = onCardLongPress
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFF5E6D3)
-        )
+        border = CwocChitCardStyle.cardBorder,
+        colors = CwocChitCardStyle.cardColors(),
+        elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Chit title + checklist progress
@@ -248,18 +255,6 @@ private fun ChecklistChitCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // B1: Tag chips
-            TagChipsRow(
-                tags = chit.tags,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-
-            // B4: People chips
-            PeopleChipsRow(
-                people = chit.people,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-
             // B8: Sharing/stealth indicators
             SharingIndicators(chit = chit)
 
@@ -276,11 +271,30 @@ private fun ChecklistChitCard(
                 )
             }
 
-            // Checklist items
+            // Checklist items — only show unchecked items (checked are counted in progress badge)
             items.forEachIndexed { index, item ->
-                ChecklistItemRow(
-                    item = item,
-                    onToggle = { onToggleItem(index) }
+                if (!item.checked) {
+                    ChecklistItemRow(
+                        item = item,
+                        onToggle = { onToggleItem(index) }
+                    )
+                }
+            }
+
+            // Tags at the bottom (non-system tags only)
+            if (!userTags.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                TagChipsRow(
+                    tags = userTags,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            // B4: People chips
+            if (!chit.people.isNullOrEmpty()) {
+                PeopleChipsRow(
+                    people = chit.people,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }

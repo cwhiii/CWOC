@@ -15,7 +15,17 @@ sealed class Screen(val route: String) {
     data object Indicators : Screen("indicators")
     data object Map : Screen("map")
     data object Contacts : Screen("contacts")
-    data object Settings : Screen("settings")
+    data object Settings : Screen("settings") {
+        /** Route template with query parameters for composable definition. */
+        const val ROUTE_WITH_ARGS = "settings?tab={tab}&section={section}"
+
+        fun createRoute(tab: String? = null, section: String? = null): String {
+            val params = mutableListOf<String>()
+            if (tab != null) params.add("tab=$tab")
+            if (section != null) params.add("section=$section")
+            return if (params.isEmpty()) "settings" else "settings?${params.joinToString("&")}"
+        }
+    }
     data object Trash : Screen("trash")
     data object Search : Screen("search")
     data object Help : Screen("help")
@@ -34,6 +44,13 @@ sealed class Screen(val route: String) {
     data object Email : Screen("email")
     // Attachments browser
     data object Attachments : Screen("attachments")
+    // Kiosk mode
+    data object Kiosk : Screen("kiosk?tags={tags}") {
+        fun createRoute(selectedTags: List<String>): String {
+            val tagsParam = selectedTags.joinToString(",")
+            return "kiosk?tags=$tagsParam"
+        }
+    }
 
     data object RuleEditor : Screen("rule-editor/{ruleId}") {
         const val NEW_RULE_ID = "new"

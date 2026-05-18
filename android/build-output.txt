@@ -1,4 +1,4 @@
-Build failed: 2026-05-18T12:13:15.845396545Z
+Build failed: 2026-05-18T15:42:14.550560461Z
 
 === Kotlin Compiler Errors ===
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/ImageViewDialog.kt:35:8 [UNRESOLVED_REFERENCE] Unresolved reference: coil
@@ -16,6 +16,44 @@ e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/ma
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:76:8 [UNRESOLVED_REFERENCE] Unresolved reference: coil
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:400:21 [UNRESOLVED_REFERENCE] Unresolved reference: AsyncImage
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:499:21 [UNRESOLVED_REFERENCE] Unresolved reference: AsyncImage
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/filter/FilterEngine.kt:155:35 [UNRESOLVED_REFERENCE] Unresolved reference: notes
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/sort/SortEngine.kt:39:5 [MUST_BE_INITIALIZED] Property must be initialized
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/sort/SortEngine.kt:40:9 [EQUALITY_NOT_APPLICABLE] Operator '!=' cannot be applied to 'Boolean' and 'SortField'
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/sort/SortEngine.kt:40:36 [EQUALITY_NOT_APPLICABLE] Operator '!=' cannot be applied to 'Boolean' and 'SortField'
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/sort/SortEngine.kt:41:9 [EQUALITY_NOT_APPLICABLE] Operator '!=' cannot be applied to 'Boolean' and 'SortField'
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/domain/sort/SortEngine.kt:41:38 [EQUALITY_NOT_APPLICABLE] Operator '!=' cannot be applied to 'Boolean' and 'SortField'
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:86:17 [UNRESOLVED_REFERENCE] Unresolved reference: CwocApiService
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1356:21 [UNRESOLVED_REFERENCE] Unresolved reference: HomeAssistantSection
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1478:17 [UNRESOLVED_REFERENCE] Unresolved reference: CwocApiService
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1486:29 [NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER] Not enough information to infer type variable T
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1486:29 [DELEGATE_SPECIAL_FUNCTION_NONE_APPLICABLE] Property delegate must have a 'getValue(Nothing?, KProperty<*>)' method. None of the following functions is suitable: 
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1486:55 [UNRESOLVED_REFERENCE] Unresolved reference: UpgradeModalMode
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1507:17 [UNRESOLVED_REFERENCE] Unresolved reference: rememberCoroutineScope
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1513:32 [UNRESOLVED_REFERENCE] Unresolved reference: withContext
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1513:44 [UNRESOLVED_REFERENCE] Unresolved reference: Dispatchers
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1535:32 [UNRESOLVED_REFERENCE] Unresolved reference: withContext
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1535:44 [UNRESOLVED_REFERENCE] Unresolved reference: Dispatchers
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1632:60 [UNRESOLVED_REFERENCE] Unresolved reference: withContext
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1632:72 [UNRESOLVED_REFERENCE] Unresolved reference: Dispatchers
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1657:65 [UNRESOLVED_REFERENCE] Unresolved reference: Refresh
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1679:44 [UNRESOLVED_REFERENCE] Unresolved reference: UpgradeModalMode
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1693:44 [UNRESOLVED_REFERENCE] Unresolved reference: UpgradeModalMode
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1738:9 [UNRESOLVED_REFERENCE] Unresolved reference: UpgradeModal
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1747:9 [UNRESOLVED_REFERENCE] Unresolved reference: ReleaseNotesDialog
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1769:48 [UNRESOLVED_REFERENCE] Unresolved reference: withContext
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:1769:60 [UNRESOLVED_REFERENCE] Unresolved reference: Dispatchers
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:995:5 [UNRESOLVED_REFERENCE] Unresolved reference: CollapsibleSection
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1000:9 [COMPOSABLE_INVOCATION] @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1044:25 [UNRESOLVED_REFERENCE] Unresolved reference: Switch
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1046:49 [CANNOT_INFER_PARAMETER_TYPE] Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1080:21 [UNRESOLVED_REFERENCE] Unresolved reference: Switch
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1082:45 [CANNOT_INFER_PARAMETER_TYPE] Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1322:33 [UNRESOLVED_REFERENCE] Unresolved reference: TextStyle
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1322:56 [UNRESOLVED_REFERENCE] Unresolved reference: FontFamily
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1322:92 [UNRESOLVED_REFERENCE] Unresolved reference: sp
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1343:33 [UNRESOLVED_REFERENCE] Unresolved reference: TextStyle
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1343:56 [UNRESOLVED_REFERENCE] Unresolved reference: FontFamily
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/EmailSettingsTab.kt:1343:92 [UNRESOLVED_REFERENCE] Unresolved reference: sp
 
 === Task Failure ===
 Execution failed for task ':app:compileDebugKotlin'.

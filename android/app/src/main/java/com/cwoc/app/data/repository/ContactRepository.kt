@@ -1,15 +1,28 @@
 package com.cwoc.app.data.repository
 
+import android.content.Context
+import android.net.Uri
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.entity.ContactEntity
+import com.cwoc.app.data.mapper.ContactImageManager
+import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.ImportResultDto
+import com.cwoc.app.data.remote.SwitchableUserDto
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
 import dagger.Lazy
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
@@ -17,14 +30,12 @@ import javax.inject.Singleton
 
 /**
  * Interface for contact CRUD operations with dirty tracking and push sync.
- *
- * Validates: Requirements 4.1, 4.2, 4.3, 4.4
  */
 interface ContactRepository {
-    /** All non-deleted contacts as a reactive Flow, ordered by givenName. */
+    /** All non-deleted contacts as a reactive Flow, ordered by favorite DESC then displayName. */
     val allContacts: Flow<List<ContactEntity>>
 
-    /** Search contacts by name, email, or phone. */
+    /** Search contacts across ALL fields. */
     fun searchContacts(query: String): Flow<List<ContactEntity>>
 
     /** Get a single contact by ID. */
@@ -38,22 +49,58 @@ interface ContactRepository {
 
     /** Soft-delete a contact. Marks deleted=true, dirty with ["deleted"], pushes if online. */
     suspend fun delete(contactId: String)
+
+    /** Toggle favorite status locally and via API. Returns new favorite state. */
+    suspend fun toggleFavorite(contactId: String): Boolean
+
+    /** Upload a profile image for a contact. Returns the new image URL or null on failure. */
+    suspend fun uploadImage(contactId: String, imageFile: File): String?
+
+    /** Delete a contact's profile image. */
+    suspend fun deleteImage(contactId: String)
+
+    /** Import contacts from a file URI. Returns import result summary. */
+    suspend fun importFile(context: Context, uri: Uri, filename: String): ImportResultDto?
+
+    /** Export all contacts. Returns the downloaded file or null. */
+    suspend fun exportAll(context: Context, format: String): File?
+
+    /** Export a single contact as .vcf. Returns the downloaded file or null. */
+    suspend fun exportSingle(context: Context, contactId: String): File?
+
+    /** Get soft-deleted contacts for trash view. */
+    fun getTrashContacts(): Flow<List<ContactEntity>>
+
+    /** Restore a contact from trash. */
+    suspend fun restoreFromTrash(contactId: String)
+
+    /** Permanently purge a contact from trash. */
+    suspend fun purgeFromTrash(contactId: String)
+
+    /** Get list of switchable users from API. */
+    suspend fun getSwitchableUsers(): List<SwitchableUserDto>
+
+    /** Get favorites contacts. */
+    fun getFavorites(): Flow<List<ContactEntity>>
+
+    /** Get non-favorite owned contacts. */
+    fun getNonFavoriteOwned(): Flow<List<ContactEntity>>
+
+    /** Get vault contacts from other users. */
+    fun getVaultContacts(currentUserId: String): Flow<List<ContactEntity>>
 }
 
 /**
  * Implementation of [ContactRepository] backed by Room via [ContactDao].
- *
- * - create(): generates UUID, sets createdDatetime/modifiedDatetime, upserts to Room,
- *   marks dirty with all populated fields, triggers immediate push when online.
- * - update(): upserts to Room, marks dirty with changed fields, pushes if online.
- * - delete(): calls contactDao.markDeleted, marks dirty with ["deleted"], pushes if online.
  */
 @Singleton
 class ContactRepositoryImpl @Inject constructor(
     private val contactDao: ContactDao,
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: Lazy<SyncPushEngine>,
-    private val connectivityMonitor: ConnectivityMonitor
+    private val connectivityMonitor: ConnectivityMonitor,
+    private val apiService: Lazy<CwocApiService>,
+    @ApplicationContext private val appContext: Context
 ) : ContactRepository {
 
     private val pushScope = CoroutineScope(Dispatchers.IO)
@@ -62,7 +109,7 @@ class ContactRepositoryImpl @Inject constructor(
         get() = contactDao.getAllActive()
 
     override fun searchContacts(query: String): Flow<List<ContactEntity>> =
-        contactDao.search(query)
+        contactDao.searchAll(query)
 
     override suspend fun getById(id: String): ContactEntity? =
         contactDao.getById(id)
@@ -82,7 +129,6 @@ class ContactRepositoryImpl @Inject constructor(
 
         contactDao.upsert(entity)
 
-        // Mark dirty with all populated fields
         val allFields = buildSet {
             if (entity.givenName.isNotBlank()) add("givenName")
             if (!entity.surname.isNullOrBlank()) add("surname")
@@ -131,10 +177,139 @@ class ContactRepositoryImpl @Inject constructor(
         triggerPushIfOnline()
     }
 
-    /**
-     * Triggers an immediate push if the device is currently online.
-     * Launches in a separate coroutine scope so the caller doesn't block on the push.
-     */
+    override suspend fun toggleFavorite(contactId: String): Boolean {
+        val now = Instant.now().toString()
+        contactDao.toggleFavorite(contactId, now)
+        dirtyTracker.markContactDirty(contactId, setOf("favorite"))
+        triggerPushIfOnline()
+        return contactDao.getFavoriteState(contactId) ?: false
+    }
+
+    override suspend fun uploadImage(contactId: String, imageFile: File): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val mimeType = ContactImageManager.getMimeType(imageFile)
+                val requestBody = imageFile.asRequestBody(mimeType.toMediaType())
+                val part = MultipartBody.Part.createFormData("file", imageFile.name, requestBody)
+                val response = apiService.get().uploadContactImage(contactId, part)
+                if (response.isSuccessful) {
+                    response.body()?.get("image_url")
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    override suspend fun deleteImage(contactId: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                apiService.get().deleteContactImage(contactId)
+            } catch (_: Exception) {}
+        }
+    }
+
+    override suspend fun importFile(context: Context, uri: Uri, filename: String): ImportResultDto? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext null
+                val bytes = inputStream.readBytes()
+                inputStream.close()
+
+                val mimeType = if (filename.endsWith(".csv")) "text/csv" else "text/vcard"
+                val requestBody = bytes.toRequestBody(mimeType.toMediaType())
+                val part = MultipartBody.Part.createFormData("file", filename, requestBody)
+                val response = apiService.get().importContacts(part)
+                if (response.isSuccessful) response.body() else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    override suspend fun exportAll(context: Context, format: String): File? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.get().exportContacts(format)
+                if (response.isSuccessful) {
+                    val body = response.body() ?: return@withContext null
+                    val ext = if (format == "csv") "csv" else "vcf"
+                    val file = File(context.getExternalFilesDir(null), "contacts_export.$ext")
+                    file.outputStream().use { fos ->
+                        body.byteStream().copyTo(fos)
+                    }
+                    file
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    override suspend fun exportSingle(context: Context, contactId: String): File? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.get().exportSingleContact(contactId, "vcf")
+                if (response.isSuccessful) {
+                    val body = response.body() ?: return@withContext null
+                    val file = File(context.getExternalFilesDir(null), "contact_$contactId.vcf")
+                    file.outputStream().use { fos ->
+                        body.byteStream().copyTo(fos)
+                    }
+                    file
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    override fun getTrashContacts(): Flow<List<ContactEntity>> =
+        contactDao.getDeletedContacts()
+
+    override suspend fun restoreFromTrash(contactId: String) {
+        val now = Instant.now().toString()
+        contactDao.restoreFromTrash(contactId, now)
+        // Also call API if online
+        if (connectivityMonitor.isOnline.value) {
+            pushScope.launch {
+                try { apiService.get().restoreContact(contactId) } catch (_: Exception) {}
+            }
+        }
+        dirtyTracker.markContactDirty(contactId, setOf("deleted"))
+        triggerPushIfOnline()
+    }
+
+    override suspend fun purgeFromTrash(contactId: String) {
+        contactDao.purge(contactId)
+        // Also call API if online
+        if (connectivityMonitor.isOnline.value) {
+            pushScope.launch {
+                try { apiService.get().purgeContact(contactId) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    override suspend fun getSwitchableUsers(): List<SwitchableUserDto> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = apiService.get().getSwitchableUsers()
+                if (response.isSuccessful) response.body() ?: emptyList() else emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    override fun getFavorites(): Flow<List<ContactEntity>> =
+        contactDao.getFavorites()
+
+    override fun getNonFavoriteOwned(): Flow<List<ContactEntity>> =
+        contactDao.getNonFavoriteOwned()
+
+    override fun getVaultContacts(currentUserId: String): Flow<List<ContactEntity>> =
+        contactDao.getVaultContacts(currentUserId)
+
     private fun triggerPushIfOnline() {
         if (connectivityMonitor.isOnline.value) {
             pushScope.launch {

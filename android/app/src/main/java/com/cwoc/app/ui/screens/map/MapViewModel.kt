@@ -224,14 +224,13 @@ class MapViewModel @Inject constructor(
 
     /**
      * Extract the first address from the JSON array string.
-     * Addresses are stored as JSON: ["123 Main St, City, ST 12345", ...]
-     * or as JSON objects: [{"street": "...", "city": "...", ...}]
+     * Addresses are stored as JSON: [{"label": "Home", "value": "123 Main St, City, ST 12345"}, ...]
+     * The "value" field contains the full address string.
      */
     private fun extractFirstAddress(addressesJson: String?): String? {
         if (addressesJson.isNullOrBlank() || addressesJson == "[]" || addressesJson == "null") return null
 
         return try {
-            // Try as simple string array first
             val listType = object : TypeToken<List<Any>>() {}.type
             val list: List<Any> = gson.fromJson(addressesJson, listType) ?: return null
             if (list.isEmpty()) return null
@@ -240,7 +239,11 @@ class MapViewModel @Inject constructor(
             when (first) {
                 is String -> first.takeIf { it.isNotBlank() }
                 is Map<*, *> -> {
-                    // Build address from object fields
+                    // Primary format: {"label": "Home", "value": "123 Main St..."}
+                    val value = first["value"] as? String
+                    if (!value.isNullOrBlank()) return value
+
+                    // Fallback: try building from component fields
                     val parts = listOfNotNull(
                         first["street"] as? String,
                         first["city"] as? String,

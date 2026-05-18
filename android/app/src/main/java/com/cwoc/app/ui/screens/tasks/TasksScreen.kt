@@ -50,6 +50,7 @@ import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.ChitListScaffold
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.SwipeableChitCard
 import com.cwoc.app.ui.components.UndoToast
@@ -426,10 +427,9 @@ private fun TaskCard(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = CwocChitCardStyle.cardBorder,
+        colors = CwocChitCardStyle.cardColors(),
+        elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(
             modifier = Modifier.padding(12.dp)

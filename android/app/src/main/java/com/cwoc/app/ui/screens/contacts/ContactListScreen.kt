@@ -1,8 +1,14 @@
 package com.cwoc.app.ui.screens.contacts
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,35 +22,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,18 +58,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.cwoc.app.data.local.entity.ContactEntity
-import java.io.File
+import com.cwoc.app.data.remote.SwitchableUserDto
+import com.cwoc.app.ui.components.PeopleSectionHeader
+import com.cwoc.app.ui.components.firstMultiValue
+import com.cwoc.app.ui.theme.ColorUtils
+import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 
 /**
- * Contact List screen — displays all contacts with search, alphabetical index,
- * grouped/ungrouped toggle, and import/export functionality.
+ * People Page — Contact Rolodex list with toolbar, search, grouped/ungrouped modes,
+ * import/export, and properly rendered contact rows with images and parsed data.
  */
 @Composable
 fun ContactListScreen(
@@ -75,209 +86,179 @@ fun ContactListScreen(
     modifier: Modifier = Modifier,
     viewModel: ContactListViewModel = hiltViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val contacts by viewModel.contacts.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val isGrouped by viewModel.isGrouped.collectAsState()
-    val groupedContacts by viewModel.groupedContacts.collectAsState()
-    val actionMessage by viewModel.actionMessage.collectAsState()
-    val sectionIndex = remember(contacts) { viewModel.computeSectionIndex(contacts) }
-    var showOverflowMenu by remember { mutableStateOf(false) }
-
     val context = LocalContext.current
 
-    // File picker launchers for import
-    val vcardPickerLauncher = rememberLauncherForActivityResult(
+    // File picker for import
+    val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { viewModel.importVcard(it) }
+        uri?.let { viewModel.importFile(it) }
     }
 
-    val csvPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { viewModel.importCsv(it) }
+    // Export dropdown state
+    var showExportMenu by remember { mutableStateOf(false) }
+
+    // Handle messages
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearError()
+        }
+    }
+    LaunchedEffect(uiState.exportSuccess) {
+        uiState.exportSuccess?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearExportSuccess()
+        }
     }
 
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
-        Column(
+    // Server URL for image loading
+    val serverUrl = remember {
+        context.getSharedPreferences("cwoc_secure_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("server_url", "") ?: ""
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // ─── Toolbar ────────────────────────────────────────────────────────
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Search input with grouped toggle and overflow menu
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Search contacts...") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF6B4E31),
-                        cursorColor = Color(0xFF6B4E31)
-                    )
-                )
-
-                // Grouped/Ungrouped toggle button
-                IconButton(onClick = { viewModel.toggleGroupedMode() }) {
-                    Icon(
-                        imageVector = if (isGrouped) Icons.Default.ViewModule else Icons.Default.ViewList,
-                        contentDescription = if (isGrouped) "Switch to ungrouped" else "Switch to grouped",
-                        tint = Color(0xFF6B4E31)
-                    )
-                }
-
-                Box {
-                    IconButton(onClick = { showOverflowMenu = true }) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = Color(0xFF6B4E31)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Import vCard") },
-                            onClick = {
-                                showOverflowMenu = false
-                                vcardPickerLauncher.launch("text/*")
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Upload, contentDescription = null, tint = Color(0xFF6B4E31))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Import CSV") },
-                            onClick = {
-                                showOverflowMenu = false
-                                csvPickerLauncher.launch("text/*")
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Upload, contentDescription = null, tint = Color(0xFF6B4E31))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Export vCard") },
-                            onClick = {
-                                showOverflowMenu = false
-                                viewModel.exportVcard { data ->
-                                    if (data != null) {
-                                        shareExportedFile(context, data, "contacts.vcf", "text/vcard")
-                                    }
-                                }
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFF6B4E31))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Export CSV") },
-                            onClick = {
-                                showOverflowMenu = false
-                                viewModel.exportCsv { data ->
-                                    if (data != null) {
-                                        shareExportedFile(context, data, "contacts.csv", "text/csv")
-                                    }
-                                }
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFF6B4E31))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("View Deleted") },
-                            onClick = {
-                                showOverflowMenu = false
-                                onNavigateToTrash()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFF6B4E31))
-                            }
-                        )
-                    }
+            // New Contact
+            IconButton(onClick = { onNavigateToContact("new") }) {
+                Icon(Icons.Default.Add, "New Contact", tint = CwocZoneHeaderBrown)
+            }
+            // Import
+            IconButton(onClick = { importLauncher.launch("*/*") }) {
+                if (uiState.isImporting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.FileUpload, "Import", tint = CwocZoneHeaderBrown)
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Mode indicator chips
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = isGrouped,
-                    onClick = { if (!isGrouped) viewModel.toggleGroupedMode() },
-                    label = { Text("Grouped") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFF6B4E31),
-                        selectedLabelColor = Color.White
+            // Export
+            Box {
+                IconButton(onClick = { showExportMenu = true }) {
+                    Icon(Icons.Default.FileDownload, "Export", tint = CwocZoneHeaderBrown)
+                }
+                DropdownMenu(expanded = showExportMenu, onDismissRequest = { showExportMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Export as .vcf (vCard)") },
+                        onClick = { showExportMenu = false; viewModel.exportContacts("vcf") }
                     )
-                )
-                FilterChip(
-                    selected = !isGrouped,
-                    onClick = { if (isGrouped) viewModel.toggleGroupedMode() },
-                    label = { Text("Ungrouped") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFF6B4E31),
-                        selectedLabelColor = Color.White
+                    DropdownMenuItem(
+                        text = { Text("Export as .csv") },
+                        onClick = { showExportMenu = false; viewModel.exportContacts("csv") }
                     )
+                }
+            }
+            // Group/Ungroup toggle
+            IconButton(onClick = { viewModel.toggleGroupedMode() }) {
+                Icon(
+                    if (uiState.isGrouped) Icons.Default.ViewModule else Icons.Default.ViewList,
+                    if (uiState.isGrouped) "Ungroup" else "Group",
+                    tint = CwocZoneHeaderBrown
                 )
             }
+            // Trash
+            IconButton(onClick = { onNavigateToTrash() }) {
+                Icon(Icons.Default.Delete, "Trash", tint = CwocZoneHeaderBrown)
+            }
+        }
 
-            Spacer(modifier = Modifier.height(8.dp))
+        // ─── Search ─────────────────────────────────────────────────────────
+        OutlinedTextField(
+            value = uiState.searchQuery,
+            onValueChange = { viewModel.updateSearchQuery(it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            placeholder = { Text("🔍 Search contacts...") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF008080),
+                unfocusedContainerColor = Color(0xFFF5E6CC)
+            )
+        )
 
-            if (contacts.isEmpty() && !isGrouped) {
-                EmptyContactsState(hasQuery = searchQuery.isNotBlank())
-            } else if (isGrouped) {
-                // Grouped mode
-                GroupedContactList(
-                    grouped = groupedContacts,
-                    onContactTap = { onNavigateToContact(it) },
-                    onUserTap = { userId -> onNavigateToProfile(userId) }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ─── Contact List ───────────────────────────────────────────────────
+        if (contacts.isEmpty() && uiState.users.isEmpty()) {
+            // Empty state
+            Column(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = if (uiState.searchQuery.isNotBlank()) "No contacts match your search."
+                    else "No contacts yet. Tap '+' to add one.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFF8B7355)
                 )
-            } else {
-                // Ungrouped mode — flat alphabetical list
-                LazyColumn {
-                    itemsIndexed(contacts, key = { _, c -> c.id }) { index, contact ->
-                        // Section header
-                        val letter = (contact.givenName.firstOrNull()
-                            ?: contact.surname?.firstOrNull() ?: '#').uppercaseChar()
-                        if (sectionIndex[letter] == index) {
-                            SectionHeader(letter = letter)
+            }
+        } else if (uiState.isGrouped) {
+            // Grouped mode
+            GroupedContactList(
+                uiState = uiState,
+                contacts = contacts,
+                serverUrl = serverUrl,
+                onContactTap = { onNavigateToContact(it) },
+                onUserTap = { onNavigateToProfile(it) },
+                onToggleFavorite = { viewModel.toggleFavorite(it) },
+                onToggleUserFavorite = { viewModel.toggleUserFavorite(it) },
+                onToggleSection = { viewModel.toggleSection(it) },
+                isSectionCollapsed = { viewModel.isSectionCollapsed(it) },
+                isUserFavorite = { viewModel.isUserFavorite(it) }
+            )
+        } else {
+            // Ungrouped flat list
+            LazyColumn {
+                items(contacts, key = { it.id }) { contact ->
+                    ContactRow(
+                        contact = contact,
+                        serverUrl = serverUrl,
+                        onTap = { onNavigateToContact(contact.id) },
+                        onToggleFavorite = { viewModel.toggleFavorite(contact.id) }
+                    )
+                }
+            }
+        }
+    }
+
+    // Import result dialog
+    uiState.importResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearImportResult() },
+            title = { Text("📋 Import Results") },
+            text = {
+                Column {
+                    Text("✅ ${result.imported} imported", color = Color(0xFF2E7D32))
+                    Text("⚠️ ${result.skipped} skipped", color = Color(0xFFF57F17))
+                    if (result.errors.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Errors:", fontWeight = FontWeight.Bold)
+                        result.errors.take(10).forEach { err ->
+                            Text(
+                                "Entry ${err.entry ?: "?"}: ${err.reason ?: "Unknown"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
-
-                        ContactRow(
-                            contact = contact,
-                            onTap = { onNavigateToContact(contact.id) }
-                        )
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearImportResult() }) { Text("Close") }
             }
-        }
-
-        // New Contact FAB
-        FloatingActionButton(
-            onClick = { onNavigateToContact("new") },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = Color(0xFF6B4E31),
-            contentColor = Color.White
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "New Contact")
-        }
+        )
     }
 }
 
@@ -285,234 +266,89 @@ fun ContactListScreen(
 
 @Composable
 private fun GroupedContactList(
-    grouped: GroupedContacts,
+    uiState: PeopleUiState,
+    contacts: List<ContactEntity>,
+    serverUrl: String,
     onContactTap: (String) -> Unit,
-    onUserTap: (String) -> Unit
+    onUserTap: (String) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onToggleUserFavorite: (String) -> Unit,
+    onToggleSection: (String) -> Unit,
+    isSectionCollapsed: (String) -> Boolean,
+    isUserFavorite: (String) -> Boolean
 ) {
-    var favoritesExpanded by remember { mutableStateOf(true) }
-    var usersExpanded by remember { mutableStateOf(true) }
-    var allContactsExpanded by remember { mutableStateOf(true) }
-    var vaultExpanded by remember { mutableStateOf(true) }
-
     LazyColumn {
-        // ─── Favorites Section ──────────────────────────────────────────
-        item {
-            GroupSectionHeader(
-                title = "Favorites",
-                count = grouped.favorites.size,
-                isExpanded = favoritesExpanded,
-                onToggle = { favoritesExpanded = !favoritesExpanded },
-                icon = Icons.Default.Favorite
-            )
-        }
-        if (favoritesExpanded) {
-            itemsIndexed(grouped.favorites, key = { _, c -> "fav_${c.id}" }) { _, contact ->
-                ContactRow(contact = contact, onTap = { onContactTap(contact.id) })
-            }
-            if (grouped.favorites.isEmpty()) {
-                item {
-                    Text(
-                        text = "No favorites yet",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
-                    )
-                }
-            }
-        }
-
-        // ─── Users Section ──────────────────────────────────────────────
-        item {
-            GroupSectionHeader(
-                title = "Users",
-                count = grouped.users.size,
-                isExpanded = usersExpanded,
-                onToggle = { usersExpanded = !usersExpanded },
-                icon = Icons.Default.Person
-            )
-        }
-        if (usersExpanded) {
-            itemsIndexed(grouped.users, key = { _, u -> "user_${u.id}" }) { _, user ->
-                UserRow(user = user, onTap = { onUserTap(user.id) })
-            }
-            if (grouped.users.isEmpty()) {
-                item {
-                    Text(
-                        text = "No other users",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
-                    )
-                }
-            }
-        }
-
-        // ─── All Contacts Section ───────────────────────────────────────
-        item {
-            GroupSectionHeader(
-                title = "All Contacts",
-                count = grouped.allContacts.size,
-                isExpanded = allContactsExpanded,
-                onToggle = { allContactsExpanded = !allContactsExpanded }
-            )
-        }
-        if (allContactsExpanded) {
-            itemsIndexed(grouped.allContacts, key = { _, c -> "all_${c.id}" }) { _, contact ->
-                ContactRow(contact = contact, onTap = { onContactTap(contact.id) })
-            }
-            if (grouped.allContacts.isEmpty()) {
-                item {
-                    Text(
-                        text = "No contacts",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
-                    )
-                }
-            }
-        }
-
-        // ─── Vault Contacts Section ─────────────────────────────────────
-        item {
-            GroupSectionHeader(
-                title = "Vault Contacts",
-                count = grouped.vaultContacts.size,
-                isExpanded = vaultExpanded,
-                onToggle = { vaultExpanded = !vaultExpanded }
-            )
-        }
-        if (vaultExpanded) {
-            itemsIndexed(grouped.vaultContacts, key = { _, c -> "vault_${c.id}" }) { _, contact ->
-                ContactRow(contact = contact, onTap = { onContactTap(contact.id) })
-            }
-            if (grouped.vaultContacts.isEmpty()) {
-                item {
-                    Text(
-                        text = "No vault contacts",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ─── Group Section Header ───────────────────────────────────────────────────────
-
-@Composable
-private fun GroupSectionHeader(
-    title: String,
-    count: Int,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggle() }
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = Color(0xFF6B4E31)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = Color(0xFF6B4E31),
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f)
-        )
-
-        Text(
-            text = "$count",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color(0xFF8B7355),
-            modifier = Modifier.padding(end = 4.dp)
-        )
-
-        Icon(
-            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = if (isExpanded) "Collapse" else "Expand",
-            tint = Color(0xFF6B4E31),
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-// ─── User Row ───────────────────────────────────────────────────────────────────
-
-@Composable
-private fun UserRow(
-    user: SwitchableUser,
-    onTap: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable { onTap() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape),
-                tint = Color(0xFF2196F3)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = user.displayName ?: user.username,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF1A1208),
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        // ★ Favorites
+        if (uiState.favorites.isNotEmpty()) {
+            item(key = "header_favorites") {
+                PeopleSectionHeader(
+                    label = "★ Favorites",
+                    count = uiState.favorites.size,
+                    isExpanded = !isSectionCollapsed("favorites"),
+                    onToggle = { onToggleSection("favorites") }
                 )
-                user.email?.let { email ->
-                    Text(
-                        text = email,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            }
+            if (!isSectionCollapsed("favorites")) {
+                items(uiState.favorites, key = { "fav_${it.id}" }) { contact ->
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
+                }
+            }
+        }
+
+        // Users
+        if (uiState.users.isNotEmpty()) {
+            val nonFavUsers = uiState.users.filter { !isUserFavorite(it.id) }
+            if (nonFavUsers.isNotEmpty()) {
+                item(key = "header_users") {
+                    PeopleSectionHeader(
+                        label = "Users",
+                        count = nonFavUsers.size,
+                        isExpanded = !isSectionCollapsed("users"),
+                        onToggle = { onToggleSection("users") }
                     )
+                }
+                if (!isSectionCollapsed("users")) {
+                    items(nonFavUsers, key = { "user_${it.id}" }) { user ->
+                        UserRow(user, serverUrl, { onUserTap(user.id) }, isUserFavorite(user.id), { onToggleUserFavorite(user.id) })
+                    }
+                }
+            }
+        }
+
+        // All Contacts
+        if (uiState.allContacts.isNotEmpty()) {
+            item(key = "header_all") {
+                PeopleSectionHeader(
+                    label = "All Contacts",
+                    count = uiState.allContacts.size,
+                    isExpanded = !isSectionCollapsed("all"),
+                    onToggle = { onToggleSection("all") }
+                )
+            }
+            if (!isSectionCollapsed("all")) {
+                items(uiState.allContacts, key = { "all_${it.id}" }) { contact ->
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
+                }
+            }
+        }
+
+        // 🏛️ Contact Vault
+        if (uiState.vaultContacts.isNotEmpty()) {
+            item(key = "header_vault") {
+                PeopleSectionHeader(
+                    label = "🏛️ Contact Vault",
+                    count = uiState.vaultContacts.size,
+                    isExpanded = !isSectionCollapsed("vault"),
+                    onToggle = { onToggleSection("vault") }
+                )
+            }
+            if (!isSectionCollapsed("vault")) {
+                items(uiState.vaultContacts, key = { "vault_${it.id}" }) { contact ->
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
                 }
             }
         }
     }
-}
-
-// ─── Alphabetical Section Header ────────────────────────────────────────────────
-
-@Composable
-private fun SectionHeader(letter: Char) {
-    Text(
-        text = letter.toString(),
-        style = MaterialTheme.typography.titleSmall,
-        color = Color(0xFF6B4E31),
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp)
-    )
 }
 
 // ─── Contact Row ────────────────────────────────────────────────────────────────
@@ -520,123 +356,185 @@ private fun SectionHeader(letter: Char) {
 @Composable
 private fun ContactRow(
     contact: ContactEntity,
-    onTap: () -> Unit
+    serverUrl: String,
+    onTap: () -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
-    Card(
+    val colorPair = ColorUtils.applyContactRowColors(contact.color)
+    val borderColor = ColorUtils.contactBorderColor(contact.color)
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable { onTap() },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
+            .then(
+                if (borderColor != null) Modifier.border(
+                    width = 3.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(0.dp)
+                ) else Modifier
+            )
+            .background(colorPair?.first ?: Color.Transparent)
+            .clickable { onTap() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar placeholder
-            Icon(
-                imageVector = Icons.Default.Person,
+        // Star toggle
+        Text(
+            text = if (contact.favorite) "★" else "☆",
+            fontSize = 20.sp,
+            color = if (contact.favorite) Color(0xFFE3B23C) else Color(0xFF8B7355),
+            modifier = Modifier
+                .clickable { onToggleFavorite() }
+                .padding(end = 8.dp)
+        )
+
+        // Thumbnail
+        val imageUrl = contact.imageUrl?.let { url ->
+            if (url.startsWith("http")) url else "$serverUrl$url"
+        }
+        if (imageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape),
-                tint = Color(0xFF6B4E31)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, Color(0xFF8B5A2B), CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF5E6CC))
+                    .border(1.dp, Color(0xFFC4A484), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp), tint = Color(0xFF8B5A2B))
+            }
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // Name + detail column
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = contact.displayName ?: contact.givenName.ifBlank { "(unnamed)" },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (contact.favorite) FontWeight.Bold else FontWeight.Normal,
+                color = colorPair?.second ?: MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                val displayName = contact.displayName
-                    ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ")
+            // Detail line: first email · first phone · org
+            val details = buildList {
+                firstMultiValue(contact.emails)?.let { add(it) }
+                firstMultiValue(contact.phones)?.let { add(it) }
+                contact.organization?.takeIf { it.isNotBlank() }?.let { add(it) }
+            }
+            if (details.isNotEmpty()) {
                 Text(
-                    text = displayName.ifBlank { "Unnamed" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF1A1208),
-                    fontWeight = FontWeight.Medium,
+                    text = details.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = (colorPair?.second ?: MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                // Show email or phone if available
-                val subtitle = contact.emails?.takeIf { it.isNotBlank() && it != "[]" }
-                    ?: contact.phones?.takeIf { it.isNotBlank() && it != "[]" }
-                subtitle?.let {
-                    Text(
-                        text = it.removeSurrounding("[\"", "\"]").split("\",\"").firstOrNull() ?: "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B7355),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
+        }
 
-            // Favorite indicator
-            if (contact.favorite) {
-                Icon(
-                    imageVector = Icons.Default.Favorite,
-                    contentDescription = "Favorite",
-                    modifier = Modifier.size(16.dp),
-                    tint = Color(0xFFE91E63)
-                )
-            }
+        // Vault icon
+        if (contact.sharedToVault) {
+            Text("🏛️", modifier = Modifier.padding(horizontal = 4.dp))
+        }
+
+        // QR share button
+        IconButton(onClick = { /* TODO: show QR dialog */ }, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Default.QrCode, "Share QR", tint = CwocZoneHeaderBrown, modifier = Modifier.size(18.dp))
         }
     }
 }
 
-// ─── Empty State ────────────────────────────────────────────────────────────────
+// ─── User Row ───────────────────────────────────────────────────────────────────
 
 @Composable
-private fun EmptyContactsState(hasQuery: Boolean) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(120.dp))
-        Text(
-            text = if (hasQuery) "No contacts found" else "No contacts yet",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color(0xFF6B4E31)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = if (hasQuery) "Try a different search term."
-            else "Contacts will appear here after syncing.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF8B7355)
-        )
-    }
-}
-
-// ─── Helper: Share exported file ────────────────────────────────────────────────
-
-private fun shareExportedFile(
-    context: android.content.Context,
-    data: ByteArray,
-    fileName: String,
-    mimeType: String
+private fun UserRow(
+    user: SwitchableUserDto,
+    serverUrl: String,
+    onTap: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit
 ) {
-    try {
-        val cacheDir = File(context.cacheDir, "exports")
-        cacheDir.mkdirs()
-        val file = File(cacheDir, fileName)
-        file.writeBytes(data)
-
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onTap() }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Star toggle
+        Text(
+            text = if (isFavorite) "★" else "☆",
+            fontSize = 20.sp,
+            color = if (isFavorite) Color(0xFFE3B23C) else Color(0xFF8B7355),
+            modifier = Modifier
+                .clickable { onToggleFavorite() }
+                .padding(end = 8.dp)
         )
 
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = mimeType
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Thumbnail
+        val imageUrl = user.profileImageUrl?.let { url ->
+            if (url.startsWith("http")) url else "$serverUrl$url"
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Export $fileName"))
-    } catch (e: Exception) {
-        android.util.Log.e("CWOC_CONTACTS", "Failed to share exported file: ${e.message}")
+        if (imageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, Color(0xFF8B5A2B), CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE3F2FD))
+                    .border(1.dp, Color(0xFF90CAF9), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp), tint = Color(0xFF2196F3))
+            }
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // Name + username
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = user.displayName ?: user.username,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isFavorite) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "@${user.username}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

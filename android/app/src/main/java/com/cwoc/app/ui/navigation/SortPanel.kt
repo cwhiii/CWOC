@@ -16,7 +16,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -33,21 +32,28 @@ import com.cwoc.app.domain.sort.SortState
 
 /**
  * Human-readable labels for each sort field.
+ * Matches the web sidebar's sort dropdown options exactly.
  */
 private fun SortField.displayLabel(): String = when (this) {
+    SortField.NONE -> "— None —"
     SortField.TITLE -> "Title"
-    SortField.DUE_DATE -> "Due Date"
     SortField.START_DATE -> "Start Date"
-    SortField.CREATED_DATE -> "Created Date"
-    SortField.MODIFIED_DATE -> "Modified Date"
-    SortField.PRIORITY -> "Priority"
+    SortField.DUE_DATE -> "Due Date"
+    SortField.MODIFIED_DATE -> "Updated"
+    SortField.CREATED_DATE -> "Created"
     SortField.STATUS -> "Status"
     SortField.MANUAL -> "Manual"
+    SortField.RANDOM -> "Random / Shuffle"
+    SortField.UPCOMING -> "Upcoming (Due Soon)"
+    SortField.PRIORITY -> "Priority"
 }
 
 /**
  * Sort panel composable embedded in the SidebarContent.
  * Provides a dropdown for sort field selection and an ASC/DESC toggle button.
+ * Section title is "Order" (matching web).
+ * Direction button is hidden for NONE, MANUAL, RANDOM, and UPCOMING.
+ * When sort field changes, direction resets to ASC.
  *
  * @param sortState The current sort state (field + direction).
  * @param onSortStateChanged Callback invoked when the user changes the sort field or direction.
@@ -67,7 +73,7 @@ fun SortPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "Sort",
+            text = "Order",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -102,7 +108,8 @@ fun SortPanel(
                         DropdownMenuItem(
                             text = { Text(field.displayLabel()) },
                             onClick = {
-                                onSortStateChanged(sortState.copy(field = field))
+                                // Reset direction to ASC when changing field (matches web)
+                                onSortStateChanged(SortState(field = field, direction = SortDirection.ASC))
                                 expanded = false
                             },
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
@@ -111,28 +118,30 @@ fun SortPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            // ASC/DESC toggle button — hidden for NONE, MANUAL, RANDOM, UPCOMING
+            if (sortState.showDirectionToggle) {
+                Spacer(modifier = Modifier.width(8.dp))
 
-            // ASC/DESC toggle button
-            IconButton(
-                onClick = {
-                    val newDirection = when (sortState.direction) {
-                        SortDirection.ASC -> SortDirection.DESC
-                        SortDirection.DESC -> SortDirection.ASC
+                IconButton(
+                    onClick = {
+                        val newDirection = when (sortState.direction) {
+                            SortDirection.ASC -> SortDirection.DESC
+                            SortDirection.DESC -> SortDirection.ASC
+                        }
+                        onSortStateChanged(sortState.copy(direction = newDirection))
                     }
-                    onSortStateChanged(sortState.copy(direction = newDirection))
+                ) {
+                    Icon(
+                        imageVector = when (sortState.direction) {
+                            SortDirection.ASC -> Icons.Default.ArrowUpward
+                            SortDirection.DESC -> Icons.Default.ArrowDownward
+                        },
+                        contentDescription = when (sortState.direction) {
+                            SortDirection.ASC -> "Ascending (tap to switch to descending)"
+                            SortDirection.DESC -> "Descending (tap to switch to ascending)"
+                        }
+                    )
                 }
-            ) {
-                Icon(
-                    imageVector = when (sortState.direction) {
-                        SortDirection.ASC -> Icons.Default.ArrowUpward
-                        SortDirection.DESC -> Icons.Default.ArrowDownward
-                    },
-                    contentDescription = when (sortState.direction) {
-                        SortDirection.ASC -> "Ascending (tap to switch to descending)"
-                        SortDirection.DESC -> "Descending (tap to switch to ascending)"
-                    }
-                )
             }
         }
     }

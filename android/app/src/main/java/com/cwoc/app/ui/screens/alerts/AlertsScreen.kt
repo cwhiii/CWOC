@@ -43,6 +43,7 @@ import com.cwoc.app.domain.alerts.ClassifiedAlert
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
@@ -339,10 +340,9 @@ private fun AlertItemCard(
                 onClick = onTap,
                 onLongClick = onLongPress
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (alert.section == AlertSection.UPCOMING)
-                Color(0xFFF5E6D3) else Color(0xFFEDE0D0)
-        )
+        border = CwocChitCardStyle.cardBorder,
+        colors = CwocChitCardStyle.cardColors(),
+        elevation = CwocChitCardStyle.cardElevation()
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

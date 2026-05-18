@@ -54,12 +54,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.mapper.ContactFormState
 import com.cwoc.app.ui.screens.editor.zones.ColorZone
 import com.cwoc.app.ui.screens.editor.zones.EditorZoneHeader
 import com.google.gson.Gson
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -97,6 +100,7 @@ fun ContactEditorScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isSaved by viewModel.isSaved.collectAsState()
     val isOwnProfile by viewModel.isOwnProfile.collectAsState()
+    val customColors by viewModel.customColors.collectAsState()
 
     val isProfileMode = viewModel.isProfileMode
     val isReadOnly = isProfileMode && !isOwnProfile
@@ -273,7 +277,8 @@ fun ContactEditorScreen(
                 ContactProfileImageSection(
                     contactId = formState.id,
                     isNew = formState.isNew,
-                    readOnly = isReadOnly
+                    readOnly = isReadOnly,
+                    isProfileMode = viewModel.isProfileMode
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -297,6 +302,16 @@ fun ContactEditorScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
+                // ─── Social & Web Zone (collapsible) ────────────────────────────
+                SocialWebZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // ─── Security Zone (collapsible) ────────────────────────────────
+                SecurityZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
                 // ─── Tags Zone (collapsible) ────────────────────────────────────
                 ContactTagsZone(
                     tags = formState.tags,
@@ -308,7 +323,7 @@ fun ContactEditorScreen(
                 // ─── Color Zone (collapsible) ───────────────────────────────────
                 ColorZone(
                     selectedColor = formState.color.ifBlank { null },
-                    customColors = emptyList(),
+                    customColors = customColors,
                     onColorSelected = {
                         viewModel.updateField { state -> state.copy(color = it ?: "") }
                     }
@@ -438,6 +453,8 @@ private fun NameSection(
 
 /**
  * Contact profile image section with camera capture, gallery picker, and image viewer.
+ * Actually loads and displays the contact's profile image using Coil.
+ * Shows a type badge ("Contact" or "Profile") below the image.
  *
  * Tap profile image → options: "Take Photo" | "Choose Gallery" | "Remove"
  * - Camera intent + upload to /api/contacts/{id}/image
@@ -448,21 +465,26 @@ private fun NameSection(
 private fun ContactProfileImageSection(
     contactId: String,
     isNew: Boolean,
-    readOnly: Boolean
+    readOnly: Boolean,
+    isProfileMode: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    var showImageOptions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var showImageViewer by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var imageUrl by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var showImageOptions by remember { mutableStateOf(false) }
+    var showImageViewer by remember { mutableStateOf(false) }
+    var imageRefreshKey by remember { mutableStateOf(0L) }
 
     val prefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
     val serverUrl = prefs.getString("server_url", "") ?: ""
     val authToken = prefs.getString("auth_token", "") ?: ""
 
-    // Build image URL
+    // Build image URL with cache-busting key
     val contactImageUrl = if (!isNew && serverUrl.isNotBlank()) {
-        "$serverUrl/api/contacts/$contactId/image"
+        if (imageRefreshKey > 0) {
+            "$serverUrl/api/contacts/$contactId/image?t=$imageRefreshKey"
+        } else {
+            "$serverUrl/api/contacts/$contactId/image"
+        }
     } else null
 
     // Gallery picker
@@ -472,8 +494,7 @@ private fun ContactProfileImageSection(
         if (uri != null && !isNew) {
             coroutineScope.launch {
                 uploadContactImage(context, uri, contactId, serverUrl, authToken)
-                // Force refresh
-                imageUrl = "$serverUrl/api/contacts/$contactId/image?t=${System.currentTimeMillis()}"
+                imageRefreshKey = System.currentTimeMillis()
             }
         }
     }
@@ -485,7 +506,7 @@ private fun ContactProfileImageSection(
         if (bitmap != null && !isNew) {
             coroutineScope.launch {
                 uploadContactBitmap(bitmap, contactId, serverUrl, authToken)
-                imageUrl = "$serverUrl/api/contacts/$contactId/image?t=${System.currentTimeMillis()}"
+                imageRefreshKey = System.currentTimeMillis()
             }
         }
     }
@@ -510,12 +531,22 @@ private fun ContactProfileImageSection(
             contentAlignment = Alignment.Center
         ) {
             if (contactImageUrl != null) {
-                // Show contact image (using text placeholder since Coil may not be available)
-                Text(
-                    text = "👤",
-                    style = MaterialTheme.typography.headlineLarge
+                AsyncImage(
+                    model = coil.request.ImageRequest.Builder(context)
+                        .data(contactImageUrl)
+                        .addHeader("Authorization", "Bearer $authToken")
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Contact photo",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape),
+                    contentScale = ContentScale.Crop
                 )
-            } else {
+                // Fallback placeholder shown behind AsyncImage if it fails
+            }
+            // Always show placeholder behind (AsyncImage will cover it on success)
+            if (isNew || contactImageUrl == null) {
                 Text(
                     text = "👤",
                     style = MaterialTheme.typography.headlineLarge
@@ -523,9 +554,25 @@ private fun ContactProfileImageSection(
             }
         }
 
+        // Type badge: "Contact" or "Profile"
+        Spacer(modifier = Modifier.height(4.dp))
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0x2E4682B4) // Light blue tint
+            ),
+            modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
+            Text(
+                text = if (isProfileMode) "👤 Profile" else "📇 Contact",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF1565C0),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+
         if (!readOnly && !isNew) {
             Text(
-                text = "Tap to change photo",
+                text = "Tap photo to change",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
@@ -558,7 +605,7 @@ private fun ContactProfileImageSection(
                             showImageOptions = false
                             coroutineScope.launch {
                                 deleteContactImage(contactId, serverUrl, authToken)
-                                imageUrl = null
+                                imageRefreshKey = System.currentTimeMillis()
                             }
                         }) {
                             Text("🗑️ Remove Photo", color = MaterialTheme.colorScheme.error)
@@ -682,9 +729,9 @@ private fun ContactInfoZone(
         onToggle = { isExpanded = !isExpanded },
         trailingContent = {
             if (!isExpanded && hasContent) {
-                val count = countJsonArrayItems(formState.phones) +
-                        countJsonArrayItems(formState.emails) +
-                        countJsonArrayItems(formState.addresses)
+                val count = countMultiValueItems(formState.phones) +
+                        countMultiValueItems(formState.emails) +
+                        countMultiValueItems(formState.addresses)
                 Text(
                     text = "$count item${if (count != 1) "s" else ""}",
                     style = MaterialTheme.typography.bodySmall,
@@ -699,7 +746,9 @@ private fun ContactInfoZone(
                 label = "Phones",
                 jsonValue = formState.phones,
                 itemLabel = "Phone",
-                onValueChange = { onUpdate(formState.copy(phones = it)) }
+                onValueChange = { onUpdate(formState.copy(phones = it)) },
+                defaultLabel = "Mobile",
+                valuePlaceholder = "+1-555-0100"
             )
 
             // Emails
@@ -707,7 +756,9 @@ private fun ContactInfoZone(
                 label = "Emails",
                 jsonValue = formState.emails,
                 itemLabel = "Email",
-                onValueChange = { onUpdate(formState.copy(emails = it)) }
+                onValueChange = { onUpdate(formState.copy(emails = it)) },
+                defaultLabel = "Home",
+                valuePlaceholder = "user@example.com"
             )
 
             // Addresses
@@ -715,7 +766,9 @@ private fun ContactInfoZone(
                 label = "Addresses",
                 jsonValue = formState.addresses,
                 itemLabel = "Address",
-                onValueChange = { onUpdate(formState.copy(addresses = it)) }
+                onValueChange = { onUpdate(formState.copy(addresses = it)) },
+                defaultLabel = "Home",
+                valuePlaceholder = "123 Main St, City, ST 12345"
             )
         }
     }
@@ -724,7 +777,8 @@ private fun ContactInfoZone(
 // ─── Details Zone (collapsible) ─────────────────────────────────────────────────
 
 /**
- * Collapsible zone for organization, nickname, and social context fields.
+ * Collapsible zone for organization, nickname, social context, and display name.
+ * Matches the web's "Context" zone.
  */
 @Composable
 private fun DetailsZone(
@@ -776,10 +830,11 @@ private fun DetailsZone(
                 value = formState.socialContext,
                 onValueChange = { onUpdate(formState.copy(socialContext = it)) },
                 label = { Text("Social Context") },
+                placeholder = { Text("How you know them") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            // X1: Display Name field
+            // Display Name field
             OutlinedTextField(
                 value = formState.displayName,
                 onValueChange = { onUpdate(formState.copy(displayName = it)) },
@@ -787,31 +842,114 @@ private fun DetailsZone(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            // X3: Call Signs field
-            OutlinedTextField(
-                value = formState.callSigns,
-                onValueChange = { onUpdate(formState.copy(callSigns = it)) },
-                label = { Text("Call Signs") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            // X4: X Handles field
-            OutlinedTextField(
-                value = formState.xHandles,
+        }
+    }
+}
+
+// ─── Social & Web Zone (collapsible) ────────────────────────────────────────────
+
+/**
+ * Collapsible zone for X handles, websites, and call signs.
+ * These are multi-value fields stored as JSON arrays of {label, value} objects.
+ * Matches the web's "Social & Web" zone.
+ */
+@Composable
+private fun SocialWebZone(
+    formState: ContactFormState,
+    onUpdate: (ContactFormState) -> Unit
+) {
+    val hasContent = formState.xHandles.isNotBlank() ||
+            formState.websites.isNotBlank() ||
+            formState.callSigns.isNotBlank()
+    var isExpanded by remember { mutableStateOf(hasContent) }
+
+    EditorZoneHeader(
+        title = "Social & Web",
+        isExpanded = isExpanded,
+        onToggle = { isExpanded = !isExpanded },
+        trailingContent = {
+            if (!isExpanded && hasContent) {
+                val count = countMultiValueItems(formState.xHandles) +
+                        countMultiValueItems(formState.websites) +
+                        countMultiValueItems(formState.callSigns)
+                Text(
+                    text = "$count item${if (count != 1) "s" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // X Handles
+            MultiValueField(
+                label = "X Handles",
+                jsonValue = formState.xHandles,
+                itemLabel = "Handle",
                 onValueChange = { onUpdate(formState.copy(xHandles = it)) },
-                label = { Text("X Handles") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                defaultLabel = "X",
+                valuePlaceholder = "@username"
             )
-            // X5: Websites field
-            OutlinedTextField(
-                value = formState.websites,
+
+            // Websites
+            MultiValueField(
+                label = "Websites",
+                jsonValue = formState.websites,
+                itemLabel = "URL",
                 onValueChange = { onUpdate(formState.copy(websites = it)) },
-                label = { Text("Websites") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                defaultLabel = "Website",
+                valuePlaceholder = "https://example.com"
             )
-            // X6: Has Signal toggle
+
+            // Call Signs
+            MultiValueField(
+                label = "Call Signs",
+                jsonValue = formState.callSigns,
+                itemLabel = "Call Sign",
+                onValueChange = { onUpdate(formState.copy(callSigns = it)) },
+                defaultLabel = "Ham",
+                valuePlaceholder = "KD2ABC"
+            )
+        }
+    }
+}
+
+// ─── Security Zone (collapsible) ────────────────────────────────────────────────
+
+/**
+ * Collapsible zone for Signal, PGP key, and Vault toggle.
+ * Matches the web's "Security" zone.
+ */
+@Composable
+private fun SecurityZone(
+    formState: ContactFormState,
+    onUpdate: (ContactFormState) -> Unit
+) {
+    val hasContent = formState.hasSignal ||
+            formState.pgpKey.isNotBlank() ||
+            formState.sharedToVault
+    var isExpanded by remember { mutableStateOf(hasContent) }
+
+    EditorZoneHeader(
+        title = "Security",
+        isExpanded = isExpanded,
+        onToggle = { isExpanded = !isExpanded },
+        trailingContent = {
+            if (!isExpanded && hasContent) {
+                val items = mutableListOf<String>()
+                if (formState.hasSignal) items.add("Signal")
+                if (formState.pgpKey.isNotBlank()) items.add("PGP")
+                if (formState.sharedToVault) items.add("Vault")
+                Text(
+                    text = items.joinToString(", "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Has Signal toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -823,26 +961,28 @@ private fun DetailsZone(
                     onCheckedChange = { onUpdate(formState.copy(hasSignal = it)) }
                 )
             }
-            // X7: Signal Username (shown when hasSignal is true)
+            // Signal Username (shown when hasSignal is true)
             if (formState.hasSignal) {
                 OutlinedTextField(
                     value = formState.signalUsername,
                     onValueChange = { onUpdate(formState.copy(signalUsername = it)) },
                     label = { Text("Signal Username") },
+                    placeholder = { Text("Signal username or phone") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            // X8: PGP Key field
+            // PGP Key field
             OutlinedTextField(
                 value = formState.pgpKey,
                 onValueChange = { onUpdate(formState.copy(pgpKey = it)) },
                 label = { Text("PGP Public Key") },
+                placeholder = { Text("Paste PGP public key here...") },
                 minLines = 2,
                 maxLines = 5,
                 modifier = Modifier.fillMaxWidth()
             )
-            // X11: Shared to Vault toggle
+            // Shared to Vault toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -978,8 +1118,8 @@ private fun ContactNotesZone(
 
 /**
  * Collapsible Dates zone for labeled date entries (birthday, anniversary, etc.).
- * Dates are stored as a JSON array of objects: [{"label": "Birthday", "date": "1990-01-15"}, ...]
- * Provides add/remove buttons for each date entry.
+ * Dates are stored as a JSON array of objects: [{"label": "Birthday", "value": "1990-01-15", "show_on_calendar": true}, ...]
+ * Provides add/remove buttons for each date entry with a show_on_calendar toggle.
  */
 @Composable
 private fun ContactDatesZone(
@@ -1007,9 +1147,10 @@ private fun ContactDatesZone(
             dates.forEachIndexed { index, entry ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Label input (e.g., "Birthday", "Anniversary")
                     OutlinedTextField(
                         value = entry.label,
                         onValueChange = { newLabel ->
@@ -1018,20 +1159,33 @@ private fun ContactDatesZone(
                             onDatesChange(serializeDateEntries(updated))
                         },
                         label = { Text("Label") },
+                        placeholder = { Text("Birthday") },
                         singleLine = true,
-                        modifier = Modifier.weight(0.4f)
+                        modifier = Modifier.weight(0.3f)
                     )
+                    // Date value input (YYYY-MM-DD format)
                     OutlinedTextField(
-                        value = entry.date,
-                        onValueChange = { newDate ->
+                        value = entry.value,
+                        onValueChange = { newValue ->
                             val updated = dates.toMutableList()
-                            updated[index] = entry.copy(date = newDate)
+                            updated[index] = entry.copy(value = newValue)
                             onDatesChange(serializeDateEntries(updated))
                         },
                         label = { Text("Date") },
+                        placeholder = { Text("YYYY-MM-DD") },
                         singleLine = true,
-                        modifier = Modifier.weight(0.5f)
+                        modifier = Modifier.weight(0.4f)
                     )
+                    // Show on calendar toggle
+                    androidx.compose.material3.Checkbox(
+                        checked = entry.showOnCalendar,
+                        onCheckedChange = { checked ->
+                            val updated = dates.toMutableList()
+                            updated[index] = entry.copy(showOnCalendar = checked)
+                            onDatesChange(serializeDateEntries(updated))
+                        }
+                    )
+                    // Remove button
                     IconButton(
                         onClick = {
                             val updated = dates.toMutableList()
@@ -1051,7 +1205,7 @@ private fun ContactDatesZone(
             // Add date button
             TextButton(
                 onClick = {
-                    val updated = dates + DateEntry(label = "", date = "")
+                    val updated = dates + DateEntry(label = "", value = "", showOnCalendar = true)
                     onDatesChange(serializeDateEntries(updated))
                 }
             ) {
@@ -1070,10 +1224,11 @@ private fun ContactDatesZone(
 // ─── Multi-Value Field Component ────────────────────────────────────────────────
 
 /**
- * Reusable multi-value field for phones, emails, addresses.
- * Parses a JSON array string into individual text fields with add/remove buttons.
+ * Reusable multi-value field for phones, emails, addresses, call signs, X handles, websites.
+ * Parses a JSON array of {label, value} objects into individual rows with label + value text fields
+ * and add/remove buttons.
  *
- * Validates: Requirements 1.3
+ * Matches the web contact editor's multi-value row pattern.
  */
 @Composable
 private fun MultiValueField(
@@ -1081,10 +1236,10 @@ private fun MultiValueField(
     jsonValue: String,
     itemLabel: String,
     onValueChange: (String) -> Unit,
-    // X2: Type labels for each entry
-    typeOptions: List<String> = emptyList()
+    defaultLabel: String = "",
+    valuePlaceholder: String = ""
 ) {
-    val items = remember(jsonValue) { parseJsonArray(jsonValue) }
+    val entries = remember(jsonValue) { parseMultiValueEntries(jsonValue) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -1093,53 +1248,44 @@ private fun MultiValueField(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        items.forEachIndexed { index, item ->
+        entries.forEachIndexed { index, entry ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // X2: Type label dropdown (Home/Work/Mobile/Other)
-                if (typeOptions.isNotEmpty()) {
-                    var typeExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        Text(
-                            text = typeOptions.firstOrNull() ?: "Type",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clickable { typeExpanded = true }
-                                .padding(4.dp)
-                        )
-                        androidx.compose.material3.DropdownMenu(
-                            expanded = typeExpanded,
-                            onDismissRequest = { typeExpanded = false }
-                        ) {
-                            typeOptions.forEach { type ->
-                                androidx.compose.material3.DropdownMenuItem(
-                                    text = { Text(type) },
-                                    onClick = { typeExpanded = false }
-                                )
-                            }
-                        }
-                    }
-                }
+                // Label input (e.g., "Home", "Work", "Mobile")
                 OutlinedTextField(
-                    value = item,
-                    onValueChange = { newValue ->
-                        val updated = items.toMutableList()
-                        updated[index] = newValue
-                        onValueChange(serializeJsonArray(updated))
+                    value = entry.label,
+                    onValueChange = { newLabel ->
+                        val updated = entries.toMutableList()
+                        updated[index] = entry.copy(label = newLabel)
+                        onValueChange(serializeMultiValueEntries(updated))
                     },
-                    label = { Text("$itemLabel ${index + 1}") },
+                    label = { Text("Label") },
+                    placeholder = { Text(defaultLabel) },
                     singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(0.35f)
                 )
+                // Value input (e.g., phone number, email address)
+                OutlinedTextField(
+                    value = entry.value,
+                    onValueChange = { newValue ->
+                        val updated = entries.toMutableList()
+                        updated[index] = entry.copy(value = newValue)
+                        onValueChange(serializeMultiValueEntries(updated))
+                    },
+                    label = { Text(itemLabel) },
+                    placeholder = { Text(valuePlaceholder) },
+                    singleLine = true,
+                    modifier = Modifier.weight(0.55f)
+                )
+                // Remove button
                 IconButton(
                     onClick = {
-                        val updated = items.toMutableList()
+                        val updated = entries.toMutableList()
                         updated.removeAt(index)
-                        onValueChange(serializeJsonArray(updated))
+                        onValueChange(serializeMultiValueEntries(updated))
                     }
                 ) {
                     Icon(
@@ -1154,8 +1300,8 @@ private fun MultiValueField(
         // Add button
         TextButton(
             onClick = {
-                val updated = items + ""
-                onValueChange(serializeJsonArray(updated))
+                val updated = entries + MultiValueEntry(label = defaultLabel, value = "")
+                onValueChange(serializeMultiValueEntries(updated))
             }
         ) {
             Icon(
@@ -1172,58 +1318,91 @@ private fun MultiValueField(
 // ─── JSON Utility Functions ─────────────────────────────────────────────────────
 
 /**
- * Parses a JSON array string (e.g., '["555-1234","555-5678"]') into a list of strings.
+ * Data class for a multi-value entry (phone, email, address, call sign, X handle, website).
+ * Matches the backend MultiValueEntry model: {label: "Home", value: "555-1234"}
+ */
+private data class MultiValueEntry(
+    val label: String,
+    val value: String
+)
+
+/**
+ * Parses a JSON string of multi-value entries.
+ * Handles both formats:
+ * - Object array: [{"label": "Home", "value": "555-1234"}, ...]  (correct backend format)
+ * - String array: ["555-1234", "555-5678"]  (legacy/fallback)
  * Returns an empty list if the string is blank or not valid JSON.
  */
-private fun parseJsonArray(json: String): List<String> {
+private fun parseMultiValueEntries(json: String): List<MultiValueEntry> {
     if (json.isBlank()) return emptyList()
     return try {
-        val type = object : TypeToken<List<String>>() {}.type
-        Gson().fromJson<List<String>>(json, type) ?: emptyList()
+        // First try parsing as array of objects with label/value keys
+        val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+        val list: List<Map<String, Any?>> = Gson().fromJson(json, type) ?: emptyList()
+        list.map { map ->
+            MultiValueEntry(
+                label = (map["label"] as? String) ?: "",
+                value = (map["value"] as? String) ?: ""
+            )
+        }
     } catch (_: Exception) {
-        // If it's not a JSON array, treat the whole string as a single item
-        if (json.isNotBlank()) listOf(json) else emptyList()
+        try {
+            // Fallback: try parsing as flat string array
+            val type = object : TypeToken<List<String>>() {}.type
+            val strings: List<String> = Gson().fromJson(json, type) ?: emptyList()
+            strings.map { MultiValueEntry(label = "", value = it) }
+        } catch (_: Exception) {
+            // Last resort: treat the whole string as a single entry
+            if (json.isNotBlank()) listOf(MultiValueEntry(label = "", value = json)) else emptyList()
+        }
     }
 }
 
 /**
- * Serializes a list of strings into a JSON array string.
- * Keeps all entries (including blank ones for in-progress editing).
- * Returns empty string if the list is empty.
+ * Serializes a list of MultiValueEntry objects into a JSON string.
+ * Uses the backend format: [{"label": "Home", "value": "555-1234"}, ...]
+ * Filters out entries where value is blank.
  */
-private fun serializeJsonArray(items: List<String>): String {
-    if (items.isEmpty()) return ""
-    return Gson().toJson(items)
+private fun serializeMultiValueEntries(entries: List<MultiValueEntry>): String {
+    val filtered = entries.filter { it.value.isNotBlank() }
+    if (filtered.isEmpty()) return ""
+    val maps = filtered.map { mapOf("label" to it.label, "value" to it.value) }
+    return Gson().toJson(maps)
 }
 
 /**
- * Counts the number of items in a JSON array string.
+ * Counts the number of items in a multi-value JSON string.
  */
-private fun countJsonArrayItems(json: String): Int {
-    return parseJsonArray(json).size
+private fun countMultiValueItems(json: String): Int {
+    return parseMultiValueEntries(json).size
 }
 
 /**
- * Data class for a labeled date entry.
+ * Data class for a labeled date entry with optional show_on_calendar flag.
+ * Matches the backend format: {label: "Birthday", value: "1990-01-15", show_on_calendar: true}
  */
 private data class DateEntry(
     val label: String,
-    val date: String
+    val value: String,
+    val showOnCalendar: Boolean = true
 )
 
 /**
  * Parses a JSON string of date entries.
- * Expected format: [{"label": "Birthday", "date": "1990-01-15"}, ...]
+ * Expected format: [{"label": "Birthday", "value": "1990-01-15", "show_on_calendar": true}, ...]
+ * Also handles legacy format with "date" key instead of "value".
  */
 private fun parseDateEntries(json: String): List<DateEntry> {
     if (json.isBlank()) return emptyList()
     return try {
-        val type = object : TypeToken<List<Map<String, String>>>() {}.type
-        val list: List<Map<String, String>> = Gson().fromJson(json, type) ?: emptyList()
+        val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+        val list: List<Map<String, Any?>> = Gson().fromJson(json, type) ?: emptyList()
         list.map { map ->
             DateEntry(
-                label = map["label"] ?: "",
-                date = map["date"] ?: ""
+                label = (map["label"] as? String) ?: "",
+                // Backend uses "value" key; also handle legacy "date" key
+                value = (map["value"] as? String) ?: (map["date"] as? String) ?: "",
+                showOnCalendar = (map["show_on_calendar"] as? Boolean) ?: true
             )
         }
     } catch (_: Exception) {
@@ -1233,11 +1412,14 @@ private fun parseDateEntries(json: String): List<DateEntry> {
 
 /**
  * Serializes a list of DateEntry objects into a JSON string.
- * Filters out entries where both label and date are blank.
+ * Uses the backend format: [{"label": "Birthday", "value": "1990-01-15", "show_on_calendar": true}, ...]
+ * Filters out entries where both label and value are blank.
  */
 private fun serializeDateEntries(entries: List<DateEntry>): String {
-    val filtered = entries.filter { it.label.isNotBlank() || it.date.isNotBlank() }
+    val filtered = entries.filter { it.label.isNotBlank() || it.value.isNotBlank() }
     if (filtered.isEmpty()) return ""
-    val maps = filtered.map { mapOf("label" to it.label, "date" to it.date) }
+    val maps = filtered.map {
+        mapOf("label" to it.label, "value" to it.value, "show_on_calendar" to it.showOnCalendar)
+    }
     return Gson().toJson(maps)
 }

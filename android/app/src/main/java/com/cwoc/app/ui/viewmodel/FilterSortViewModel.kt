@@ -91,7 +91,7 @@ class FilterSortViewModel @Inject constructor(
 
         val field = fieldName?.let {
             try { SortField.valueOf(it) } catch (_: IllegalArgumentException) { null }
-        } ?: SortField.MANUAL
+        } ?: SortField.NONE
 
         val direction = directionName?.let {
             try { SortDirection.valueOf(it) } catch (_: IllegalArgumentException) { null }

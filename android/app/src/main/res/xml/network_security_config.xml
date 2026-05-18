@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext (HTTP) traffic to the local CWOC server -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.1.111</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
-    </domain-config>
+    <!-- Allow cleartext (HTTP) traffic globally — this is a personal app on a local network -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

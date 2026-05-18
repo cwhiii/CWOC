@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -82,6 +83,33 @@ private val NOTIFICATION_OFFSETS = listOf(
     "1 week before" to 10080
 )
 
+// Tag color palette matching web implementation (bg/fg pairs)
+private data class PaletteColor(val bg: String, val fg: String)
+
+private val TAG_COLOR_PALETTE = listOf(
+    PaletteColor("#8b5a2b", "#fff8e1"),
+    PaletteColor("#a0522d", "#fff8e1"),
+    PaletteColor("#4a2c2a", "#fdf5e6"),
+    PaletteColor("#6b4e31", "#fff8e1"),
+    PaletteColor("#b22222", "#fff8e1"),
+    PaletteColor("#8b0000", "#fdf5e6"),
+    PaletteColor("#2e4057", "#fdf5e6"),
+    PaletteColor("#1b4332", "#e8dcc8"),
+    PaletteColor("#5c4033", "#faebd7"),
+    PaletteColor("#d4af37", "#2b1e0f"),
+    PaletteColor("#c4a484", "#2b1e0f"),
+    PaletteColor("#e8dcc8", "#4a2c2a"),
+    PaletteColor("#d2b48c", "#2b1e0f"),
+    PaletteColor("#f5e6cc", "#4a2c2a"),
+    PaletteColor("#fff8e1", "#4a2c2a")
+)
+
+// Font color swatches matching web implementation
+private val FONT_COLOR_SWATCHES = listOf(
+    "#2b1e0f", "#4a2c2a", "#5c3317", "#fff8e1", "#fdf5e6",
+    "#faebd7", "#e8dcc8", "#000000", "#ffffff"
+)
+
 /**
  * Collections settings tab with 4 collapsible sections:
  * Tag Editor, Custom Colors, Saved Locations, Default Notifications.
@@ -113,7 +141,12 @@ fun CollectionsSettingsTab(
         // Section 2: Custom Colors
         CustomColorsSection(
             customColorsJson = settingsState.customColors,
-            onColorsChanged = { onUpdateSetting("custom_colors", it) }
+            onColorsChanged = { onUpdateSetting("custom_colors", it) },
+            chitOptionsJson = settingsState.chitOptions,
+            overdueBorderColor = settingsState.overdueBorderColor,
+            blockedBorderColor = settingsState.blockedBorderColor,
+            onOverdueBorderColorChanged = { onUpdateSetting("overdue_border_color", it) },
+            onBlockedBorderColorChanged = { onUpdateSetting("blocked_border_color", it) }
         )
 
         HorizontalDivider()
@@ -171,6 +204,7 @@ private fun CollapsibleSectionHeader(
 /**
  * Tag Editor section: displays hierarchical tag list with color swatches,
  * supports create/edit/delete via dialogs.
+ * Requirement 15.1: Hierarchical tree structure with / delimiter.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -184,6 +218,7 @@ private fun TagEditorSection(
     var showDeleteConfirm by remember { mutableStateOf<Int?>(null) }
 
     val tags = remember(sharedTagsJson) { parseTagsJson(sharedTagsJson) }
+    val tagTree = remember(tags) { buildTagTree(tags) }
 
     Column {
         CollapsibleSectionHeader(
@@ -201,12 +236,14 @@ private fun TagEditorSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    tags.forEachIndexed { index, tag ->
-                        TagRow(
-                            tag = tag,
-                            childCount = tags.count { it.parent == tag.name },
-                            onEdit = { editingTagIndex = index },
-                            onDelete = { showDeleteConfirm = index }
+                    // Render hierarchical tree
+                    tagTree.forEach { node ->
+                        TagTreeNodeRow(
+                            node = node,
+                            depth = 0,
+                            tags = tags,
+                            onEdit = { tagIndex -> editingTagIndex = tagIndex },
+                            onDelete = { tagIndex -> showDeleteConfirm = tagIndex }
                         )
                     }
                 }
@@ -224,15 +261,14 @@ private fun TagEditorSection(
 
     // Add Tag Dialog
     if (showAddDialog) {
-        TagEditDialog(
+        EnhancedTagEditDialog(
             title = "Add Tag",
-            initialName = "",
-            initialColor = DEFAULT_COLORS.first(),
-            initialParent = "",
+            initialTag = TagItem(name = "", color = DEFAULT_COLORS.first(), fontColor = "#5c3317"),
             availableParents = tags.map { it.name },
+            allTags = tags,
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, color, parent ->
-                val newTags = tags + TagItem(name = name, color = color, parent = parent)
+            onConfirm = { updatedTag ->
+                val newTags = tags + updatedTag
                 onTagsChanged(serializeTagsJson(newTags))
                 showAddDialog = false
             }
@@ -242,16 +278,15 @@ private fun TagEditorSection(
     // Edit Tag Dialog
     editingTagIndex?.let { index ->
         val tag = tags[index]
-        TagEditDialog(
+        EnhancedTagEditDialog(
             title = "Edit Tag",
-            initialName = tag.name,
-            initialColor = tag.color,
-            initialParent = tag.parent,
+            initialTag = tag,
             availableParents = tags.filter { it.name != tag.name }.map { it.name },
+            allTags = tags,
             onDismiss = { editingTagIndex = null },
-            onConfirm = { name, color, parent ->
+            onConfirm = { updatedTag ->
                 val newTags = tags.toMutableList()
-                newTags[index] = TagItem(name = name, color = color, parent = parent)
+                newTags[index] = updatedTag
                 onTagsChanged(serializeTagsJson(newTags))
                 editingTagIndex = null
             }
@@ -284,87 +319,194 @@ private fun TagEditorSection(
     }
 }
 
+/**
+ * Recursive composable for rendering a tag tree node with expand/collapse.
+ * Requirement 15.1: Hierarchical tree with expand/collapse per parent.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TagRow(
-    tag: TagItem,
-    childCount: Int,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+private fun TagTreeNodeRow(
+    node: TagTreeNode,
+    depth: Int,
+    tags: List<TagItem>,
+    onEdit: (Int) -> Unit,
+    onDelete: (Int) -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onEdit,
-                onLongClick = onDelete
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Row(
+    var isExpanded by remember { mutableStateOf(true) }
+    val hasChildren = node.children.isNotEmpty()
+
+    Column {
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = (depth * 16).dp)
+                .combinedClickable(
+                    onClick = {
+                        if (node.tagIndex != null) {
+                            onEdit(node.tagIndex)
+                        } else if (hasChildren) {
+                            isExpanded = !isExpanded
+                        }
+                    },
+                    onLongClick = {
+                        if (node.tagIndex != null) {
+                            onDelete(node.tagIndex)
+                        }
+                    }
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
         ) {
-            // Color swatch
-            Box(
+            Row(
                 modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(parseHexColor(tag.color))
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            // Tag name
-            Text(
-                text = tag.name,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
-            // Child count
-            if (childCount > 0) {
-                Text(
-                    text = "$childCount children",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Expand/collapse toggle for parents
+                if (hasChildren) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clickable { isExpanded = !isExpanded },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                } else {
+                    Spacer(modifier = Modifier.width(24.dp))
+                }
+
+                // Color swatch
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(parseHexColor(node.color ?: "#808080"))
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-            }
-            // Parent indicator
-            if (tag.parent.isNotEmpty()) {
+
+                // Favorite star
+                if (node.favorite) {
+                    Text(
+                        text = "★",
+                        color = Color(0xFFDAA520),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
+                // Tag name (just the segment, not full path)
                 Text(
-                    text = "↳ ${tag.parent}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = node.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Child count indicator
+                if (hasChildren) {
+                    Text(
+                        text = "${node.children.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
+                // Edit icon for items with a tag index
+                if (node.tagIndex != null) {
+                    IconButton(
+                        onClick = { onEdit(node.tagIndex) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Render children if expanded
+        if (hasChildren && isExpanded) {
+            node.children.forEach { child ->
+                Spacer(modifier = Modifier.height(4.dp))
+                TagTreeNodeRow(
+                    node = child,
+                    depth = depth + 1,
+                    tags = tags,
+                    onEdit = onEdit,
+                    onDelete = onDelete
                 )
             }
         }
     }
 }
 
+/**
+ * Enhanced Tag Edit Dialog with:
+ * - Favorite star toggle (Req 15.2)
+ * - Sharing section with user picker, role selector (Req 15.3, 15.4)
+ * - Font Color picker with preset swatches (Req 15.5)
+ * - Preview chip with live color update (Req 15.6)
+ * - Free-form hex color input with validation (Req 15.7)
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun TagEditDialog(
+private fun EnhancedTagEditDialog(
     title: String,
-    initialName: String,
-    initialColor: String,
-    initialParent: String,
+    initialTag: TagItem,
     availableParents: List<String>,
+    allTags: List<TagItem>,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, color: String, parent: String) -> Unit
+    onConfirm: (TagItem) -> Unit
 ) {
-    var name by remember { mutableStateOf(initialName) }
-    var selectedColor by remember { mutableStateOf(initialColor) }
-    var selectedParent by remember { mutableStateOf(initialParent) }
+    var name by remember { mutableStateOf(initialTag.name) }
+    var selectedBgColor by remember { mutableStateOf(initialTag.color) }
+    var selectedFontColor by remember { mutableStateOf(initialTag.fontColor) }
+    var selectedParent by remember { mutableStateOf(initialTag.parent) }
+    var isFavorite by remember { mutableStateOf(initialTag.favorite) }
+    var shares by remember { mutableStateOf(initialTag.shares) }
     var parentExpanded by remember { mutableStateOf(false) }
+
+    // Hex input state
+    var bgHexInput by remember { mutableStateOf(selectedBgColor) }
+    var fgHexInput by remember { mutableStateOf(selectedFontColor) }
+    var bgHexError by remember { mutableStateOf(false) }
+    var fgHexError by remember { mutableStateOf(false) }
+
+    // Sharing state
+    var shareUserInput by remember { mutableStateOf("") }
+    var shareRole by remember { mutableStateOf("viewer") }
+    var shareRoleExpanded by remember { mutableStateOf(false) }
+
+    val scrollState = rememberScrollState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, modifier = Modifier.weight(1f))
+                // Favorite star toggle (Req 15.2)
+                IconButton(onClick = { isFavorite = !isFavorite }) {
+                    Text(
+                        text = if (isFavorite) "★" else "☆",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (isFavorite) Color(0xFFDAA520) else Color.Gray
+                    )
+                }
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Tag Name
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -373,31 +515,261 @@ private fun TagEditDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text("Color", style = MaterialTheme.typography.labelMedium)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Preview chip (Req 15.6) — updates within 100ms of color change
+                Text("Preview", style = MaterialTheme.typography.labelMedium)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(parseHexColor(selectedBgColor))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    DEFAULT_COLORS.forEach { color ->
+                    Text(
+                        text = name.ifBlank { "Tag Preview" },
+                        color = parseHexColor(selectedFontColor),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                HorizontalDivider()
+
+                // Background Color section
+                Text("Background Color", style = MaterialTheme.typography.labelMedium)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    TAG_COLOR_PALETTE.forEach { paletteColor ->
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(parseHexColor(color))
+                                .background(parseHexColor(paletteColor.bg))
                                 .then(
-                                    if (color == selectedColor) {
+                                    if (paletteColor.bg == selectedBgColor) {
                                         Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
                                     } else {
                                         Modifier.border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                                     }
                                 )
-                                .clickable { selectedColor = color }
+                                .clickable {
+                                    selectedBgColor = paletteColor.bg
+                                    bgHexInput = paletteColor.bg
+                                    bgHexError = false
+                                    // Also set font color from palette pair
+                                    selectedFontColor = paletteColor.fg
+                                    fgHexInput = paletteColor.fg
+                                    fgHexError = false
+                                }
                         )
                     }
                 }
 
+                // Hex input for background (Req 15.7)
+                OutlinedTextField(
+                    value = bgHexInput,
+                    onValueChange = { input ->
+                        bgHexInput = input
+                        val normalized = input.removePrefix("#")
+                        if (normalized.matches(Regex("^[0-9A-Fa-f]{6}$"))) {
+                            selectedBgColor = "#$normalized"
+                            bgHexError = false
+                        } else {
+                            bgHexError = input.isNotEmpty()
+                        }
+                    },
+                    label = { Text("Hex (e.g. #8b5a2b)") },
+                    isError = bgHexError,
+                    supportingText = if (bgHexError) {{ Text("Invalid hex color") }} else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                HorizontalDivider()
+
+                // Font Color section (Req 15.5)
+                Text("Font Color", style = MaterialTheme.typography.labelMedium)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FONT_COLOR_SWATCHES.forEach { fgColor ->
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(parseHexColor(fgColor))
+                                .then(
+                                    if (fgColor == selectedFontColor) {
+                                        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                    } else {
+                                        Modifier.border(
+                                            1.dp,
+                                            if (isLightColor(fgColor)) MaterialTheme.colorScheme.outline else Color.Transparent,
+                                            CircleShape
+                                        )
+                                    }
+                                )
+                                .clickable {
+                                    selectedFontColor = fgColor
+                                    fgHexInput = fgColor
+                                    fgHexError = false
+                                }
+                        )
+                    }
+                }
+
+                // Hex input for font color (Req 15.7)
+                OutlinedTextField(
+                    value = fgHexInput,
+                    onValueChange = { input ->
+                        fgHexInput = input
+                        val normalized = input.removePrefix("#")
+                        if (normalized.matches(Regex("^[0-9A-Fa-f]{6}$"))) {
+                            selectedFontColor = "#$normalized"
+                            fgHexError = false
+                        } else {
+                            fgHexError = input.isNotEmpty()
+                        }
+                    },
+                    label = { Text("Hex (e.g. #5c3317)") },
+                    isError = fgHexError,
+                    supportingText = if (fgHexError) {{ Text("Invalid hex color") }} else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                HorizontalDivider()
+
+                // Sharing section (Req 15.3, 15.4)
+                Text(
+                    text = "🔗 Sharing",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Current shares list
+                if (shares.isEmpty()) {
+                    Text(
+                        text = "Not shared with anyone",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    shares.forEach { share ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = share.displayName.ifEmpty { share.userId },
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            // Role badge
+                            Text(
+                                text = if (share.role == "manager") "✏️ Manager" else "👁️ Viewer",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            // Remove button (Req 15.4)
+                            IconButton(
+                                onClick = {
+                                    shares = shares.filter { it.userId != share.userId }
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove share",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Add share controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // User picker
+                    OutlinedTextField(
+                        value = shareUserInput,
+                        onValueChange = { shareUserInput = it },
+                        label = { Text("User") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Role selector
+                    ExposedDropdownMenuBox(
+                        expanded = shareRoleExpanded,
+                        onExpandedChange = { shareRoleExpanded = !shareRoleExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = if (shareRole == "manager") "Manager" else "Viewer",
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .menuAnchor()
+                                .width(100.dp),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = shareRoleExpanded) }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = shareRoleExpanded,
+                            onDismissRequest = { shareRoleExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("👁️ Viewer") },
+                                onClick = {
+                                    shareRole = "viewer"
+                                    shareRoleExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("✏️ Manager") },
+                                onClick = {
+                                    shareRole = "manager"
+                                    shareRoleExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Share button
+                Button(
+                    onClick = {
+                        if (shareUserInput.isNotBlank()) {
+                            val alreadyShared = shares.any {
+                                it.userId == shareUserInput || it.displayName == shareUserInput
+                            }
+                            if (!alreadyShared) {
+                                shares = shares + TagShare(
+                                    userId = shareUserInput,
+                                    role = shareRole,
+                                    displayName = shareUserInput
+                                )
+                                shareUserInput = ""
+                            }
+                        }
+                    },
+                    enabled = shareUserInput.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("➕ Share")
+                }
+
                 // Parent dropdown (optional)
                 if (availableParents.isNotEmpty()) {
+                    HorizontalDivider()
                     ExposedDropdownMenuBox(
                         expanded = parentExpanded,
                         onExpandedChange = { parentExpanded = !parentExpanded }
@@ -439,8 +811,19 @@ private fun TagEditDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name, selectedColor, selectedParent) },
-                enabled = name.isNotBlank()
+                onClick = {
+                    onConfirm(
+                        TagItem(
+                            name = name,
+                            color = selectedBgColor,
+                            parent = selectedParent,
+                            fontColor = selectedFontColor,
+                            favorite = isFavorite,
+                            shares = shares
+                        )
+                    )
+                },
+                enabled = name.isNotBlank() && !bgHexError && !fgHexError
             ) {
                 Text("Save")
             }
@@ -459,19 +842,45 @@ private fun TagEditDialog(
 
 /**
  * Custom Colors section: shows default palette + user-defined colors,
- * supports add (hex input), edit, and delete.
+ * supports add (hex input), edit, delete, and overdue/blocked border color assignment.
+ *
+ * Validates: Requirements 16.1, 16.2, 16.3, 16.4, 16.5, 16.6
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CustomColorsSection(
     customColorsJson: String,
-    onColorsChanged: (String) -> Unit
+    onColorsChanged: (String) -> Unit,
+    chitOptionsJson: String,
+    overdueBorderColor: String,
+    blockedBorderColor: String,
+    onOverdueBorderColorChanged: (String) -> Unit,
+    onBlockedBorderColorChanged: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(true) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingColorIndex by remember { mutableStateOf<Int?>(null) }
+    // Track which color swatch was tapped for border assignment popup
+    var borderAssignPopupColor by remember { mutableStateOf<String?>(null) }
 
     val customColors = remember(customColorsJson) { parseColorsJson(customColorsJson) }
+
+    // Parse highlight settings from chitOptions JSON
+    val highlightOverdueEnabled = remember(chitOptionsJson) {
+        try {
+            val obj = JSONObject(chitOptionsJson)
+            obj.optBoolean("highlight_overdue_chits", true)
+        } catch (e: Exception) { true }
+    }
+    val highlightBlockedEnabled = remember(chitOptionsJson) {
+        try {
+            val obj = JSONObject(chitOptionsJson)
+            obj.optBoolean("highlight_blocked_chits", true)
+        } catch (e: Exception) { true }
+    }
+
+    // All swatches (default + custom) for border color display
+    val allSwatches = DEFAULT_COLORS + customColors
 
     Column {
         CollapsibleSectionHeader(
@@ -493,12 +902,15 @@ private fun CustomColorsSection(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     DEFAULT_COLORS.forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(parseHexColor(color))
-                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        ColorSwatchWithBorderIndicator(
+                            color = color,
+                            isOverdue = overdueBorderColor.equals(color, ignoreCase = true),
+                            isBlocked = blockedBorderColor.equals(color, ignoreCase = true),
+                            onClick = {
+                                if (highlightOverdueEnabled || highlightBlockedEnabled) {
+                                    borderAssignPopupColor = color
+                                }
+                            }
                         )
                     }
                 }
@@ -524,13 +936,20 @@ private fun CustomColorsSection(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         customColors.forEachIndexed { index, color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(parseHexColor(color))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                                    .clickable { editingColorIndex = index }
+                            ColorSwatchWithBorderIndicator(
+                                color = color,
+                                isOverdue = overdueBorderColor.equals(color, ignoreCase = true),
+                                isBlocked = blockedBorderColor.equals(color, ignoreCase = true),
+                                isCustom = true,
+                                onClick = {
+                                    if (highlightOverdueEnabled || highlightBlockedEnabled) {
+                                        borderAssignPopupColor = color
+                                    } else {
+                                        // If neither highlight is enabled, fall back to edit behavior
+                                        editingColorIndex = index
+                                    }
+                                },
+                                onLongClick = { editingColorIndex = index }
                             )
                         }
                     }
@@ -545,6 +964,24 @@ private fun CustomColorsSection(
                 }
             }
         }
+    }
+
+    // Border Color Assignment Popup
+    borderAssignPopupColor?.let { color ->
+        BorderColorAssignmentDialog(
+            color = color,
+            showOverdueOption = highlightOverdueEnabled,
+            showBlockedOption = highlightBlockedEnabled,
+            onAssignOverdue = {
+                onOverdueBorderColorChanged(color)
+                borderAssignPopupColor = null
+            },
+            onAssignBlocked = {
+                onBlockedBorderColorChanged(color)
+                borderAssignPopupColor = null
+            },
+            onDismiss = { borderAssignPopupColor = null }
+        )
     }
 
     // Add Color Dialog
@@ -582,6 +1019,163 @@ private fun CustomColorsSection(
             }
         )
     }
+}
+
+/**
+ * A color swatch that displays ring outlines when assigned as overdue/blocked border color.
+ * Supports double ring if same swatch is assigned to both.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ColorSwatchWithBorderIndicator(
+    color: String,
+    isOverdue: Boolean,
+    isBlocked: Boolean,
+    isCustom: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
+) {
+    val swatchSize = if (isCustom) 40.dp else 32.dp
+    val shape = if (isCustom) RoundedCornerShape(8.dp) else CircleShape
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .then(
+                    when {
+                        isOverdue && isBlocked -> {
+                            // Double ring: outer ring for overdue, inner ring for blocked
+                            Modifier
+                                .size(swatchSize + 12.dp)
+                                .border(2.dp, Color(0xFFFF4444), shape)
+                                .padding(3.dp)
+                                .border(2.dp, Color(0xFFFF8800), shape)
+                                .padding(3.dp)
+                        }
+                        isOverdue -> {
+                            // Single ring for overdue
+                            Modifier
+                                .size(swatchSize + 8.dp)
+                                .border(2.dp, Color(0xFFFF4444), shape)
+                                .padding(3.dp)
+                        }
+                        isBlocked -> {
+                            // Single ring for blocked
+                            Modifier
+                                .size(swatchSize + 8.dp)
+                                .border(2.dp, Color(0xFFFF8800), shape)
+                                .padding(3.dp)
+                        }
+                        else -> Modifier.size(swatchSize)
+                    }
+                )
+                .clip(shape)
+                .background(parseHexColor(color))
+                .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick
+                        )
+                    } else {
+                        Modifier.clickable { onClick() }
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {}
+
+        // Labels below the swatch
+        if (isOverdue && isBlocked) {
+            Text(
+                text = "Overdue",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFF4444),
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Blocked",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFF8800),
+                fontWeight = FontWeight.Bold
+            )
+        } else if (isOverdue) {
+            Text(
+                text = "Overdue",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFF4444),
+                fontWeight = FontWeight.Bold
+            )
+        } else if (isBlocked) {
+            Text(
+                text = "Blocked",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFF8800),
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/**
+ * Dialog for assigning a color as overdue or blocked border color.
+ * Options are conditionally visible based on highlight settings.
+ */
+@Composable
+private fun BorderColorAssignmentDialog(
+    color: String,
+    showOverdueOption: Boolean,
+    showBlockedOption: Boolean,
+    onAssignOverdue: () -> Unit,
+    onAssignBlocked: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Assign Border Color") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Preview of the selected color
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Color: ", style = MaterialTheme.typography.bodyMedium)
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(parseHexColor(color))
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Assign this color as a border indicator:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        },
+        confirmButton = {
+            Column {
+                if (showOverdueOption) {
+                    TextButton(onClick = onAssignOverdue) {
+                        Text("Overdue Border")
+                    }
+                }
+                if (showBlockedOption) {
+                    TextButton(onClick = onAssignBlocked) {
+                        Text("Blocked Border")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -1123,7 +1717,27 @@ private fun NotificationOffsetDialog(
 private data class TagItem(
     val name: String,
     val color: String,
-    val parent: String = ""
+    val parent: String = "",
+    val fontColor: String = "#5c3317",
+    val favorite: Boolean = false,
+    val shares: List<TagShare> = emptyList()
+)
+
+private data class TagShare(
+    val userId: String,
+    val role: String = "viewer",  // "viewer" or "manager"
+    val displayName: String = ""
+)
+
+// Hierarchical tree node for display
+private data class TagTreeNode(
+    val name: String,        // Display name (last segment)
+    val fullPath: String,    // Full path including parents
+    val color: String?,
+    val fontColor: String?,
+    val favorite: Boolean,
+    val children: MutableList<TagTreeNode> = mutableListOf(),
+    val tagIndex: Int? = null // Index in the flat tags list, null for synthetic parents
 )
 
 private data class LocationItem(
@@ -1143,6 +1757,117 @@ private data class NotificationsData(
     val startNotifications: List<NotificationRule>,
     val dueNotifications: List<NotificationRule>
 )
+
+// ============================================================
+// Tag Tree Building
+// ============================================================
+
+/**
+ * Build a hierarchical tag tree from a flat list of TagItems.
+ * Tags with "/" in their name are split into parent-child relationships.
+ * Favorites are sorted to the top at each level.
+ * Requirement 15.1: Hierarchical tree structure with / delimiter.
+ */
+private fun buildTagTree(tags: List<TagItem>): List<TagTreeNode> {
+    val root = mutableListOf<TagTreeNode>()
+    val nodeMap = mutableMapOf<String, TagTreeNode>()
+
+    tags.forEachIndexed { index, tag ->
+        val parts = tag.name.split("/")
+        var currentLevel = root
+        var pathSoFar = ""
+
+        parts.forEachIndexed { partIndex, part ->
+            pathSoFar = if (pathSoFar.isEmpty()) part else "$pathSoFar/$part"
+            val isLeaf = partIndex == parts.size - 1
+
+            if (!nodeMap.containsKey(pathSoFar)) {
+                val node = TagTreeNode(
+                    name = part,
+                    fullPath = pathSoFar,
+                    color = if (isLeaf) tag.color else null,
+                    fontColor = if (isLeaf) tag.fontColor else null,
+                    favorite = if (isLeaf) tag.favorite else false,
+                    tagIndex = if (isLeaf) index else null
+                )
+                nodeMap[pathSoFar] = node
+                currentLevel.add(node)
+            } else if (isLeaf) {
+                // Update existing synthetic parent with actual tag data
+                val existing = nodeMap[pathSoFar]!!
+                val updated = TagTreeNode(
+                    name = existing.name,
+                    fullPath = existing.fullPath,
+                    color = tag.color,
+                    fontColor = tag.fontColor,
+                    favorite = tag.favorite,
+                    children = existing.children,
+                    tagIndex = index
+                )
+                val parentList = if (partIndex == 0) root else {
+                    val parentPath = pathSoFar.substringBeforeLast("/")
+                    nodeMap[parentPath]?.children ?: root
+                }
+                val existingIndex = parentList.indexOf(existing)
+                if (existingIndex >= 0) {
+                    parentList[existingIndex] = updated
+                }
+                nodeMap[pathSoFar] = updated
+            }
+            currentLevel = nodeMap[pathSoFar]!!.children
+        }
+    }
+
+    // Color inheritance: children with no color inherit from parent
+    fun inheritColors(nodes: MutableList<TagTreeNode>, parentColor: String?) {
+        for (i in nodes.indices) {
+            val node = nodes[i]
+            if (node.color == null && parentColor != null) {
+                val updated = TagTreeNode(
+                    name = node.name,
+                    fullPath = node.fullPath,
+                    color = parentColor,
+                    fontColor = node.fontColor,
+                    favorite = node.favorite,
+                    children = node.children,
+                    tagIndex = node.tagIndex
+                )
+                nodes[i] = updated
+                nodeMap[node.fullPath] = updated
+            }
+            if (nodes[i].children.isNotEmpty()) {
+                inheritColors(nodes[i].children, nodes[i].color ?: parentColor)
+            }
+        }
+    }
+    inheritColors(root, null)
+
+    // Sort: favorites first, then alphabetically at every level
+    fun sortLevel(nodes: MutableList<TagTreeNode>) {
+        nodes.sortWith(compareBy<TagTreeNode> { !it.favorite }.thenBy { it.name.lowercase() })
+        nodes.forEach { if (it.children.isNotEmpty()) sortLevel(it.children) }
+    }
+    sortLevel(root)
+
+    return root
+}
+
+/**
+ * Check if a hex color is "light" (for border visibility on light swatches).
+ */
+private fun isLightColor(hex: String): Boolean {
+    return try {
+        val clean = hex.removePrefix("#")
+        if (clean.length < 6) return false
+        val r = clean.substring(0, 2).toInt(16)
+        val g = clean.substring(2, 4).toInt(16)
+        val b = clean.substring(4, 6).toInt(16)
+        // Perceived brightness formula
+        (r * 299 + g * 587 + b * 114) / 1000 > 180
+    } catch (e: Exception) {
+        false
+    }
+}
 
 // ============================================================
 // JSON Parsing & Serialization
@@ -1181,10 +1906,24 @@ private fun parseTagsJson(json: String): List<TagItem> {
         val array = JSONArray(json)
         (0 until array.length()).map { i ->
             val obj = array.getJSONObject(i)
+            val sharesArray = obj.optJSONArray("shares")
+            val shares = if (sharesArray != null) {
+                (0 until sharesArray.length()).map { j ->
+                    val shareObj = sharesArray.getJSONObject(j)
+                    TagShare(
+                        userId = shareObj.optString("user_id", ""),
+                        role = shareObj.optString("role", "viewer"),
+                        displayName = shareObj.optString("display_name", "")
+                    )
+                }
+            } else emptyList()
             TagItem(
                 name = obj.optString("name", ""),
                 color = obj.optString("color", "#808080"),
-                parent = obj.optString("parent", "")
+                parent = obj.optString("parent", ""),
+                fontColor = obj.optString("fontColor", "#5c3317"),
+                favorite = obj.optBoolean("favorite", false),
+                shares = shares
             )
         }
     } catch (e: Exception) {
@@ -1200,6 +1939,19 @@ private fun serializeTagsJson(tags: List<TagItem>): String {
         obj.put("color", tag.color)
         if (tag.parent.isNotEmpty()) {
             obj.put("parent", tag.parent)
+        }
+        obj.put("fontColor", tag.fontColor)
+        obj.put("favorite", tag.favorite)
+        if (tag.shares.isNotEmpty()) {
+            val sharesArray = JSONArray()
+            tag.shares.forEach { share ->
+                val shareObj = JSONObject()
+                shareObj.put("user_id", share.userId)
+                shareObj.put("role", share.role)
+                shareObj.put("display_name", share.displayName)
+                sharesArray.put(shareObj)
+            }
+            obj.put("shares", sharesArray)
         }
         array.put(obj)
     }

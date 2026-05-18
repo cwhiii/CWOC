@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.TagChipsRow
 
 /**
@@ -400,10 +401,9 @@ private fun EmailThreadCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = CwocChitCardStyle.cardBorder,
+        colors = CwocChitCardStyle.cardColors(),
+        elevation = CwocChitCardStyle.cardElevation()
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

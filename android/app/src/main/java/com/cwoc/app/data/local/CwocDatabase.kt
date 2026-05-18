@@ -26,7 +26,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
         SyncMetadataEntity::class,
         NotificationEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

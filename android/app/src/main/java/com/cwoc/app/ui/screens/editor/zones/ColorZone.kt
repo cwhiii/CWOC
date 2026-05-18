@@ -35,18 +35,30 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Default color palette matching the web app's color picker.
- * Contains common colors: red, orange, yellow, green, blue, purple, pink,
- * cyan, light green, deep orange, brown, blue-grey, dark red, medium blue, medium green.
+ * Contains the full 20-color palette used in both the chit editor and contact editor.
  */
-// ADD14: Color palette matches web's 7 default colors
 val DEFAULT_COLOR_PALETTE = listOf(
     "transparent", // No color (☒ icon)
-    "#C66B6B", // Muted Red
-    "#D68A59", // Muted Orange
-    "#E3B23C", // Muted Yellow/Gold
-    "#8A9A5B", // Muted Green
-    "#6B8299", // Muted Blue
-    "#8B6B99"  // Muted Purple
+    "#E3B23C", // Golden Ochre
+    "#D4764E", // Burnt Orange
+    "#D45B5B", // Coral Red
+    "#C2185B", // Deep Pink
+    "#7B1FA2", // Deep Purple
+    "#512DA8", // Indigo
+    "#303F9F", // Dark Blue
+    "#1976D2", // Medium Blue
+    "#0097A7", // Teal
+    "#00897B", // Dark Teal
+    "#388E3C", // Forest Green
+    "#689F38", // Olive Green
+    "#AFB42B", // Lime
+    "#F9A825", // Amber
+    "#FF8F00", // Dark Amber
+    "#D84315", // Deep Orange
+    "#795548", // Brown
+    "#546E7A", // Blue Grey
+    "#8D6E63", // Warm Brown
+    "#E91E63"  // Pink
 )
 
 /**
@@ -236,21 +248,31 @@ internal fun parseHexColor(hex: String): Color {
  */
 private fun getColorName(hex: String): String {
     val colorNames = mapOf(
-        "#FF6B6B" to "Red",
-        "#FF8E53" to "Orange",
-        "#FFC93C" to "Yellow",
-        "#6BCB77" to "Green",
-        "#4D96FF" to "Blue",
-        "#9B59B6" to "Purple",
-        "#E91E63" to "Pink",
-        "#00BCD4" to "Cyan",
-        "#8BC34A" to "Light Green",
-        "#FF5722" to "Deep Orange",
+        "#E3B23C" to "Golden Ochre",
+        "#D4764E" to "Burnt Orange",
+        "#D45B5B" to "Coral Red",
+        "#C2185B" to "Deep Pink",
+        "#7B1FA2" to "Deep Purple",
+        "#512DA8" to "Indigo",
+        "#303F9F" to "Dark Blue",
+        "#1976D2" to "Medium Blue",
+        "#0097A7" to "Teal",
+        "#00897B" to "Dark Teal",
+        "#388E3C" to "Forest Green",
+        "#689F38" to "Olive Green",
+        "#AFB42B" to "Lime",
+        "#F9A825" to "Amber",
+        "#FF8F00" to "Dark Amber",
+        "#D84315" to "Deep Orange",
         "#795548" to "Brown",
-        "#607D8B" to "Blue Grey",
-        "#F44336" to "Dark Red",
-        "#2196F3" to "Medium Blue",
-        "#4CAF50" to "Medium Green"
+        "#546E7A" to "Blue Grey",
+        "#8D6E63" to "Warm Brown",
+        "#E91E63" to "Pink",
+        "#C66B6B" to "Dusty Rose",
+        "#D68A59" to "Burnt Sienna",
+        "#8A9A5B" to "Mossy Sage",
+        "#6B8299" to "Slate Teal",
+        "#8B6B99" to "Muted Lilac"
     )
     return colorNames[hex.uppercase()] ?: colorNames[hex] ?: hex
 }

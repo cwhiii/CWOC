@@ -59,6 +59,7 @@ import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
@@ -343,7 +344,9 @@ private fun ProjectCard(
                 onClick = onToggleExpand,
                 onLongClick = onLongPress
             ),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
+        border = CwocChitCardStyle.cardBorder,
+        colors = CwocChitCardStyle.cardColors(),
+        elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Project header
@@ -492,7 +495,9 @@ private fun KanbanColumnView(
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
                     .clickable { onChildTap(chit.id) },
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFAF0))
+                border = CwocChitCardStyle.cardBorder,
+                colors = CwocChitCardStyle.cardColors(),
+                elevation = CwocChitCardStyle.cardElevation()
             ) {
                 Column(modifier = Modifier.padding(6.dp)) {
                     Text(

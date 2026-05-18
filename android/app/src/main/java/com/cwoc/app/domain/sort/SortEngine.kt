@@ -6,6 +6,7 @@ import com.cwoc.app.data.local.entity.ChitEntity
  * Available fields to sort chits by.
  */
 enum class SortField {
+    NONE,
     TITLE,
     DUE_DATE,
     START_DATE,
@@ -13,7 +14,9 @@ enum class SortField {
     MODIFIED_DATE,
     PRIORITY,
     STATUS,
-    MANUAL
+    MANUAL,
+    RANDOM,
+    UPCOMING
 }
 
 /**
@@ -26,12 +29,17 @@ enum class SortDirection {
 
 /**
  * Holds the current sort state for a view.
- * Defaults to manual ordering, ascending.
+ * Defaults to NONE (no sorting), ascending.
  */
 data class SortState(
-    val field: SortField = SortField.MANUAL,
+    val field: SortField = SortField.NONE,
     val direction: SortDirection = SortDirection.ASC
-)
+) {
+    /** Whether the direction toggle should be visible for this sort field. */
+    val showDirectionToggle: Boolean
+        get() = this.field != SortField.NONE && this.field != SortField.MANUAL &&
+                this.field != SortField.RANDOM && this.field != SortField.UPCOMING
+}
 
 /**
  * Pure-function sort engine for chit lists.
@@ -68,18 +76,52 @@ object SortEngine {
      * Returns a new sorted list (does not mutate the input).
      *
      * Null handling: nulls sort last in ASC, first in DESC.
+     * NONE sort preserves the original list order (but still pins to top).
      * MANUAL sort preserves the original list order (but still pins to top).
+     * RANDOM shuffles the list randomly each time.
+     * UPCOMING sorts by nearest future due date (nulls last).
      */
     fun sort(
         chits: List<ChitEntity>,
         field: SortField,
         direction: SortDirection
     ): List<ChitEntity> {
-        if (field == SortField.MANUAL) {
-            // Manual sort preserves existing order but pins to top
+        if (field == SortField.NONE || field == SortField.MANUAL) {
+            // Preserve existing order but pins to top
             val pinned = chits.filter { it.pinned }
             val unpinned = chits.filter { !it.pinned }
             return pinned + unpinned
+        }
+
+        if (field == SortField.RANDOM) {
+            // Shuffle randomly, but pins still go to top
+            val pinned = chits.filter { it.pinned }.shuffled()
+            val unpinned = chits.filter { !it.pinned }.shuffled()
+            return pinned + unpinned
+        }
+
+        if (field == SortField.UPCOMING) {
+            // Sort by nearest upcoming due date. Nulls sort last.
+            // Pinned still go to top.
+            val now = java.time.LocalDateTime.now().toString()
+            val comparator = Comparator<ChitEntity> { a, b ->
+                val aDate = a.dueDatetime
+                val bDate = b.dueDatetime
+                when {
+                    aDate == null && bDate == null -> 0
+                    aDate == null -> 1  // null sorts last
+                    bDate == null -> -1
+                    else -> aDate.compareTo(bDate)
+                }
+            }
+            val pinnedFirst = Comparator<ChitEntity> { a, b ->
+                when {
+                    a.pinned && !b.pinned -> -1
+                    !a.pinned && b.pinned -> 1
+                    else -> comparator.compare(a, b)
+                }
+            }
+            return chits.sortedWith(pinnedFirst)
         }
 
         val comparator = buildComparator(field, direction)
@@ -117,7 +159,7 @@ object SortEngine {
             SortField.MODIFIED_DATE -> compareNullableStrings(a.modifiedDatetime, b.modifiedDatetime)
             SortField.PRIORITY -> compareByOrdinal(a.priority, b.priority, PRIORITY_ORDINAL)
             SortField.STATUS -> compareByOrdinal(a.status, b.status, STATUS_ORDINAL)
-            SortField.MANUAL -> 0 // Should not reach here; handled above
+            SortField.NONE, SortField.MANUAL, SortField.RANDOM, SortField.UPCOMING -> 0
         }
     }
 

@@ -1,7 +1,8 @@
 package com.cwoc.app.ui.screens.contacts
 
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,21 +20,16 @@ import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,315 +40,228 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.data.local.entity.ContactEntity
+import com.cwoc.app.ui.components.firstMultiValue
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
-// ─── Theme Colors ───────────────────────────────────────────────────────────────
-
-private val ParchmentBrown = Color(0xFF6B4E31)
-private val ParchmentText = Color(0xFF4A3520)
-
-// ─── Main Screen ────────────────────────────────────────────────────────────────
-
+/**
+ * Contact Trash screen — lists soft-deleted contacts with restore and permanent delete.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactTrashScreen(
     onNavigateBack: () -> Unit,
     viewModel: ContactTrashViewModel = hiltViewModel()
 ) {
-    val contacts by viewModel.contacts.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val actionMessage by viewModel.actionMessage.collectAsState()
+    val trashContacts by viewModel.trashContacts.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    var showPurgeConfirm by remember { mutableStateOf<String?>(null) } // single contact ID
+    var showBulkPurgeConfirm by remember { mutableStateOf(false) }
 
-    // Dialog state
-    var contactToPurge by remember { mutableStateOf<DeletedContact?>(null) }
-    var showPurgeAllConfirm by remember { mutableStateOf(false) }
-
-    // Show snackbar for action messages
-    LaunchedEffect(actionMessage) {
-        actionMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearActionMessage()
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearMessage()
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Deleted Contacts") },
+                title = { Text("🗑️ Deleted Contacts") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    if (contacts.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.restoreAll() }) {
-                            Text("Restore All", color = ParchmentBrown)
+                    if (uiState.selectedIds.isNotEmpty()) {
+                        // Bulk restore
+                        IconButton(onClick = { viewModel.bulkRestore() }) {
+                            Icon(Icons.Default.RestoreFromTrash, "Restore Selected", tint = Color(0xFF2E7D32))
                         }
-                        TextButton(onClick = { showPurgeAllConfirm = true }) {
-                            Text("Purge All", color = Color(0xFFC62828))
+                        // Bulk delete
+                        IconButton(onClick = { showBulkPurgeConfirm = true }) {
+                            Icon(Icons.Default.Delete, "Delete Selected", tint = MaterialTheme.colorScheme.error)
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
             )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { innerPadding ->
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(padding)
         ) {
-            when {
-                isLoading -> LoadingState()
-                error != null -> ErrorState(
-                    message = error!!,
-                    onRetry = { viewModel.loadDeletedContacts() }
+            // Count + select all
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = viewModel.isAllSelected(trashContacts),
+                    onCheckedChange = { viewModel.toggleSelectAll(trashContacts) }
                 )
-                contacts.isEmpty() -> EmptyState()
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item { Spacer(modifier = Modifier.height(4.dp)) }
-                        items(contacts, key = { it.id }) { contact ->
-                            DeletedContactCard(
-                                contact = contact,
-                                onRestore = { viewModel.restoreContact(contact.id) },
-                                onPurge = { contactToPurge = contact }
-                            )
-                        }
-                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                Text(
+                    text = "${trashContacts.size} deleted contact${if (trashContacts.size != 1) "s" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (uiState.selectedIds.isNotEmpty()) {
+                    Text(
+                        text = " · ${uiState.selectedIds.size} selected",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (trashContacts.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("No deleted contacts.", color = Color(0xFF8B7355))
+                }
+            } else {
+                LazyColumn {
+                    items(trashContacts, key = { it.id }) { contact ->
+                        TrashContactRow(
+                            contact = contact,
+                            isSelected = viewModel.isSelected(contact.id),
+                            onToggleSelect = { viewModel.toggleSelection(contact.id) },
+                            onRestore = { viewModel.restoreContact(contact.id) },
+                            onDelete = { showPurgeConfirm = contact.id }
+                        )
+                        HorizontalDivider()
                     }
                 }
             }
         }
     }
 
-    // Purge single contact confirmation dialog
-    contactToPurge?.let { contact ->
-        PurgeConfirmationDialog(
-            contactName = contact.displayName
-                ?: listOfNotNull(contact.firstName, contact.lastName).joinToString(" ")
-                    .ifBlank { "Unnamed" },
-            onConfirm = {
-                viewModel.purgeContact(contact.id)
-                contactToPurge = null
+    // Single purge confirm
+    showPurgeConfirm?.let { contactId ->
+        AlertDialog(
+            onDismissRequest = { showPurgeConfirm = null },
+            title = { Text("Permanently Delete") },
+            text = { Text("This contact will be permanently deleted. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.purgeContact(contactId)
+                    showPurgeConfirm = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
-            onDismiss = { contactToPurge = null }
+            dismissButton = {
+                TextButton(onClick = { showPurgeConfirm = null }) { Text("Cancel") }
+            }
         )
     }
 
-    // Purge all confirmation dialog
-    if (showPurgeAllConfirm) {
+    // Bulk purge confirm
+    if (showBulkPurgeConfirm) {
         AlertDialog(
-            onDismissRequest = { showPurgeAllConfirm = false },
-            title = { Text("Purge All Contacts?", color = ParchmentText) },
-            text = {
-                Text("All ${contacts.size} deleted contact(s) will be permanently removed. This cannot be undone.")
-            },
+            onDismissRequest = { showBulkPurgeConfirm = false },
+            title = { Text("Permanently Delete ${uiState.selectedIds.size} Contact(s)") },
+            text = { Text("These contacts will be permanently deleted. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.purgeAll()
-                    showPurgeAllConfirm = false
-                }) {
-                    Text("Purge All", color = Color(0xFFC62828))
-                }
+                    viewModel.bulkPurge()
+                    showBulkPurgeConfirm = false
+                }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { showPurgeAllConfirm = false }) {
-                    Text("Cancel", color = ParchmentBrown)
-                }
+                TextButton(onClick = { showBulkPurgeConfirm = false }) { Text("Cancel") }
             }
         )
     }
 }
 
-// ─── Deleted Contact Card ───────────────────────────────────────────────────────
-
 @Composable
-private fun DeletedContactCard(
-    contact: DeletedContact,
+private fun TrashContactRow(
+    contact: ContactEntity,
+    isSelected: Boolean,
+    onToggleSelect: () -> Unit,
     onRestore: () -> Unit,
-    onPurge: () -> Unit
+    onDelete: () -> Unit
 ) {
-    val displayName = contact.displayName
-        ?: listOfNotNull(contact.firstName, contact.lastName).joinToString(" ")
-            .ifBlank { "Unnamed" }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggleSelect() }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            // Contact name
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = ParchmentText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
 
-            // Deleted date
-            contact.deletedDatetime?.let { deletedAt ->
-                Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Deleted: ${formatDate(deletedAt)}",
+                    text = contact.displayName ?: contact.givenName.ifBlank { "(Unnamed)" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (contact.sharedToVault) {
+                    Text(" 🏛️", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            val details = buildList {
+                contact.organization?.takeIf { it.isNotBlank() }?.let { add(it) }
+                firstMultiValue(contact.emails)?.let { add(it) }
+                firstMultiValue(contact.phones)?.let { add(it) }
+            }
+            if (details.isNotEmpty()) {
+                Text(
+                    text = details.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Deleted timestamp
+            contact.deletedDatetime?.let { dt ->
+                Text(
+                    text = "Deleted: ${formatTrashDate(dt)}",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
 
-            // Action buttons
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                OutlinedButton(onClick = onRestore) {
-                    Icon(
-                        imageVector = Icons.Default.RestoreFromTrash,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("Restore")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedButton(onClick = onPurge) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("Purge")
-                }
-            }
+        // Restore button
+        IconButton(onClick = onRestore) {
+            Icon(Icons.Default.RestoreFromTrash, "Restore", tint = Color(0xFF2E7D32))
+        }
+        // Delete button
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
         }
     }
 }
 
-// ─── Dialogs ────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun PurgeConfirmationDialog(
-    contactName: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Permanently Delete?", color = ParchmentText) },
-        text = {
-            Text("\"$contactName\" will be permanently deleted. This cannot be undone.")
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Purge", color = Color(0xFFC62828))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = ParchmentBrown)
-            }
-        }
-    )
-}
-
-// ─── State Composables ──────────────────────────────────────────────────────────
-
-@Composable
-private fun LoadingState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        CircularProgressIndicator(color = ParchmentBrown)
-    }
-}
-
-@Composable
-private fun ErrorState(message: String, onRetry: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.error
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
-            ) {
-                Text("Retry")
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "No deleted contacts",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Deleted contacts will appear here",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ─── Utility Functions ──────────────────────────────────────────────────────────
-
-private fun formatDate(dateStr: String): String {
+private fun formatTrashDate(iso: String): String {
     return try {
-        val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-        inputFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        val date = inputFormat.parse(dateStr)
-            ?: java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", java.util.Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.parse(dateStr)
-            ?: return dateStr
-
-        val outputFormat = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
-        outputFormat.timeZone = java.util.TimeZone.getDefault()
-        outputFormat.format(date)
-    } catch (e: Exception) {
-        dateStr
+        val instant = Instant.parse(iso)
+        val zdt = instant.atZone(ZoneId.systemDefault())
+        val formatter = DateTimeFormatter.ofPattern("MMM-dd HH:mm")
+        zdt.format(formatter)
+    } catch (_: Exception) {
+        iso.take(16)
     }
 }

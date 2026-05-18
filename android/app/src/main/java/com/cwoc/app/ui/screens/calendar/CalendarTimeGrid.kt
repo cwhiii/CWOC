@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,7 +82,18 @@ fun DayTimeGrid(
     val isToday = date == LocalDate.now()
 
     // The Row fills available space; scrolling is handled inside each child
-    Row(modifier = modifier.fillMaxSize()) {
+    // Pinch-to-zoom: two-finger vertical pinch changes zoomScale (hour height)
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTransformGestures { _, _, zoom, _ ->
+                    // Only use the vertical component of zoom (zoom is uniform scale)
+                    // Clamp between 0.5x and 4x
+                    zoomScale = (zoomScale * zoom).coerceIn(0.5f, 4f)
+                }
+            }
+    ) {
         // Hour labels column — scrolls in sync with the grid
         Column(
             modifier = Modifier
@@ -409,8 +421,11 @@ fun WeekTimeGrid(
     onEmptySlotTap: (LocalDateTime) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // C7: Mutable hour height for pinch-to-zoom
+    var zoomScale by remember { mutableStateOf(1f) }
+    val effectiveHourHeight = hourHeight * zoomScale
     val scrollState = rememberScrollState()
-    val totalHeight = hourHeight * 24
+    val totalHeight = effectiveHourHeight * 24
     val hourLabelWidth = 36.dp
     val gridLineColor = MaterialTheme.colorScheme.outlineVariant
     val currentTimeColor = Color(0xFFB22222)
@@ -420,7 +435,16 @@ fun WeekTimeGrid(
     // 7 days starting from weekStartDate
     val days = (0..6).map { weekStartDate.plusDays(it.toLong()) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTransformGestures { _, _, zoom, _ ->
+                    // Pinch-to-zoom: vertical only (hour segments get taller/shorter)
+                    zoomScale = (zoomScale * zoom).coerceIn(0.5f, 4f)
+                }
+            }
+    ) {
         // Day header row with week number (C12)
         Row(modifier = Modifier.fillMaxWidth()) {
             // Week number in the hour label column area
@@ -486,7 +510,7 @@ fun WeekTimeGrid(
                 for (hour in 0..23) {
                     Box(
                         modifier = Modifier
-                            .height(hourHeight)
+                            .height(effectiveHourHeight)
                             .fillMaxWidth(),
                         contentAlignment = Alignment.TopEnd
                     ) {
@@ -510,7 +534,7 @@ fun WeekTimeGrid(
                 ) {
                     // Grid lines
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val hourHeightPx = hourHeight.toPx()
+                        val hourHeightPx = effectiveHourHeight.toPx()
                         for (hour in 0..24) {
                             val y = hour * hourHeightPx
                             drawLine(
@@ -533,7 +557,7 @@ fun WeekTimeGrid(
                     if (day == today) {
                         val currentMinutes = now.hour * 60 + now.minute
                         val currentY = with(LocalDensity.current) {
-                            (currentMinutes.toFloat() / 60f) * hourHeight.toPx()
+                            (currentMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
                         }
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawLine(
@@ -562,10 +586,10 @@ fun WeekTimeGrid(
                         val durationMinutes = getEventDurationMinutes(event)
                             .coerceAtMost(1440 - startMinutes) // Clamp to end of day
                         val topOffset = with(LocalDensity.current) {
-                            (startMinutes.toFloat() / 60f) * hourHeight.toPx()
+                            (startMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
                         }
                         val eventHeight = with(LocalDensity.current) {
-                            ((durationMinutes.coerceAtLeast(20)).toFloat() / 60f) * hourHeight.toPx()
+                            ((durationMinutes.coerceAtLeast(20)).toFloat() / 60f) * effectiveHourHeight.toPx()
                         }
 
                         WeekEventChip(

@@ -271,7 +271,7 @@ class SettingsViewModelTest {
             val baseEntity = SettingsEntity(
                 userId = "user-$seed",
                 timeFormat = "24h",
-                sex = "male",
+                sex = "man",
                 snoozeLength = "30",
                 defaultFilters = "{\"status\":\"ToDo\"}",
                 alarmOrientation = "portrait",

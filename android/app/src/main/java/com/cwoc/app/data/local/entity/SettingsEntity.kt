@@ -114,6 +114,37 @@ data class SettingsEntity(
     // Timezone override
     val timezoneOverride: String? = null,
 
+    // === Migration 7→8 columns ===
+
+    // General tab
+    @ColumnInfo(name = "clock_orientation") val clockOrientation: String? = null,
+    @ColumnInfo(name = "landing_view") val landingView: String? = null,
+    @ColumnInfo(name = "hidden_views") val hiddenViews: String? = null,
+    @ColumnInfo(name = "prefer_google_maps") val preferGoogleMaps: String? = null,
+    @ColumnInfo(name = "show_tab_counts") val showTabCounts: String? = null,
+    @ColumnInfo(name = "combine_alerts") val combineAlerts: String? = null,
+
+    // Views tab
+    @ColumnInfo(name = "projects_show_child_count") val projectsShowChildCount: String? = null,
+    @ColumnInfo(name = "projects_show_checklist_count") val projectsShowChecklistCount: String? = null,
+
+    // Email tab
+    @ColumnInfo(name = "email_check_interval") val emailCheckInterval: String? = null,
+    @ColumnInfo(name = "email_max_pull") val emailMaxPull: String? = null,
+    @ColumnInfo(name = "email_signature") val emailSignature: String? = null,
+    @ColumnInfo(name = "email_bundles_count_display") val emailBundlesCountDisplay: String? = null,
+
+    // Admin tab
+    @ColumnInfo(name = "instance_name") val instanceName: String? = null,
+    @ColumnInfo(name = "welcome_message") val welcomeMessage: String? = null,
+    @ColumnInfo(name = "audit_log_pruning_enabled") val auditLogPruningEnabled: String? = null,
+    @ColumnInfo(name = "tailscale_enabled") val tailscaleEnabled: String? = null,
+    @ColumnInfo(name = "tailscale_auth_key") val tailscaleAuthKey: String? = null,
+    @ColumnInfo(name = "ntfy_enabled") val ntfyEnabled: String? = null,
+    @ColumnInfo(name = "ha_enabled") val haEnabled: String? = null,
+    @ColumnInfo(name = "ha_poll_interval") val haPollInterval: String? = null,
+    @ColumnInfo(name = "kiosk_selected_tags") val kioskSelectedTags: String? = null,
+
     // Phase 3 — dirty tracking for sync
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

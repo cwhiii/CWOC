@@ -10,11 +10,13 @@ import com.cwoc.app.data.mapper.detectContactChangedFields
 import com.cwoc.app.data.mapper.toContactEntity
 import com.cwoc.app.data.mapper.toContactFormState
 import com.cwoc.app.data.repository.ContactRepository
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +81,7 @@ data class UserProfile(
 @HiltViewModel
 class ContactEditorViewModel @Inject constructor(
     private val contactRepository: ContactRepository,
+    private val settingsRepository: SettingsRepository,
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
@@ -95,6 +98,8 @@ class ContactEditorViewModel @Inject constructor(
 
     private val contactId: String? = savedStateHandle.get<String>("contactId")
     private val userId: String? = savedStateHandle.get<String>("userId")
+    private val prefillEmail: String? = savedStateHandle.get<String>("prefillEmail")
+    private val prefillName: String? = savedStateHandle.get<String>("prefillName")
     private val isNew: Boolean = contactId == null || contactId == NEW_CONTACT_ID
     val isProfileMode: Boolean = userId != null
 
@@ -130,11 +135,49 @@ class ContactEditorViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Custom colors from user settings for the color picker. */
+    private val _customColors = MutableStateFlow<List<String>>(emptyList())
+    val customColors: StateFlow<List<String>> = _customColors.asStateFlow()
+
     init {
         if (isProfileMode) {
             loadProfile()
         } else if (!isNew) {
             loadExistingContact()
+        } else {
+            // New contact — apply defaults
+            applyNewContactDefaults()
+        }
+        loadCustomColors()
+    }
+
+    /**
+     * Apply defaults for new contacts: vault setting, prefill from nav args.
+     */
+    private fun applyNewContactDefaults() {
+        viewModelScope.launch {
+            var form = _formState.value
+
+            // Check default_share_contacts setting
+            val settings = settingsRepository.get()
+            if (settings?.defaultShareContacts == "1") {
+                form = form.copy(sharedToVault = true)
+            }
+
+            // Prefill from navigation args
+            if (!prefillEmail.isNullOrBlank()) {
+                val emailJson = """[{"label":"Email","value":"$prefillEmail"}]"""
+                form = form.copy(emails = emailJson)
+            }
+            if (!prefillName.isNullOrBlank()) {
+                val parts = prefillName.trim().split("\\s+".toRegex())
+                form = form.copy(
+                    givenName = parts.firstOrNull() ?: "",
+                    surname = if (parts.size > 1) parts.drop(1).joinToString(" ") else ""
+                )
+            }
+
+            _formState.value = form
         }
     }
 
@@ -269,6 +312,25 @@ class ContactEditorViewModel @Inject constructor(
                 _formState.value = entity.toContactFormState()
             }
             _isLoading.value = false
+        }
+    }
+
+    /**
+     * Loads custom colors from user settings for the color picker.
+     */
+    private fun loadCustomColors() {
+        viewModelScope.launch {
+            val settings = settingsRepository.get()
+            if (settings != null) {
+                val colors = try {
+                    settings.customColors?.let { json ->
+                        gson.fromJson<List<String>>(json, object : TypeToken<List<String>>() {}.type)
+                    } ?: emptyList()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                _customColors.value = colors
+            }
         }
     }
 

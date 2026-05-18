@@ -177,12 +177,48 @@ fun CwocNavGraph(
             )
         }
 
-        composable(Screen.Settings.route) {
+        composable(
+            route = Screen.Settings.ROUTE_WITH_ARGS,
+            arguments = listOf(
+                navArgument("tab") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("section") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val deepLinkTab = backStackEntry.arguments?.getString("tab")
+            val deepLinkSection = backStackEntry.arguments?.getString("section")
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToAdminChits = {
                     navController.navigate(Screen.AdminChits.route)
-                }
+                },
+                onNavigateToUserAdmin = {
+                    navController.navigate(Screen.UserAdmin.route)
+                },
+                onNavigateToAttachments = {
+                    navController.navigate(Screen.Attachments.route)
+                },
+                onNavigateToAuditLog = {
+                    navController.navigate(Screen.AuditLog.route)
+                },
+                onNavigateToTrash = {
+                    navController.navigate(Screen.Trash.route)
+                },
+                onNavigateToCustomObjects = {
+                    navController.navigate(Screen.CustomObjects.route)
+                },
+                onNavigateToKiosk = { selectedTags ->
+                    navController.navigate(Screen.Kiosk.createRoute(selectedTags))
+                },
+                deepLinkTab = deepLinkTab,
+                deepLinkSection = deepLinkSection
             )
         }
 
@@ -290,6 +326,25 @@ fun CwocNavGraph(
 
         composable(Screen.Attachments.route) {
             AttachmentsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.Kiosk.route,
+            arguments = listOf(
+                navArgument("tags") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val tagsParam = backStackEntry.arguments?.getString("tags")
+            val selectedTags = tagsParam?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+            // TODO: Replace with KioskScreen composable when implemented
+            com.cwoc.app.ui.screens.kiosk.KioskScreen(
+                selectedTags = selectedTags,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

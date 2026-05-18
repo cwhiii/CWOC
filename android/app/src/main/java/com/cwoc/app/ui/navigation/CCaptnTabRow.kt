@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Notes
@@ -38,7 +39,8 @@ enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector
     Tasks("Tasks", "tasks", Icons.Default.Task),
     Notes("Notes", "notes", Icons.Default.Notes),
     Indicators("Indicators", "indicators", Icons.Default.ShowChart),
-    Email("Email", "email", Icons.Default.Email)
+    Email("Email", "email", Icons.Default.Email),
+    Omni("Omni", "omni", Icons.Default.Dashboard)
 }
 
 /**
@@ -115,7 +117,7 @@ fun CCaptnTabRow(
  * Supports both comma-separated format and JSON array format.
  * Falls back to all tabs in default order if parsing fails.
  */
-private fun getOrderedVisibleTabs(viewOrder: String?): List<CCaptnTab> {
+fun getOrderedVisibleTabs(viewOrder: String?): List<CCaptnTab> {
     if (viewOrder.isNullOrBlank()) {
         return CCaptnTab.entries.toList()
     }
