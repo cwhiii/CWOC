@@ -7,6 +7,8 @@ import com.cwoc.app.data.local.migration.MIGRATION_1_2
 import com.cwoc.app.data.local.migration.MIGRATION_2_3
 import com.cwoc.app.data.local.migration.MIGRATION_3_4
 import com.cwoc.app.data.local.migration.MIGRATION_4_5
+import com.cwoc.app.data.local.migration.MIGRATION_5_6
+import com.cwoc.app.data.local.migration.MIGRATION_6_7
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -41,7 +43,7 @@ object WidgetDataProvider {
             CwocDatabase::class.java,
             "cwoc.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     }
 

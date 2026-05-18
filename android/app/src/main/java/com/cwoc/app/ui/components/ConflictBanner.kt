@@ -20,16 +20,17 @@ import androidx.compose.ui.unit.dp
  * was resolved on the server for that chit.
  *
  * Uses Material3 error-container colors to draw attention without being overly alarming.
+ * Y1: "View in audit log" is now clickable.
  *
- * @param conflictFields Optional comma-separated field names that had conflicts (e.g. "title, note")
+ * @param conflictFields Optional comma-separated field names that had conflicts
  * @param onDismiss Callback invoked when the user taps the dismiss (close) button
- *
- * Validates: Requirements 1.1, 1.2
+ * @param onViewAuditLog Callback when "View in audit log" is tapped (Y1)
  */
 @Composable
 fun ConflictBanner(
     conflictFields: String? = null,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onViewAuditLog: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -40,14 +41,20 @@ fun ConflictBanner(
     ) {
         Text(
             text = if (!conflictFields.isNullOrBlank()) {
-                "⚠️ Sync conflict resolved ($conflictFields) — View in audit log"
+                "⚠️ Sync conflict resolved ($conflictFields)"
             } else {
-                "⚠️ Sync conflict resolved — View in audit log"
+                "⚠️ Sync conflict resolved"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier.weight(1f)
         )
+        // Y1: Clickable "View" button
+        if (onViewAuditLog != null) {
+            androidx.compose.material3.TextButton(onClick = onViewAuditLog) {
+                Text("View", color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
         IconButton(onClick = onDismiss) {
             Icon(
                 imageVector = Icons.Default.Close,

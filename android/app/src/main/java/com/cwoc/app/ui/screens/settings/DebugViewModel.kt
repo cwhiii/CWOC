@@ -1,4 +1,4 @@
-package com.cwoc.app.ui.screens.debug
+package com.cwoc.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

@@ -3,6 +3,7 @@ package com.cwoc.app.domain.search
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import javax.inject.Inject
 
 /**
  * Evaluates a parsed SearchNode AST against a ChitEntity.
@@ -10,7 +11,7 @@ import com.google.gson.reflect.TypeToken
  * Searches across: title, note, tags, and checklist item text.
  * All matching is case-insensitive substring matching.
  */
-class BooleanSearchEvaluator {
+class BooleanSearchEvaluator @Inject constructor() {
 
     private val gson = Gson()
 

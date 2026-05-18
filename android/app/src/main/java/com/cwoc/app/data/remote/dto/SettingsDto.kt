@@ -38,5 +38,78 @@ data class SettingsDto(
     val default_timezone: String?,
     val default_view: String?,
     val view_order: Any?,
-    val sync_version: Int = 0
+    val sync_version: Int = 0,
+
+    // Audit settings
+    val audit_log_max_days: Int?,
+    val audit_log_max_mb: Double?,
+
+    // Notification defaults
+    val default_notifications: Any?,
+
+    // Shared/kiosk
+    val shared_tags: Any?,
+    val kiosk_users: Any?,
+
+    // Map settings
+    val map_default_lat: String?,
+    val map_default_lon: String?,
+    val map_default_zoom: String?,
+    val map_auto_zoom: String?,
+
+    // Email settings
+    val email_account: Any?,
+    val email_accounts: Any?,
+
+    // Attachment limits
+    val attachment_max_size_mb: String?,
+    val attachment_max_storage_mb: String?,
+
+    // Sharing
+    val default_share_contacts: String?,
+
+    // Autosave
+    val checklist_autosave: String?,
+    val autosave_desktop: String?,
+    val autosave_mobile: String?,
+
+    // Tags
+    val recent_tags: Any?,
+
+    // Email pagination
+    val paginate_email: String?,
+
+    // Bundles
+    val bundles_multi_placement: Any? = null,
+    val bundles_enabled: Any? = null,
+    val bundles_show_count: String? = null,
+
+    // Map thumbnails
+    val show_map_thumbnails: String?,
+
+    // Session
+    val session_lifetime: String?,
+
+    // Omni view
+    val omni_layout: Any?,
+    val omni_locked_filters: Any?,
+    val omni_hst_clock_mode: String?,
+    val omni_email_count: String?,
+    val omni_normalize_colors: String?,
+
+    // Smart actions
+    val smart_actions_config: Any?,
+
+    // Custom view filters
+    val custom_view_filters: Any?,
+
+    // Email privacy
+    val email_block_tracking_pixels: String?,
+    val email_external_content: String?,
+    val email_read_receipts: String?,
+    val email_undo_send_delay: String?,
+    val email_group_by: String?,
+
+    // Timezone override
+    val timezone_override: String?
 )

@@ -20,7 +20,9 @@ data class LoginUiState(
     val password: String = "cwoc",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val loginSuccess: Boolean = false
+    val loginSuccess: Boolean = false,
+    val instanceName: String? = null,
+    val welcomeMessage: String? = null
 )
 
 @HiltViewModel
@@ -38,10 +40,14 @@ class LoginViewModel @Inject constructor(
         if (lastUrl != null) {
             _uiState.update { it.copy(serverUrl = lastUrl) }
         }
+        // Fetch login message from server
+        fetchLoginMessage()
     }
 
     fun onServerUrlChanged(url: String) {
         _uiState.update { it.copy(serverUrl = url, error = null) }
+        // Re-fetch login message when URL changes
+        fetchLoginMessage()
     }
 
     fun onUsernameChanged(username: String) {
@@ -50,6 +56,51 @@ class LoginViewModel @Inject constructor(
 
     fun onPasswordChanged(password: String) {
         _uiState.update { it.copy(password = password, error = null) }
+    }
+
+    private fun fetchLoginMessage() {
+        val serverUrl = _uiState.value.serverUrl
+        if (!isValidServerUrl(serverUrl)) return
+
+        viewModelScope.launch {
+            try {
+                val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                })
+                val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+                sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+
+                val client = okhttp3.OkHttpClient.Builder()
+                    .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
+                    .hostnameVerifier { _, _ -> true }
+                    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+
+                val retrofit = retrofit2.Retrofit.Builder()
+                    .baseUrl(serverUrl.trimEnd('/') + "/")
+                    .client(client)
+                    .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+                    .build()
+
+                val api = retrofit.create(com.cwoc.app.data.remote.CwocApiService::class.java)
+                val response = api.getLoginMessage()
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    _uiState.update {
+                        it.copy(
+                            instanceName = body?.instance_name,
+                            welcomeMessage = body?.message
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Silently fail — login message is optional
+                android.util.Log.d("CWOC_LOGIN", "Failed to fetch login message: ${e.message}")
+            }
+        }
     }
 
     fun login() {
@@ -109,6 +160,10 @@ class LoginViewModel @Inject constructor(
                 is AuthResult.InvalidCredentials -> {
                     syncEngine.reportLog("Login failed: invalid credentials for user=${state.username}", "error")
                     _uiState.update { it.copy(isLoading = false, error = "Invalid username or password") }
+                }
+                is AuthResult.RateLimited -> {
+                    syncEngine.reportLog("Login failed: rate limited for user=${state.username}", "error")
+                    _uiState.update { it.copy(isLoading = false, error = "Too many login attempts. Please wait before retrying.") }
                 }
                 is AuthResult.NetworkError -> {
                     syncEngine.reportLog("Login failed: network error reaching ${state.serverUrl}", "error")

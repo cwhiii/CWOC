@@ -86,6 +86,37 @@ data class ChitEntity(
     val syncVersion: Int,
     val lastSyncedAt: String?,
 
+    // Ownership display fields
+    val ownerDisplayName: String? = null,
+    val ownerUsername: String? = null,
+
+    // Email fields
+    val emailMessageId: String? = null,
+    val emailFrom: String? = null,
+    val emailTo: String? = null,
+    val emailCc: String? = null,
+    val emailBcc: String? = null,
+    val emailSubject: String? = null,
+    val emailBodyText: String? = null,
+    val emailDate: String? = null,
+    val emailFolder: String? = null,
+    val emailStatus: String? = null,
+    val emailRead: Boolean? = null,
+    val emailInReplyTo: String? = null,
+    val emailReferences: String? = null,
+    val emailBodyHtml: String? = null,
+    val emailAccountId: String? = null,
+    val emailSendAt: String? = null,
+    val emailRequestReadReceipt: Boolean? = null,
+
+    // Attachments
+    val attachments: String? = null,
+
+    // Checklist/thread fields
+    val checklistAutosave: String? = null,
+    val nestThreadId: String? = null,
+    val autoCompleteChecklist: Boolean? = null,
+
     // Phase 2 — dirty tracking
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

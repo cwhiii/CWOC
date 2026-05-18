@@ -1,3 +1,5 @@
+- Phase 2 audit remediation: all 43 Android editor gaps implemented (new zones, fields, toolbar actions)
+
 ## 20260516.0701
 Fixed empty chits bug: sync endpoint was sending alarm/notification/deleted as integers (0/1) but Android Gson expected booleans. Added bool() conversion in _deserialize_chit_for_sync.
 

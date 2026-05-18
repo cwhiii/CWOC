@@ -67,9 +67,35 @@ data class ChitPushDto(
     val stealth: Boolean?,
     val assigned_to: String?,
     val owner_id: String?,
+    val owner_display_name: String?,
+    val owner_username: String?,
     val availability: String?,
     val snoozed_until: String?,
-    val prerequisites: List<String>?
+    val prerequisites: List<String>?,
+    // Email fields
+    val email_message_id: String?,
+    val email_from: String?,
+    val email_to: Any?,
+    val email_cc: Any?,
+    val email_bcc: Any?,
+    val email_subject: String?,
+    val email_body_text: String?,
+    val email_date: String?,
+    val email_folder: String?,
+    val email_status: String?,
+    val email_read: Boolean?,
+    val email_in_reply_to: String?,
+    val email_references: String?,
+    val email_body_html: String?,
+    val email_account_id: String?,
+    val email_send_at: String?,
+    val email_request_read_receipt: Boolean?,
+    // Attachments
+    val attachments: Any?,
+    // Checklist/thread fields
+    val checklist_autosave: String?,
+    val nest_thread_id: String?,
+    val auto_complete_checklist: Boolean?
 )
 
 /**

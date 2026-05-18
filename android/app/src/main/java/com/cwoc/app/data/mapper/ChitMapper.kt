@@ -18,6 +18,7 @@ data class ChitFormState(
     val pointInTime: String? = null,
     val status: String? = null,
     val priority: String? = null,
+    val severity: String? = null,
     val tags: List<String> = emptyList(),
     val checklist: String? = null,
     val people: List<String> = emptyList(),
@@ -26,9 +27,50 @@ data class ChitFormState(
     val alerts: String? = null,
     val recurrence: String? = null,
     val recurrenceRule: String? = null,
+    val recurrenceExceptions: String? = null,
     val allDay: Boolean = false,
     val timezone: String? = null,
     val availability: String? = null,
+    val perpetual: Boolean = false,
+    val habit: Boolean = false,
+    val habitGoal: Int? = null,
+    val habitSuccess: Int? = null,
+    val habitResetPeriod: String? = null,
+    val habitLastActionDate: String? = null,
+    val habitHideOverall: Boolean? = null,
+    val showOnCalendar: Boolean? = null,
+    val isProjectMaster: Boolean = false,
+    val childChits: List<String>? = null,
+    val assignedTo: String? = null,
+    val prerequisites: List<String>? = null,
+    val stealth: Boolean? = null,
+    val autoCompleteChecklist: Boolean? = null,
+    val checklistAutosave: String? = null,
+    val healthData: String? = null,
+    val attachments: String? = null,
+    val nestThreadId: String? = null,
+    // Email fields
+    val emailFrom: String? = null,
+    val emailTo: String? = null,
+    val emailCc: String? = null,
+    val emailBcc: String? = null,
+    val emailSubject: String? = null,
+    val emailBodyText: String? = null,
+    val emailBodyHtml: String? = null,
+    val emailDate: String? = null,
+    val emailFolder: String? = null,
+    val emailStatus: String? = null,
+    val emailRead: Boolean? = null,
+    val emailInReplyTo: String? = null,
+    val emailReferences: String? = null,
+    val emailMessageId: String? = null,
+    val emailAccountId: String? = null,
+    val emailSendAt: String? = null,
+    val emailRequestReadReceipt: Boolean? = null,
+    // Ownership display
+    val ownerId: String? = null,
+    val ownerDisplayName: String? = null,
+    val ownerUsername: String? = null,
     val isNew: Boolean = false
 )
 
@@ -47,6 +89,7 @@ fun ChitEntity.toFormState(): ChitFormState {
         pointInTime = pointInTime,
         status = status,
         priority = priority,
+        severity = severity,
         tags = tags ?: emptyList(),
         checklist = checklist,
         people = people ?: emptyList(),
@@ -55,9 +98,48 @@ fun ChitEntity.toFormState(): ChitFormState {
         alerts = alerts,
         recurrence = recurrence,
         recurrenceRule = recurrenceRule,
+        recurrenceExceptions = recurrenceExceptions,
         allDay = allDay,
         timezone = timezone,
         availability = availability,
+        perpetual = perpetual,
+        habit = habit,
+        habitGoal = habitGoal,
+        habitSuccess = habitSuccess,
+        habitResetPeriod = habitResetPeriod,
+        habitLastActionDate = habitLastActionDate,
+        habitHideOverall = habitHideOverall,
+        showOnCalendar = showOnCalendar,
+        isProjectMaster = isProjectMaster,
+        childChits = childChits,
+        assignedTo = assignedTo,
+        prerequisites = prerequisites,
+        stealth = stealth,
+        autoCompleteChecklist = autoCompleteChecklist,
+        checklistAutosave = checklistAutosave,
+        healthData = healthData,
+        attachments = attachments,
+        nestThreadId = nestThreadId,
+        emailFrom = emailFrom,
+        emailTo = emailTo,
+        emailCc = emailCc,
+        emailBcc = emailBcc,
+        emailSubject = emailSubject,
+        emailBodyText = emailBodyText,
+        emailBodyHtml = emailBodyHtml,
+        emailDate = emailDate,
+        emailFolder = emailFolder,
+        emailStatus = emailStatus,
+        emailRead = emailRead,
+        emailInReplyTo = emailInReplyTo,
+        emailReferences = emailReferences,
+        emailMessageId = emailMessageId,
+        emailAccountId = emailAccountId,
+        emailSendAt = emailSendAt,
+        emailRequestReadReceipt = emailRequestReadReceipt,
+        ownerId = ownerId,
+        ownerDisplayName = ownerDisplayName,
+        ownerUsername = ownerUsername,
         isNew = false
     )
 }
@@ -87,14 +169,14 @@ fun ChitFormState.toEntity(
         completedDatetime = originalEntity?.completedDatetime,
         status = status,
         priority = priority,
-        severity = originalEntity?.severity,
+        severity = severity,
         checklist = checklist,
         alarm = originalEntity?.alarm,
         notification = originalEntity?.notification,
         recurrence = recurrence,
         recurrenceId = originalEntity?.recurrenceId,
         recurrenceRule = recurrenceRule,
-        recurrenceExceptions = originalEntity?.recurrenceExceptions,
+        recurrenceExceptions = recurrenceExceptions,
         location = location,
         color = color,
         people = people.ifEmpty { null },
@@ -103,33 +185,59 @@ fun ChitFormState.toEntity(
         deleted = originalEntity?.deleted ?: false,
         createdDatetime = createdDatetime,
         modifiedDatetime = modifiedDatetime,
-        isProjectMaster = originalEntity?.isProjectMaster ?: false,
-        childChits = originalEntity?.childChits,
+        isProjectMaster = isProjectMaster,
+        childChits = childChits,
         allDay = allDay,
         timezone = timezone,
         alerts = alerts,
         progressPercent = originalEntity?.progressPercent,
         timeEstimate = originalEntity?.timeEstimate,
         weatherData = originalEntity?.weatherData,
-        healthData = originalEntity?.healthData,
-        habit = originalEntity?.habit ?: false,
-        habitGoal = originalEntity?.habitGoal,
-        habitSuccess = originalEntity?.habitSuccess,
-        showOnCalendar = originalEntity?.showOnCalendar,
-        habitResetPeriod = originalEntity?.habitResetPeriod,
-        habitLastActionDate = originalEntity?.habitLastActionDate,
-        habitHideOverall = originalEntity?.habitHideOverall,
-        perpetual = originalEntity?.perpetual ?: false,
+        healthData = healthData,
+        habit = habit,
+        habitGoal = habitGoal,
+        habitSuccess = habitSuccess,
+        showOnCalendar = showOnCalendar,
+        habitResetPeriod = habitResetPeriod,
+        habitLastActionDate = habitLastActionDate,
+        habitHideOverall = habitHideOverall,
+        perpetual = perpetual,
         shares = originalEntity?.shares,
-        stealth = originalEntity?.stealth,
-        assignedTo = originalEntity?.assignedTo,
-        ownerId = originalEntity?.ownerId,
+        stealth = stealth,
+        assignedTo = assignedTo,
+        ownerId = ownerId,
+        ownerDisplayName = ownerDisplayName,
+        ownerUsername = ownerUsername,
         hasUnviewedConflict = originalEntity?.hasUnviewedConflict ?: false,
         availability = availability,
         snoozedUntil = originalEntity?.snoozedUntil,
-        prerequisites = originalEntity?.prerequisites,
+        prerequisites = prerequisites,
         syncVersion = originalEntity?.syncVersion ?: 0,
         lastSyncedAt = originalEntity?.lastSyncedAt,
+        // Email fields
+        emailMessageId = emailMessageId,
+        emailFrom = emailFrom,
+        emailTo = emailTo,
+        emailCc = emailCc,
+        emailBcc = emailBcc,
+        emailSubject = emailSubject,
+        emailBodyText = emailBodyText,
+        emailDate = emailDate,
+        emailFolder = emailFolder,
+        emailStatus = emailStatus,
+        emailRead = emailRead,
+        emailInReplyTo = emailInReplyTo,
+        emailReferences = emailReferences,
+        emailBodyHtml = emailBodyHtml,
+        emailAccountId = emailAccountId,
+        emailSendAt = emailSendAt,
+        emailRequestReadReceipt = emailRequestReadReceipt,
+        // Attachments
+        attachments = attachments,
+        // Checklist/thread fields
+        checklistAutosave = checklistAutosave,
+        nestThreadId = nestThreadId,
+        autoCompleteChecklist = autoCompleteChecklist,
         isDirty = true,
         dirtyFields = "[]" // Will be set by DirtyTracker
     )
@@ -192,9 +300,35 @@ fun ChitEntity.toPushDto(): ChitPushDto {
         stealth = stealth,
         assigned_to = assignedTo,
         owner_id = ownerId,
+        owner_display_name = ownerDisplayName,
+        owner_username = ownerUsername,
         availability = availability,
         snoozed_until = snoozedUntil,
-        prerequisites = prerequisites
+        prerequisites = prerequisites,
+        // Email fields
+        email_message_id = emailMessageId,
+        email_from = emailFrom,
+        email_to = emailTo?.let { gson.fromJson(it, Any::class.java) },
+        email_cc = emailCc?.let { gson.fromJson(it, Any::class.java) },
+        email_bcc = emailBcc?.let { gson.fromJson(it, Any::class.java) },
+        email_subject = emailSubject,
+        email_body_text = emailBodyText,
+        email_date = emailDate,
+        email_folder = emailFolder,
+        email_status = emailStatus,
+        email_read = emailRead,
+        email_in_reply_to = emailInReplyTo,
+        email_references = emailReferences,
+        email_body_html = emailBodyHtml,
+        email_account_id = emailAccountId,
+        email_send_at = emailSendAt,
+        email_request_read_receipt = emailRequestReadReceipt,
+        // Attachments
+        attachments = attachments?.let { gson.fromJson(it, Any::class.java) },
+        // Checklist/thread fields
+        checklist_autosave = checklistAutosave,
+        nest_thread_id = nestThreadId,
+        auto_complete_checklist = autoCompleteChecklist
     )
 }
 
@@ -217,6 +351,7 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
             if (form.pointInTime != null) add("point_in_time")
             if (form.status != null) add("status")
             if (form.priority != null) add("priority")
+            if (form.severity != null) add("severity")
             if (form.tags.isNotEmpty()) add("tags")
             if (form.checklist != null) add("checklist")
             if (form.people.isNotEmpty()) add("people")
@@ -225,9 +360,38 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
             if (form.alerts != null) add("alerts")
             if (form.recurrence != null) add("recurrence")
             if (form.recurrenceRule != null) add("recurrence_rule")
+            if (form.recurrenceExceptions != null) add("recurrence_exceptions")
             if (form.allDay) add("all_day")
             if (form.timezone != null) add("timezone")
             if (form.availability != null) add("availability")
+            if (form.perpetual) add("perpetual")
+            if (form.habit) add("habit")
+            if (form.habitGoal != null) add("habit_goal")
+            if (form.habitSuccess != null) add("habit_success")
+            if (form.habitResetPeriod != null) add("habit_reset_period")
+            if (form.habitLastActionDate != null) add("habit_last_action_date")
+            if (form.habitHideOverall != null) add("habit_hide_overall")
+            if (form.showOnCalendar != null) add("show_on_calendar")
+            if (form.isProjectMaster) add("is_project_master")
+            if (!form.childChits.isNullOrEmpty()) add("child_chits")
+            if (form.assignedTo != null) add("assigned_to")
+            if (!form.prerequisites.isNullOrEmpty()) add("prerequisites")
+            if (form.stealth != null) add("stealth")
+            if (form.autoCompleteChecklist != null) add("auto_complete_checklist")
+            if (form.checklistAutosave != null) add("checklist_autosave")
+            if (form.healthData != null) add("health_data")
+            if (form.attachments != null) add("attachments")
+            if (form.nestThreadId != null) add("nest_thread_id")
+            if (form.emailFrom != null) add("email_from")
+            if (form.emailTo != null) add("email_to")
+            if (form.emailCc != null) add("email_cc")
+            if (form.emailBcc != null) add("email_bcc")
+            if (form.emailSubject != null) add("email_subject")
+            if (form.emailBodyText != null) add("email_body_text")
+            if (form.emailBodyHtml != null) add("email_body_html")
+            if (form.emailStatus != null) add("email_status")
+            if (form.emailSendAt != null) add("email_send_at")
+            if (form.emailRequestReadReceipt != null) add("email_request_read_receipt")
         }
     }
 
@@ -241,7 +405,8 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
         if (form.pointInTime != original.pointInTime) add("point_in_time")
         if (form.status != original.status) add("status")
         if (form.priority != original.priority) add("priority")
-        if (form.tags != (original.tags ?: emptyList<String>())) add("tags")
+        if (form.severity != original.severity) add("severity")
+        if (form.tags    != (original.tags ?: emptyList<String>())) add("tags")
         if (form.checklist != original.checklist) add("checklist")
         if (form.people != (original.people ?: emptyList<String>())) add("people")
         if (form.location != original.location) add("location")
@@ -249,8 +414,37 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
         if (form.alerts != original.alerts) add("alerts")
         if (form.recurrence != original.recurrence) add("recurrence")
         if (form.recurrenceRule != original.recurrenceRule) add("recurrence_rule")
+        if (form.recurrenceExceptions != original.recurrenceExceptions) add("recurrence_exceptions")
         if (form.allDay != original.allDay) add("all_day")
         if (form.timezone != original.timezone) add("timezone")
         if (form.availability != original.availability) add("availability")
+        if (form.perpetual != original.perpetual) add("perpetual")
+        if (form.habit != original.habit) add("habit")
+        if (form.habitGoal != original.habitGoal) add("habit_goal")
+        if (form.habitSuccess != original.habitSuccess) add("habit_success")
+        if (form.habitResetPeriod != original.habitResetPeriod) add("habit_reset_period")
+        if (form.habitLastActionDate != original.habitLastActionDate) add("habit_last_action_date")
+        if (form.habitHideOverall != original.habitHideOverall) add("habit_hide_overall")
+        if (form.showOnCalendar != original.showOnCalendar) add("show_on_calendar")
+        if (form.isProjectMaster != original.isProjectMaster) add("is_project_master")
+        if (form.childChits != original.childChits) add("child_chits")
+        if (form.assignedTo != original.assignedTo) add("assigned_to")
+        if (form.prerequisites != original.prerequisites) add("prerequisites")
+        if (form.stealth != original.stealth) add("stealth")
+        if (form.autoCompleteChecklist != original.autoCompleteChecklist) add("auto_complete_checklist")
+        if (form.checklistAutosave != original.checklistAutosave) add("checklist_autosave")
+        if (form.healthData != original.healthData) add("health_data")
+        if (form.attachments != original.attachments) add("attachments")
+        if (form.nestThreadId != original.nestThreadId) add("nest_thread_id")
+        if (form.emailFrom != original.emailFrom) add("email_from")
+        if (form.emailTo != original.emailTo) add("email_to")
+        if (form.emailCc != original.emailCc) add("email_cc")
+        if (form.emailBcc != original.emailBcc) add("email_bcc")
+        if (form.emailSubject != original.emailSubject) add("email_subject")
+        if (form.emailBodyText != original.emailBodyText) add("email_body_text")
+        if (form.emailBodyHtml != original.emailBodyHtml) add("email_body_html")
+        if (form.emailStatus != original.emailStatus) add("email_status")
+        if (form.emailSendAt != original.emailSendAt) add("email_send_at")
+        if (form.emailRequestReadReceipt != original.emailRequestReadReceipt) add("email_request_read_receipt")
     }
 }

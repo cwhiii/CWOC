@@ -119,6 +119,8 @@ fun ContactFormState.toContactEntity(
         modifiedDatetime = modifiedDatetime,
         syncVersion = originalEntity?.syncVersion ?: 0,
         lastSyncedAt = originalEntity?.lastSyncedAt,
+        ownerId = originalEntity?.ownerId,
+        deletedDatetime = originalEntity?.deletedDatetime,
         isDirty = true,
         dirtyFields = "[]", // Will be set by DirtyTracker
         deleted = originalEntity?.deleted ?: false,

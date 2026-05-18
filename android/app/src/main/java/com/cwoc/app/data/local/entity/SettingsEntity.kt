@@ -41,6 +41,79 @@ data class SettingsEntity(
     val syncVersion: Int = 0,
     val lastSyncedAt: String?,
 
+    // Audit settings
+    val auditLogMaxDays: Int? = null,
+    val auditLogMaxMb: Double? = null,
+
+    // Notification defaults
+    val defaultNotifications: String? = null,
+
+    // Shared/kiosk
+    val sharedTags: String? = null,
+    val kioskUsers: String? = null,
+
+    // Map settings
+    val mapDefaultLat: String? = null,
+    val mapDefaultLon: String? = null,
+    val mapDefaultZoom: String? = null,
+    val mapAutoZoom: String? = null,
+
+    // Email settings
+    val emailAccount: String? = null,
+    val emailAccounts: String? = null,
+
+    // Attachment limits
+    val attachmentMaxSizeMb: String? = null,
+    val attachmentMaxStorageMb: String? = null,
+
+    // Sharing
+    val defaultShareContacts: String? = null,
+
+    // Autosave
+    val checklistAutosave: String? = null,
+    val autosaveDesktop: String? = null,
+    val autosaveMobile: String? = null,
+
+    // Tags
+    val recentTags: String? = null,
+
+    // Email pagination
+    val paginateEmail: String? = null,
+
+    // Bundles
+    val bundlesMultiPlacement: Boolean? = null,
+    val bundlesEnabled: Boolean? = null,
+    val bundlesShowCount: String? = null,
+
+    // Map thumbnails
+    val showMapThumbnails: String? = null,
+
+    // Session
+    val sessionLifetime: String? = null,
+
+    // Omni view
+    val omniLayout: String? = null,
+    val omniLockedFilters: String? = null,
+    val omniHstClockMode: String? = null,
+    val omniEmailCount: String? = null,
+    val omniNormalizeColors: String? = null,
+
+    // Smart actions
+    val smartActionsConfig: String? = null,
+
+    // Custom view filters
+    val customViewFilters: String? = null,
+
+    // Email privacy
+    val emailBlockTrackingPixels: String? = null,
+    val emailExternalContent: String? = null,
+    val emailReadReceipts: String? = null,
+    val emailUndoSendDelay: String? = null,
+    val emailGroupBy: String? = null,
+
+    // Timezone override
+    val timezoneOverride: String? = null,
+
     // Phase 3 — dirty tracking for sync
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

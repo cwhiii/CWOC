@@ -9,12 +9,15 @@ import com.cwoc.app.data.local.CwocDatabase
 import com.cwoc.app.data.local.dao.AttachmentMetadataDao
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
+import com.cwoc.app.data.local.dao.NotificationDao
 import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.migration.MIGRATION_1_2
 import com.cwoc.app.data.local.migration.MIGRATION_2_3
 import com.cwoc.app.data.local.migration.MIGRATION_3_4
 import com.cwoc.app.data.local.migration.MIGRATION_4_5
+import com.cwoc.app.data.local.migration.MIGRATION_5_6
+import com.cwoc.app.data.local.migration.MIGRATION_6_7
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -66,7 +69,7 @@ object AppModule {
             CwocDatabase::class.java,
             "cwoc.db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         .build()
     }
 
@@ -84,4 +87,7 @@ object AppModule {
 
     @Provides
     fun provideAttachmentMetadataDao(db: CwocDatabase): AttachmentMetadataDao = db.attachmentMetadataDao()
+
+    @Provides
+    fun provideNotificationDao(db: CwocDatabase): NotificationDao = db.notificationDao()
 }

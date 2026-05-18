@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "m20260516.1937"
+        versionName = "m20260518.0628"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -115,6 +115,12 @@ dependencies {
 
     // osmdroid — OpenStreetMap map tiles
     implementation("org.osmdroid:osmdroid-android:6.1.18")
+
+    // Coil — Image loading for Compose
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // ZXing — QR code generation
+    implementation("com.google.zxing:core:3.5.3")
 
     // EncryptedSharedPreferences — Secure token storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

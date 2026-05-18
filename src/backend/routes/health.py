@@ -96,6 +96,141 @@ async def geocode_proxy(q: str = Query(..., min_length=1)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Weather Forecasts (for mobile app — requirement 8.4)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _sync_weather_fetch_for_forecasts(url):
+    """Blocking fetch for weather API — runs in thread pool."""
+    req = urllib.request.Request(url, headers={"User-Agent": "CWOC-Weather/1.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode())
+
+
+@router.get("/api/weather/forecasts")
+async def get_weather_forecasts(request: Request):
+    """Return 16-day weather forecasts for all saved locations.
+
+    Reads saved_locations from the user's settings, geocodes each location,
+    fetches 16-day daily forecasts from Open-Meteo, and returns the combined data.
+
+    Response format:
+    {
+        "locations": [
+            {
+                "label": "Home",
+                "address": "123 Main St, City",
+                "daily": {
+                    "time": ["2025-01-01", ...],
+                    "temperature_2m_max": [5.2, ...],
+                    "temperature_2m_min": [-1.3, ...],
+                    "precipitation_sum": [0.0, ...],
+                    "weathercode": [3, ...],
+                    "wind_speed_10m_max": [12.5, ...]
+                }
+            },
+            ...
+        ]
+    }
+    """
+    global _geocode_last_req
+
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Load saved locations from settings
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT saved_locations FROM settings WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    finally:
+        if conn:
+            conn.close()
+
+    if not row or not row["saved_locations"]:
+        return {"locations": []}
+
+    saved_locations = deserialize_json_field(row["saved_locations"])
+    if not isinstance(saved_locations, list) or len(saved_locations) == 0:
+        return {"locations": []}
+
+    # Fetch forecasts for each location
+    results = []
+    for loc in saved_locations:
+        if not isinstance(loc, dict):
+            continue
+        label = loc.get("label", "")
+        address = loc.get("address", "") or label
+        if not address:
+            continue
+
+        # Geocode the location (use lat/lon if already stored)
+        lat = loc.get("lat")
+        lon = loc.get("lon")
+        if lat is None or lon is None:
+            # Try geocoding
+            key = address.lower().strip()
+            if key in _geocode_cache and (time.time() - _geocode_cache[key]["ts"]) < 86400:
+                lat = _geocode_cache[key]["lat"]
+                lon = _geocode_cache[key]["lon"]
+            else:
+                async with _geocode_lock:
+                    # Re-check cache
+                    if key in _geocode_cache and (time.time() - _geocode_cache[key]["ts"]) < 86400:
+                        lat = _geocode_cache[key]["lat"]
+                        lon = _geocode_cache[key]["lon"]
+                    else:
+                        elapsed = time.time() - _geocode_last_req
+                        if elapsed < 1.1:
+                            await asyncio.sleep(1.1 - elapsed)
+                        geo_url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + urllib.parse.quote(address)
+                        try:
+                            _geocode_last_req = time.time()
+                            loop = asyncio.get_event_loop()
+                            data = await loop.run_in_executor(None, _sync_geocode_fetch, geo_url)
+                            if data and len(data) > 0:
+                                lat = float(data[0]["lat"])
+                                lon = float(data[0]["lon"])
+                                _geocode_cache[key] = {"lat": lat, "lon": lon, "ts": time.time()}
+                            else:
+                                logger.warning(f"Weather forecasts: geocode failed for '{address}'")
+                                continue
+                        except Exception as e:
+                            logger.error(f"Weather forecasts: geocode error for '{address}': {e}")
+                            continue
+
+        if lat is None or lon is None:
+            continue
+
+        # Fetch 16-day forecast from Open-Meteo
+        weather_url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max"
+            f"&timezone=auto&forecast_days=16"
+        )
+        try:
+            loop = asyncio.get_event_loop()
+            forecast_data = await loop.run_in_executor(None, _sync_weather_fetch_for_forecasts, weather_url)
+            if forecast_data and "daily" in forecast_data:
+                results.append({
+                    "label": label,
+                    "address": address,
+                    "daily": forecast_data["daily"]
+                })
+            else:
+                logger.warning(f"Weather forecasts: no daily data for '{label}'")
+        except Exception as e:
+            logger.error(f"Weather forecasts: fetch error for '{label}': {e}")
+
+    return {"locations": results}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Sync Hub (WebSocket + HTTP polling fallback)
 # ═══════════════════════════════════════════════════════════════════════════
 

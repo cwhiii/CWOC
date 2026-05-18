@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -19,6 +20,16 @@ import javax.inject.Inject
 data class IndicatorChart(
     val type: String,
     val points: List<ChartDataPoint>
+)
+
+/**
+ * A single health data entry for calendar/log views, including the source chit title.
+ */
+data class HealthEntry(
+    val date: LocalDate,
+    val indicatorType: String,
+    val value: Float,
+    val chitTitle: String?
 )
 
 /**
@@ -36,6 +47,10 @@ class IndicatorsViewModel @Inject constructor(
     private val _selectedRange = MutableStateFlow(TimeRange.THIRTY_DAYS)
     val selectedRange: StateFlow<TimeRange> = _selectedRange.asStateFlow()
 
+    /** All health entries for calendar and log views. */
+    private val _healthEntries = MutableStateFlow<List<HealthEntry>>(emptyList())
+    val healthEntries: StateFlow<List<HealthEntry>> = _healthEntries.asStateFlow()
+
     init {
         viewModelScope.launch {
             chitRepository.getIndicatorChits().collect { chits ->
@@ -46,6 +61,18 @@ class IndicatorsViewModel @Inject constructor(
                 _charts.value = grouped.map { (type, points) ->
                     val filtered = ChartDataTransformer.filterByRange(points, _selectedRange.value)
                     IndicatorChart(type = type, points = filtered)
+                }
+
+                // Build health entries for calendar/log modes
+                _healthEntries.value = chits.flatMap { chit ->
+                    ChartDataTransformer.parseHealthData(chit.healthData).map { point ->
+                        HealthEntry(
+                            date = point.date,
+                            indicatorType = point.label ?: "unknown",
+                            value = point.value,
+                            chitTitle = chit.title
+                        )
+                    }
                 }
             }
         }

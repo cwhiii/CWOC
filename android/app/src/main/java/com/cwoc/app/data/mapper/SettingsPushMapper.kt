@@ -48,6 +48,61 @@ fun SettingsEntity.toPushDto(): SettingsPushDto {
         put("default_timezone", defaultTimezone)
         put("default_view", defaultView)
         put("view_order", viewOrder?.let { gson.fromJson(it, Any::class.java) })
+        // Audit settings
+        put("audit_log_max_days", auditLogMaxDays)
+        put("audit_log_max_mb", auditLogMaxMb)
+        // Notification defaults
+        put("default_notifications", defaultNotifications?.let { gson.fromJson(it, Any::class.java) })
+        // Shared/kiosk
+        put("shared_tags", sharedTags?.let { gson.fromJson(it, Any::class.java) })
+        put("kiosk_users", kioskUsers?.let { gson.fromJson(it, Any::class.java) })
+        // Map settings
+        put("map_default_lat", mapDefaultLat)
+        put("map_default_lon", mapDefaultLon)
+        put("map_default_zoom", mapDefaultZoom)
+        put("map_auto_zoom", mapAutoZoom)
+        // Email settings
+        put("email_account", emailAccount?.let { gson.fromJson(it, Any::class.java) })
+        put("email_accounts", emailAccounts?.let { gson.fromJson(it, Any::class.java) })
+        // Attachment limits
+        put("attachment_max_size_mb", attachmentMaxSizeMb)
+        put("attachment_max_storage_mb", attachmentMaxStorageMb)
+        // Sharing
+        put("default_share_contacts", defaultShareContacts)
+        // Autosave
+        put("checklist_autosave", checklistAutosave)
+        put("autosave_desktop", autosaveDesktop)
+        put("autosave_mobile", autosaveMobile)
+        // Tags
+        put("recent_tags", recentTags?.let { gson.fromJson(it, Any::class.java) })
+        // Email pagination
+        put("paginate_email", paginateEmail)
+        // Bundles
+        put("bundles_multi_placement", bundlesMultiPlacement)
+        put("bundles_enabled", bundlesEnabled)
+        put("bundles_show_count", bundlesShowCount)
+        // Map thumbnails
+        put("show_map_thumbnails", showMapThumbnails)
+        // Session
+        put("session_lifetime", sessionLifetime)
+        // Omni view
+        put("omni_layout", omniLayout?.let { gson.fromJson(it, Any::class.java) })
+        put("omni_locked_filters", omniLockedFilters?.let { gson.fromJson(it, Any::class.java) })
+        put("omni_hst_clock_mode", omniHstClockMode)
+        put("omni_email_count", omniEmailCount)
+        put("omni_normalize_colors", omniNormalizeColors)
+        // Smart actions
+        put("smart_actions_config", smartActionsConfig?.let { gson.fromJson(it, Any::class.java) })
+        // Custom view filters
+        put("custom_view_filters", customViewFilters?.let { gson.fromJson(it, Any::class.java) })
+        // Email privacy
+        put("email_block_tracking_pixels", emailBlockTrackingPixels)
+        put("email_external_content", emailExternalContent)
+        put("email_read_receipts", emailReadReceipts)
+        put("email_undo_send_delay", emailUndoSendDelay)
+        put("email_group_by", emailGroupBy)
+        // Timezone override
+        put("timezone_override", timezoneOverride)
     }
 
     return SettingsPushDto(

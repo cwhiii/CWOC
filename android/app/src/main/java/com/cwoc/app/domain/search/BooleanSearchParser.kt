@@ -1,5 +1,7 @@
 package com.cwoc.app.domain.search
 
+import javax.inject.Inject
+
 /**
  * Boolean search AST node types.
  */
@@ -32,7 +34,7 @@ sealed class SearchNode {
  *
  * Graceful fallback: unparseable input is treated as a single Term.
  */
-class BooleanSearchParser {
+class BooleanSearchParser @Inject constructor() {
 
     private var tokens: List<String> = emptyList()
     private var pos: Int = 0

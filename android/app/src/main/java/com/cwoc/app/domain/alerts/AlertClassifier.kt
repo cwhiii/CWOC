@@ -17,9 +17,12 @@ enum class AlertSection {
 data class ClassifiedAlert(
     val chitId: String,
     val chitTitle: String?,
-    val alertType: String,          // "alarm", "reminder", "timer"
+    val alertType: String,          // "notification", "alarm", "timer", "stopwatch"
     val scheduledTime: LocalDateTime,
-    val section: AlertSection
+    val section: AlertSection,
+    // R6: Fields for filtering
+    val chitStatus: String? = null,
+    val chitTags: List<String>? = null
 )
 
 /**
@@ -55,7 +58,9 @@ object AlertClassifier {
         chitId: String,
         chitTitle: String?,
         alerts: List<RawAlert>,
-        referenceTime: LocalDateTime = LocalDateTime.now()
+        referenceTime: LocalDateTime = LocalDateTime.now(),
+        chitStatus: String? = null,
+        chitTags: List<String>? = null
     ): List<ClassifiedAlert> {
         return alerts.mapNotNull { alert ->
             val scheduledTime = parseAlertTime(alert.datetime) ?: return@mapNotNull null
@@ -68,9 +73,11 @@ object AlertClassifier {
             ClassifiedAlert(
                 chitId = chitId,
                 chitTitle = chitTitle,
-                alertType = alert.type ?: "reminder",
+                alertType = alert.type ?: "notification",
                 scheduledTime = scheduledTime,
-                section = section
+                section = section,
+                chitStatus = chitStatus,
+                chitTags = chitTags
             )
         }.sortedWith(
             compareBy<ClassifiedAlert> { it.section.ordinal } // UPCOMING (0) before PAST (1)

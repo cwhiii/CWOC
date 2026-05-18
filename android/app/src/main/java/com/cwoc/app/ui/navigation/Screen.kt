@@ -1,15 +1,5 @@
 package com.cwoc.app.ui.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.ui.graphics.vector.ImageVector
-
 /**
  * Sealed class defining all navigation routes in the app.
  */
@@ -25,28 +15,40 @@ sealed class Screen(val route: String) {
     data object Indicators : Screen("indicators")
     data object Map : Screen("map")
     data object Contacts : Screen("contacts")
+    data object Settings : Screen("settings")
+    data object Trash : Screen("trash")
+    data object Search : Screen("search")
+    data object Help : Screen("help")
+    data object Weather : Screen("weather")
+    data object OmniView : Screen("omni")
+    data object Notifications : Screen("notifications")
 
-    data object Editor : Screen("editor/{chitId}") {
+    // Z1-Z4: Missing pages
+    data object AuditLog : Screen("audit-log")
+    data object CustomObjects : Screen("custom-objects")
+    data object RulesManager : Screen("rules-manager")
+    data object UserAdmin : Screen("user-admin")
+    data object AdminChits : Screen("admin-chits")
+    data object ContactTrash : Screen("contact-trash")
+    // CC: Email client
+    data object Email : Screen("email")
+    // Attachments browser
+    data object Attachments : Screen("attachments")
+
+    data object RuleEditor : Screen("rule-editor/{ruleId}") {
+        const val NEW_RULE_ID = "new"
+        fun createRoute(ruleId: String) = "rule-editor/$ruleId"
+    }
+
+    data object Editor : Screen("editor/{chitId}?start={start}&end={end}") {
         const val NEW_CHIT_ID = "new"
         fun createRoute(chitId: String) = "editor/$chitId"
+        fun createRouteWithPrefill(start: String, end: String) = "editor/new?start=$start&end=$end"
+    }
+
+    data object ContactEditor : Screen("contact-editor/{contactId}?userId={userId}") {
+        const val NEW_CONTACT_ID = "new"
+        fun createRoute(contactId: String) = "contact-editor/$contactId"
+        fun createProfileRoute(userId: String) = "contact-editor/profile?userId=$userId"
     }
 }
-
-/**
- * Bottom navigation tab definitions — Debug first, then C CAPTN view order.
- */
-data class BottomNavItem(
-    val screen: Screen,
-    val label: String,
-    val icon: ImageVector
-)
-
-val bottomNavItems = listOf(
-    BottomNavItem(Screen.Calendar, "Calendar", Icons.Default.DateRange),
-    BottomNavItem(Screen.Checklists, "Checklists", Icons.Default.Done),
-    BottomNavItem(Screen.Alarms, "Alarms", Icons.Default.Notifications),
-    BottomNavItem(Screen.Projects, "Projects", Icons.Default.Star),
-    BottomNavItem(Screen.Tasks, "Tasks", Icons.Default.List),
-    BottomNavItem(Screen.Notes, "Notes", Icons.Default.Edit),
-    BottomNavItem(Screen.Debug, "Debug", Icons.Default.Info)
-)

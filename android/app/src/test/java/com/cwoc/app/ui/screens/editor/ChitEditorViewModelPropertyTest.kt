@@ -3,9 +3,20 @@ package com.cwoc.app.ui.screens.editor
 import androidx.lifecycle.SavedStateHandle
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.local.entity.SettingsEntity
 import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.data.mapper.detectChangedFields
 import com.cwoc.app.data.mapper.toEntity
+import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.dto.AttachmentUploadResponse
+import com.cwoc.app.data.remote.dto.ClientLogRequest
+import com.cwoc.app.data.remote.dto.ClientLogResponse
+import com.cwoc.app.data.remote.dto.DeviceTokenRequest
+import com.cwoc.app.data.remote.dto.DeviceTokenResponse
+import com.cwoc.app.data.remote.dto.SyncPushRequestDto
+import com.cwoc.app.data.remote.dto.SyncPushResponseDto
+import com.cwoc.app.data.remote.dto.SyncResponseDto
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityEvent
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
@@ -22,10 +33,14 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import retrofit2.Response
 import kotlin.random.Random
 
 /**
@@ -46,6 +61,8 @@ class ChitEditorViewModelPropertyTest {
     private lateinit var fakeDirtyTracker: FakeEditorDirtyTracker
     private lateinit var fakeSyncPushEngine: FakeEditorSyncPushEngine
     private lateinit var fakeConnectivityMonitor: FakeEditorConnectivityMonitor
+    private lateinit var fakeApiService: FakeEditorApiService
+    private lateinit var fakeSettingsRepository: FakeEditorSettingsRepository
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -55,6 +72,8 @@ class ChitEditorViewModelPropertyTest {
         fakeDirtyTracker = FakeEditorDirtyTracker()
         fakeSyncPushEngine = FakeEditorSyncPushEngine()
         fakeConnectivityMonitor = FakeEditorConnectivityMonitor()
+        fakeApiService = FakeEditorApiService()
+        fakeSettingsRepository = FakeEditorSettingsRepository()
     }
 
     @After
@@ -400,6 +419,8 @@ class ChitEditorViewModelPropertyTest {
             dirtyTracker = fakeDirtyTracker,
             syncPushEngine = fakeSyncPushEngine,
             connectivityMonitor = fakeConnectivityMonitor,
+            apiService = fakeApiService,
+            settingsRepository = fakeSettingsRepository,
             savedStateHandle = savedStateHandle
         )
     }
@@ -495,6 +516,32 @@ class FakeEditorChitDao : ChitDao {
     override fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> = flowOf(emptyList())
     override suspend fun getCount(): Int = entities.size
     override suspend fun getFirstFive(): List<ChitEntity> = entities.values.take(5)
+    override suspend fun clearConflictFlag(id: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(hasUnviewedConflict = false, conflictFields = null)
+    }
+    override suspend fun setConflictState(id: String, fields: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(hasUnviewedConflict = true, conflictFields = fields)
+    }
+    override fun getChecklistChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override fun getProjectMasterChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override suspend fun getChitsByIds(ids: List<String>): List<ChitEntity> =
+        ids.mapNotNull { entities[it] }
+    override fun getAlertChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override fun getIndicatorChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override fun getLocationChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override suspend fun markDirty(id: String, dirtyFields: String, now: String) {
+        val entity = entities[id] ?: return
+        entities[id] = entity.copy(isDirty = true, dirtyFields = dirtyFields, modifiedDatetime = now)
+    }
+    override suspend fun getChitsForDaySuspend(dayStart: String, dayEnd: String): List<ChitEntity> = emptyList()
+    override suspend fun getUpcomingTasksSuspend(): List<ChitEntity> = emptyList()
+    override suspend fun getChitsWithAlerts(): List<ChitEntity> = emptyList()
+    override suspend fun getChitsWithTag(tag: String): List<ChitEntity> = emptyList()
+    override suspend fun upsertWithoutDirty(chit: ChitEntity) {
+        entities[chit.id] = chit
+    }
 }
 
 /**
@@ -524,6 +571,11 @@ class FakeEditorDirtyTracker : DirtyTracker {
     override suspend fun clearDirtyWithMerge(chitId: String, mergedEntity: ChitEntity) {
         dirtyFieldsMap.remove(chitId)
     }
+
+    override suspend fun markContactDirty(contactId: String, changedFields: Set<String>) {}
+    override suspend fun clearContactDirty(contactId: String) {}
+    override suspend fun markSettingsDirty() {}
+    override suspend fun clearSettingsDirty() {}
 }
 
 /**
@@ -557,4 +609,129 @@ class FakeEditorConnectivityMonitor(isOnlineInitial: Boolean = false) : Connecti
     fun setOnline(online: Boolean) {
         _isOnline.value = online
     }
+}
+
+/**
+ * Fake CwocApiService for editor ViewModel tests.
+ * Returns empty/success responses for all methods.
+ */
+class FakeEditorApiService : CwocApiService {
+    override suspend fun authenticate(request: DeviceTokenRequest): Response<DeviceTokenResponse> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+
+    override suspend fun getSyncChanges(since: Int, include: String): Response<SyncResponseDto> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+
+    override suspend fun pushChanges(request: SyncPushRequestDto): Response<SyncPushResponseDto> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+
+    override suspend fun postClientLog(entry: ClientLogRequest): Response<ClientLogResponse> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+
+    override suspend fun dismissConflict(chitId: String): Response<Unit> {
+        return Response.success(Unit)
+    }
+
+    override suspend fun downloadAttachment(attachmentId: String): Response<ResponseBody> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+
+    override suspend fun uploadAttachment(
+        chitId: RequestBody,
+        filename: RequestBody,
+        mimeType: RequestBody,
+        file: MultipartBody.Part
+    ): Response<AttachmentUploadResponse> {
+        throw NotImplementedError("Not needed for editor tests")
+    }
+}
+
+/**
+ * Fake SettingsRepository for editor ViewModel tests.
+ * Returns a default SettingsEntity with standard values.
+ */
+class FakeEditorSettingsRepository : SettingsRepository {
+    override val settings: Flow<SettingsEntity> = flowOf(
+        SettingsEntity(
+            userId = "test-user",
+            timeFormat = "12h",
+            sex = null,
+            snoozeLength = "10",
+            defaultFilters = null,
+            alarmOrientation = null,
+            activeClocks = null,
+            savedLocations = null,
+            tags = null,
+            customColors = null,
+            visualIndicators = null,
+            chitOptions = null,
+            calendarSnap = "15",
+            weekStartDay = "sunday",
+            workStartHour = null,
+            workEndHour = null,
+            workDays = null,
+            enabledPeriods = null,
+            customDaysCount = null,
+            allViewStartHour = null,
+            allViewEndHour = null,
+            dayScrollToHour = null,
+            username = null,
+            unitSystem = null,
+            habitsSuccessWindow = null,
+            overdueBorderColor = null,
+            blockedBorderColor = null,
+            hidDeclined = null,
+            defaultShowHabitsOnCalendar = null,
+            defaultTimezone = "America/New_York",
+            defaultView = "Tasks",
+            viewOrder = null,
+            syncVersion = 0,
+            lastSyncedAt = null
+        )
+    )
+
+    override suspend fun get(): SettingsEntity? = SettingsEntity(
+        userId = "test-user",
+        timeFormat = "12h",
+        sex = null,
+        snoozeLength = "10",
+        defaultFilters = null,
+        alarmOrientation = null,
+        activeClocks = null,
+        savedLocations = null,
+        tags = null,
+        customColors = null,
+        visualIndicators = null,
+        chitOptions = null,
+        calendarSnap = "15",
+        weekStartDay = "sunday",
+        workStartHour = null,
+        workEndHour = null,
+        workDays = null,
+        enabledPeriods = null,
+        customDaysCount = null,
+        allViewStartHour = null,
+        allViewEndHour = null,
+        dayScrollToHour = null,
+        username = null,
+        unitSystem = null,
+        habitsSuccessWindow = null,
+        overdueBorderColor = null,
+        blockedBorderColor = null,
+        hidDeclined = null,
+        defaultShowHabitsOnCalendar = null,
+        defaultTimezone = "America/New_York",
+        defaultView = "Tasks",
+        viewOrder = null,
+        syncVersion = 0,
+        lastSyncedAt = null
+    )
+
+    override suspend fun update(settings: SettingsEntity) {}
+    override suspend fun replaceWithServerVersion(settings: SettingsEntity) {}
+    override suspend fun clearDirty() {}
 }

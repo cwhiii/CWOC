@@ -1,11 +1,25 @@
 ---
 inclusion: always
 ---
+# ABSOLUTE RULE: COMPLETE IMPLEMENTATION — NO PARTIAL FEATURES
+**This is the single most important rule in this project. It overrides all other considerations.**
+
+- **NEVER omit, defer, skip, or deprioritize ANYTHING the user asks for.** If the user says to do something, DO IT. ALL OF IT. No exceptions.
+- **NEVER decide on your own** that something is "too large," "can wait," "needs more discussion," or "isn't critical right now." You do not have permission to make prioritization or scope decisions. The user makes those decisions.
+- **If you think a task is too large to complete in one pass, STOP AND ASK.** Do not silently reduce scope. Do not say "let me hold on that for now." Do not defer part of the work. Ask the user how they want to proceed.
+- When a task says "implement feature X," that means EVERY SINGLE PIECE of feature X as it exists on the web app. Not a subset. Not the "important parts." Not a skeleton. EVERYTHING.
+- **Before implementing any feature**, read the ACTUAL web implementation (HTML + JS + CSS) to understand the COMPLETE scope. Do not rely on summary descriptions or requirements docs alone — they may omit details. The web code IS the spec.
+- **After implementing any feature**, verify completeness by comparing field-for-field, option-for-option, behavior-for-behavior against the web version. If anything is missing, it's not done.
+- **Subagents must follow this rule too.** When dispatching work to subagents, explicitly instruct them to read the web implementation and match it completely. Do not let subagents make their own scope decisions.
+- If a feature genuinely cannot exist on mobile (hardware limitation, OS restriction), STOP and ask the user. Do not silently skip it.
+- "Feature parity" means IDENTICAL functionality, not "similar structure with less content."
+
+**Violation of this rule means the work must be redone. There are no exceptions.**
+
 # DO NOT TRY TO INSTALL ANY SOFTWARE AT ANY POINT! ONLY BUILD THE CODE!
 - DO NOT TRY TO INSTALL ANY SOFTWARE AT ANY POINT! ONLY BUILD THE CODE! 
 - update the task list to skip any installs!
 - Ensure that no step in a test requires installing software, such as with ".venv/bin/python."
-
 
 
 no installs, no pip, no npm.
@@ -180,7 +194,7 @@ no installs, no pip, no npm.
 
 ## Tests Are Optional
 - Running tests is optional (since we can't install dependencies in this environment). Writing tests is equally optional — if execution is optional, so is creation.
-- When task lists include test steps, mark them as optional rather than required. They should still be written out as tasks, just flagged as optional.
+- Do not include test-writing steps in task lists unless the user explicitly requests tests. Skip them entirely rather than marking them optional.
 - Tests are never a blocker for completing a feature.
 
 ## Help & Reference
@@ -260,8 +274,8 @@ Release notes are collated into **daily files** named `release_notes-YYYYMMDD.md
 
 Ensure all new features are mobile-frienldy from the get go.
 
-## Cross-Platform Parity (Active after Phase 6 completion)
-Once Phase 6 of the mobile app project is complete, **every change must be available on all platforms**: desktop web, mobile web, and Android app. This is the default — not the exception.
+## Cross-Platform Parity (Active after Phase 7 completion)
+Once Phase 7 of the mobile app project is complete, **every change must be available on all platforms**: desktop web, mobile web, and Android app. This is the default — not the exception.
 
 - **Assume parity.** Unless a feature is explicitly called out as platform-specific (e.g., BOOT_COMPLETED receiver is Android-only by nature), implement it everywhere.
 - **Never silently omit a platform.** If there's a reason a feature can't or shouldn't exist on one platform (hardware limitation, OS API dependency, UX mismatch), **stop and ask the user** before proceeding. Explain why and get explicit approval to skip it.

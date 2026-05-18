@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.calendar
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -39,14 +42,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.WeatherIndicator
+import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.util.DateUtils
+import java.time.LocalDate
 
 /**
  * Calendar screen with day/week toggle, date navigation, and event list.
+ * C1: Day view uses a time grid instead of flat list.
+ * C8: Tapping events navigates to the editor.
  */
 @Composable
 fun CalendarScreen(
-    viewModel: CalendarViewModel = hiltViewModel()
+    viewModel: CalendarViewModel = hiltViewModel(),
+    onNavigateToEditor: (String) -> Unit = {},
+    onNavigateToNewChitWithPrefill: (start: String, end: String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -65,7 +75,7 @@ fun CalendarScreen(
             onToday = viewModel::goToToday
         )
 
-        // Event list
+        // Event display based on view mode
         when {
             uiState.isLoading -> {
                 Box(
@@ -99,7 +109,104 @@ fun CalendarScreen(
                 }
             }
             else -> {
-                EventList(events = uiState.events)
+                when (uiState.viewMode) {
+                    CalendarViewMode.DAY -> {
+                        // C1: Time grid instead of flat list
+                        DayTimeGrid(
+                            events = uiState.events,
+                            date = uiState.selectedDate,
+                            onEventTap = { event -> onNavigateToEditor(event.id) },
+                            onEmptySlotTap = { tappedTime ->
+                                // Task 33: Navigate to editor with pre-filled start/end
+                                val start = tappedTime.toString()
+                                val end = tappedTime.plusHours(1).toString()
+                                onNavigateToNewChitWithPrefill(start, end)
+                            }
+                        )
+                    }
+                    CalendarViewMode.WEEK -> {
+                        // C1 sub-item 2: Week time grid with 7 columns
+                        WeekTimeGrid(
+                            events = uiState.events,
+                            weekStartDate = uiState.selectedDate,
+                            onEventTap = { event -> onNavigateToEditor(event.id) },
+                            onEmptySlotTap = { tappedTime ->
+                                // Task 33: Navigate to editor with pre-filled start/end
+                                val start = tappedTime.toString()
+                                val end = tappedTime.plusHours(1).toString()
+                                onNavigateToNewChitWithPrefill(start, end)
+                            }
+                        )
+                    }
+                    CalendarViewMode.MONTH -> {
+                        Column {
+                            // Compress/Scroll toggle
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = uiState.monthMode == "compress",
+                                    onClick = { viewModel.setMonthMode("compress") },
+                                    label = { Text("Compress") }
+                                )
+                                FilterChip(
+                                    selected = uiState.monthMode == "scroll",
+                                    onClick = { viewModel.setMonthMode("scroll") },
+                                    label = { Text("Scroll") }
+                                )
+                            }
+                            MonthView(
+                                events = uiState.events,
+                                selectedDate = uiState.selectedDate,
+                                weekStartDay = "sunday",
+                                monthMode = uiState.monthMode,
+                                onDayTap = { date ->
+                                    viewModel.setViewMode(CalendarViewMode.DAY)
+                                }
+                            )
+                        }
+                    }
+                    CalendarViewMode.YEAR -> {
+                        YearView(
+                            events = uiState.events,
+                            selectedDate = uiState.selectedDate,
+                            weekStartDay = "sunday",
+                            onMonthTap = { date ->
+                                viewModel.setViewMode(CalendarViewMode.MONTH)
+                            }
+                        )
+                    }
+                    CalendarViewMode.ITINERARY -> {
+                        ItineraryView(
+                            events = uiState.events,
+                            onEventTap = { chitId -> onNavigateToEditor(chitId) }
+                        )
+                    }
+                    CalendarViewMode.X_DAY -> {
+                        XDayView(
+                            events = uiState.events,
+                            dayCount = uiState.xDayCount,
+                            startDate = uiState.selectedDate,
+                            onEventTap = { chitId -> onNavigateToEditor(chitId) }
+                        )
+                    }
+                    CalendarViewMode.WORK_HOURS -> {
+                        // ADD12: Work Hours view — same as Day but filtered to work hours
+                        DayTimeGrid(
+                            events = uiState.events,
+                            date = uiState.selectedDate,
+                            onEventTap = { event -> onNavigateToEditor(event.id) },
+                            onEmptySlotTap = { tappedTime ->
+                                val start = tappedTime.toString()
+                                val end = tappedTime.plusHours(1).toString()
+                                onNavigateToNewChitWithPrefill(start, end)
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -110,23 +217,29 @@ private fun ViewModeToggle(
     currentMode: CalendarViewMode,
     onModeChanged: (CalendarViewMode) -> Unit
 ) {
-    Row(
+    val modes = listOf(
+        CalendarViewMode.DAY to "Day",
+        CalendarViewMode.WEEK to "Week",
+        CalendarViewMode.MONTH to "Month",
+        CalendarViewMode.YEAR to "Year",
+        CalendarViewMode.ITINERARY to "Itinerary",
+        CalendarViewMode.X_DAY to "X-Day",
+        CalendarViewMode.WORK_HOURS to "Work"
+    )
+
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        FilterChip(
-            selected = currentMode == CalendarViewMode.DAY,
-            onClick = { onModeChanged(CalendarViewMode.DAY) },
-            label = { Text("Day") }
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        FilterChip(
-            selected = currentMode == CalendarViewMode.WEEK,
-            onClick = { onModeChanged(CalendarViewMode.WEEK) },
-            label = { Text("Week") }
-        )
+        itemsIndexed(modes) { _, (mode, label) ->
+            FilterChip(
+                selected = currentMode == mode,
+                onClick = { onModeChanged(mode) },
+                label = { Text(label) }
+            )
+        }
     }
 }
 
@@ -168,7 +281,10 @@ private fun DateNavigationHeader(
 }
 
 @Composable
-private fun EventList(events: List<ChitEntity>) {
+private fun EventList(
+    events: List<ChitEntity>,
+    onEventTap: (ChitEntity) -> Unit = {}
+) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -178,7 +294,10 @@ private fun EventList(events: List<ChitEntity>) {
         item { Spacer(modifier = Modifier.height(4.dp)) }
 
         items(events, key = { it.id }) { event ->
-            EventCard(event = event)
+            EventCard(
+                event = event,
+                onTap = { onEventTap(event) }
+            )
         }
 
         item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -186,14 +305,17 @@ private fun EventList(events: List<ChitEntity>) {
 }
 
 @Composable
-private fun EventCard(event: ChitEntity) {
+private fun EventCard(event: ChitEntity, onTap: () -> Unit = {}) {
     val eventColor = event.color?.let { parseColor(it) }
         ?: MaterialTheme.colorScheme.primary
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onTap() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            // B2 sub-item 4: background tint from chit color
+            containerColor = eventColor.copy(alpha = 0.08f)
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -229,6 +351,18 @@ private fun EventCard(event: ChitEntity) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                // B6: Weather indicator
+                WeatherIndicator(
+                    weatherDataJson = event.weatherData,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+
+                // B7: Location indicator
+                LocationIndicator(
+                    location = event.location,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
         }
     }
@@ -261,3 +395,9 @@ private fun parseColor(colorString: String): Color {
         Color(0xFF6B4E31) // fallback to primary
     }
 }
+
+// --- Additional view composables (stubs for tasks 2.2–2.5) ---
+
+
+
+

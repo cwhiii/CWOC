@@ -54,9 +54,38 @@ data class ChitDto(
     val stealth: Boolean?,
     val assigned_to: String?,
     val owner_id: String?,
+    val owner_display_name: String?,
+    val owner_username: String?,
     val has_unviewed_conflict: Boolean?,
     val availability: String?,
     val snoozed_until: String?,
     val prerequisites: List<String>?,
-    val sync_version: Int = 0
+    val sync_version: Int = 0,
+
+    // Email fields
+    val email_message_id: String? = null,
+    val email_from: String? = null,
+    val email_to: Any? = null,
+    val email_cc: Any? = null,
+    val email_bcc: Any? = null,
+    val email_subject: String? = null,
+    val email_body_text: String? = null,
+    val email_date: String? = null,
+    val email_folder: String? = null,
+    val email_status: String? = null,
+    val email_read: Boolean? = null,
+    val email_in_reply_to: String? = null,
+    val email_references: String? = null,
+    val email_body_html: String? = null,
+    val email_account_id: String? = null,
+    val email_send_at: String? = null,
+    val email_request_read_receipt: Any? = null,
+
+    // Attachments
+    val attachments: Any? = null,
+
+    // Checklist/thread fields
+    val checklist_autosave: Boolean? = null,
+    val nest_thread_id: String? = null,
+    val auto_complete_checklist: Boolean? = null
 )

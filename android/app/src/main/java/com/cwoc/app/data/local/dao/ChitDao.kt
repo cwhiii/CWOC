@@ -56,6 +56,15 @@ interface ChitDao {
     @Query("UPDATE chits SET deleted = 1, modifiedDatetime = :now WHERE id = :id")
     suspend fun markDeleted(id: String, now: String)
 
+    @Query("UPDATE chits SET deleted = 0, modifiedDatetime = :now WHERE id = :id")
+    suspend fun restoreDeleted(id: String, now: String)
+
+    @Query("DELETE FROM chits WHERE id = :id")
+    suspend fun hardDelete(id: String)
+
+    @Query("SELECT * FROM chits WHERE deleted = 1")
+    fun getDeletedChits(): Flow<List<ChitEntity>>
+
     // Phase 2 — Sync version update
 
     @Query("UPDATE chits SET syncVersion = :version WHERE id = :id")
@@ -91,6 +100,10 @@ interface ChitDao {
 
     @Query("UPDATE chits SET isDirty = 1, dirtyFields = :dirtyFields, modifiedDatetime = :now WHERE id = :id")
     suspend fun markDirty(id: String, dirtyFields: String, now: String)
+
+    /** All non-deleted chits (for search). */
+    @Query("SELECT * FROM chits WHERE deleted = 0")
+    fun getAllNonDeleted(): Flow<List<ChitEntity>>
 
     // Phase 4 — Widget suspend queries (non-Flow for RemoteViews context)
 

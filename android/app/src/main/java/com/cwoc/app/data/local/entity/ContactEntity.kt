@@ -46,6 +46,12 @@ data class ContactEntity(
     val syncVersion: Int = 0,
     val lastSyncedAt: String?,
 
+    // Ownership
+    val ownerId: String? = null,
+
+    // Soft-delete timestamp
+    val deletedDatetime: String? = null,
+
     // Phase 3 — dirty tracking and conflict state
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

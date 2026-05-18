@@ -85,6 +85,32 @@ class AlarmReceiver : BroadcastReceiver() {
                 if (alertType == AlertType.ALARM || alertType == AlertType.TIMER) {
                     setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
                 }
+                // R8: Add Snooze and Dismiss action buttons to notification shade
+                // Snooze action — snoozes for the configured snooze length
+                val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
+                    action = "com.cwoc.app.SNOOZE_ALERT"
+                    putExtra("chit_id", chitId)
+                }
+                val snoozePendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    (chitId.hashCode() + 1000),
+                    snoozeIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                addAction(0, "Snooze", snoozePendingIntent)
+
+                // Dismiss action — marks the alert as acknowledged
+                val dismissIntent = Intent(context, AlarmReceiver::class.java).apply {
+                    action = "com.cwoc.app.DISMISS_ALERT"
+                    putExtra("chit_id", chitId)
+                }
+                val dismissPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    (chitId.hashCode() + 2000),
+                    dismissIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                addAction(0, "Dismiss", dismissPendingIntent)
             }
             .build()
 

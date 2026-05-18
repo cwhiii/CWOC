@@ -16,6 +16,7 @@ import javax.inject.Singleton
 sealed class AuthResult {
     data object Success : AuthResult()
     data object InvalidCredentials : AuthResult()
+    data object RateLimited : AuthResult()
     data object NetworkError : AuthResult()
     data class Error(val message: String) : AuthResult()
 }
@@ -111,6 +112,9 @@ class AuthRepository @Inject constructor(
                 }
                 response.code() == 401 || response.code() == 403 -> {
                     AuthResult.InvalidCredentials
+                }
+                response.code() == 429 -> {
+                    AuthResult.RateLimited
                 }
                 else -> {
                     AuthResult.Error("Server error: ${response.code()} ${response.message()}")

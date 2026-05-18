@@ -1,49 +1,21 @@
-Build failed: 2026-05-16T23:32:04.391996118Z
+Build failed: 2026-05-18T12:13:15.845396545Z
 
 === Kotlin Compiler Errors ===
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:244:22 Expecting ')
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:244:23 Expecting an expression
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:244:23 Unexpected tokens (use ';' to separate expressions on the same line)
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:245:9 Expecting an element
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:245:42 Unexpected tokens (use ';' to separate expressions on the same line)
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:244:23 [EQUALS_MISSING] No method 'equals(Any?): Boolean' available
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:244:44 [NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER] Not enough information to infer type variable T
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:246:25 [EQUALS_MISSING] No method 'equals(Any?): Boolean' available
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:246:48 [NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER] Not enough information to infer type variable T
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ContactMapper.kt:195:23 [EQUALS_MISSING] No method 'equals(Any?): Boolean' available
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ContactMapper.kt:195:44 [NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER] Not enough information to infer type variable T
-e: java.nio.file.NoSuchFileException: /home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/ksp/debug/java/byRounds/1
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-/home/cwhiii/Sync/Secondary Data/Development/CWOC/android/app/build/generated/hilt/component_sources/debug/com/cwoc/app/CwocApplication_HiltComponents.java:154: error: [Dagger/DependencyCycle] Found a dependency cycle:
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:12:47 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:80:60 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:27:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:28:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:65 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:95 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:12:47 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:80:60 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:27:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:28:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:65 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:95 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/PullToRefreshWrapper.kt:5:49 [UNRESOLVED_REFERENCE] Unresolved reference: PullToRefreshBox
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/PullToRefreshWrapper.kt:34:5 [UNRESOLVED_REFERENCE] Unresolved reference: PullToRefreshBox
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/PullToRefreshWrapper.kt:48:9 [COMPOSABLE_INVOCATION] @Composable invocations can only happen from the context of a @Composable function
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:12:47 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/swipe/SwipeToAction.kt:80:60 [UNRESOLVED_REFERENCE] Unresolved reference: Schedule
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/map/MapScreen.kt:12:47 [UNRESOLVED_REFERENCE] Unresolved reference: MyLocation
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/map/MapScreen.kt:159:39 [UNRESOLVED_REFERENCE] Unresolved reference: MyLocation
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/map/MapScreen.kt:176:39 [UNRESOLVED_REFERENCE] Unresolved reference: MyLocation
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:27:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:28:47 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:65 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandLess
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/projects/ProjectsScreen.kt:112:95 [UNRESOLVED_REFERENCE] Unresolved reference: ExpandMore
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/ImageViewDialog.kt:35:8 [UNRESOLVED_REFERENCE] Unresolved reference: coil
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/ImageViewDialog.kt:36:8 [UNRESOLVED_REFERENCE] Unresolved reference: coil
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/ImageViewDialog.kt:88:13 [UNRESOLVED_REFERENCE] Unresolved reference: AsyncImage
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/ImageViewDialog.kt:89:25 [UNRESOLVED_REFERENCE] Unresolved reference: ImageRequest
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:34:19 [UNRESOLVED_REFERENCE] Unresolved reference: zxing
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:35:19 [UNRESOLVED_REFERENCE] Unresolved reference: zxing
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:36:19 [UNRESOLVED_REFERENCE] Unresolved reference: zxing
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:140:21 [NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER] Not enough information to infer type variable K
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:141:13 [UNRESOLVED_REFERENCE] Unresolved reference: EncodeHintType
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:142:13 [UNRESOLVED_REFERENCE] Unresolved reference: EncodeHintType
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:144:22 [UNRESOLVED_REFERENCE] Unresolved reference: QRCodeWriter
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/QrCodeDialog.kt:145:45 [UNRESOLVED_REFERENCE] Unresolved reference: BarcodeFormat
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:76:8 [UNRESOLVED_REFERENCE] Unresolved reference: coil
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:400:21 [UNRESOLVED_REFERENCE] Unresolved reference: AsyncImage
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/attachments/AttachmentsScreen.kt:499:21 [UNRESOLVED_REFERENCE] Unresolved reference: AsyncImage
 
 === Task Failure ===
 Execution failed for task ':app:compileDebugKotlin'.

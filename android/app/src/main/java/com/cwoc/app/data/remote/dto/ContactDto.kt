@@ -35,5 +35,8 @@ data class ContactDto(
     val shared_to_vault: Boolean?,
     val created_datetime: String?,
     val modified_datetime: String?,
+    val owner_id: String? = null,
+    val deleted: Any? = null,
+    val deleted_datetime: String? = null,
     val sync_version: Int = 0
 )

@@ -191,7 +191,37 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
 
 ---
 
-## Phase 5: Pixel-Perfect & Gesture-Identical UI Replication
+## Phase 5: Core Usability
+
+*Goal: Close the most critical functional gaps. Sidebar/menu, search, filters, sort, proper editor UIs, settings page, trash, unsaved changes detection. Makes the app a viable daily driver.*
+
+**Budget: 4-5 weeks**
+
+**Spec:** `.kiro/specs/android-app/android-phase5a-core-usability/`
+
+---
+
+## Phase 6: Feature Parity
+
+*Goal: Full feature parity with the web app. Contact editor, additional calendar views, Omni View, tags UI, markdown preview, pin/archive/snooze, habits, weather, help, notifications.*
+
+**Budget: 4-5 weeks**
+
+**Spec:** `.kiro/specs/android-app/android-phase5b-feature-parity/`
+
+---
+
+## Phase 7: Advanced Features
+
+*Goal: Remaining advanced features. Audit log, attachments, quick-edit modal, import/export, contact QR/vCard, location UI with geocoding, email view (read-only).*
+
+**Budget: 3-4 weeks**
+
+**Spec:** `.kiro/specs/android-app/android-phase5c-advanced-features/`
+
+---
+
+## Phase 8: Pixel-Perfect & Gesture-Identical UI Replication
 
 *Goal: The native app must be IDENTICAL to the mobile browser version. Not similar. Not inspired by. IDENTICAL — pixel for pixel, gesture for gesture, across every screen, view, page, and tool. A user switching between the mobile browser and the native app should not be able to tell the difference except for performance.*
 
@@ -199,19 +229,19 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
 
 **Budget: 4-6 weeks**
 
-### 5.1 Navigation — Exact Replication
+### 8.1 Navigation — Exact Replication
 - **No bottom tab bar.** The web app does not have one. Remove it entirely.
 - **Swipe from right** opens the C CAPTN view tabs — same panel, same animation speed, same overlay opacity, same tab order, same icons, same labels (Alarms, not Alerts)
 - **Swipe from left** opens the menu/options panel — same items, same order, same icons, same behavior
 - Gesture thresholds must match exactly: same swipe distance to trigger, same velocity threshold, same spring-back animation if cancelled
 - Back button / back gesture must behave identically to browser back (close overlay first, then navigate)
 
-### 5.2 Every Label, Every Icon, Every String
+### 8.2 Every Label, Every Icon, Every String
 - Audit EVERY piece of text in the native app against the web app: screen titles, tab labels, button text, placeholder text, empty state messages, error messages, toast messages, modal titles, modal body text, confirm/cancel button labels
 - Zero tolerance for deviation. If the web says "Alarms," the app says "Alarms." If the web says "Quick Edit," the app says "Quick Edit." Character for character.
 - Icons must be identical — bundle Font Awesome 6 if Material equivalents don't match exactly. Same icon, same size, same color, same position.
 
-### 5.3 Layout — Pixel-Level Fidelity
+### 8.3 Layout — Pixel-Level Fidelity
 - Every screen must match the mobile browser layout exactly: same margins, same padding, same font sizes, same line heights, same border radii, same shadow/elevation values
 - Chit cards: same height, same internal spacing, same indicator positions, same badge placement, same truncation behavior, same line-clamp count
 - Calendar views: same cell sizes, same event chip appearance, same multi-day bar rendering, same pinch-zoom behavior, same drag handle appearance
@@ -223,7 +253,7 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
 - Help page: same navigation, same rendering
 - Weather page: same layout, same data presentation
 
-### 5.4 Interactions — Gesture for Gesture
+### 8.4 Interactions — Gesture for Gesture
 - **Tap** targets: same size, same hit area, same feedback (ripple must match web's tap highlight)
 - **Long-press**: same delay threshold, same visual feedback, same resulting action
 - **Drag-and-drop**: same initiation gesture, same drag ghost appearance, same drop zone highlighting, same reorder animation
@@ -235,7 +265,7 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
 - **Quick-edit modal**: same trigger, same appearance, same fields, same save/cancel behavior
 - **Checklist interactions**: same tap-to-toggle, same drag-to-reorder, same indent/outdent gesture, same undo behavior
 
-### 5.5 Every Page, Every Tool — Complete Audit
+### 8.5 Every Page, Every Tool — Complete Audit
 - Systematically open every page in the mobile browser and the native app side by side
 - Screenshot both. Overlay them. Fix every difference.
 - Pages to audit (exhaustive list):
@@ -255,7 +285,7 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
   - All error states
   - All loading states
 
-### 5.6 Behavioral Edge Cases
+### 8.6 Behavioral Edge Cases
 - ESC/back-button priority chain must be identical to web's ESC chain
 - Unsaved changes detection must trigger at the same moments
 - Dirty tracking must flag the same fields
@@ -269,42 +299,42 @@ Build a native Android app (Kotlin + Jetpack Compose) that keeps all chit data o
 
 ---
 
-## Phase 6: Native Platform Advantages
+## Phase 9: Native Platform Advantages
 
 *Goal: Leverage native Android capabilities that are difficult or impossible via the mobile browser. These are additive features — they enhance the app beyond what the web can do.*
 
 **Budget: Ongoing**
 
-### 6.1 Push Notifications & Alarms
+### 9.1 Push Notifications & Alarms
 - Native alarm scheduling via AlarmManager (survives app kill, respects Do Not Disturb)
 - Rich notifications with actions (Mark Complete, Snooze, Open)
 - Notification channels per alert type (Alarms, Reminders, Timers) with user-configurable priority
 - Exact alarm scheduling (not subject to browser tab throttling)
 
-### 6.2 Location Services
+### 9.2 Location Services
 - Background location polling for location-based reminders ("remind me when I arrive at...")
 - Geofencing for automatic chit triggers (enter/exit a saved location)
 - Passive location tagging — auto-suggest location when creating a chit based on current position
 - Battery-efficient location strategy (significant motion detection → precise fix only when needed)
 
-### 6.3 Background Sync & Freshness
+### 9.3 Background Sync & Freshness
 - True background sync via WorkManager (periodic + event-driven)
 - Sync completes even when app is closed (not possible in mobile browser)
 - Instant push via Firebase Cloud Messaging (FCM) for real-time updates without polling
 
-### 6.4 System Integration
+### 9.4 System Integration
 - Share intent: receive text/links/images from other apps → create chit
 - Calendar provider integration: optionally mirror chits to Android system calendar
 - Contacts provider integration: link CWOC contacts to system contacts
 - Quick Settings tile for rapid chit creation
 - App shortcuts (long-press app icon → New Task, New Note, Today's Calendar)
 
-### 6.5 Offline Resilience
+### 9.5 Offline Resilience
 - Full offline operation with zero degradation (no "you're offline" limitations)
 - Attachment caching with intelligent preloading on Wi-Fi
 - Offline search across all local data (instant, no server round-trip)
 
-### 6.6 Hardware Access
+### 9.6 Hardware Access
 - Camera integration for quick photo attachments
 - Voice-to-text for note dictation
 - NFC tag scanning for location check-in or quick-add triggers
@@ -465,10 +495,10 @@ Feed these files to the LLM and ask for Kotlin equivalents (pure functions, no D
 
 ## Effort Estimate
 
-| Component | Effort | Status |
-|-----------|--------|--------|
-| Server sync infrastructure | — | ✅ Complete |
-| Device auth (server) | — | ✅ Complete |
+| Component | Effort | Phase |
+|-----------|--------|-------|
+| Server sync infrastructure | — | ✅ Phase 0 |
+| Device auth (server) | — | ✅ Phase 0 |
 | Android app shell + navigation | Medium | Phase 1 |
 | Local SQLite database + Room DAOs | Medium | Phase 1 |
 | Tasks + Notes + Calendar views | Large | Phase 1-2 |
@@ -482,16 +512,24 @@ Feed these files to the LLM and ask for Kotlin equivalents (pure functions, no D
 | Attachments sync | Medium | Phase 3-4 |
 | Remaining views (Checklists, Projects, Alerts, Indicators) | Large | Phase 4 |
 | Maps, widgets, polish | Medium | Phase 4 |
-| Navigation & gesture alignment (swipe panels) | Large | Phase 5 |
-| Label/naming audit & fixes | Small | Phase 5 |
-| Layout & visual fidelity pass | Large | Phase 5 |
-| Interaction parity (drag, modals, quick-edit) | Large | Phase 5 |
-| Feature gap audit & fixes | Medium | Phase 5 |
-| Native notifications & alarms | Medium | Phase 6 |
-| Location services & geofencing | Large | Phase 6 |
-| Background sync & FCM | Medium | Phase 6 |
-| System integration (share, calendar, contacts) | Medium | Phase 6 |
-| Hardware access (camera, voice, NFC, biometrics) | Medium | Phase 6 |
+| Sidebar/menu, search, filters, sort | Large | Phase 5 |
+| Proper editor UIs (date picker, checklist, color, alerts, recurrence) | Large | Phase 5 |
+| Settings page, trash, unsaved changes, undo | Medium | Phase 5 |
+| Contact editor, calendar views (Month/Year/Itinerary/X-Day) | Large | Phase 6 |
+| Omni View, tags UI, markdown preview, pin/archive/snooze | Large | Phase 6 |
+| Habits, weather, help, notifications | Medium | Phase 6 |
+| Audit log, attachments, quick-edit modal | Medium | Phase 7 |
+| Import/export, contact QR/vCard, location UI, email view | Medium | Phase 7 |
+| Navigation & gesture alignment (swipe panels) | Large | Phase 8 |
+| Label/naming audit & fixes | Small | Phase 8 |
+| Layout & visual fidelity pass | Large | Phase 8 |
+| Interaction parity (drag, modals, quick-edit) | Large | Phase 8 |
+| Feature gap audit & fixes | Medium | Phase 8 |
+| Native notifications & alarms | Medium | Phase 9 |
+| Location services & geofencing | Large | Phase 9 |
+| Background sync & FCM | Medium | Phase 9 |
+| System integration (share, calendar, contacts) | Medium | Phase 9 |
+| Hardware access (camera, voice, NFC, biometrics) | Medium | Phase 9 |
 | Integration testing | Large | Ongoing |
 
 ---
