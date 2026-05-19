@@ -4,8 +4,12 @@ import com.cwoc.app.data.attachment.AttachmentCache
 import com.cwoc.app.data.attachment.AttachmentCacheImpl
 import com.cwoc.app.data.attachment.AttachmentManager
 import com.cwoc.app.data.attachment.AttachmentManagerImpl
+import com.cwoc.app.data.repository.BundleRepository
+import com.cwoc.app.data.repository.BundleRepositoryImpl
 import com.cwoc.app.data.repository.ContactRepository
 import com.cwoc.app.data.repository.ContactRepositoryImpl
+import com.cwoc.app.data.repository.EmailRepository
+import com.cwoc.app.data.repository.EmailRepositoryImpl
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.repository.SettingsRepositoryImpl
 import com.cwoc.app.data.sync.ConnectivityMonitor
@@ -85,6 +89,18 @@ abstract class SyncModule {
     abstract fun bindContactRepository(
         impl: ContactRepositoryImpl
     ): ContactRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindEmailRepository(
+        impl: EmailRepositoryImpl
+    ): EmailRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBundleRepository(
+        impl: BundleRepositoryImpl
+    ): BundleRepository
 
     @Binds
     @Singleton
