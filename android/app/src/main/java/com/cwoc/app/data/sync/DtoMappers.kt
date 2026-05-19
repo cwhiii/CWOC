@@ -261,6 +261,30 @@ fun SettingsDto.toEntity(syncedAt: String, gson: Gson): SettingsEntity {
         emailUndoSendDelay = email_undo_send_delay,
         emailGroupBy = email_group_by,
         // Timezone override
-        timezoneOverride = timezone_override
+        timezoneOverride = timezone_override,
+
+        // === Migration 7→8 fields ===
+        // General tab
+        clockOrientation = clock_orientation,
+        hiddenViews = hidden_views.toJsonString(gson),
+        combineAlerts = combine_alerts,
+        // Views tab
+        projectsShowChildCount = projects_show_child_count,
+        projectsShowChecklistCount = projects_show_checklist_count,
+        // Email tab
+        emailCheckInterval = email_check_interval,
+        emailMaxPull = email_max_pull,
+        emailSignature = email_signature,
+        emailBundlesCountDisplay = email_bundles_count_display,
+        // Admin tab
+        instanceName = instance_name,
+        welcomeMessage = welcome_message,
+        auditLogPruningEnabled = audit_log_pruning_enabled,
+        tailscaleEnabled = tailscale_enabled,
+        tailscaleAuthKey = tailscale_auth_key,
+        ntfyEnabled = ntfy_enabled,
+        haEnabled = ha_enabled,
+        haPollInterval = ha_poll_interval,
+        kioskSelectedTags = kiosk_selected_tags.toJsonString(gson)
     )
 }

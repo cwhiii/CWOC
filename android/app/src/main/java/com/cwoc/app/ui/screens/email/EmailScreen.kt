@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +33,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -105,23 +103,6 @@ fun EmailScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 1. Folder FilterChips row
-            FolderFilterChips(
-                currentFolder = uiState.currentFolder,
-                onFolderSelected = { viewModel.setFolder(it) }
-            )
-
-            // 2. Bundle tabs (only visible when folder = inbox)
-            if (uiState.currentFolder == "inbox") {
-                BundleTabsRow(
-                    activeBundle = uiState.activeBundle,
-                    onBundleSelected = { viewModel.setBundle(it) }
-                )
-            }
-
-            // 3. Account filter pills
-            // TODO: Implement account filter pills when multiple account data is available
-
             // Content area
             when {
                 uiState.isLoading -> {
@@ -167,68 +148,6 @@ fun EmailScreen(
                     )
                 }
             }
-        }
-    }
-}
-
-// ─── Folder FilterChips ───────────────────────────────────────────────────────
-
-@Composable
-private fun FolderFilterChips(
-    currentFolder: String,
-    onFolderSelected: (String) -> Unit
-) {
-    val folders = listOf(
-        "inbox" to "Inbox",
-        "sent" to "Sent",
-        "drafts" to "Drafts",
-        "scheduled" to "Scheduled",
-        "trash" to "Trash",
-        "archived" to "Archived"
-    )
-
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(folders) { (folderId, folderLabel) ->
-            FilterChip(
-                selected = currentFolder == folderId,
-                onClick = { onFolderSelected(folderId) },
-                label = { Text(folderLabel) }
-            )
-        }
-    }
-}
-
-// ─── Bundle Tabs ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun BundleTabsRow(
-    activeBundle: String?,
-    onBundleSelected: (String?) -> Unit
-) {
-    // For now, just show "All" as the only bundle since bundle data comes from settings
-    val bundles = listOf("All")
-
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(bundles) { bundle ->
-            val isSelected = (bundle == "All" && activeBundle == null) ||
-                activeBundle == bundle
-            FilterChip(
-                selected = isSelected,
-                onClick = {
-                    onBundleSelected(if (bundle == "All") null else bundle)
-                },
-                label = { Text(bundle) }
-            )
         }
     }
 }
@@ -397,12 +316,16 @@ private fun EmailThreadCard(
     val isUnread = thread.unreadCount > 0
     val latestMessage = thread.latestMessage
 
+    // Full background color matching web's applyChitColors(card, chitColor(chit))
+    val cardBgColor = remember(latestMessage.color) { CwocChitCardStyle.resolveChitBgColor(latestMessage.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         border = CwocChitCardStyle.cardBorder,
-        colors = CwocChitCardStyle.cardColors(),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Row(
@@ -416,7 +339,7 @@ private fun EmailThreadCard(
                         .padding(top = 6.dp, end = 8.dp)
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF6B4E31))
+                        .background(cardTextColor)
                 )
             } else {
                 Spacer(modifier = Modifier.width(16.dp))
@@ -439,6 +362,7 @@ private fun EmailThreadCard(
                             text = extractSenderName(latestMessage.emailFrom),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Normal,
+                            color = cardTextColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -451,12 +375,12 @@ private fun EmailThreadCard(
                                 imageVector = Icons.Default.Reply,
                                 contentDescription = "Thread",
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = cardTextColor.copy(alpha = 0.7f)
                             )
                             Text(
                                 text = "${thread.messages.size}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = cardTextColor.copy(alpha = 0.7f)
                             )
                         }
                     }
@@ -465,7 +389,7 @@ private fun EmailThreadCard(
                     Text(
                         text = formatEmailDate(thread.latestDate),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = cardTextColor.copy(alpha = 0.7f)
                     )
                 }
 
@@ -480,6 +404,7 @@ private fun EmailThreadCard(
                         text = thread.subject,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Normal,
+                        color = cardTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -492,7 +417,7 @@ private fun EmailThreadCard(
                             imageVector = Icons.Default.AttachFile,
                             contentDescription = "Has attachments",
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = cardTextColor.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -505,7 +430,7 @@ private fun EmailThreadCard(
                     Text(
                         text = snippet.replace("\n", " "),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = cardTextColor.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

@@ -1176,7 +1176,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
     statuses.forEach(status => {
       const col = document.createElement("div");
       col.className = "kanban-column";
-      col.style.cssText = "flex:1;min-width:0;border-right:2px solid rgba(139,90,43,0.35);padding:0.5em;display:flex;flex-direction:column;gap:0.3em;background:rgba(255,255,255,0.15);";
+      col.style.cssText = "flex:1;min-width:0;border-right:2px solid rgba(139,90,43,0.35);padding:0.5em;display:flex;flex-direction:column;gap:0.3em;background:transparent;";
       col.dataset.status = status;
       col.dataset.projectId = project.id;
 
@@ -1559,27 +1559,8 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
                 _kanbanTouchDragCard = null;
               },
               onLongPress: function () {
-                // Clean up floating card state if drag was active
-                if (_kanbanTouchDragCard) {
-                  document.body.style.overscrollBehavior = '';
-                  _card.style.position = '';
-                  _card.style.left = '';
-                  _card.style.top = '';
-                  _card.style.width = '';
-                  _card.style.zIndex = '';
-                  _card.style.opacity = '';
-                  _card.style.boxShadow = '';
-                  _card.style.transition = '';
-                  _card.style.pointerEvents = '';
-                  if (_kanbanTouchPlaceholder && _kanbanTouchPlaceholder.parentNode) {
-                    _kanbanTouchPlaceholder.parentNode.insertBefore(_card, _kanbanTouchPlaceholder);
-                    _kanbanTouchPlaceholder.remove();
-                  }
-                  _kanbanTouchPlaceholder = null;
-                  _kanbanTouchDragCard = null;
-                }
-                if (typeof _isViewerRole === 'function' && _isViewerRole(_child)) return;
-                showQuickEditModal(_child, function () { displayChits(); });
+                // No-op — drag is the primary gesture for kanban cards.
+                // Quick-edit is accessible via shift+click (desktop) or double-tap opens editor.
               },
             });
           })(card, child, status, project);
@@ -2051,10 +2032,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
             }
           }
         },
-        onLongPress: function () {
-          storePreviousState();
-          window.location.href = '/editor?id=' + projectId;
-        },
+        // No onLongPress — project headers use drag only; double-tap opens editor
       });
     });
   }

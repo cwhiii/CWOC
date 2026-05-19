@@ -265,6 +265,8 @@ def get_sync_changes(
                 settings["view_order"] = deserialize_json_field(settings.get("view_order"))
                 settings["recent_tags"] = deserialize_json_field(settings.get("recent_tags"))
                 settings["custom_view_filters"] = deserialize_json_field(settings.get("custom_view_filters"))
+                settings["hidden_views"] = deserialize_json_field(settings.get("hidden_views"))
+                settings["kiosk_selected_tags"] = deserialize_json_field(settings.get("kiosk_selected_tags"))
                 response["settings"] = settings
             else:
                 response["settings"] = None
@@ -459,6 +461,7 @@ _SETTINGS_JSON_FIELDS = frozenset([
     "chit_options", "default_notifications", "kiosk_users", "shared_tags",
     "active_clocks", "saved_locations", "recent_tags", "custom_view_filters",
     "email_account", "email_accounts", "view_order",
+    "hidden_views", "kiosk_selected_tags", "smart_actions_config",
 ])
 
 # All valid settings columns that can be pushed from a mobile client
@@ -482,6 +485,18 @@ _SETTINGS_PUSH_FIELDS = frozenset([
     "omni_locked_filters", "omni_hst_clock_mode", "omni_email_count",
     "omni_normalize_colors", "custom_view_filters",
     "default_timezone", "timezone_override", "default_view",
+    # Android parity fields
+    "clock_orientation", "hidden_views", "combine_alerts",
+    "projects_show_child_count", "projects_show_checklist_count",
+    "email_check_interval", "email_max_pull", "email_signature",
+    "email_bundles_count_display",
+    "instance_name", "welcome_message", "audit_log_pruning_enabled",
+    "tailscale_enabled", "tailscale_auth_key",
+    "ntfy_enabled", "ha_enabled", "ha_poll_interval",
+    "kiosk_selected_tags", "smart_actions_config",
+    # Email privacy (already in DB from earlier migration)
+    "email_block_tracking_pixels", "email_external_content",
+    "email_read_receipts", "email_undo_send_delay", "email_group_by",
 ])
 
 

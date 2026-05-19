@@ -461,7 +461,7 @@ function _restoreUIState() {
     if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators' || currentTab === 'Email') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
-    if (kanbanSectionRestore) kanbanSectionRestore.style.display = 'none';
+    if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
     const calOptsRestore2 = document.getElementById('section-cal-options');
     if (calOptsRestore2) calOptsRestore2.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
     const indSectionRestore = document.getElementById('section-indicators');
@@ -1016,7 +1016,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const yearWeekContainer = document.getElementById('year-week-container');
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const kanbanSection = document.getElementById('section-kanban');
-  if (kanbanSection) kanbanSection.style.display = 'none';
+  if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
   const calOptsRestore = document.getElementById('section-cal-options');
   if (calOptsRestore) calOptsRestore.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
   // Initialize the month mode pill toggle
@@ -1448,6 +1448,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!headerEl) return;
     var _tbSwStartX = 0, _tbSwStartY = 0;
     var _tbSwiping = false;
+    var _tbSwipeStarted = false;
     var SWIPE_MIN = 60;
 
     var _tabOrder = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes', 'Email', 'Indicators', 'Search'];
@@ -1456,10 +1457,13 @@ document.addEventListener("DOMContentLoaded", function () {
       var t = e.touches[0];
       _tbSwStartX = t.clientX;
       _tbSwStartY = t.clientY;
+      _tbSwipeStarted = true;
     }, { passive: true });
 
-    headerEl.addEventListener('touchend', function(e) {
-      if (_tbSwiping) return;
+    // Listen on document for touchend so swipe completes even if finger leaves header
+    document.addEventListener('touchend', function(e) {
+      if (!_tbSwipeStarted || _tbSwiping) { _tbSwipeStarted = false; return; }
+      _tbSwipeStarted = false;
       var t = e.changedTouches[0];
       var dx = t.clientX - _tbSwStartX;
       var dy = Math.abs(t.clientY - _tbSwStartY);

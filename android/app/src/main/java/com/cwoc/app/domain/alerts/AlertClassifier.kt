@@ -22,7 +22,9 @@ data class ClassifiedAlert(
     val section: AlertSection,
     // R6: Fields for filtering
     val chitStatus: String? = null,
-    val chitTags: List<String>? = null
+    val chitTags: List<String>? = null,
+    // Chit color for card background (matching web's applyChitColors)
+    val chitColor: String? = null
 )
 
 /**
@@ -60,7 +62,8 @@ object AlertClassifier {
         alerts: List<RawAlert>,
         referenceTime: LocalDateTime = LocalDateTime.now(),
         chitStatus: String? = null,
-        chitTags: List<String>? = null
+        chitTags: List<String>? = null,
+        chitColor: String? = null
     ): List<ClassifiedAlert> {
         return alerts.mapNotNull { alert ->
             val scheduledTime = parseAlertTime(alert.datetime) ?: return@mapNotNull null
@@ -77,7 +80,8 @@ object AlertClassifier {
                 scheduledTime = scheduledTime,
                 section = section,
                 chitStatus = chitStatus,
-                chitTags = chitTags
+                chitTags = chitTags,
+                chitColor = chitColor
             )
         }.sortedWith(
             compareBy<ClassifiedAlert> { it.section.ordinal } // UPCOMING (0) before PAST (1)

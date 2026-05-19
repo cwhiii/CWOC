@@ -1,13 +1,22 @@
 package com.cwoc.app.data.remote
 
+import com.cwoc.app.data.remote.dto.ArchiveOriginalRequest
+import com.cwoc.app.data.remote.dto.CreateBundleRequest
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
 import com.cwoc.app.data.remote.dto.DeviceTokenResponse
+import com.cwoc.app.data.remote.dto.MarkReadRequest
+import com.cwoc.app.data.remote.dto.PgpKeyRequest
+import com.cwoc.app.data.remote.dto.PgpKeyResponse
+import com.cwoc.app.data.remote.dto.ReorderBundlesRequest
+import com.cwoc.app.data.remote.dto.ScheduleEmailRequest
+import com.cwoc.app.data.remote.dto.StandaloneAlertDto
 import com.cwoc.app.data.remote.dto.SyncResponseDto
 import com.cwoc.app.data.remote.dto.SyncPushRequestDto
 import com.cwoc.app.data.remote.dto.SyncPushResponseDto
 import com.cwoc.app.data.remote.dto.ClientLogRequest
 import com.cwoc.app.data.remote.dto.ClientLogResponse
 import com.cwoc.app.data.remote.dto.AttachmentUploadResponse
+import com.cwoc.app.data.remote.dto.UpdateBundleRequest
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.ResponseBody
@@ -35,6 +44,81 @@ interface CwocApiService {
     suspend fun authenticate(
         @Body request: DeviceTokenRequest
     ): Response<DeviceTokenResponse>
+
+    /**
+     * Get the authenticated user's profile info.
+     * Returns display_name, username, user_id, email, is_admin, profile_image_url, etc.
+     */
+    @GET("/api/auth/me")
+    suspend fun getMe(): Response<UserProfileResponse>
+
+    /**
+     * Get list of notifications for the authenticated user.
+     * Optionally filter by device type (mobile/desktop).
+     */
+    @GET("/api/notifications")
+    suspend fun getNotifications(
+        @Query("device") device: String? = "mobile"
+    ): Response<List<NotificationDto>>
+
+    /**
+     * Accept or decline a notification (RSVP).
+     */
+    @retrofit2.http.PATCH("/api/notifications/{id}")
+    suspend fun updateNotification(
+        @Path("id") notificationId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, Any?>>
+
+    /**
+     * Dismiss a notification.
+     */
+    @retrofit2.http.DELETE("/api/notifications/{id}")
+    suspend fun dismissNotification(
+        @Path("id") notificationId: String
+    ): Response<Unit>
+
+    /**
+     * Snooze a notification for a given number of minutes.
+     */
+    @POST("/api/notifications/{id}/snooze")
+    suspend fun snoozeNotification(
+        @Path("id") notificationId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, Any?>>
+
+    // ─── Standalone alerts endpoints ────────────────────────────────────────
+
+    /**
+     * Get all standalone alerts (alarms, timers, stopwatches).
+     */
+    @GET("/api/standalone-alerts")
+    suspend fun getStandaloneAlerts(): Response<List<StandaloneAlertDto>>
+
+    /**
+     * Create a new standalone alert.
+     */
+    @POST("/api/standalone-alerts")
+    suspend fun createStandaloneAlert(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<StandaloneAlertDto>
+
+    /**
+     * Update an existing standalone alert.
+     */
+    @retrofit2.http.PUT("/api/standalone-alerts/{id}")
+    suspend fun updateStandaloneAlert(
+        @Path("id") alertId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
+
+    /**
+     * Delete a standalone alert.
+     */
+    @retrofit2.http.DELETE("/api/standalone-alerts/{id}")
+    suspend fun deleteStandaloneAlert(
+        @Path("id") alertId: String
+    ): Response<Unit>
 
     /**
      * Fetch the login message (instance name + welcome message) for the login screen.
@@ -80,6 +164,16 @@ interface CwocApiService {
     @POST("/api/chit/{id}/dismiss-conflict")
     suspend fun dismissConflict(
         @Path("id") chitId: String
+    ): Response<Unit>
+
+    /**
+     * PATCH only the checklist field of a chit (auto-save).
+     * Used by ChecklistZoneV2 for debounced auto-save without saving the entire chit.
+     */
+    @retrofit2.http.PATCH("/api/chits/{id}/checklist")
+    suspend fun patchChecklist(
+        @Path("id") chitId: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
     ): Response<Unit>
 
     /**
@@ -475,6 +569,87 @@ interface CwocApiService {
     ): Response<BundleToggleResponse>
 
     /**
+     * Create a new email bundle.
+     */
+    @POST("/api/bundles")
+    suspend fun createBundle(
+        @Body request: CreateBundleRequest
+    ): Response<BundleDto>
+
+    /**
+     * Update an existing email bundle.
+     */
+    @retrofit2.http.PUT("/api/bundles/{id}")
+    suspend fun updateBundle(
+        @Path("id") id: String,
+        @Body request: UpdateBundleRequest
+    ): Response<BundleDto>
+
+    /**
+     * Delete an email bundle.
+     */
+    @retrofit2.http.DELETE("/api/bundles/{id}")
+    suspend fun deleteBundle(
+        @Path("id") id: String
+    ): Response<Unit>
+
+    /**
+     * Reorder email bundles by providing an ordered list of IDs.
+     */
+    @retrofit2.http.PUT("/api/bundles/reorder")
+    suspend fun reorderBundles(
+        @Body request: ReorderBundlesRequest
+    ): Response<Unit>
+
+    // ─── Email operation endpoints ──────────────────────────────────────────
+
+    /**
+     * Schedule an email for later delivery, or cancel a scheduled send.
+     */
+    @POST("/api/email/schedule/{chitId}")
+    suspend fun scheduleEmail(
+        @Path("chitId") chitId: String,
+        @Body request: ScheduleEmailRequest
+    ): Response<Unit>
+
+    /**
+     * Archive the original email after sending a reply.
+     */
+    @POST("/api/email/archive-original")
+    suspend fun archiveOriginal(
+        @Body request: ArchiveOriginalRequest
+    ): Response<Unit>
+
+    /**
+     * Mark an email as read or unread.
+     */
+    @retrofit2.http.PATCH("/api/email/{id}/read")
+    suspend fun markEmailRead(
+        @Path("id") id: String,
+        @Body request: MarkReadRequest
+    ): Response<Unit>
+
+    /**
+     * Download the raw .eml file for an email.
+     * Uses @Streaming to avoid loading the entire file into memory.
+     */
+    @Streaming
+    @GET("/api/email/{chitId}/raw")
+    suspend fun downloadRawEmail(
+        @Path("chitId") chitId: String
+    ): Response<ResponseBody>
+
+    // ─── PGP endpoint ───────────────────────────────────────────────────────
+
+    /**
+     * Retrieve the user's private PGP key (requires password confirmation).
+     */
+    @POST("/api/auth/private-pgp-key")
+    suspend fun getPrivatePgpKey(
+        @Body request: PgpKeyRequest
+    ): Response<PgpKeyResponse>
+
+    /**
      * Reset all sort orders and manual item ordering for every view.
      * Clears all saved sort preferences.
      */
@@ -771,4 +946,34 @@ data class BundleToggleResponse(
 data class ResetSortOrdersResponse(
     val success: Boolean = false,
     val message: String? = null
+)
+
+/**
+ * Response from GET /api/auth/me — the authenticated user's profile.
+ */
+data class UserProfileResponse(
+    @com.google.gson.annotations.SerializedName("user_id") val userId: String,
+    val username: String,
+    @com.google.gson.annotations.SerializedName("display_name") val displayName: String?,
+    val email: String?,
+    @com.google.gson.annotations.SerializedName("is_admin") val isAdmin: Boolean = false,
+    @com.google.gson.annotations.SerializedName("profile_image_url") val profileImageUrl: String?
+)
+
+/**
+ * A notification from GET /api/notifications.
+ */
+data class NotificationDto(
+    val id: String,
+    @com.google.gson.annotations.SerializedName("user_id") val userId: String? = null,
+    @com.google.gson.annotations.SerializedName("chit_id") val chitId: String? = null,
+    @com.google.gson.annotations.SerializedName("chit_title") val chitTitle: String? = null,
+    @com.google.gson.annotations.SerializedName("owner_display_name") val ownerDisplayName: String? = null,
+    @com.google.gson.annotations.SerializedName("notification_type") val notificationType: String? = null,
+    val status: String? = null,
+    @com.google.gson.annotations.SerializedName("created_datetime") val createdDatetime: String? = null,
+    @com.google.gson.annotations.SerializedName("delivery_target") val deliveryTarget: String? = null,
+    @com.google.gson.annotations.SerializedName("snoozed_until") val snoozedUntil: String? = null,
+    @com.google.gson.annotations.SerializedName("due_datetime") val dueDatetime: String? = null,
+    @com.google.gson.annotations.SerializedName("start_datetime") val startDatetime: String? = null
 )

@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "m20260518.0940"
+        versionName = "m20260518.2000"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -62,6 +62,7 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -121,6 +122,10 @@ dependencies {
 
     // ZXing — QR code generation
     implementation("com.google.zxing:core:3.5.3")
+
+    // BouncyCastle — PGP encryption for email
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    implementation("org.bouncycastle:bcpg-jdk18on:1.78.1")
 
     // EncryptedSharedPreferences — Secure token storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

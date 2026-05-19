@@ -111,5 +111,33 @@ data class SettingsDto(
     val email_group_by: String?,
 
     // Timezone override
-    val timezone_override: String?
+    val timezone_override: String?,
+
+    // === Migration 7→8 fields (previously missing from DTO) ===
+
+    // General tab
+    val clock_orientation: String? = null,
+    val hidden_views: Any? = null,
+    val combine_alerts: String? = null,
+
+    // Views tab
+    val projects_show_child_count: String? = null,
+    val projects_show_checklist_count: String? = null,
+
+    // Email tab
+    val email_check_interval: String? = null,
+    val email_max_pull: String? = null,
+    val email_signature: String? = null,
+    val email_bundles_count_display: String? = null,
+
+    // Admin tab
+    val instance_name: String? = null,
+    val welcome_message: String? = null,
+    val audit_log_pruning_enabled: String? = null,
+    val tailscale_enabled: String? = null,
+    val tailscale_auth_key: String? = null,
+    val ntfy_enabled: String? = null,
+    val ha_enabled: String? = null,
+    val ha_poll_interval: String? = null,
+    val kiosk_selected_tags: Any? = null
 )

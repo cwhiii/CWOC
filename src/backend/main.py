@@ -204,6 +204,7 @@ from src.backend.migrations import (
     migrate_add_habit_trigger_config,
     migrate_add_timezone_column,
     migrate_add_default_view,
+    migrate_add_android_settings_parity,
     migrate_add_sync_version,
 )
 
@@ -293,6 +294,7 @@ migrate_add_email_privacy_and_send_later()
 migrate_add_habit_trigger_config()
 migrate_add_timezone_column()
 migrate_add_default_view()
+migrate_add_android_settings_parity()
 migrate_add_sync_version()
 seed_version_info()
 

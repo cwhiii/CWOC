@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.ui.screens.alerts.AlertsScreen
 import com.cwoc.app.ui.screens.attachments.AttachmentsScreen
 import com.cwoc.app.ui.screens.auditlog.AuditLogScreen
@@ -28,6 +29,7 @@ import com.cwoc.app.ui.screens.tasks.TasksScreen
 import com.cwoc.app.ui.screens.trash.TrashScreen
 import com.cwoc.app.ui.screens.weather.WeatherScreen
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
+import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
 
 /**
  * Main navigation graph for the CWOC app.
@@ -42,7 +44,9 @@ fun CwocNavGraph(
     isAuthenticated: Boolean,
     modifier: Modifier = Modifier,
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    sidebarStateViewModel: SidebarStateViewModel? = null,
+    settingsRepository: SettingsRepository? = null
 ) {
     val startDestination = if (isAuthenticated) Screen.Tasks.route else Screen.Login.route
 
@@ -67,7 +71,8 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                sidebarStateViewModel = sidebarStateViewModel
             )
         }
 
@@ -88,7 +93,8 @@ fun CwocNavGraph(
                 },
                 onNavigateToNewChitWithPrefill = { start, end ->
                     navController.navigate(Screen.Editor.createRouteWithPrefill(start, end))
-                }
+                },
+                sidebarStateViewModel = sidebarStateViewModel
             )
         }
 
@@ -108,7 +114,8 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                settingsRepository = settingsRepository
             )
         }
 
@@ -118,12 +125,15 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                sidebarStateViewModel = sidebarStateViewModel
             )
         }
 
         composable(Screen.Indicators.route) {
-            IndicatorsScreen()
+            IndicatorsScreen(
+                sidebarStateViewModel = sidebarStateViewModel
+            )
         }
 
         composable(Screen.Contacts.route) {

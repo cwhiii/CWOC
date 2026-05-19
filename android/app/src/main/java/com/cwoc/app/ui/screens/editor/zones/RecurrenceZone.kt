@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -23,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,11 +32,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.recurrence.RecurrenceEngine
 import com.cwoc.app.domain.recurrence.RecurrenceRule
+import com.cwoc.app.ui.components.FlatpickrCalendarPicker
+import com.cwoc.app.ui.components.formatYMDDate
+import com.cwoc.app.ui.components.parseYMDDate
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -81,6 +79,17 @@ private enum class DayOption(val label: String, val code: String) {
 /**
  * RecurrenceZone composable for the chit editor.
  *
+ * @deprecated This zone is deprecated as of Task 12 (android-dates-zone-parity spec).
+ * All recurrence functionality is now inline within DateZone.kt as InlineRecurrenceRow.
+ * This file is kept for backward compatibility with any existing references but should
+ * not be used for new code. The inline recurrence row in DateZone provides:
+ * - Checkbox labeled "🔁 Repeat"
+ * - Contextual frequency dropdown (Daily, Weekly on [day], Monthly on the [date]th, etc.)
+ * - "Ends never" checkbox + conditional until-date input
+ * - Custom recurrence block with interval, unit, and by-day checkboxes
+ * - Proper greyed-out state when date mode is None or Point in Time
+ * - Habit-mode simplified labels
+ *
  * Provides a collapsible zone with:
  * - Preset selector: None, Daily, Weekly, Monthly, Yearly, Custom
  * - Custom builder (shown when "Custom" selected): frequency dropdown,
@@ -97,6 +106,10 @@ private enum class DayOption(val label: String, val code: String) {
  * @param recurrenceExceptions JSON string of recurrence exceptions (nullable)
  * @param onRecurrenceRuleChanged Callback when the recurrence rule changes
  */
+@Deprecated(
+    message = "RecurrenceZone is deprecated. Use InlineRecurrenceRow in DateZone.kt instead.",
+    level = DeprecationLevel.WARNING
+)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun RecurrenceZone(
@@ -415,52 +428,34 @@ private fun CustomRecurrenceBuilder(
         }
     }
 
-    // --- Until Date Picker Dialog ---
+    // --- Until Date Picker (FlatpickrCalendarPicker — replaces native DatePickerDialog) ---
     if (showUntilDatePicker) {
-        val initialMillis = rule.until?.let { dateStr ->
+        val initialDateStr = rule.until?.let { dateStr ->
             try {
-                LocalDate.parse(dateStr.substringBefore('T'))
-                    .atStartOfDay(ZoneOffset.UTC)
-                    .toInstant()
-                    .toEpochMilli()
+                val localDate = LocalDate.parse(dateStr.substringBefore('T'))
+                formatYMDDate(localDate)
             } catch (_: Exception) {
                 null
             }
         }
 
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = initialMillis
-        )
-
-        DatePickerDialog(
-            onDismissRequest = { showUntilDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val selectedMillis = datePickerState.selectedDateMillis
-                    if (selectedMillis != null) {
-                        val selectedDate = Instant.ofEpochMilli(selectedMillis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                        val updatedRule = rule.copy(
-                            until = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
-                            // Clear count if setting until
-                            count = null
-                        )
-                        onRuleChanged(gson.toJson(updatedRule))
-                    }
-                    showUntilDatePicker = false
-                }) {
-                    Text("OK")
+        FlatpickrCalendarPicker(
+            isOpen = true,
+            initialDate = initialDateStr,
+            onDateSelected = { ymdDate ->
+                val selectedDate = parseYMDDate(ymdDate)
+                if (selectedDate != null) {
+                    val updatedRule = rule.copy(
+                        until = selectedDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                        // Clear count if setting until
+                        count = null
+                    )
+                    onRuleChanged(gson.toJson(updatedRule))
                 }
+                showUntilDatePicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showUntilDatePicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+            onDismiss = { showUntilDatePicker = false }
+        )
     }
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -200,16 +201,19 @@ private fun MonthDayCellView(
             if (monthMode == "compress") {
                 // Compress mode: show events with maxLines truncation
                 cell.events.take(3).forEach { event ->
-                    val eventColor = event.color?.let { parseEventColor(it) }
-                        ?: Color(0xFF6B4E31)
+                    val eventBg = CwocChitCardStyle.resolveChitBgColor(event.color)
+                    val eventText = CwocChitCardStyle.contrastTextColor(eventBg)
                     Text(
                         text = event.title ?: "Untitled",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = eventColor,
-                        modifier = Modifier.fillMaxWidth()
+                        color = eventText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(eventBg, RoundedCornerShape(2.dp))
+                            .padding(horizontal = 2.dp)
                     )
                 }
                 // Show overflow count if more events exist
@@ -225,16 +229,19 @@ private fun MonthDayCellView(
             } else {
                 // Scroll mode: show ALL events, no truncation
                 cell.events.forEach { event ->
-                    val eventColor = event.color?.let { parseEventColor(it) }
-                        ?: Color(0xFF6B4E31)
+                    val eventBg = CwocChitCardStyle.resolveChitBgColor(event.color)
+                    val eventText = CwocChitCardStyle.contrastTextColor(eventBg)
                     Text(
                         text = event.title ?: "Untitled",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        color = eventColor,
-                        modifier = Modifier.fillMaxWidth()
+                        color = eventText,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(eventBg, RoundedCornerShape(2.dp))
+                            .padding(horizontal = 2.dp)
                     )
                 }
             }

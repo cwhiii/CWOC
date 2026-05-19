@@ -56,15 +56,13 @@ object ColorUtils {
     /**
      * Given a contact's color hex string, return a pair of (background, text) colors
      * suitable for rendering a contact row or editor background.
-     * The background is the parsed color at reduced opacity for subtlety.
+     * The background is the full solid color (matching the web's applyChitColors behavior).
      * Returns null if the color string is invalid or blank.
      */
     fun applyContactRowColors(colorHex: String?): Pair<Color, Color>? {
         val bgColor = parseHexColor(colorHex) ?: return null
-        // Use the color at ~20% opacity for row background (subtle tint)
-        val tintedBg = bgColor.copy(alpha = 0.2f)
         val textColor = computeAutoContrast(bgColor)
-        return Pair(tintedBg, textColor)
+        return Pair(bgColor, textColor)
     }
 
     /**

@@ -8,7 +8,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,17 +21,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -60,8 +59,12 @@ import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.components.CwocPromptDialog
 import com.cwoc.app.ui.components.SnoozePickerDialog
+import com.cwoc.app.ui.components.chitColorBorder
+import com.cwoc.app.ui.components.parseHexColor
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
+import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -78,13 +81,14 @@ fun ProjectsScreen(
     modifier: Modifier = Modifier,
     viewModel: ProjectsViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    sidebarStateViewModel: SidebarStateViewModel? = null
 ) {
     val projects by viewModel.projects.collectAsState()
     val expandedIds by viewModel.expandedProjects.collectAsState()
 
-    // Projects view mode: "kanban" (default) or "list"
-    var projectsMode by remember { mutableStateOf("kanban") }
+    // Projects view mode: read from sidebar state (controlled by sidebar buttons)
+    val projectsMode = sidebarStateViewModel?.state?.collectAsState()?.value?.projectsViewMode ?: "kanban"
 
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
@@ -129,27 +133,6 @@ fun ProjectsScreen(
                         .fillMaxSize()
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    // FilterChip row for Kanban/List toggle
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilterChip(
-                                selected = projectsMode == "kanban",
-                                onClick = { projectsMode = "kanban" },
-                                label = { Text("Kanban") }
-                            )
-                            FilterChip(
-                                selected = projectsMode == "list",
-                                onClick = { projectsMode = "list" },
-                                label = { Text("List") }
-                            )
-                        }
-                    }
-
                     when (projectsMode) {
                         "kanban" -> {
                             items(filteredSortedProjects, key = { it.project.id }) { projectWithChildren ->
@@ -158,7 +141,8 @@ fun ProjectsScreen(
                                     isExpanded = projectWithChildren.project.id in expandedIds,
                                     onToggleExpand = { viewModel.toggleExpanded(projectWithChildren.project.id) },
                                     onChildTap = { chitId -> onNavigateToEditor(chitId) },
-                                    onLongPress = { menuChit = projectWithChildren.project }
+                                    onLongPress = { menuChit = projectWithChildren.project },
+                                    onCreateChild = { title -> viewModel.createChildChit(projectWithChildren.project.id, title) }
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
@@ -334,18 +318,50 @@ private fun ProjectCard(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onChildTap: (String) -> Unit,
-    onLongPress: () -> Unit
+    onLongPress: () -> Unit,
+    onCreateChild: (String) -> Unit = {}
 ) {
+    // Determine project card background color from chit color
+    val projectBgColor = remember(project.project.color) {
+        if (!project.project.color.isNullOrBlank() && project.project.color != "transparent") {
+            parseHexColor(project.project.color) ?: CwocChitCardStyle.CardBackground
+        } else {
+            CwocChitCardStyle.CardBackground
+        }
+    }
+    // Contrast text color for the project header
+    val projectTextColor = remember(projectBgColor) {
+        val luminance = (0.299f * projectBgColor.red + 0.587f * projectBgColor.green + 0.114f * projectBgColor.blue)
+        if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFDF5E6)
+    }
+
+    // State for the "Create New Child Chit" dialog
+    var showCreateChildDialog by remember { mutableStateOf(false) }
+
+    if (showCreateChildDialog) {
+        CwocPromptDialog(
+            title = "Create New Child Chit",
+            placeholder = "Enter chit title\u2026",
+            onConfirm = { title ->
+                onCreateChild(title)
+                showCreateChildDialog = false
+            },
+            onDismiss = { showCreateChildDialog = false },
+            confirmLabel = "Create"
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .chitColorBorder(project.project.color)
             .animateContentSize()
             .combinedClickable(
                 onClick = onToggleExpand,
                 onLongClick = onLongPress
             ),
         border = CwocChitCardStyle.cardBorder,
-        colors = CwocChitCardStyle.cardColors(),
+        colors = CardDefaults.cardColors(containerColor = projectBgColor),
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -357,16 +373,28 @@ private fun ProjectCard(
                 Text(
                     text = project.project.title ?: "Untitled Project",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFF6B4E31),
+                    color = projectTextColor,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // "+" button to create a new child chit
+                IconButton(
+                    onClick = { showCreateChildDialog = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Create new child chit",
+                        tint = projectTextColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = Color(0xFF6B4E31)
+                    tint = projectTextColor
                 )
             }
 
@@ -375,7 +403,7 @@ private fun ProjectCard(
                 Text(
                     text = "📌 Pinned",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF6B4E31),
+                    color = projectTextColor.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -401,7 +429,7 @@ private fun ProjectCard(
                     Text(
                         text = "$completedChildren/$totalChildren",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF6B4E31)
+                        color = projectTextColor.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -429,16 +457,16 @@ private fun KanbanBoard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         KanbanStatus.entries.forEach { status ->
             val chits = columns[status] ?: emptyList()
             KanbanColumnView(
                 status = status,
                 chits = chits,
-                onChildTap = onChildTap
+                onChildTap = onChildTap,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -449,17 +477,17 @@ private fun KanbanColumnView(
     status: KanbanStatus,
     chits: List<ChitEntity>,
     onChildTap: (String) -> Unit,
+    modifier: Modifier = Modifier,
     // Q5: Add existing chit to this column
     onAddExisting: (() -> Unit)? = null,
     // Q6: Create new child in this column
     onCreateNew: (() -> Unit)? = null
 ) {
     Column(
-        modifier = Modifier
-            .width(140.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFFEDE0D0))
-            .padding(8.dp)
+            .padding(4.dp)
     ) {
         // Column header with count badge
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -467,12 +495,16 @@ private fun KanbanColumnView(
                 text = status.displayName,
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF6B4E31),
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(2.dp))
             Box(
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(16.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF6B4E31)),
                 contentAlignment = Alignment.Center
@@ -480,40 +512,54 @@ private fun KanbanColumnView(
                 Text(
                     text = "${chits.size}",
                     color = Color.White,
-                    fontSize = 10.sp,
+                    fontSize = 8.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // Child chit cards with Q2 (due date) and Q3 (status indicator)
+        // Child chit cards with colors applied
         chits.forEach { chit ->
+            // Determine card background from chit color
+            val cardBgColor = remember(chit.color) {
+                if (!chit.color.isNullOrBlank() && chit.color != "transparent") {
+                    parseHexColor(chit.color) ?: CwocChitCardStyle.CardBackground
+                } else {
+                    CwocChitCardStyle.CardBackground
+                }
+            }
+            val cardTextColor = remember(cardBgColor) {
+                val luminance = (0.299f * cardBgColor.red + 0.587f * cardBgColor.green + 0.114f * cardBgColor.blue)
+                if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFDF5E6)
+            }
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
                     .clickable { onChildTap(chit.id) },
                 border = CwocChitCardStyle.cardBorder,
-                colors = CwocChitCardStyle.cardColors(),
+                colors = CardDefaults.cardColors(containerColor = cardBgColor),
                 elevation = CwocChitCardStyle.cardElevation()
             ) {
-                Column(modifier = Modifier.padding(6.dp)) {
+                Column(modifier = Modifier.padding(4.dp)) {
                     Text(
                         text = chit.title ?: "Untitled",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF1A1208),
+                        color = cardTextColor,
+                        fontSize = 10.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    // Q2: Due date on child cards
+                    // Due date on child cards
                     if (chit.dueDatetime != null) {
                         Text(
                             text = "Due: ${chit.dueDatetime.take(10)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF8B7355),
-                            fontSize = 9.sp
+                            color = cardTextColor.copy(alpha = 0.7f),
+                            fontSize = 8.sp
                         )
                     }
                 }

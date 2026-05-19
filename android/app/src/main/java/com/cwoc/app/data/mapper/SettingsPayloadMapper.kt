@@ -86,7 +86,19 @@ object SettingsPayloadMapper {
         "attachment_max_size_mb",
         "attachment_max_storage_mb",
         "overdue_border_color",
-        "blocked_border_color"
+        "blocked_border_color",
+        "clock_orientation",
+        "ntfy_enabled",
+        "ha_enabled",
+        "ha_poll_interval",
+        "tailscale_enabled",
+        "tailscale_auth_key",
+        "email_block_tracking_pixels",
+        "email_undo_send_delay",
+        "paginate_email",
+        "bundles_enabled",
+        "bundles_multi_placement",
+        "email_accounts"
     )
 
     /**
@@ -161,6 +173,20 @@ object SettingsPayloadMapper {
             put("attachment_max_storage_mb", formState.attachmentMaxStorageMb)
             put("overdue_border_color", formState.overdueBorderColor.ifEmpty { null })
             put("blocked_border_color", formState.blockedBorderColor.ifEmpty { null })
+            // Dependent apps & additional fields
+            put("clock_orientation", formState.clockOrientation)
+            put("ntfy_enabled", formState.ntfyEnabled)
+            put("ha_enabled", formState.haEnabled)
+            put("ha_poll_interval", formState.haPollInterval)
+            put("tailscale_enabled", formState.tailscaleEnabled)
+            put("tailscale_auth_key", formState.tailscaleAuthKey.ifEmpty { null })
+            // Email fields not previously included
+            put("email_block_tracking_pixels", formState.emailBlockTracking)
+            put("email_undo_send_delay", formState.emailUndoSendDelay)
+            put("paginate_email", formState.emailPaginate)
+            put("bundles_enabled", formState.emailBundlesEnabled)
+            put("bundles_multi_placement", formState.emailMultiPlacement)
+            put("email_accounts", parseJsonOrRaw(formState.emailAccounts))
         }
     }
 
@@ -180,7 +206,6 @@ object SettingsPayloadMapper {
             timezoneOverride = payload.getString("timezone_override") ?: "",
             defaultShareContacts = payload.getString("default_share_contacts") ?: "0",
             activeClocks = payload.toJsonString("active_clocks") ?: "[\"12 Hour\"]",
-            clockOrientation = payload.getString("alarm_orientation") ?: "horizontal",
             landingView = payload.getString("default_view") ?: "Calendar",
             viewOrder = payload.toJsonString("view_order")
                 ?: "[\"Calendar\",\"Checklists\",\"Alarms\",\"Projects\",\"Tasks\",\"Notes\",\"Email\",\"Indicators\"]",
@@ -237,7 +262,21 @@ object SettingsPayloadMapper {
             hiddenViews = payload.toJsonString("hidden_views") ?: "[]",
             enabledPeriods = payload.getString("enabled_periods") ?: "Day,Week,Month",
             combineAlerts = payload.getString("combine_alerts") ?: "0",
-            omniBundleToggles = payload.toJsonString("omni_bundle_toggles") ?: "{}"
+            omniBundleToggles = payload.toJsonString("omni_bundle_toggles") ?: "{}",
+            // Dependent apps
+            clockOrientation = payload.getString("clock_orientation") ?: payload.getString("alarm_orientation") ?: "horizontal",
+            ntfyEnabled = payload.getString("ntfy_enabled") ?: "0",
+            haEnabled = payload.getString("ha_enabled") ?: "0",
+            haPollInterval = payload.getString("ha_poll_interval") ?: "30",
+            tailscaleEnabled = payload.getString("tailscale_enabled") ?: "0",
+            tailscaleAuthKey = payload.getString("tailscale_auth_key") ?: "",
+            // Email fields
+            emailBlockTracking = payload.getString("email_block_tracking_pixels") ?: "true",
+            emailUndoSendDelay = payload.getString("email_undo_send_delay") ?: "10",
+            emailPaginate = payload.getString("paginate_email") ?: "true",
+            emailBundlesEnabled = payload.getString("bundles_enabled") ?: "true",
+            emailMultiPlacement = payload.getString("bundles_multi_placement") ?: "false",
+            emailAccounts = payload.toJsonString("email_accounts") ?: "[]"
         )
     }
 

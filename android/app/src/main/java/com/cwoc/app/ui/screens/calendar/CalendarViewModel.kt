@@ -139,6 +139,11 @@ class CalendarViewModel @Inject constructor(
         loadEvents()
     }
 
+    fun setDate(date: LocalDate) {
+        _uiState.update { it.copy(selectedDate = date) }
+        loadEvents()
+    }
+
     private fun loadEvents() {
         viewModelScope.launch {
             val state = _uiState.value

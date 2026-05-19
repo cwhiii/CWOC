@@ -70,6 +70,7 @@ import coil.request.ImageRequest
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.remote.SwitchableUserDto
 import com.cwoc.app.ui.components.PeopleSectionHeader
+import com.cwoc.app.ui.components.ContactQrCodeDialog
 import com.cwoc.app.ui.components.firstMultiValue
 import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
@@ -99,6 +100,9 @@ fun ContactListScreen(
 
     // Export dropdown state
     var showExportMenu by remember { mutableStateOf(false) }
+
+    // QR code dialog state
+    var qrContact by remember { mutableStateOf<ContactEntity?>(null) }
 
     // Handle messages
     LaunchedEffect(uiState.errorMessage) {
@@ -216,7 +220,8 @@ fun ContactListScreen(
                 onToggleUserFavorite = { viewModel.toggleUserFavorite(it) },
                 onToggleSection = { viewModel.toggleSection(it) },
                 isSectionCollapsed = { viewModel.isSectionCollapsed(it) },
-                isUserFavorite = { viewModel.isUserFavorite(it) }
+                isUserFavorite = { viewModel.isUserFavorite(it) },
+                onShareQr = { qrContact = it }
             )
         } else {
             // Ungrouped flat list
@@ -226,11 +231,20 @@ fun ContactListScreen(
                         contact = contact,
                         serverUrl = serverUrl,
                         onTap = { onNavigateToContact(contact.id) },
-                        onToggleFavorite = { viewModel.toggleFavorite(contact.id) }
+                        onToggleFavorite = { viewModel.toggleFavorite(contact.id) },
+                        onShareQr = { qrContact = contact }
                     )
                 }
             }
         }
+    }
+
+    // QR code dialog
+    qrContact?.let { contact ->
+        ContactQrCodeDialog(
+            contact = contact,
+            onDismiss = { qrContact = null }
+        )
     }
 
     // Import result dialog
@@ -275,7 +289,8 @@ private fun GroupedContactList(
     onToggleUserFavorite: (String) -> Unit,
     onToggleSection: (String) -> Unit,
     isSectionCollapsed: (String) -> Boolean,
-    isUserFavorite: (String) -> Boolean
+    isUserFavorite: (String) -> Boolean,
+    onShareQr: (ContactEntity) -> Unit
 ) {
     LazyColumn {
         // ★ Favorites
@@ -290,7 +305,7 @@ private fun GroupedContactList(
             }
             if (!isSectionCollapsed("favorites")) {
                 items(uiState.favorites, key = { "fav_${it.id}" }) { contact ->
-                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) }, { onShareQr(contact) })
                 }
             }
         }
@@ -327,7 +342,7 @@ private fun GroupedContactList(
             }
             if (!isSectionCollapsed("all")) {
                 items(uiState.allContacts, key = { "all_${it.id}" }) { contact ->
-                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) }, { onShareQr(contact) })
                 }
             }
         }
@@ -344,7 +359,7 @@ private fun GroupedContactList(
             }
             if (!isSectionCollapsed("vault")) {
                 items(uiState.vaultContacts, key = { "vault_${it.id}" }) { contact ->
-                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) })
+                    ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) }, { onShareQr(contact) })
                 }
             }
         }
@@ -358,7 +373,8 @@ private fun ContactRow(
     contact: ContactEntity,
     serverUrl: String,
     onTap: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onShareQr: () -> Unit = {}
 ) {
     val colorPair = ColorUtils.applyContactRowColors(contact.color)
     val borderColor = ColorUtils.contactBorderColor(contact.color)
@@ -454,7 +470,7 @@ private fun ContactRow(
         }
 
         // QR share button
-        IconButton(onClick = { /* TODO: show QR dialog */ }, modifier = Modifier.size(32.dp)) {
+        IconButton(onClick = { onShareQr() }, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Default.QrCode, "Share QR", tint = CwocZoneHeaderBrown, modifier = Modifier.size(18.dp))
         }
     }

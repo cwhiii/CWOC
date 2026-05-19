@@ -46,7 +46,8 @@ data class HstItem(
     val startTime: String,
     val endTime: String?,
     val positionPercent: Float, // 0-100 position on the 24h bar
-    val icon: String // emoji icon based on chit type
+    val icon: String, // emoji icon based on chit type
+    val color: String? = null // chit color for background
 )
 
 /**
@@ -139,6 +140,17 @@ class OmniViewViewModel @Inject constructor(
     private val _showLayoutDialog = MutableStateFlow(false)
     val showLayoutDialog: StateFlow<Boolean> = _showLayoutDialog.asStateFlow()
 
+    // ─── HST mode and color mode ────────────────────────────────────────────
+
+    private val _hstMode = MutableStateFlow("both") // chits, both, weather, none
+    val hstMode: StateFlow<String> = _hstMode.asStateFlow()
+
+    private val _hstClockMode = MutableStateFlow("both") // hst, system, both
+    val hstClockMode: StateFlow<String> = _hstClockMode.asStateFlow()
+
+    private val _colorMode = MutableStateFlow("colored") // colored, normalized, mono
+    val colorMode: StateFlow<String> = _colorMode.asStateFlow()
+
     init {
         loadSectionConfig()
         observeChits()
@@ -149,6 +161,12 @@ class OmniViewViewModel @Inject constructor(
 
     fun toggleEmailExpanded() {
         _emailExpanded.value = !_emailExpanded.value
+    }
+
+    fun cycleHstMode() {
+        val modes = listOf("chits", "both", "weather", "none")
+        val idx = modes.indexOf(_hstMode.value)
+        _hstMode.value = modes[(idx + 1) % modes.size]
     }
 
     fun openLayoutDialog() {
@@ -201,6 +219,20 @@ class OmniViewViewModel @Inject constructor(
                     // Load email page size
                     settings.omniEmailCount?.toIntOrNull()?.let { count ->
                         _emailPageSize.value = count
+                    }
+
+                    // Load HST clock mode
+                    settings.omniHstClockMode?.let { mode ->
+                        if (mode.isNotBlank() && mode != "null") {
+                            _hstClockMode.value = mode
+                        }
+                    }
+
+                    // Load color mode
+                    settings.omniNormalizeColors?.let { mode ->
+                        if (mode.isNotBlank() && mode != "null") {
+                            _colorMode.value = mode
+                        }
                     }
 
                     // Parse omni layout
@@ -373,7 +405,8 @@ class OmniViewViewModel @Inject constructor(
                     parseToInstant(end)?.atZone(zone)?.toLocalDateTime()?.let { formatHstTime(it) }
                 },
                 positionPercent = pct,
-                icon = icon
+                icon = icon,
+                color = chit.color
             )
         }.sortedBy { it.positionPercent }
     }

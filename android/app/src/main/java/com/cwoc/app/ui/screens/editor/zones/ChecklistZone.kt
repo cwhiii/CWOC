@@ -72,6 +72,7 @@ import java.util.UUID
  * @param onChecklistChange Callback invoked with the updated JSON string on every change
  * @param onUndo Callback exposed for external undo triggering (e.g., from toolbar)
  */
+@Deprecated("Use ChecklistZoneV2 — this legacy zone has swipe-to-delete, up/down arrows, and collapsible behavior that don't match the mobile browser.")
 @Composable
 fun ChecklistZone(
     checklistJson: String?,

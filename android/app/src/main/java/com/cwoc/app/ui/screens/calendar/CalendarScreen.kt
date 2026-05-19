@@ -14,25 +14,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,7 +37,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.ui.components.WeatherIndicator
 import com.cwoc.app.ui.components.LocationIndicator
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.util.DateUtils
+import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
 import java.time.LocalDate
 
 /**
@@ -56,24 +51,42 @@ import java.time.LocalDate
 fun CalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
     onNavigateToEditor: (String) -> Unit = {},
-    onNavigateToNewChitWithPrefill: (start: String, end: String) -> Unit = { _, _ -> }
+    onNavigateToNewChitWithPrefill: (start: String, end: String) -> Unit = { _, _ -> },
+    sidebarStateViewModel: SidebarStateViewModel? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // View mode toggle
-        ViewModeToggle(
-            currentMode = uiState.viewMode,
-            onModeChanged = viewModel::setViewMode
-        )
+    // Sync sidebar state → CalendarViewModel (period, date, monthMode)
+    val sidebarState = sidebarStateViewModel?.state?.collectAsState()?.value
+    LaunchedEffect(sidebarState?.currentPeriod) {
+        if (sidebarState != null) {
+            val mode = when (sidebarState.currentPeriod) {
+                "Itinerary" -> CalendarViewMode.ITINERARY
+                "Day" -> CalendarViewMode.DAY
+                "Work" -> CalendarViewMode.WORK_HOURS
+                "Week" -> CalendarViewMode.WEEK
+                "SevenDay" -> CalendarViewMode.X_DAY
+                "Month" -> CalendarViewMode.MONTH
+                "Year" -> CalendarViewMode.YEAR
+                else -> CalendarViewMode.WEEK
+            }
+            if (uiState.viewMode != mode) {
+                viewModel.setViewMode(mode)
+            }
+        }
+    }
+    LaunchedEffect(sidebarState?.currentDate) {
+        if (sidebarState != null && uiState.selectedDate != sidebarState.currentDate) {
+            viewModel.setDate(sidebarState.currentDate)
+        }
+    }
+    LaunchedEffect(sidebarState?.monthMode) {
+        if (sidebarState != null && uiState.monthMode != sidebarState.monthMode) {
+            viewModel.setMonthMode(sidebarState.monthMode)
+        }
+    }
 
-        // Date navigation header
-        DateNavigationHeader(
-            title = uiState.headerTitle,
-            onPrevious = viewModel::previousPeriod,
-            onNext = viewModel::nextPeriod,
-            onToday = viewModel::goToToday
-        )
+    Column(modifier = Modifier.fillMaxSize()) {
 
         // Event display based on view mode
         when {
@@ -139,35 +152,15 @@ fun CalendarScreen(
                         )
                     }
                     CalendarViewMode.MONTH -> {
-                        Column {
-                            // Compress/Scroll toggle
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                FilterChip(
-                                    selected = uiState.monthMode == "compress",
-                                    onClick = { viewModel.setMonthMode("compress") },
-                                    label = { Text("Compress") }
-                                )
-                                FilterChip(
-                                    selected = uiState.monthMode == "scroll",
-                                    onClick = { viewModel.setMonthMode("scroll") },
-                                    label = { Text("Scroll") }
-                                )
+                        MonthView(
+                            events = uiState.events,
+                            selectedDate = uiState.selectedDate,
+                            weekStartDay = "sunday",
+                            monthMode = uiState.monthMode,
+                            onDayTap = { date ->
+                                viewModel.setViewMode(CalendarViewMode.DAY)
                             }
-                            MonthView(
-                                events = uiState.events,
-                                selectedDate = uiState.selectedDate,
-                                weekStartDay = "sunday",
-                                monthMode = uiState.monthMode,
-                                onDayTap = { date ->
-                                    viewModel.setViewMode(CalendarViewMode.DAY)
-                                }
-                            )
-                        }
+                        )
                     }
                     CalendarViewMode.YEAR -> {
                         YearView(
@@ -213,74 +206,6 @@ fun CalendarScreen(
 }
 
 @Composable
-private fun ViewModeToggle(
-    currentMode: CalendarViewMode,
-    onModeChanged: (CalendarViewMode) -> Unit
-) {
-    val modes = listOf(
-        CalendarViewMode.DAY to "Day",
-        CalendarViewMode.WEEK to "Week",
-        CalendarViewMode.MONTH to "Month",
-        CalendarViewMode.YEAR to "Year",
-        CalendarViewMode.ITINERARY to "Itinerary",
-        CalendarViewMode.X_DAY to "X-Day",
-        CalendarViewMode.WORK_HOURS to "Work"
-    )
-
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        itemsIndexed(modes) { _, (mode, label) ->
-            FilterChip(
-                selected = currentMode == mode,
-                onClick = { onModeChanged(mode) },
-                label = { Text(label) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun DateNavigationHeader(
-    title: String,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onToday: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        IconButton(onClick = onPrevious) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Previous")
-        }
-
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        IconButton(onClick = onToday) {
-            Icon(Icons.Default.Home, contentDescription = "Today")
-        }
-
-        IconButton(onClick = onNext) {
-            Icon(Icons.Default.ArrowForward, contentDescription = "Next")
-        }
-    }
-}
-
-@Composable
 private fun EventList(
     events: List<ChitEntity>,
     onEventTap: (ChitEntity) -> Unit = {}
@@ -306,16 +231,16 @@ private fun EventList(
 
 @Composable
 private fun EventCard(event: ChitEntity, onTap: () -> Unit = {}) {
-    val eventColor = event.color?.let { parseColor(it) }
-        ?: MaterialTheme.colorScheme.primary
+    // Full background color matching web's applyChitColors(el, chitColor(chit))
+    val cardBgColor = remember(event.color) { CwocChitCardStyle.resolveChitBgColor(event.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onTap() },
         colors = CardDefaults.cardColors(
-            // B2 sub-item 4: background tint from chit color
-            containerColor = eventColor.copy(alpha = 0.08f)
+            containerColor = cardBgColor
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -323,21 +248,12 @@ private fun EventCard(event: ChitEntity, onTap: () -> Unit = {}) {
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Color indicator dot
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(eventColor)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.title ?: "Untitled Event",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
+                    color = cardTextColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -348,7 +264,7 @@ private fun EventCard(event: ChitEntity, onTap: () -> Unit = {}) {
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = cardTextColor.copy(alpha = 0.7f)
                     )
                 }
 

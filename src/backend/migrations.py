@@ -3274,6 +3274,59 @@ def migrate_add_default_view():
             conn.close()
 
 
+# ── Android Settings Parity: add missing columns ─────────────────────────
+
+def migrate_add_android_settings_parity():
+    """Add settings columns needed for Android app parity.
+
+    These columns were managed by the Android app (Room migration 7→8) but
+    never existed on the server. Adding them enables proper bidirectional sync.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+
+        new_columns = {
+            "clock_orientation": "TEXT",
+            "hidden_views": "TEXT",
+            "combine_alerts": "TEXT DEFAULT '0'",
+            "projects_show_child_count": "TEXT DEFAULT '0'",
+            "projects_show_checklist_count": "TEXT DEFAULT '0'",
+            "email_check_interval": "TEXT DEFAULT '15'",
+            "email_max_pull": "TEXT DEFAULT '100'",
+            "email_signature": "TEXT",
+            "email_bundles_count_display": "TEXT",
+            "instance_name": "TEXT",
+            "welcome_message": "TEXT",
+            "audit_log_pruning_enabled": "TEXT DEFAULT '0'",
+            "tailscale_enabled": "TEXT DEFAULT '0'",
+            "tailscale_auth_key": "TEXT",
+            "ntfy_enabled": "TEXT DEFAULT '0'",
+            "ha_enabled": "TEXT DEFAULT '0'",
+            "ha_poll_interval": "TEXT DEFAULT '30'",
+            "kiosk_selected_tags": "TEXT",
+        }
+
+        for col_name, col_type in new_columns.items():
+            if col_name not in existing:
+                cursor.execute(f"ALTER TABLE settings ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Added {col_name} column to settings table")
+
+        conn.commit()
+        logger.info("Android settings parity migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_android_settings_parity: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 # ── Mobile Sync: sync_version columns and indexes ────────────────────────
 
 def migrate_add_sync_version():

@@ -103,6 +103,29 @@ fun SettingsEntity.toPushDto(): SettingsPushDto {
         put("email_group_by", emailGroupBy)
         // Timezone override
         put("timezone_override", timezoneOverride)
+
+        // === Migration 7→8 fields ===
+        // General tab
+        put("clock_orientation", clockOrientation)
+        put("hidden_views", hiddenViews?.let { gson.fromJson(it, Any::class.java) })
+        put("combine_alerts", combineAlerts)
+        // Views tab
+        put("projects_show_child_count", projectsShowChildCount)
+        put("projects_show_checklist_count", projectsShowChecklistCount)
+        // Email tab
+        put("email_check_interval", emailCheckInterval)
+        put("email_max_pull", emailMaxPull)
+        put("email_signature", emailSignature)
+        // Admin tab
+        put("instance_name", instanceName)
+        put("welcome_message", welcomeMessage)
+        put("audit_log_pruning_enabled", auditLogPruningEnabled)
+        put("tailscale_enabled", tailscaleEnabled)
+        put("tailscale_auth_key", tailscaleAuthKey)
+        put("ntfy_enabled", ntfyEnabled)
+        put("ha_enabled", haEnabled)
+        put("ha_poll_interval", haPollInterval)
+        put("kiosk_selected_tags", kioskSelectedTags?.let { gson.fromJson(it, Any::class.java) })
     }
 
     return SettingsPushDto(

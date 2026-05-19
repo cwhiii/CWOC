@@ -198,6 +198,10 @@ class ChitEditorViewModel @Inject constructor(
     private val _contactNames = MutableStateFlow<List<String>>(emptyList())
     val contactNames: StateFlow<List<String>> = _contactNames.asStateFlow()
 
+    /** Map of contact display name → color hex for chip colorization. */
+    private val _contactColors = MutableStateFlow<Map<String, String>>(emptyMap())
+    val contactColors: StateFlow<Map<String, String>> = _contactColors.asStateFlow()
+
     init {
         if (!isNew) {
             loadExistingChit()
@@ -290,7 +294,7 @@ class ChitEditorViewModel @Inject constructor(
     }
 
     /**
-     * Loads all active contact display names for the People zone autocomplete.
+     * Loads all active contact display names and colors for the People zone.
      */
     private fun loadContactNames() {
         viewModelScope.launch {
@@ -299,6 +303,16 @@ class ChitEditorViewModel @Inject constructor(
                     contact.displayName
                         ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ").ifBlank { null }
                 }
+                // Build color map: display name → color hex
+                val colorMap = mutableMapOf<String, String>()
+                contacts.forEach { contact ->
+                    val name = contact.displayName
+                        ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ").ifBlank { null }
+                    if (name != null && !contact.color.isNullOrBlank()) {
+                        colorMap[name] = contact.color
+                    }
+                }
+                _contactColors.value = colorMap
             }
         }
     }

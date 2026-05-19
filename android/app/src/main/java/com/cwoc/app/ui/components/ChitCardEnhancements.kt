@@ -62,7 +62,8 @@ fun TagChipsRow(
     tags: List<String>?,
     modifier: Modifier = Modifier,
     tagColorMap: Map<String, String>? = null,
-    maxTags: Int = 4
+    maxTags: Int = 4,
+    overflowTextColor: Color? = null
 ) {
     if (tags.isNullOrEmpty()) return
 
@@ -79,7 +80,7 @@ fun TagChipsRow(
             Text(
                 text = "+${tags.size - maxTags}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = overflowTextColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 2.dp)
             )
         }
@@ -182,7 +183,8 @@ fun parseHexColor(hex: String?): Color? {
 @Composable
 fun ChecklistProgressBadge(
     checklistJson: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textColor: Color? = null
 ) {
     if (checklistJson.isNullOrBlank()) return
 
@@ -202,14 +204,14 @@ fun ChecklistProgressBadge(
             modifier = Modifier
                 .width(40.dp)
                 .height(4.dp),
-            color = if (checked == total) Color(0xFF4A6741) else Color(0xFF8B5A2B),
-            trackColor = Color(0xFFEDE0D4)
+            color = if (checked == total) Color(0xFF4A6741) else (textColor ?: Color(0xFF8B5A2B)),
+            trackColor = Color(0xFFEDE0D4).copy(alpha = if (textColor != null) 0.3f else 1f)
         )
         // Count text
         Text(
             text = "☑ $checked/$total",
             style = MaterialTheme.typography.labelSmall,
-            color = if (checked == total) Color(0xFF4A6741) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (checked == total) Color(0xFF4A6741) else (textColor ?: MaterialTheme.colorScheme.onSurfaceVariant),
             fontWeight = if (checked == total) FontWeight.Bold else FontWeight.Normal
         )
     }
@@ -258,7 +260,8 @@ private fun countChecklistItems(items: List<Map<String, Any>>): Pair<Int, Int> {
 fun PeopleChipsRow(
     people: List<String>?,
     modifier: Modifier = Modifier,
-    maxPeople: Int = 3
+    maxPeople: Int = 3,
+    overflowTextColor: Color? = null
 ) {
     if (people.isNullOrEmpty()) return
 
@@ -275,7 +278,7 @@ fun PeopleChipsRow(
             Text(
                 text = "+${people.size - maxPeople}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = overflowTextColor ?: MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -327,7 +330,8 @@ private fun PersonChip(name: String) {
 @Composable
 fun WeatherIndicator(
     weatherDataJson: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textColor: Color? = null
 ) {
     if (weatherDataJson.isNullOrBlank()) return
 
@@ -346,7 +350,7 @@ fun WeatherIndicator(
         Text(
             text = "${weatherInfo.high}°/${weatherInfo.low}°",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = textColor ?: MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -430,7 +434,8 @@ fun Modifier.overdueBorder(chit: ChitEntity): Modifier {
 @Composable
 fun LocationIndicator(
     location: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textColor: Color? = null
 ) {
     if (location.isNullOrBlank()) return
 
@@ -446,7 +451,7 @@ fun LocationIndicator(
         Text(
             text = location,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

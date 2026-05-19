@@ -9,12 +9,14 @@ import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.dao.NotificationDao
 import com.cwoc.app.data.local.dao.SettingsDao
+import com.cwoc.app.data.local.dao.StandaloneAlertDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.entity.AttachmentMetadata
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.local.entity.NotificationEntity
 import com.cwoc.app.data.local.entity.SettingsEntity
+import com.cwoc.app.data.local.entity.StandaloneAlertEntity
 import com.cwoc.app.data.local.entity.SyncMetadataEntity
 
 @Database(
@@ -24,9 +26,10 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
         SettingsEntity::class,
         AttachmentMetadata::class,
         SyncMetadataEntity::class,
-        NotificationEntity::class
+        NotificationEntity::class,
+        StandaloneAlertEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -37,4 +40,5 @@ abstract class CwocDatabase : RoomDatabase() {
     abstract fun attachmentMetadataDao(): AttachmentMetadataDao
     abstract fun syncMetadataDao(): SyncMetadataDao
     abstract fun notificationDao(): NotificationDao
+    abstract fun standaloneAlertDao(): StandaloneAlertDao
 }

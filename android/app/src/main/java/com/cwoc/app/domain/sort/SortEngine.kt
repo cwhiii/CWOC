@@ -61,13 +61,15 @@ object SortEngine {
 
     /**
      * Status ordinal mapping for consistent ordering.
-     * ToDo → In Progress → Blocked → Complete
+     * ToDo → In Progress → Blocked → Complete → Rejected
+     * Matches web's default status sort: ToDo=1, InProgress=2, Blocked=3, Complete=4, Rejected=5
      */
     private val STATUS_ORDINAL: Map<String, Int> = mapOf(
         "ToDo" to 1,
         "In Progress" to 2,
         "Blocked" to 3,
-        "Complete" to 4
+        "Complete" to 4,
+        "Rejected" to 5
     )
 
     /**

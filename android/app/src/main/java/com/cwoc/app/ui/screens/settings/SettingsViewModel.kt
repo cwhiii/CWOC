@@ -1707,7 +1707,7 @@ class SettingsViewModel @Inject constructor(
             mapDefaultZoom = entity.mapDefaultZoom ?: "",
 
             // --- Collections Tab ---
-            sharedTags = entity.sharedTags ?: "[]",
+            sharedTags = entity.tags ?: "[]",
             customColors = entity.customColors ?: "[]",
             savedLocations = entity.savedLocations ?: "[]",
             defaultNotifications = entity.defaultNotifications ?: "{\"start_notifications\":[],\"due_notifications\":[]}",
@@ -1873,7 +1873,7 @@ class SettingsViewModel @Inject constructor(
             mapDefaultZoom = formState.mapDefaultZoom.ifEmpty { null },
 
             // --- Collections Tab ---
-            sharedTags = formState.sharedTags,
+            tags = formState.sharedTags,
             customColors = formState.customColors,
             savedLocations = formState.savedLocations,
             defaultNotifications = formState.defaultNotifications,

@@ -22,17 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Contacts
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Help
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,44 +37,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 
-/**
- * A single item in the views panel — label + icon + route.
- */
-data class ViewsPanelEntry(
-    val label: String,
-    val icon: ImageVector,
-    val route: String
-)
+
 
 /**
- * All other (non-tab) views in the app.
- */
-val ALL_VIEWS_OTHER = listOf(
-    ViewsPanelEntry("Search", Icons.Default.Search, Screen.Search.route),
-    ViewsPanelEntry("Notifications", Icons.Default.Notifications, Screen.Notifications.route),
-    ViewsPanelEntry("Settings", Icons.Default.Settings, Screen.Settings.route),
-    ViewsPanelEntry("Contacts", Icons.Default.Contacts, Screen.Contacts.route),
-    ViewsPanelEntry("Weather", Icons.Default.Cloud, Screen.Weather.route),
-    ViewsPanelEntry("Map", Icons.Default.Map, Screen.Map.route),
-    ViewsPanelEntry("Trash", Icons.Default.Delete, Screen.Trash.route),
-    ViewsPanelEntry("Help", Icons.Default.Help, Screen.Help.route),
-    ViewsPanelEntry("Audit Log", Icons.Default.Help, Screen.AuditLog.route),
-    ViewsPanelEntry("Custom Objects", Icons.Default.Settings, Screen.CustomObjects.route),
-    ViewsPanelEntry("Rules", Icons.Default.Settings, Screen.RulesManager.route),
-    ViewsPanelEntry("User Admin", Icons.Default.People, Screen.UserAdmin.route),
-    ViewsPanelEntry("Attachments", Icons.Default.AttachFile, Screen.Attachments.route)
-)
-
-/**
- * Right-swipe views panel — slides in from the right edge showing the FULL list
- * of ALL available views in the app. Matches the mobile web's "Views" panel behavior:
+ * Right-swipe views panel — slides in from the right edge showing the user's
+ * configured visible views. Matches the mobile web's tab bar behavior:
+ * only shows views enabled in the view_order setting, in their configured order.
  * - Swipe left from right edge to open
  * - Swipe right to close
  * - Tap backdrop to close
  * - Tap a view to navigate to it
- *
- * Shows C CAPTN views first (in the order determined by view_order setting),
- * then a divider, then all other screens.
  */
 @Composable
 fun ViewsPanel(
@@ -164,28 +125,6 @@ fun ViewsPanel(
                             isSelected = isSelected,
                             onClick = {
                                 onNavigate(tab.route)
-                                onDismiss()
-                            }
-                        )
-                    }
-
-                    // Divider between main views and other screens
-                    Spacer(modifier = Modifier.height(8.dp))
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF8B5A2B).copy(alpha = 0.2f)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // All other screens
-                    ALL_VIEWS_OTHER.forEach { entry ->
-                        val isSelected = entry.route == currentRoute
-                        ViewsPanelItem(
-                            label = entry.label,
-                            icon = entry.icon,
-                            isSelected = isSelected,
-                            onClick = {
-                                onNavigate(entry.route)
                                 onDismiss()
                             }
                         )

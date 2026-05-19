@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.local.entity.ChitEntity
-import com.cwoc.app.ui.components.parseHexColor
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -221,7 +221,9 @@ private fun TimeGridEventCard(
     heightPx: Float,
     onTap: () -> Unit
 ) {
-    val eventColor = parseHexColor(event.color) ?: MaterialTheme.colorScheme.primary
+    // Full background color matching web's applyChitColors(ev, chitColor(chit))
+    val eventColor = CwocChitCardStyle.resolveChitBgColor(event.color)
+    val textColor = CwocChitCardStyle.contrastTextColor(eventColor)
     val density = LocalDensity.current
 
     Box(
@@ -233,7 +235,7 @@ private fun TimeGridEventCard(
             .height(with(density) { heightPx.toDp() })
             .padding(horizontal = 2.dp, vertical = 1.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(eventColor.copy(alpha = 0.2f))
+            .background(eventColor)
             .clickable { onTap() }
             .pointerInput(Unit) {
                 // C3: Long-press to initiate drag-to-move
@@ -255,7 +257,7 @@ private fun TimeGridEventCard(
                 text = event.title ?: "Untitled",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
-                color = eventColor,
+                color = textColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -265,7 +267,7 @@ private fun TimeGridEventCard(
                     Text(
                         text = timeStr,
                         style = MaterialTheme.typography.labelSmall,
-                        color = eventColor.copy(alpha = 0.7f),
+                        color = textColor.copy(alpha = 0.7f),
                         fontSize = 9.sp
                     )
                 }
@@ -276,7 +278,7 @@ private fun TimeGridEventCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .background(eventColor.copy(alpha = 0.4f), RoundedCornerShape(2.dp))
+                    .background(textColor.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
                     .pointerInput(Unit) {
                         detectDragGestures { _, dragAmount ->
                             // Drag delta in Y direction would resize the event
@@ -290,7 +292,7 @@ private fun TimeGridEventCard(
                 Text(
                     text = "⋯",
                     fontSize = 8.sp,
-                    color = eventColor
+                    color = textColor
                 )
             }
         }
@@ -612,7 +614,8 @@ private fun WeekEventChip(
     heightPx: Float,
     onTap: () -> Unit
 ) {
-    val eventColor = parseHexColor(event.color) ?: MaterialTheme.colorScheme.primary
+    val eventBgColor = CwocChitCardStyle.resolveChitBgColor(event.color)
+    val eventTextColor = CwocChitCardStyle.contrastTextColor(eventBgColor)
     val density = LocalDensity.current
 
     Box(
@@ -622,14 +625,14 @@ private fun WeekEventChip(
             .height(with(density) { heightPx.toDp() })
             .padding(horizontal = 1.dp, vertical = 0.5.dp)
             .clip(RoundedCornerShape(2.dp))
-            .background(eventColor.copy(alpha = 0.3f))
+            .background(eventBgColor)
             .clickable { onTap() }
             .padding(2.dp)
     ) {
         Text(
             text = event.title ?: "",
             style = MaterialTheme.typography.labelSmall,
-            color = eventColor,
+            color = eventTextColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontSize = 8.sp

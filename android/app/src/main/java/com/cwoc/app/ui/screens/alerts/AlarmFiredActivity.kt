@@ -10,7 +10,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,7 +75,6 @@ class AlarmFiredActivity : ComponentActivity() {
         // Show over lock screen
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        enableEdgeToEdge()
 
         // Extract intent extras
         val alarmTitle = intent.getStringExtra("alarm_title") ?: "Alarm"

@@ -1,3 +1,15 @@
+## m20260518.1913
+
+Android DateZone: Added accessibility semantics/tooltip to Due Complete checkbox ("Yes, this is the same as the 'Status' Complete.") and Point in Time "Now" button ("Set to current date and time"), made the entire Due Complete label row tappable for easier interaction.
+
+## s20260518.1439
+
+Fixed Android settings sync: tags, saved locations, and all other Collections/Admin/Email settings now properly sync bidirectionally. Root causes: (1) tag tree was reading from wrong DB column (shared_tags instead of tags), (2) SettingsDto was missing 18 fields added in Room migration 7→8 so server data was silently dropped on pull, (3) SettingsPushMapper wasn't sending those fields so changes never reached the server, (4) server VALID_COLUMNS and sync push fields didn't include the new columns. Added server migration for the new settings columns.
+
+## m20260518.1429
+
+Fixed Android contacts: people colors now display at full opacity matching the web (was 20% alpha), QR code share buttons now actually open the QR dialog instead of being a no-op stub, and the People list screen now has the full navigation chrome (hamburger menu, top bar, tab bar) so users can navigate to other sections of the app.
+
 ## m20260518.0727
 
 Fixed Android contact editor color picker to show the full 20-color palette matching the web version (was only showing 7). Color picker now also loads user's custom colors from settings. Fixed profile image section to actually load and display contact photos using Coil (was showing a placeholder emoji). Added "Contact" / "Profile" type badge below the profile image matching the web's header badge.

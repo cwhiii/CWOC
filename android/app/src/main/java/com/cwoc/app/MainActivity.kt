@@ -3,7 +3,6 @@ package com.cwoc.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -11,9 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DrawerValue
@@ -21,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -28,6 +26,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,20 +40,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.repository.AuthEvent
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncEngine
 import com.cwoc.app.data.sync.SyncWorker
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.ui.components.ProfileMenu
 import com.cwoc.app.ui.components.ClockModal
 import com.cwoc.app.ui.components.CalculatorSheet
 import com.cwoc.app.ui.navigation.CCaptnTab
-import com.cwoc.app.ui.navigation.CCaptnTabRow
+
 import com.cwoc.app.ui.navigation.CwocNavGraph
 import com.cwoc.app.ui.navigation.RightEdgeSwipeDetector
 import com.cwoc.app.ui.navigation.Screen
@@ -66,6 +69,7 @@ import com.cwoc.app.ui.theme.CwocHeaderBg
 import com.cwoc.app.ui.viewmodel.EmailBadgeViewModel
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import com.cwoc.app.ui.viewmodel.NotificationBadgeViewModel
+import com.cwoc.app.ui.viewmodel.ProfileMenuViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -82,24 +86,33 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var syncEngine: SyncEngine
+
+    @Inject
+    lateinit var syncMetadataDao: SyncMetadataDao
+
     private val filterSortViewModel: FilterSortViewModel by viewModels()
     private val notificationBadgeViewModel: NotificationBadgeViewModel by viewModels()
     private val emailBadgeViewModel: EmailBadgeViewModel by viewModels()
+    private val profileMenuViewModel: ProfileMenuViewModel by viewModels()
 
     private val sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
             CwocApp(
                 authRepository = authRepository,
                 filterSortViewModel = filterSortViewModel,
                 notificationBadgeViewModel = notificationBadgeViewModel,
                 emailBadgeViewModel = emailBadgeViewModel,
+                profileMenuViewModel = profileMenuViewModel,
                 chitRepository = chitRepository,
                 settingsRepository = settingsRepository,
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                syncEngine = syncEngine,
+                syncMetadataDao = syncMetadataDao
             )
         }
     }
@@ -112,9 +125,12 @@ private fun CwocApp(
     filterSortViewModel: FilterSortViewModel,
     notificationBadgeViewModel: NotificationBadgeViewModel,
     emailBadgeViewModel: EmailBadgeViewModel,
+    profileMenuViewModel: ProfileMenuViewModel,
     chitRepository: ChitRepository,
     settingsRepository: SettingsRepository,
-    sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel
+    sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel,
+    syncEngine: SyncEngine,
+    syncMetadataDao: SyncMetadataDao
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,6 +145,14 @@ private fun CwocApp(
 
     // Email tab badge unread count
     val emailUnreadCount by emailBadgeViewModel.unreadCount.collectAsState()
+
+    // Profile menu notifications (from server API, matching web behavior)
+    val profileNotifications by profileMenuViewModel.notifications.collectAsState()
+    val profileNotifCount by profileMenuViewModel.pendingCount.collectAsState()
+
+    // User display name from AuthRepository
+    val userDisplayName by authRepository.displayName.collectAsState()
+    val currentUserId by authRepository.userId.collectAsState()
 
     // Settings for profile menu (username) and view order
     val settingsFlow = remember { settingsRepository.settings }
@@ -172,6 +196,13 @@ private fun CwocApp(
         }
     }
 
+    // Fetch user profile (display name) on startup when authenticated
+    LaunchedEffect(Unit) {
+        if (authRepository.isAuthenticated()) {
+            authRepository.fetchUserProfile()
+        }
+    }
+
     // Enqueue SyncWorker periodic sync when navigating away from login
     LaunchedEffect(currentRoute) {
         if (currentRoute != null && currentRoute != Screen.Login.route) {
@@ -199,7 +230,8 @@ private fun CwocApp(
         Screen.Projects.route,
         Screen.Indicators.route,
         Screen.Email.route,
-        Screen.OmniView.route
+        Screen.OmniView.route,
+        Screen.Contacts.route
     )
     val showNavChrome = currentRoute != null && currentRoute in cCaptnRoutes
 
@@ -208,7 +240,11 @@ private fun CwocApp(
         if (showNavChrome) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
+                gesturesEnabled = !viewsPanelOpen,
                 drawerContent = {
+                    ModalDrawerSheet(
+                        drawerContainerColor = Color(0xFFFDF5E6) // Parchment light
+                    ) {
                     SidebarContent(
                         selectedTab = selectedTab,
                         onNavigate = { screen ->
@@ -244,6 +280,7 @@ private fun CwocApp(
                         onCalculatorClick = { showCalculatorSheet = true },
                         onReferenceClick = { showReferenceDialog = true }
                     )
+                    }
                 }
             ) {
                 ParchmentBackground {
@@ -252,84 +289,7 @@ private fun CwocApp(
                     snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                     topBar = {
                         TopAppBar(
-                            title = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // "Omni" is tappable — navigates directly to Omni view
-                                    Text(
-                                        text = "Omni",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.clickable {
-                                            selectedTab = CCaptnTab.Omni
-                                            navController.navigate(Screen.OmniView.route) {
-                                                popUpTo(navController.graph.startDestinationId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    )
-                                    Text(
-                                        text = " Chits",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = {
-                                    scope.launch { drawerState.open() }
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Open navigation drawer"
-                                    )
-                                }
-                            },
-                            actions = {
-                                // Profile menu (avatar + dropdown with logout/switch user)
-                                ProfileMenu(
-                                    username = currentUsername,
-                                    displayName = null,
-                                    onLogout = {
-                                        authRepository.clearToken()
-                                        navController.navigate(Screen.Login.route) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
-                                    },
-                                    onSwitchUser = {
-                                        authRepository.clearToken()
-                                        navController.navigate(Screen.Login.route) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
-                                    }
-                                )
-
-                                // Views button — shows current tab name, opens views panel
-                                androidx.compose.material3.TextButton(
-                                    onClick = { viewsPanelOpen = true }
-                                ) {
-                                    Text(
-                                        text = "☰ ${selectedTab.label}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = CwocHeaderBg
-                            )
-                        )
-                    }
-                ) { innerPadding ->
-                    Column(modifier = Modifier.padding(innerPadding)) {
-                        // C CAPTN tab row with swipe-to-change-tab gesture
-                        // Swipe left → next tab, swipe right → previous tab
-                        // Matches mobile web behavior on the header area
-                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
                                 .pointerInput(selectedTab, orderedTabs) {
                                     detectHorizontalDragGestures { _, dragAmount ->
                                         val curIdx = orderedTabs.indexOf(selectedTab)
@@ -359,37 +319,142 @@ private fun CwocApp(
                                             }
                                         }
                                     }
-                                }
-                        ) {
-                            CCaptnTabRow(
-                                selectedTab = selectedTab,
-                                onTabSelected = { tab ->
-                                    selectedTab = tab
-                                    navController.navigate(tab.route) {
-                                        popUpTo(navController.graph.startDestinationId) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
                                 },
-                                tabCounts = mapOf(CCaptnTab.Email to emailUnreadCount)
-                                    .filterValues { it > 0 },
-                                viewOrder = viewOrder
-                            )
-                        }
+                            title = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // "Omni" is tappable — navigates directly to Omni view
+                                    Text(
+                                        text = "Omni",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.clickable {
+                                            selectedTab = CCaptnTab.Omni
+                                            navController.navigate(Screen.OmniView.route) {
+                                                popUpTo(navController.graph.startDestinationId) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    )
+                                    Text(
+                                        text = " Chits",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        viewsPanelOpen = false
+                                        drawerState.open()
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = "Open navigation drawer"
+                                    )
+                                }
+                            },
+                            actions = {
+                                // Profile menu (avatar + dropdown with logout/switch user/view profile/notifications)
+                                ProfileMenu(
+                                    username = currentUsername,
+                                    displayName = userDisplayName,
+                                    onLogout = {
+                                        authRepository.clearToken()
+                                        navController.navigate(Screen.Login.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    },
+                                    onSwitchUser = {
+                                        authRepository.clearToken()
+                                        navController.navigate(Screen.Login.route) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    },
+                                    onViewProfile = {
+                                        val uid = currentUserId
+                                        if (uid != null) {
+                                            navController.navigate(Screen.ContactEditor.createProfileRoute(uid))
+                                        }
+                                    },
+                                    onViewNotifications = {
+                                        navController.navigate(Screen.Notifications.route)
+                                    },
+                                    notificationCount = profileNotifCount,
+                                    notifications = profileNotifications,
+                                    onAcceptNotification = { id -> profileMenuViewModel.acceptNotification(id) },
+                                    onDeclineNotification = { id -> profileMenuViewModel.declineNotification(id) },
+                                    onDismissNotification = { id -> profileMenuViewModel.dismissNotification(id) },
+                                    onSnoozeNotification = { id -> profileMenuViewModel.snoozeNotification(id) },
+                                    onNavigateToChit = { chitId ->
+                                        navController.navigate(Screen.Editor.createRoute(chitId))
+                                    }
+                                )
 
+                                // Views button — shows current tab name, opens views panel
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        scope.launch { drawerState.close() }
+                                        viewsPanelOpen = true
+                                    }
+                                ) {
+                                    Text(
+                                        text = "☰ ${selectedTab.label}",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = CwocHeaderBg
+                            )
+                        )
+                    }
+                ) { innerPadding ->
+                    // Pull-to-refresh wrapping the entire content area (tab row + views)
+                    val pullToRefreshState = rememberPullToRefreshState()
+                    if (pullToRefreshState.isRefreshing) {
+                        LaunchedEffect(true) {
+                            try {
+                                val metadata = syncMetadataDao.getMetadata()
+                                val since = metadata?.highWaterMark ?: 0
+                                syncEngine.performSync(since)
+                            } finally {
+                                pullToRefreshState.endRefresh()
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                    ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
                         // Main content area with right-edge swipe detector
-                        Box(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                        ) {
                             RightEdgeSwipeDetector(
-                                onOpenPanel = { viewsPanelOpen = true }
+                                onOpenPanel = {
+                                    if (drawerState.currentValue == DrawerValue.Closed) {
+                                        viewsPanelOpen = true
+                                    }
+                                }
                             ) {
                                 CwocNavGraph(
                                     navController = navController,
                                     isAuthenticated = isAuthenticated,
                                     modifier = Modifier.fillMaxSize(),
                                     filterSortViewModel = filterSortViewModel,
-                                    chitRepository = chitRepository
+                                    chitRepository = chitRepository,
+                                    sidebarStateViewModel = sidebarStateViewModel,
+                                    settingsRepository = settingsRepository
                                 )
                             }
 
@@ -411,6 +476,12 @@ private fun CwocApp(
                             )
                         }
                     }
+
+                    PullToRefreshContainer(
+                        state = pullToRefreshState,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                    } // Box (pull-to-refresh)
                 }
                 } // ParchmentBackground
             }
@@ -418,14 +489,14 @@ private fun CwocApp(
             // Full-screen pages: Login, Editor, Settings, Contacts, Trash, Help, Weather, etc.
             // No drawer, no top bar, no C CAPTN tabs
             ParchmentBackground {
-                Box(modifier = Modifier.systemBarsPadding()) {
-                    CwocNavGraph(
-                        navController = navController,
-                        isAuthenticated = isAuthenticated,
-                        filterSortViewModel = filterSortViewModel,
-                        chitRepository = chitRepository
-                    )
-                }
+                CwocNavGraph(
+                    navController = navController,
+                    isAuthenticated = isAuthenticated,
+                    filterSortViewModel = filterSortViewModel,
+                    chitRepository = chitRepository,
+                    sidebarStateViewModel = sidebarStateViewModel,
+                    settingsRepository = settingsRepository
+                )
             }
         }
 

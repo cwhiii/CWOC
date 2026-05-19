@@ -219,17 +219,20 @@ private fun ChecklistChitCard(
         tag !in SYSTEM_TAGS && !tag.startsWith("CWOC_System/") && !tag.startsWith("cwoc_system/")
     }
 
+    // Full background color matching web's applyChitColors(el, chitColor(chit))
+    val cardBgColor = remember(chit.color) { CwocChitCardStyle.resolveChitBgColor(chit.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize()
-            .chitColorBorder(chit.color)
             .combinedClickable(
                 onClick = onCardTap,
                 onLongClick = onCardLongPress
             ),
         border = CwocChitCardStyle.cardBorder,
-        colors = CwocChitCardStyle.cardColors(),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -241,7 +244,7 @@ private fun ChecklistChitCard(
                 Text(
                     text = chit.title ?: "Untitled",
                     style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFF6B4E31),
+                    color = cardTextColor,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -249,7 +252,8 @@ private fun ChecklistChitCard(
                 // B3: Checklist progress count
                 ChecklistProgressBadge(
                     checklistJson = chit.checklist,
-                    modifier = Modifier.padding(start = 8.dp)
+                    modifier = Modifier.padding(start = 8.dp),
+                    textColor = cardTextColor
                 )
             }
 
@@ -266,7 +270,7 @@ private fun ChecklistChitCard(
                 Text(
                     text = "📌 Pinned",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF6B4E31),
+                    color = cardTextColor.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
@@ -276,6 +280,7 @@ private fun ChecklistChitCard(
                 if (!item.checked) {
                     ChecklistItemRow(
                         item = item,
+                        textColor = cardTextColor,
                         onToggle = { onToggleItem(index) }
                     )
                 }
@@ -304,6 +309,7 @@ private fun ChecklistChitCard(
 @Composable
 private fun ChecklistItemRow(
     item: ChecklistItem,
+    textColor: Color = Color(0xFF1A1208),
     onToggle: () -> Unit
 ) {
     val indentDp = ChecklistOperations.indentationDp(item.indent)
@@ -319,8 +325,10 @@ private fun ChecklistItemRow(
             checked = item.checked,
             onCheckedChange = { onToggle() },
             colors = CheckboxDefaults.colors(
-                checkedColor = Color(0xFF6B4E31),
-                uncheckedColor = Color(0xFF8B7355)
+                checkedColor = textColor.copy(alpha = 0.8f),
+                uncheckedColor = textColor.copy(alpha = 0.7f),
+                checkmarkColor = if (textColor == Color(0xFF2B1E0F) || textColor == Color(0xFF1A1208))
+                    Color(0xFFFDF5E6) else Color(0xFF2B1E0F)
             )
         )
         Spacer(modifier = Modifier.width(4.dp))
@@ -328,7 +336,7 @@ private fun ChecklistItemRow(
             text = item.text,
             style = MaterialTheme.typography.bodyMedium,
             textDecoration = if (item.checked) TextDecoration.LineThrough else TextDecoration.None,
-            color = if (item.checked) Color(0xFF8B7355) else Color(0xFF1A1208),
+            color = if (item.checked) textColor.copy(alpha = 0.6f) else textColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )

@@ -82,4 +82,91 @@ class ProjectsViewModel @Inject constructor(
             chitRepository.markDirty(chitId, "status")
         }
     }
+
+    /**
+     * Create a new child chit with the given title and add it to the project's child_chits.
+     * The new chit gets status "ToDo" and is immediately synced.
+     */
+    fun createChildChit(projectId: String, title: String) {
+        viewModelScope.launch {
+            val now = Instant.now().toString()
+            val newId = java.util.UUID.randomUUID().toString()
+
+            // Create the new child chit
+            val newChit = ChitEntity(
+                id = newId,
+                title = title,
+                note = null,
+                tags = null,
+                startDatetime = null,
+                endDatetime = null,
+                dueDatetime = null,
+                pointInTime = null,
+                completedDatetime = null,
+                status = "ToDo",
+                priority = null,
+                severity = null,
+                checklist = null,
+                alarm = null,
+                notification = null,
+                recurrence = null,
+                recurrenceId = null,
+                recurrenceRule = null,
+                recurrenceExceptions = null,
+                location = null,
+                color = null,
+                people = null,
+                pinned = false,
+                archived = false,
+                deleted = false,
+                createdDatetime = now,
+                modifiedDatetime = now,
+                isProjectMaster = false,
+                childChits = null,
+                allDay = false,
+                timezone = null,
+                alerts = null,
+                progressPercent = null,
+                timeEstimate = null,
+                weatherData = null,
+                healthData = null,
+                habit = false,
+                habitGoal = null,
+                habitSuccess = null,
+                showOnCalendar = null,
+                habitResetPeriod = null,
+                habitLastActionDate = null,
+                habitHideOverall = null,
+                perpetual = false,
+                shares = null,
+                stealth = null,
+                assignedTo = null,
+                ownerId = null,
+                hasUnviewedConflict = false,
+                availability = null,
+                snoozedUntil = null,
+                prerequisites = null,
+                syncVersion = 0,
+                lastSyncedAt = null,
+                isDirty = true,
+                dirtyFields = "[\"title\",\"status\",\"createdDatetime\",\"modifiedDatetime\"]"
+            )
+            chitDao.upsert(newChit)
+
+            // Update the parent project's childChits list
+            val project = chitDao.getById(projectId) ?: return@launch
+            val updatedChildren = (project.childChits ?: emptyList()) + newId
+            chitDao.upsert(
+                project.copy(
+                    childChits = updatedChildren,
+                    modifiedDatetime = now,
+                    isDirty = true
+                )
+            )
+
+            // Mark both as dirty and push
+            chitRepository.markDirty(newId, "title")
+            chitRepository.markDirty(projectId, "childChits")
+        }
+    }
 }

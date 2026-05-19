@@ -139,6 +139,15 @@ class ChitRepository @Inject constructor(
         triggerPushIfOnline(chitId)
     }
 
+    /** Update a chit's status. Marks dirty, triggers sync push if online. */
+    suspend fun updateStatus(chitId: String, newStatus: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        chitDao.upsert(entity.copy(status = newStatus, modifiedDatetime = now))
+        dirtyTracker.markDirty(chitId, setOf("status"))
+        triggerPushIfOnline(chitId)
+    }
+
     /** Update a chit's title and note content. Marks dirty, triggers sync push if online. */
     suspend fun updateTitleAndNote(chitId: String, title: String, note: String) {
         val entity = chitDao.getById(chitId) ?: return

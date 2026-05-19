@@ -45,6 +45,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocChitCardStyle
 
 /**
  * Search screen with auto-focused search field in the TopAppBar,
@@ -173,12 +174,16 @@ private fun SearchResultCard(
 ) {
     val chit = result.chit
 
+    // Full background color matching web's applyChitColors(card, chitColor(chit))
+    val cardBgColor = remember(chit.color) { CwocChitCardStyle.resolveChitBgColor(chit.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardBgColor
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -198,6 +203,7 @@ private fun SearchResultCard(
                     text = buildHighlightedText(titleText, titleRanges),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
+                    color = cardTextColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -222,7 +228,7 @@ private fun SearchResultCard(
                 Text(
                     text = buildHighlightedText(noteSnippet, noteRanges),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = cardTextColor.copy(alpha = 0.7f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -247,7 +253,7 @@ private fun SearchResultCard(
                         Text(
                             text = chit.tags.joinToString(", ") { "#$it" },
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = cardTextColor.copy(alpha = 0.7f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -261,7 +267,7 @@ private fun SearchResultCard(
                 Text(
                     text = "Matched: ${result.matchedFields.joinToString(", ")}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
+                    color = cardTextColor.copy(alpha = 0.6f)
                 )
             }
         }

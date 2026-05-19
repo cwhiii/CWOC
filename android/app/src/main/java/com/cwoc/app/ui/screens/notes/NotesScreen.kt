@@ -93,8 +93,6 @@ fun NotesScreen(
     var showSnoozeDialog by remember { mutableStateOf(false) }
     // D3: Quick-edit sheet state
     var quickEditChit by remember { mutableStateOf<ChitEntity?>(null) }
-    // D5: Notebook mode toggle (Notes only / Checklists only / Combined)
-    var notebookMode by remember { mutableStateOf("notes") } // "notes", "checklists", "notebook"
     val coroutineScope = rememberCoroutineScope()
 
     // Apply filters, sort, and pin-to-top to the notes list
@@ -114,30 +112,6 @@ fun NotesScreen(
             onFabClick = { onNavigateToEditor("new") }
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
-                // D5: Notebook mode toggle
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    androidx.compose.material3.FilterChip(
-                        selected = notebookMode == "notes",
-                        onClick = { notebookMode = "notes" },
-                        label = { Text("Notes") }
-                    )
-                    androidx.compose.material3.FilterChip(
-                        selected = notebookMode == "checklists",
-                        onClick = { notebookMode = "checklists" },
-                        label = { Text("Checklists") }
-                    )
-                    androidx.compose.material3.FilterChip(
-                        selected = notebookMode == "notebook",
-                        onClick = { notebookMode = "notebook" },
-                        label = { Text("Notebook") }
-                    )
-                }
-
             when {
                 uiState.isLoading -> {
                     NotesLoadingSkeleton()
@@ -313,10 +287,13 @@ private fun NoteCard(
     // D7: Expandable card — tap to expand/collapse preview
     var isExpanded by remember { mutableStateOf(false) }
 
+    // Full background color matching web's applyChitColors(el, chitColor(chit))
+    val cardBgColor = remember(note.color) { CwocChitCardStyle.resolveChitBgColor(note.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .chitColorBorder(note.color)
             .animateContentSize()
             .combinedClickable(
                 onClick = {
@@ -332,7 +309,7 @@ private fun NoteCard(
                 onLongClick = onLongClick
             ),
         border = CwocChitCardStyle.cardBorder,
-        colors = CwocChitCardStyle.cardColors(),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(
@@ -349,6 +326,7 @@ private fun NoteCard(
                         text = note.title,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
+                        color = cardTextColor,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -360,7 +338,7 @@ private fun NoteCard(
                 Text(
                     text = "⋮⋮",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    color = cardTextColor.copy(alpha = 0.5f)
                 )
             }
 
@@ -373,7 +351,7 @@ private fun NoteCard(
                 Text(
                     text = MarkdownRenderer.renderToAnnotatedString(previewText),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = cardTextColor.copy(alpha = 0.8f),
                     maxLines = if (isExpanded) Int.MAX_VALUE else 5,
                     overflow = if (isExpanded) TextOverflow.Clip else TextOverflow.Ellipsis
                 )
@@ -382,7 +360,7 @@ private fun NoteCard(
                     Text(
                         text = "▲ Collapse",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = cardTextColor.copy(alpha = 0.7f),
                         modifier = Modifier
                             .padding(top = 4.dp)
                             .clickable { isExpanded = false }
@@ -420,7 +398,7 @@ private fun NoteCard(
                 Text(
                     text = "📌 Pinned",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = cardTextColor.copy(alpha = 0.7f)
                 )
             }
         }

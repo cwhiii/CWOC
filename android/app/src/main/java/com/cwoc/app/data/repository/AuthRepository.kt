@@ -5,8 +5,11 @@ import android.os.Build
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,6 +50,14 @@ class AuthRepository @Inject constructor(
 
     /** SharedFlow emitting auth events (e.g., token revocation) for UI observation. */
     val authEvents: SharedFlow<AuthEvent> = _authEvents.asSharedFlow()
+
+    /** Reactive display name for the current user. */
+    private val _displayName = MutableStateFlow<String?>(prefs.getString("user_display_name", null))
+    val displayName: StateFlow<String?> = _displayName.asStateFlow()
+
+    /** Reactive user ID for the current user. */
+    private val _userId = MutableStateFlow<String?>(prefs.getString("user_id", null))
+    val userId: StateFlow<String?> = _userId.asStateFlow()
 
     /**
      * Attempt to log in with the given credentials.
@@ -156,7 +167,36 @@ class AuthRepository @Inject constructor(
      * Clear the stored device token (used during logout or token revocation).
      */
     fun clearToken() {
-        prefs.edit().remove("device_token").apply()
+        prefs.edit()
+            .remove("device_token")
+            .remove("user_display_name")
+            .remove("user_id")
+            .apply()
+        _displayName.value = null
+        _userId.value = null
+    }
+
+    /**
+     * Fetch the current user's profile from /api/auth/me and cache display name + user ID.
+     * Called after login and on app startup when authenticated.
+     */
+    suspend fun fetchUserProfile() {
+        try {
+            val response = apiService.getMe()
+            if (response.isSuccessful) {
+                val profile = response.body()
+                if (profile != null) {
+                    prefs.edit()
+                        .putString("user_display_name", profile.displayName)
+                        .putString("user_id", profile.userId)
+                        .apply()
+                    _displayName.value = profile.displayName
+                    _userId.value = profile.userId
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CWOC_AUTH", "Failed to fetch user profile: ${e.message}")
+        }
     }
 
     /**

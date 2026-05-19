@@ -88,6 +88,8 @@ def get_settings(user_id: str, request: Request):
         settings["autosave_desktop"] = settings.get("autosave_desktop", "0")
         settings["autosave_mobile"] = settings.get("autosave_mobile", "0")
         settings["custom_view_filters"] = deserialize_json_field(settings.get("custom_view_filters"))
+        settings["hidden_views"] = deserialize_json_field(settings.get("hidden_views"))
+        settings["kiosk_selected_tags"] = deserialize_json_field(settings.get("kiosk_selected_tags"))
 
         # ── Include bundles data (piggyback on settings to avoid separate API call) ──
         try:
@@ -191,7 +193,7 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
     JSON_FIELDS = {
         "tags", "default_filters", "custom_colors", "visual_indicators",
         "chit_options", "default_notifications", "kiosk_users", "shared_tags",
-        "recent_tags", "custom_view_filters",
+        "recent_tags", "custom_view_filters", "hidden_views", "kiosk_selected_tags",
     }
 
     # All valid settings columns (excluding user_id which is the key)
@@ -216,6 +218,18 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         "omni_normalize_colors", "custom_view_filters",
         "default_timezone", "timezone_override",
         "default_view",
+        # Migration 7→8 fields (Android parity)
+        "clock_orientation", "hidden_views", "combine_alerts",
+        "projects_show_child_count", "projects_show_checklist_count",
+        "email_check_interval", "email_max_pull", "email_signature",
+        "email_bundles_count_display",
+        "instance_name", "welcome_message", "audit_log_pruning_enabled",
+        "tailscale_enabled", "tailscale_auth_key",
+        "ntfy_enabled", "ha_enabled", "ha_poll_interval",
+        "kiosk_selected_tags",
+        # Email privacy (already in DB from earlier migration)
+        "email_block_tracking_pixels", "email_external_content",
+        "email_read_receipts", "email_undo_send_delay", "email_group_by",
     }
 
     conn = None

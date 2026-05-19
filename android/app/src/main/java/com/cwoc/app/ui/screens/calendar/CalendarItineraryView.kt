@@ -21,6 +21,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -126,15 +128,16 @@ private fun ItineraryEventCard(
     event: ChitEntity,
     onTap: () -> Unit
 ) {
-    val eventColor = event.color?.let { parseItineraryColor(it) }
-        ?: MaterialTheme.colorScheme.primary
+    // Full background color matching web's applyChitColors(el, chitColor(chit))
+    val cardBgColor = remember(event.color) { CwocChitCardStyle.resolveChitBgColor(event.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onTap),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardBgColor
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -142,21 +145,12 @@ private fun ItineraryEventCard(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Color indicator dot
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(eventColor)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.title ?: "Untitled Event",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
+                    color = cardTextColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -167,7 +161,7 @@ private fun ItineraryEventCard(
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = cardTextColor.copy(alpha = 0.7f)
                     )
                 }
             }

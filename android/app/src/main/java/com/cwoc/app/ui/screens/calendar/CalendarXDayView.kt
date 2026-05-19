@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.util.DateUtils
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -176,15 +178,16 @@ private fun XDayEventCard(
     event: ChitEntity,
     onTap: () -> Unit
 ) {
-    val eventColor = event.color?.let { parseEventColor(it) }
-        ?: MaterialTheme.colorScheme.primary
+    // Full background color matching web's applyChitColors(el, chitColor(chit))
+    val cardBgColor = remember(event.color) { CwocChitCardStyle.resolveChitBgColor(event.color) }
+    val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onTap),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = cardBgColor
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(6.dp)
@@ -193,17 +196,6 @@ private fun XDayEventCard(
             modifier = Modifier.padding(8.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Color indicator dot
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(eventColor)
-            )
-
-            Spacer(modifier = Modifier.width(6.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = event.title ?: "Untitled",
@@ -211,7 +203,7 @@ private fun XDayEventCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = cardTextColor
                 )
 
                 val timeText = buildEventTimeText(event)
@@ -220,7 +212,7 @@ private fun XDayEventCard(
                     Text(
                         text = timeText,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = cardTextColor.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

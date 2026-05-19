@@ -905,9 +905,9 @@ function filterChits(tab) {
     orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators' || tab === 'Email') ? 'none' : '';
   }
 
-  // Show/hide Kanban toggle for Projects tab (permanently hidden — Kanban is the only mode)
-  // const kanbanSection = document.getElementById('section-kanban');
-  // if (kanbanSection) { kanbanSection.style.display = (tab === 'Projects') ? '' : 'none'; }
+  // Show/hide Kanban toggle for Projects tab
+  const kanbanSection = document.getElementById('section-kanban');
+  if (kanbanSection) { kanbanSection.style.display = (tab === 'Projects') ? '' : 'none'; }
 
   // Show/hide Calendar Options (compress/scroll) for Calendar + Month
   const calOptsSection = document.getElementById('section-cal-options');
