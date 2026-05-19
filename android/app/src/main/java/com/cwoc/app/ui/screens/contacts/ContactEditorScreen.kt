@@ -424,25 +424,23 @@ private fun NameSection(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Prefix and suffix side by side
+        // Prefix and suffix side by side — using dropdown with predefined options + custom
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedTextField(
+            DropdownWithCustom(
+                label = "Prefix",
                 value = formState.prefix,
+                options = PrefixOptions,
                 onValueChange = { onUpdate(formState.copy(prefix = it)) },
-                label = { Text("Prefix") },
-                singleLine = true,
-                enabled = !readOnly,
                 modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            DropdownWithCustom(
+                label = "Suffix",
                 value = formState.suffix,
+                options = SuffixOptions,
                 onValueChange = { onUpdate(formState.copy(suffix = it)) },
-                label = { Text("Suffix") },
-                singleLine = true,
-                enabled = !readOnly,
                 modifier = Modifier.weight(1f)
             )
         }

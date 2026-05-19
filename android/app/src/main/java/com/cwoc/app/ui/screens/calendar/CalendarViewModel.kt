@@ -29,7 +29,12 @@ data class CalendarUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val xDayCount: Int = 7,
-    val monthMode: String = "compress" // "compress" or "scroll"
+    val monthMode: String = "compress", // "compress" or "scroll"
+    val timeFormat: String = "12hour", // "12hour" or "24hour"
+    val dayScrollToHour: Int = 6, // hour to auto-scroll to on load
+    val calendarSnap: Int = 15, // snap grid minutes for drag
+    val workStartHour: Int = 8,
+    val workEndHour: Int = 18
 ) {
     /** Display title for the current date/period. */
     val headerTitle: String
@@ -84,10 +89,25 @@ class CalendarViewModel @Inject constructor(
 
         _uiState.update { it.copy(viewMode = restoredMode) }
 
-        // Load xDayCount from settings, then load events
+        // Load settings (xDayCount, timeFormat, scrollToHour, snap, work hours), then load events
         viewModelScope.launch {
             val xDayCount = loadXDayCount()
-            _uiState.update { it.copy(xDayCount = xDayCount) }
+            val settings = settingsRepository.get()
+            val timeFormat = settings?.timeFormat ?: "12hour"
+            val scrollToHour = settings?.dayScrollToHour?.toIntOrNull() ?: 6
+            val snap = settings?.calendarSnap?.toIntOrNull() ?: 15
+            val workStart = settings?.workStartHour?.toIntOrNull() ?: 8
+            val workEnd = settings?.workEndHour?.toIntOrNull() ?: 18
+            _uiState.update {
+                it.copy(
+                    xDayCount = xDayCount,
+                    timeFormat = timeFormat,
+                    dayScrollToHour = scrollToHour,
+                    calendarSnap = snap,
+                    workStartHour = workStart,
+                    workEndHour = workEnd
+                )
+            }
             loadEvents()
         }
     }
@@ -211,6 +231,22 @@ class CalendarViewModel @Inject constructor(
         sharedPreferences.edit()
             .putString(PREF_KEY_VIEW_MODE, mode.name)
             .apply()
+    }
+
+    /**
+     * Update a chit's date/time after a drag-move or resize operation.
+     * Persists to local DB and triggers sync push.
+     */
+    fun updateChitDateTimes(
+        chitId: String,
+        startDatetime: String? = null,
+        endDatetime: String? = null,
+        dueDatetime: String? = null,
+        pointInTime: String? = null
+    ) {
+        viewModelScope.launch {
+            chitRepository.updateDateTimes(chitId, startDatetime, endDatetime, dueDatetime, pointInTime)
+        }
     }
 
     /**

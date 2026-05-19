@@ -25,7 +25,7 @@ interface ChitDao {
     @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime IS NOT NULL OR endDatetime IS NOT NULL)")
     fun getCalendarChits(): Flow<List<ChitEntity>>
 
-    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd))")
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd) OR dueDatetime BETWEEN :dayStart AND :dayEnd OR pointInTime BETWEEN :dayStart AND :dayEnd)")
     fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>>
 
     @Query("SELECT * FROM chits WHERE id = :id")
@@ -107,7 +107,7 @@ interface ChitDao {
 
     // Phase 4 — Widget suspend queries (non-Flow for RemoteViews context)
 
-    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd)) ORDER BY startDatetime ASC")
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd) OR dueDatetime BETWEEN :dayStart AND :dayEnd OR pointInTime BETWEEN :dayStart AND :dayEnd) ORDER BY startDatetime ASC")
     suspend fun getChitsForDaySuspend(dayStart: String, dayEnd: String): List<ChitEntity>
 
     @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND status IN ('ToDo', 'In Progress') ORDER BY dueDatetime ASC LIMIT 5")

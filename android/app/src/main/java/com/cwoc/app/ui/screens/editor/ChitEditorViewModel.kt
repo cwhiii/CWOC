@@ -194,6 +194,10 @@ class ChitEditorViewModel @Inject constructor(
     private val _tagTree = MutableStateFlow<List<TagNode>>(emptyList())
     val tagTree: StateFlow<List<TagNode>> = _tagTree.asStateFlow()
 
+    /** Recent tags loaded from settings, displayed in the TagsPickerSheet. */
+    private val _recentTags = MutableStateFlow<List<String>>(emptyList())
+    val recentTags: StateFlow<List<String>> = _recentTags.asStateFlow()
+
     /** All active contact display names for the People zone autocomplete. */
     private val _contactNames = MutableStateFlow<List<String>>(emptyList())
     val contactNames: StateFlow<List<String>> = _contactNames.asStateFlow()
@@ -208,6 +212,7 @@ class ChitEditorViewModel @Inject constructor(
         }
         loadEditorSettings()
         loadTagTree()
+        loadRecentTags()
         loadContactNames()
     }
 
@@ -290,6 +295,46 @@ class ChitEditorViewModel @Inject constructor(
             if (settings != null) {
                 _tagTree.value = TagTreeParser.parseTagTree(settings.tags)
             }
+        }
+    }
+
+    /**
+     * Loads recent tags from SettingsRepository.
+     * The recentTags field is a JSON array of tag path strings.
+     */
+    private fun loadRecentTags() {
+        viewModelScope.launch {
+            val settings = settingsRepository.get()
+            if (settings != null && !settings.recentTags.isNullOrBlank()) {
+                try {
+                    val list: List<String> = Gson().fromJson(
+                        settings.recentTags,
+                        object : TypeToken<List<String>>() {}.type
+                    ) ?: emptyList()
+                    _recentTags.value = list.take(5)
+                } catch (_: Exception) {
+                    _recentTags.value = emptyList()
+                }
+            }
+        }
+    }
+
+    /**
+     * Tracks a tag as recently used. Moves it to the front of the recent list,
+     * caps at 5, and persists to settings (fire-and-forget).
+     */
+    fun trackRecentTag(tagPath: String) {
+        val current = _recentTags.value.toMutableList()
+        current.remove(tagPath)
+        current.add(0, tagPath)
+        val updated = current.take(5)
+        _recentTags.value = updated
+
+        // Persist to settings
+        viewModelScope.launch {
+            val settings = settingsRepository.get() ?: return@launch
+            val updatedSettings = settings.copy(recentTags = Gson().toJson(updated))
+            settingsRepository.update(updatedSettings)
         }
     }
 

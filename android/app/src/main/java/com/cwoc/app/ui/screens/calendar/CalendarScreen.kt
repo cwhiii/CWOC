@@ -128,7 +128,14 @@ fun CalendarScreen(
                         DayTimeGrid(
                             events = uiState.events,
                             date = uiState.selectedDate,
+                            timeFormat = uiState.timeFormat,
+                            scrollToHour = uiState.dayScrollToHour,
+                            snapMinutes = uiState.calendarSnap,
                             onEventTap = { event -> onNavigateToEditor(event.id) },
+                            onEventLongPress = { event -> onNavigateToEditor(event.id) },
+                            onEventDragEnd = { chitId, newStart, newEnd, newDue, newPit ->
+                                viewModel.updateChitDateTimes(chitId, newStart, newEnd, newDue, newPit)
+                            },
                             onEmptySlotTap = { tappedTime ->
                                 // Task 33: Navigate to editor with pre-filled start/end
                                 val start = tappedTime.toString()
@@ -191,7 +198,16 @@ fun CalendarScreen(
                         DayTimeGrid(
                             events = uiState.events,
                             date = uiState.selectedDate,
+                            timeFormat = uiState.timeFormat,
+                            scrollToHour = uiState.workStartHour,
+                            snapMinutes = uiState.calendarSnap,
+                            hourStart = uiState.workStartHour,
+                            hourEnd = uiState.workEndHour,
                             onEventTap = { event -> onNavigateToEditor(event.id) },
+                            onEventLongPress = { event -> onNavigateToEditor(event.id) },
+                            onEventDragEnd = { chitId, newStart, newEnd, newDue, newPit ->
+                                viewModel.updateChitDateTimes(chitId, newStart, newEnd, newDue, newPit)
+                            },
                             onEmptySlotTap = { tappedTime ->
                                 val start = tappedTime.toString()
                                 val end = tappedTime.plusHours(1).toString()

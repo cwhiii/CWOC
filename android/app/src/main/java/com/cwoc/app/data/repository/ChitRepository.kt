@@ -157,6 +157,41 @@ class ChitRepository @Inject constructor(
         triggerPushIfOnline(chitId)
     }
 
+    /** Update a chit's date/time fields (for calendar drag-move/resize). Marks dirty, triggers sync push. */
+    suspend fun updateDateTimes(
+        chitId: String,
+        startDatetime: String? = null,
+        endDatetime: String? = null,
+        dueDatetime: String? = null,
+        pointInTime: String? = null
+    ) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        val dirtyFields = mutableSetOf<String>()
+        var updated = entity.copy(modifiedDatetime = now)
+
+        if (startDatetime != null) {
+            updated = updated.copy(startDatetime = startDatetime)
+            dirtyFields.add("start_datetime")
+        }
+        if (endDatetime != null) {
+            updated = updated.copy(endDatetime = endDatetime)
+            dirtyFields.add("end_datetime")
+        }
+        if (dueDatetime != null) {
+            updated = updated.copy(dueDatetime = dueDatetime)
+            dirtyFields.add("due_datetime")
+        }
+        if (pointInTime != null) {
+            updated = updated.copy(pointInTime = pointInTime)
+            dirtyFields.add("point_in_time")
+        }
+
+        chitDao.upsert(updated)
+        dirtyTracker.markDirty(chitId, dirtyFields)
+        triggerPushIfOnline(chitId)
+    }
+
     /**
      * Triggers an immediate push if the device is currently online.
      * Launches in a separate coroutine scope so the caller doesn't block on the push.

@@ -899,8 +899,12 @@ private fun PrerequisitesZone(
 private fun TagsZone(
     tags: List<String>,
     tagTree: List<TagNode>,
+    recentTags: List<String> = emptyList(),
     onTagsChange: (List<String>) -> Unit,
-    onTagCreated: (String) -> Unit
+    onTagCreated: (String) -> Unit,
+    onTagTracked: (String) -> Unit = {},
+    currentColor: String? = null,
+    onAutoColor: (String) -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(tags.isNotEmpty()) }
     var showPicker by remember { mutableStateOf(false) }
@@ -1003,8 +1007,16 @@ private fun TagsZone(
                     InputChip(
                         selected = isSelected,
                         onClick = {
-                            if (isSelected) onTagsChange(tags - fav.fullPath)
-                            else onTagsChange(tags + fav.fullPath)
+                            if (isSelected) {
+                                onTagsChange(tags - fav.fullPath)
+                            } else {
+                                onTagsChange(tags + fav.fullPath)
+                                onTagTracked(fav.fullPath)
+                                // Auto-color: if chit has no color and this is the first tag, apply tag color
+                                if (currentColor.isNullOrBlank() || currentColor == "transparent") {
+                                    fav.color?.let { onAutoColor(it) }
+                                }
+                            }
                         },
                         label = {
                             Text(
@@ -1037,14 +1049,26 @@ private fun TagsZone(
             allTags = tagTree,
             selectedTags = tags,
             onTagToggled = { tagPath ->
-                val newTags = if (tags.contains(tagPath)) tags - tagPath else tags + tagPath
+                val isAdding = !tags.contains(tagPath)
+                val newTags = if (isAdding) tags + tagPath else tags - tagPath
                 onTagsChange(newTags)
+                if (isAdding) {
+                    onTagTracked(tagPath)
+                    // Auto-color: if chit has no color, apply the first selected tag's color
+                    if (currentColor.isNullOrBlank() || currentColor == "transparent") {
+                        tagNodeMap[tagPath]?.color?.let { onAutoColor(it) }
+                    }
+                }
             },
             onTagCreated = { newTagName ->
                 onTagCreated(newTagName)
-                if (!tags.contains(newTagName)) onTagsChange(tags + newTagName)
+                if (!tags.contains(newTagName)) {
+                    onTagsChange(tags + newTagName)
+                    onTagTracked(newTagName)
+                }
             },
-            onDismiss = { showPicker = false }
+            onDismiss = { showPicker = false },
+            recentTags = recentTags
         )
     }
 }

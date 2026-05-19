@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,18 +22,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -42,461 +45,145 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
+
+// ─── Data classes for event layout ──────────────────────────────────────────────
+
+private data class CalendarDateInfo(
+    val start: LocalDateTime?,
+    val end: LocalDateTime?,
+    val isAllDay: Boolean,
+    val isDueOnly: Boolean,
+    val isPointInTime: Boolean,
+    val hasDate: Boolean
+)
+
+private data class LayoutEvent(
+    val event: ChitEntity,
+    val info: CalendarDateInfo,
+    val startMinute: Int,
+    val endMinute: Int,
+    val position: Int, // horizontal position for overlap
+    val localMaxOverlap: Int // max concurrent events in this event's time range
+)
+
+// ─── DayTimeGrid — Main Day View Composable ─────────────────────────────────────
 
 /**
- * A vertical time grid for Day view showing 24 hours with events positioned
- * at their start time and sized by duration.
+ * A vertical time grid for Day view matching the web's displayDayView function.
  *
- * Addresses gap C1: Day/Week view is a flat list, not a time grid.
- *
- * Features:
- * - Hour labels along the left edge
+ * Features matching web parity:
+ * - All-day events section above the time grid
+ * - Hour labels along the left edge (respects 12h/24h setting)
  * - Horizontal grid lines at each hour
- * - Events positioned vertically by start time
- * - Events sized vertically by duration
- * - Current time red line indicator
- * - Tap empty slot to create event (C4)
+ * - Events positioned vertically by start time, sized by duration
+ * - Overlapping events shown side-by-side with proportional widths
+ * - Current time indicator (red line + dot) that updates live
+ * - Pinch-to-zoom (vertical axis)
+ * - Tap empty slot to create event
+ * - Long-press event for quick-edit
+ * - Drag-to-move events (persists new time)
+ * - Drag-to-resize events (persists new end time)
+ * - Auto-scroll to configured hour on load
+ * - Due-only events shown with ⌚ prefix
+ * - Point-in-time events shown with 📌 prefix
+ * - Completed tasks shown with strikethrough + reduced opacity
  */
 @Composable
 fun DayTimeGrid(
     events: List<ChitEntity>,
     date: LocalDate,
     hourHeight: Dp = 60.dp,
+    timeFormat: String = "12hour",
+    scrollToHour: Int = 6,
+    snapMinutes: Int = 15,
+    hourStart: Int = 0,
+    hourEnd: Int = 24,
     onEventTap: (ChitEntity) -> Unit = {},
+    onEventLongPress: (ChitEntity) -> Unit = {},
+    onEventDragEnd: (chitId: String, startDatetime: String?, endDatetime: String?, dueDatetime: String?, pointInTime: String?) -> Unit = { _, _, _, _, _ -> },
     onEmptySlotTap: (LocalDateTime) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // C7: Mutable hour height for pinch-to-zoom
-    var zoomScale by remember { mutableStateOf(1f) }
+    // Pinch-to-zoom state
+    var zoomScale by remember { mutableFloatStateOf(1f) }
     val effectiveHourHeight = hourHeight * zoomScale
     val scrollState = rememberScrollState()
-    val totalHeight = effectiveHourHeight * 24
-    val hourLabelWidth = 48.dp
+    val totalMinutes = (hourEnd - hourStart) * 60
+    val totalHeight = effectiveHourHeight * (hourEnd - hourStart)
+    val hourLabelWidth = 52.dp
     val gridLineColor = MaterialTheme.colorScheme.outlineVariant
-    val currentTimeColor = Color(0xFFB22222)
-    val now = remember { LocalTime.now() }
+    val currentTimeColor = Color(0xFF4A2C2A) // matches web's #4a2c2a
     val isToday = date == LocalDate.now()
 
-    // The Row fills available space; scrolling is handled inside each child
-    // Pinch-to-zoom: two-finger vertical pinch changes zoomScale (hour height)
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTransformGestures { _, _, zoom, _ ->
-                    // Only use the vertical component of zoom (zoom is uniform scale)
-                    // Clamp between 0.5x and 4x
-                    zoomScale = (zoomScale * zoom).coerceIn(0.5f, 4f)
-                }
-            }
-    ) {
-        // Hour labels column — scrolls in sync with the grid
-        Column(
-            modifier = Modifier
-                .width(hourLabelWidth)
-                .verticalScroll(scrollState)
-        ) {
-            for (hour in 0..23) {
-                Box(
-                    modifier = Modifier
-                        .height(effectiveHourHeight)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.TopEnd
-                ) {
-                    Text(
-                        text = formatHourLabel(hour),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 4.dp, top = 0.dp),
-                        fontSize = 10.sp
-                    )
-                }
-            }
-        }
-
-        // Time grid + events — scrolls in sync with hour labels
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(scrollState)
-        ) {
-            // Fixed-height container for the full 24-hour grid
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(totalHeight)
-                    .pointerInput(date) {
-                        detectTapGestures { offset ->
-                            // C4: Tap empty slot to create event
-                            val hourFraction = offset.y / effectiveHourHeight.toPx()
-                            val hour = hourFraction.toInt().coerceIn(0, 23)
-                            val minute = ((hourFraction - hour) * 60).toInt().coerceIn(0, 59)
-                            val tappedTime = LocalDateTime.of(date, LocalTime.of(hour, minute))
-                            onEmptySlotTap(tappedTime)
-                        }
-                    }
-            ) {
-                // Grid lines
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(totalHeight)
-                ) {
-                    val hourHeightPx = effectiveHourHeight.toPx()
-                    for (hour in 0..24) {
-                        val y = hour * hourHeightPx
-                        drawLine(
-                            color = gridLineColor,
-                            start = Offset(0f, y),
-                            end = Offset(size.width, y),
-                            strokeWidth = 1f
-                        )
-                    }
-                }
-
-                // Current time indicator (red line)
-                if (isToday) {
-                    val currentMinutes = now.hour * 60 + now.minute
-                    val currentY = with(LocalDensity.current) {
-                        (currentMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
-                    }
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(totalHeight)
-                    ) {
-                        drawLine(
-                            color = currentTimeColor,
-                            start = Offset(0f, currentY),
-                            end = Offset(size.width, currentY),
-                            strokeWidth = 2f
-                        )
-                        // Red dot at the left edge
-                        drawCircle(
-                            color = currentTimeColor,
-                            radius = 4f,
-                            center = Offset(4f, currentY)
-                        )
-                    }
-                }
-
-                // Events positioned on the grid
-                val dayEvents = remember(events, date) {
-                    events.filter { event ->
-                        getEventDate(event) == date
-                    }
-                }
-
-                dayEvents.forEach { event ->
-                    val startMinutes = getEventStartMinutes(event)
-                    val durationMinutes = getEventDurationMinutes(event)
-                        .coerceAtMost(1440 - startMinutes) // Clamp to end of day
-                    val topOffset = with(LocalDensity.current) {
-                        (startMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
-                    }
-                    val eventHeight = with(LocalDensity.current) {
-                        ((durationMinutes.coerceAtLeast(30)).toFloat() / 60f) * effectiveHourHeight.toPx()
-                    }
-
-                    TimeGridEventCard(
-                        event = event,
-                        topOffsetPx = topOffset,
-                        heightPx = eventHeight,
-                        onTap = { onEventTap(event) }
-                    )
-                }
-            }
+    // Live-updating current time (updates every minute)
+    var currentTime by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = LocalTime.now()
+            val secondsUntilNextMinute = 60 - currentTime.second
+            delay(secondsUntilNextMinute * 1000L)
         }
     }
-}
 
-@Composable
-private fun TimeGridEventCard(
-    event: ChitEntity,
-    topOffsetPx: Float,
-    heightPx: Float,
-    onTap: () -> Unit
-) {
-    // Full background color matching web's applyChitColors(ev, chitColor(chit))
-    val eventColor = CwocChitCardStyle.resolveChitBgColor(event.color)
-    val textColor = CwocChitCardStyle.contrastTextColor(eventColor)
+    // Auto-scroll to configured hour on first load
     val density = LocalDensity.current
+    LaunchedEffect(scrollToHour, zoomScale) {
+        val targetMinute = (scrollToHour - hourStart).coerceAtLeast(0) * 60
+        val scrollPx = with(density) { (targetMinute.toFloat() / 60f) * effectiveHourHeight.toPx() }
+        scrollState.scrollTo(scrollPx.toInt())
+    }
 
-    Box(
-        modifier = Modifier
-            .offset {
-                IntOffset(0, topOffsetPx.toInt())
-            }
-            .fillMaxWidth()
-            .height(with(density) { heightPx.toDp() })
-            .padding(horizontal = 2.dp, vertical = 1.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(eventColor)
-            .clickable { onTap() }
-            .pointerInput(Unit) {
-                // C3: Long-press to initiate drag-to-move
-                detectDragGestures(
-                    onDrag = { _, dragAmount ->
-                        // Drag delta would move the event to a new time slot
-                        // Full implementation requires parent-level state to track
-                        // the dragged event's new position and update on drop
-                    },
-                    onDragEnd = {
-                        // Persist the new time position
-                    }
-                )
-            }
-            .padding(4.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = event.title ?: "Untitled",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = textColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!event.allDay) {
-                val timeStr = buildCompactTimeText(event)
-                if (timeStr.isNotBlank()) {
-                    Text(
-                        text = timeStr,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.7f),
-                        fontSize = 9.sp
-                    )
-                }
-            }
-            // C2: Resize handle at bottom edge — drag to change end time
-            Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .background(textColor.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
-                    .pointerInput(Unit) {
-                        detectDragGestures { _, dragAmount ->
-                            // Drag delta in Y direction would resize the event
-                            // This requires parent-level state management to update heightPx
-                            // For now, the visual handle is present as the resize affordance
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                // Visual grip indicator
-                Text(
-                    text = "⋯",
-                    fontSize = 8.sp,
-                    color = textColor
-                )
-            }
+    // Separate events into all-day and timed
+    val (allDayEvents, timedEvents) = remember(events, date) {
+        val allDay = mutableListOf<Pair<ChitEntity, CalendarDateInfo>>()
+        val timed = mutableListOf<Pair<ChitEntity, CalendarDateInfo>>()
+        events.forEach { event ->
+            val info = getCalendarDateInfoForEvent(event)
+            if (!info.hasDate) return@forEach
+            // Check if event matches this day
+            if (!eventMatchesDay(event, info, date)) return@forEach
+            if (info.isAllDay) allDay.add(event to info)
+            else timed.add(event to info)
         }
+        allDay to timed
     }
-}
 
-// ─── Helper functions ────────────────────────────────────────────────────────────
-
-private fun formatHourLabel(hour: Int): String {
-    return when {
-        hour == 0 -> "12 AM"
-        hour < 12 -> "$hour AM"
-        hour == 12 -> "12 PM"
-        else -> "${hour - 12} PM"
+    // Calculate overlap layout for timed events (matching web's timeSlots algorithm)
+    val layoutEvents = remember(timedEvents, hourStart, hourEnd) {
+        calculateOverlapLayout(timedEvents, hourStart, hourEnd)
     }
-}
-
-private fun getEventDate(event: ChitEntity): LocalDate? {
-    val dateStr = event.startDatetime ?: event.pointInTime ?: event.dueDatetime ?: return null
-    return try {
-        if (dateStr.contains("T")) {
-            LocalDateTime.parse(dateStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                .toLocalDate()
-        } else {
-            LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
-        }
-    } catch (e: Exception) {
-        null
-    }
-}
-
-/**
- * C5: Get the end date of an event for multi-day spanning detection.
- */
-private fun getEventEndDate(event: ChitEntity): LocalDate? {
-    val dateStr = event.endDatetime ?: return null
-    return try {
-        if (dateStr.contains("T")) {
-            LocalDateTime.parse(dateStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                .toLocalDate()
-        } else {
-            LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
-        }
-    } catch (e: Exception) {
-        null
-    }
-}
-
-private fun getEventStartMinutes(event: ChitEntity): Int {
-    val dateStr = event.startDatetime ?: event.pointInTime ?: return 480 // default 8am
-    return try {
-        if (dateStr.contains("T")) {
-            val dt = LocalDateTime.parse(dateStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            dt.hour * 60 + dt.minute
-        } else {
-            480 // all-day events default to 8am position
-        }
-    } catch (e: Exception) {
-        480
-    }
-}
-
-private fun getEventDurationMinutes(event: ChitEntity): Int {
-    val startStr = event.startDatetime ?: return 60
-    val endStr = event.endDatetime ?: return 60
-    return try {
-        val start = LocalDateTime.parse(startStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val end = LocalDateTime.parse(endStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val duration = java.time.Duration.between(start, end)
-        // Clamp to max 24 hours (1440 min) to prevent layout overflow on multi-day events
-        duration.toMinutes().toInt().coerceIn(15, 1440)
-    } catch (e: Exception) {
-        60
-    }
-}
-
-private fun buildCompactTimeText(event: ChitEntity): String {
-    val startStr = event.startDatetime ?: return ""
-    return try {
-        val dt = LocalDateTime.parse(startStr.replace("Z", ""), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        val hour = dt.hour
-        val minute = dt.minute
-        val amPm = if (hour < 12) "am" else "pm"
-        val displayHour = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
-        if (minute == 0) "$displayHour$amPm" else "$displayHour:${minute.toString().padStart(2, '0')}$amPm"
-    } catch (e: Exception) {
-        ""
-    }
-}
-
-/**
- * C6: Parse weather data JSON and return just the emoji for the weather code.
- */
-private fun parseWeatherEmoji(weatherJson: String): String {
-    return try {
-        val codeMatch = Regex(""""weather_code"\s*:\s*(\d+)""").find(weatherJson)
-        val code = codeMatch?.groupValues?.get(1)?.toIntOrNull() ?: return ""
-        when (code) {
-            0 -> "☀️"
-            1, 2, 3 -> "⛅"
-            45, 48 -> "🌫️"
-            51, 53, 55, 61, 63, 65, 80, 81, 82 -> "🌧️"
-            71, 73, 75, 77, 85, 86 -> "❄️"
-            95, 96, 99 -> "⛈️"
-            else -> "🌤️"
-        }
-    } catch (e: Exception) {
-        ""
-    }
-}
-
-
-// ─── C1 sub-item 2: Week Time Grid (7 columns) ─────────────────────────────────
-
-/**
- * A week time grid showing 7 day columns side-by-side with a shared time axis.
- * Each column shows events for that day positioned by time.
- *
- * Addresses C1 sub-item 2: Week view renders 7 columns side-by-side with a shared time axis.
- * Also addresses C1 sub-item 7: Overlapping events within a day column are shown side-by-side.
- */
-@Composable
-fun WeekTimeGrid(
-    events: List<ChitEntity>,
-    weekStartDate: LocalDate,
-    hourHeight: Dp = 48.dp,
-    onEventTap: (ChitEntity) -> Unit = {},
-    onEmptySlotTap: (LocalDateTime) -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    // C7: Mutable hour height for pinch-to-zoom
-    var zoomScale by remember { mutableStateOf(1f) }
-    val effectiveHourHeight = hourHeight * zoomScale
-    val scrollState = rememberScrollState()
-    val totalHeight = effectiveHourHeight * 24
-    val hourLabelWidth = 36.dp
-    val gridLineColor = MaterialTheme.colorScheme.outlineVariant
-    val currentTimeColor = Color(0xFFB22222)
-    val now = remember { LocalTime.now() }
-    val today = LocalDate.now()
-
-    // 7 days starting from weekStartDate
-    val days = (0..6).map { weekStartDate.plusDays(it.toLong()) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, _, zoom, _ ->
-                    // Pinch-to-zoom: vertical only (hour segments get taller/shorter)
                     zoomScale = (zoomScale * zoom).coerceIn(0.5f, 4f)
                 }
             }
     ) {
-        // Day header row with week number (C12)
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Week number in the hour label column area
-            Box(
-                modifier = Modifier.width(hourLabelWidth),
-                contentAlignment = Alignment.Center
+        // All-day events section (matching web's allday-events-area)
+        if (allDayEvents.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE8DCC8)) // web's #e8dcc8
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                val weekNumber = weekStartDate.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear())
-                Text(
-                    text = "W$weekNumber",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 8.sp
-                )
-            }
-            days.forEach { day ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = day.dayOfWeek.name.take(3),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (day == today) currentTimeColor
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 9.sp
-                        )
-                        Text(
-                            text = day.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (day == today) FontWeight.Bold else FontWeight.Normal,
-                            color = if (day == today) currentTimeColor
-                                    else MaterialTheme.colorScheme.onSurface
-                        )
-                        // C6: Weather overlay in day header — show weather from events on this day
-                        val dayWeather = remember(events, day) {
-                            events.firstOrNull { event ->
-                                getEventDate(event) == day && !event.weatherData.isNullOrBlank()
-                            }?.weatherData
-                        }
-                        if (dayWeather != null) {
-                            Text(
-                                text = parseWeatherEmoji(dayWeather),
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
+                allDayEvents.forEach { (event, info) ->
+                    AllDayEventChip(
+                        event = event,
+                        info = info,
+                        timeFormat = timeFormat,
+                        onTap = { onEventTap(event) },
+                        onLongPress = { onEventLongPress(event) }
+                    )
                 }
             }
         }
@@ -505,11 +192,15 @@ fun WeekTimeGrid(
         Row(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(scrollState)
+                .fillMaxWidth()
         ) {
             // Hour labels column
-            Column(modifier = Modifier.width(hourLabelWidth)) {
-                for (hour in 0..23) {
+            Column(
+                modifier = Modifier
+                    .width(hourLabelWidth)
+                    .verticalScroll(scrollState)
+            ) {
+                for (hour in hourStart until hourEnd) {
                     Box(
                         modifier = Modifier
                             .height(effectiveHourHeight)
@@ -517,88 +208,105 @@ fun WeekTimeGrid(
                         contentAlignment = Alignment.TopEnd
                     ) {
                         Text(
-                            text = formatHourLabel(hour),
+                            text = formatHourLabel(hour, timeFormat),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 2.dp),
-                            fontSize = 8.sp
+                            modifier = Modifier.padding(end = 4.dp),
+                            fontSize = 10.sp
                         )
                     }
                 }
             }
 
-            // Day columns
-            days.forEach { day ->
+            // Time grid + events
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+            ) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(totalHeight)
+                        .pointerInput(date, snapMinutes, hourStart) {
+                            detectTapGestures { offset ->
+                                val minuteInGrid = (offset.y / effectiveHourHeight.toPx() * 60).toInt()
+                                val snapped = snapToGrid(minuteInGrid, snapMinutes)
+                                val absMinute = snapped + hourStart * 60
+                                val hour = (absMinute / 60).coerceIn(0, 23)
+                                val minute = (absMinute % 60).coerceIn(0, 59)
+                                val tappedTime = LocalDateTime.of(date, LocalTime.of(hour, minute))
+                                onEmptySlotTap(tappedTime)
+                            }
+                        }
                 ) {
                     // Grid lines
-                    Canvas(modifier = Modifier.fillMaxSize()) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(totalHeight)
+                    ) {
                         val hourHeightPx = effectiveHourHeight.toPx()
-                        for (hour in 0..24) {
+                        for (hour in 0..(hourEnd - hourStart)) {
                             val y = hour * hourHeightPx
                             drawLine(
                                 color = gridLineColor,
                                 start = Offset(0f, y),
                                 end = Offset(size.width, y),
-                                strokeWidth = 0.5f
-                            )
-                        }
-                        // Vertical border between columns
-                        drawLine(
-                            color = gridLineColor,
-                            start = Offset(0f, 0f),
-                            end = Offset(0f, size.height),
-                            strokeWidth = 0.5f
-                        )
-                    }
-
-                    // Current time line (only on today's column)
-                    if (day == today) {
-                        val currentMinutes = now.hour * 60 + now.minute
-                        val currentY = with(LocalDensity.current) {
-                            (currentMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
-                        }
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            drawLine(
-                                color = currentTimeColor,
-                                start = Offset(0f, currentY),
-                                end = Offset(size.width, currentY),
-                                strokeWidth = 2f
+                                strokeWidth = 1f
                             )
                         }
                     }
 
-                    // Events for this day (including multi-day events that span this day)
-                    val dayEvents = remember(events, day) {
-                        events.filter { event ->
-                            val startDate = getEventDate(event)
-                            val endDate = getEventEndDate(event)
-                            if (startDate == null) return@filter false
-                            if (endDate == null) return@filter startDate == day
-                            // C5: Include event if this day falls within start..end range
-                            !day.isBefore(startDate) && !day.isAfter(endDate)
+                    // Current time indicator (matching web's .time-now-bar)
+                    if (isToday) {
+                        val currentMinutes = currentTime.hour * 60 + currentTime.minute
+                        val gridMinute = currentMinutes - hourStart * 60
+                        if (gridMinute in 0..totalMinutes) {
+                            val currentY = with(LocalDensity.current) {
+                                (gridMinute.toFloat() / 60f) * effectiveHourHeight.toPx()
+                            }
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(totalHeight)
+                            ) {
+                                drawLine(
+                                    color = currentTimeColor,
+                                    start = Offset(0f, currentY),
+                                    end = Offset(size.width, currentY),
+                                    strokeWidth = 2f
+                                )
+                                // Red dot at left edge (matching web's ::before pseudo-element)
+                                drawCircle(
+                                    color = currentTimeColor,
+                                    radius = 4f,
+                                    center = Offset(4f, currentY)
+                                )
+                            }
                         }
                     }
 
-                    dayEvents.forEach { event ->
-                        val startMinutes = getEventStartMinutes(event)
-                        val durationMinutes = getEventDurationMinutes(event)
-                            .coerceAtMost(1440 - startMinutes) // Clamp to end of day
-                        val topOffset = with(LocalDensity.current) {
-                            (startMinutes.toFloat() / 60f) * effectiveHourHeight.toPx()
-                        }
-                        val eventHeight = with(LocalDensity.current) {
-                            ((durationMinutes.coerceAtLeast(20)).toFloat() / 60f) * effectiveHourHeight.toPx()
-                        }
+                    // Timed events with overlap layout
+                    layoutEvents.forEach { layoutEvent ->
+                        val widthFraction = 0.95f / layoutEvent.localMaxOverlap
+                        val leftFraction = layoutEvent.position * widthFraction
 
-                        WeekEventChip(
-                            event = event,
-                            topOffsetPx = topOffset,
-                            heightPx = eventHeight,
-                            onTap = { onEventTap(event) }
+                        TimeGridEventCard(
+                            event = layoutEvent.event,
+                            info = layoutEvent.info,
+                            startMinute = layoutEvent.startMinute,
+                            endMinute = layoutEvent.endMinute,
+                            widthFraction = widthFraction,
+                            leftFraction = leftFraction,
+                            effectiveHourHeight = effectiveHourHeight,
+                            timeFormat = timeFormat,
+                            snapMinutes = snapMinutes,
+                            hourStart = hourStart,
+                            date = date,
+                            onTap = { onEventTap(layoutEvent.event) },
+                            onLongPress = { onEventLongPress(layoutEvent.event) },
+                            onDragEnd = onEventDragEnd
                         )
                     }
                 }
@@ -607,35 +315,48 @@ fun WeekTimeGrid(
     }
 }
 
+// ─── All-Day Event Chip ─────────────────────────────────────────────────────────
+
 @Composable
-private fun WeekEventChip(
+private fun AllDayEventChip(
     event: ChitEntity,
-    topOffsetPx: Float,
-    heightPx: Float,
-    onTap: () -> Unit
+    info: CalendarDateInfo,
+    timeFormat: String,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit
 ) {
-    val eventBgColor = CwocChitCardStyle.resolveChitBgColor(event.color)
-    val eventTextColor = CwocChitCardStyle.contrastTextColor(eventBgColor)
-    val density = LocalDensity.current
+    val bgColor = CwocChitCardStyle.resolveChitBgColor(event.color)
+    val textColor = CwocChitCardStyle.contrastTextColor(bgColor)
+    val isCompleted = event.status == "Complete"
 
     Box(
         modifier = Modifier
-            .offset { IntOffset(0, topOffsetPx.toInt()) }
             .fillMaxWidth()
-            .height(with(density) { heightPx.toDp() })
-            .padding(horizontal = 1.dp, vertical = 0.5.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(eventBgColor)
-            .clickable { onTap() }
-            .padding(2.dp)
+            .padding(vertical = 1.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(bgColor)
+            .alpha(if (isCompleted) 0.6f else 1f)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onLongPress = { onLongPress() }
+                )
+            }
+            .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
+        val prefix = when {
+            info.isDueOnly -> "⌚ "
+            info.isPointInTime -> "📌 "
+            event.pinned == true -> "📌 "
+            else -> ""
+        }
         Text(
-            text = event.title ?: "",
+            text = "$prefix${event.title ?: "(Untitled)"}",
             style = MaterialTheme.typography.labelSmall,
-            color = eventTextColor,
+            color = textColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 8.sp
+            textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
         )
     }
 }

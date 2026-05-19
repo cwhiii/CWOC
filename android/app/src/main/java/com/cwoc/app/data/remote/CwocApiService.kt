@@ -22,6 +22,7 @@ import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -181,23 +182,31 @@ interface CwocApiService {
      * Uses @Streaming to avoid loading the entire file into memory.
      */
     @Streaming
-    @GET("/api/attachment/{id}/download")
+    @GET("/api/chits/{chitId}/attachments/{attachmentId}")
     suspend fun downloadAttachment(
-        @Path("id") attachmentId: String
+        @Path("chitId") chitId: String,
+        @Path("attachmentId") attachmentId: String
     ): Response<ResponseBody>
 
     /**
      * Upload an attachment file via multipart POST.
-     * Returns the server-assigned URL and metadata for the uploaded file.
+     * Returns the server-assigned metadata for the uploaded file.
      */
     @Multipart
-    @POST("/api/attachment/upload")
+    @POST("/api/chits/{chitId}/attachments")
     suspend fun uploadAttachment(
-        @Part("chitId") chitId: RequestBody,
-        @Part("filename") filename: RequestBody,
-        @Part("mimeType") mimeType: RequestBody,
+        @Path("chitId") chitId: String,
         @Part file: MultipartBody.Part
     ): Response<AttachmentUploadResponse>
+
+    /**
+     * Delete an attachment from a chit.
+     */
+    @DELETE("/api/chits/{chitId}/attachments/{attachmentId}")
+    suspend fun deleteAttachment(
+        @Path("chitId") chitId: String,
+        @Path("attachmentId") attachmentId: String
+    ): Response<Unit>
 
     /**
      * Fetch weather forecasts for all saved locations.
