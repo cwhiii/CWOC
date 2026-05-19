@@ -538,11 +538,17 @@ private fun LockedFilterDefaults(
 private fun parseOmniLayout(json: String): OmniLayout {
     return try {
         val obj = JSONObject(json)
+        val hweObj = obj.optJSONObject("hideWhenEmpty")
+        val hideMap = mutableMapOf<String, Boolean>()
+        if (hweObj != null) {
+            hweObj.keys().forEach { key -> hideMap[key] = hweObj.optBoolean(key, true) }
+        }
         OmniLayout(
             fullWidth = jsonArrayToStringList(obj.optJSONArray("fullWidth")),
             leftColumn = jsonArrayToStringList(obj.optJSONArray("leftColumn")),
             rightColumn = jsonArrayToStringList(obj.optJSONArray("rightColumn")),
-            unused = jsonArrayToStringList(obj.optJSONArray("unused"))
+            unused = jsonArrayToStringList(obj.optJSONArray("unused")),
+            hideWhenEmpty = hideMap
         )
     } catch (_: Exception) {
         getDefaultOmniLayout()
@@ -555,6 +561,11 @@ private fun serializeOmniLayout(layout: OmniLayout): String {
     obj.put("leftColumn", JSONArray(layout.leftColumn))
     obj.put("rightColumn", JSONArray(layout.rightColumn))
     obj.put("unused", JSONArray(layout.unused))
+    if (layout.hideWhenEmpty.isNotEmpty()) {
+        val hweObj = JSONObject()
+        layout.hideWhenEmpty.forEach { (id, hide) -> hweObj.put(id, hide) }
+        obj.put("hideWhenEmpty", hweObj)
+    }
     return obj.toString()
 }
 
@@ -637,7 +648,16 @@ private fun EnabledPeriodsSection(
     enabledPeriods: String,
     onPeriodsChanged: (String) -> Unit
 ) {
-    val allPeriods = listOf("Day", "Week", "Month", "Year", "Itinerary", "X-Day")
+    val allPeriods = listOf("Itinerary", "Day", "Week", "Work", "SevenDay", "Month", "Year")
+    val periodLabels = mapOf(
+        "Itinerary" to "Itinerary",
+        "Day" to "Day",
+        "Week" to "Week",
+        "Work" to "Work Hours",
+        "SevenDay" to "X Days",
+        "Month" to "Month",
+        "Year" to "Year"
+    )
     val enabledSet = remember(enabledPeriods) {
         enabledPeriods.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
@@ -657,6 +677,8 @@ private fun EnabledPeriodsSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         allPeriods.forEach { period ->
+            // Skip "Work" here — it's handled by the WorkHoursSection checkbox
+            if (period == "Work") return@forEach
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
@@ -676,7 +698,7 @@ private fun EnabledPeriodsSection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = period,
+                    text = periodLabels[period] ?: period,
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -828,7 +850,7 @@ private fun CalendarSection(
     val viewHoursEndInt = settingsState.allViewEndHour.toIntOrNull() ?: 23
     val viewHoursError = viewHoursStartInt >= viewHoursEndInt
 
-    val workHoursEnabled = settingsState.workHoursEnabled == "1"
+    val workHoursEnabled = settingsState.enabledPeriods.split(",").map { it.trim() }.contains("Work")
     val workStartInt = settingsState.workStartHour.toIntOrNull() ?: 9
     val workEndInt = settingsState.workEndHour.toIntOrNull() ?: 17
     val workHoursError = workHoursEnabled && workStartInt >= workEndInt
@@ -875,7 +897,17 @@ private fun CalendarSection(
                 workEndHour = settingsState.workEndHour,
                 workHoursError = workHoursError,
                 onWorkHoursEnabledChanged = { enabled ->
-                    onUpdateSetting("work_hours_enabled", if (enabled) "1" else "0")
+                    // Add or remove "Work" from enabled_periods (matching web behavior)
+                    val currentPeriods = settingsState.enabledPeriods.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                    if (enabled && "Work" !in currentPeriods) {
+                        // Insert after "Week" if present, otherwise at end
+                        val weekIdx = currentPeriods.indexOf("Week")
+                        if (weekIdx >= 0) currentPeriods.add(weekIdx + 1, "Work")
+                        else currentPeriods.add("Work")
+                    } else if (!enabled) {
+                        currentPeriods.remove("Work")
+                    }
+                    onUpdateSetting("enabled_periods", currentPeriods.joinToString(","))
                 },
                 onWorkDaysChanged = { onUpdateSetting("work_days", it) },
                 onWorkStartHourChanged = { onUpdateSetting("work_start_hour", it) },

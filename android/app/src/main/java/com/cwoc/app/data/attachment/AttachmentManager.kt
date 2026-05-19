@@ -126,7 +126,10 @@ class AttachmentManagerImpl @Inject constructor(
         stateFlow.value = DownloadState.Downloading(0f)
 
         return try {
-            val response = apiService.downloadAttachment(attachmentId)
+            // Extract chitId from the metadata record
+            val metadata = attachmentMetadataDao.getById(attachmentId)
+            val chitId = metadata?.chitId ?: return Result.failure(Exception("No metadata for attachment $attachmentId"))
+            val response = apiService.downloadAttachment(chitId, attachmentId)
 
             if (!response.isSuccessful) {
                 val errorMsg = "Download failed: HTTP ${response.code()}"
@@ -275,26 +278,22 @@ class AttachmentManagerImpl @Inject constructor(
         data: ByteArray
     ): Result<String> {
         return try {
-            val chitIdBody = chitId.toRequestBody("text/plain".toMediaType())
-            val filenameBody = filename.toRequestBody("text/plain".toMediaType())
-            val mimeTypeBody = mimeType.toRequestBody("text/plain".toMediaType())
-
             val fileRequestBody = data.toRequestBody(mimeType.toMediaType())
             val filePart = MultipartBody.Part.createFormData("file", filename, fileRequestBody)
 
             val response = apiService.uploadAttachment(
-                chitId = chitIdBody,
-                filename = filenameBody,
-                mimeType = mimeTypeBody,
+                chitId = chitId,
                 file = filePart
             )
 
             if (response.isSuccessful) {
                 val uploadResponse = response.body()
                 if (uploadResponse != null) {
-                    // Update metadata: set URL and clear pendingUpload flag
-                    attachmentMetadataDao.updateAfterUpload(attachmentId, uploadResponse.url)
-                    Result.success(uploadResponse.url)
+                    // Update metadata: clear pendingUpload flag
+                    // The server stores the file at /api/chits/{chitId}/attachments/{id}
+                    val url = "/api/chits/$chitId/attachments/${uploadResponse.id}"
+                    attachmentMetadataDao.updateAfterUpload(attachmentId, url)
+                    Result.success(url)
                 } else {
                     Result.failure(Exception("Upload succeeded but response body was empty"))
                 }

@@ -35,7 +35,7 @@ data class SettingsFormState(
 
     // --- General Section ---
     val timeFormat: String = "12hour",
-    val sex: String = "man",
+    val sex: String = "Man",
     val snoozeLength: String = "5",
     val calendarSnapInterval: String = "15",
     val defaultTimezone: String = "America/New_York",
@@ -107,7 +107,7 @@ data class SettingsFormState(
     val sharedTags: String = "[]",
     val customColors: String = "[]",
     val savedLocations: String = "[]",
-    val defaultNotifications: String = "{\"start_notifications\":[],\"due_notifications\":[]}",
+    val defaultNotifications: String = "{\"start\":[],\"due\":[]}",
     val overdueBorderColor: String = "",
     val blockedBorderColor: String = "",
 
@@ -1710,7 +1710,7 @@ class SettingsViewModel @Inject constructor(
             sharedTags = entity.tags ?: "[]",
             customColors = entity.customColors ?: "[]",
             savedLocations = entity.savedLocations ?: "[]",
-            defaultNotifications = entity.defaultNotifications ?: "{\"start_notifications\":[],\"due_notifications\":[]}",
+            defaultNotifications = entity.defaultNotifications ?: "{\"start\":[],\"due\":[]}",
             overdueBorderColor = entity.overdueBorderColor ?: "",
             blockedBorderColor = entity.blockedBorderColor ?: "",
 

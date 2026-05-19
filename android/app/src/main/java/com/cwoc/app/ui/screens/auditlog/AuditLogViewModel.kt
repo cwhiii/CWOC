@@ -220,6 +220,62 @@ class AuditLogViewModel @Inject constructor(
     }
 
     /**
+     * Revert a chit to its state before the given audit entry's changes.
+     * Calls POST /api/audit-log/{entryId}/revert on the server.
+     * Only applicable to "updated" actions on chit entities.
+     */
+    fun revertEntry(entryId: String) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val serverUrl = prefs.getString("server_url", null) ?: return@withContext
+                    val url = serverUrl.trimEnd('/') + "/api/audit-log/$entryId/revert"
+                    val request = Request.Builder()
+                        .url(url)
+                        .post(okhttp3.RequestBody.create(null, ByteArray(0)))
+                        .build()
+                    val response = okHttpClient.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        _error.value = "Revert failed (${response.code})"
+                    }
+                }
+                // Reload entries to show the new revert entry
+                loadEntries()
+            } catch (e: Exception) {
+                _error.value = "Revert error: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Delete/prune audit log entries older than the given number of days.
+     * Calls DELETE /api/audit-log/prune?older_than_days=N on the server.
+     */
+    fun pruneEntries(olderThanDays: Int) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val serverUrl = prefs.getString("server_url", null) ?: return@withContext
+                    val url = serverUrl.trimEnd('/') + "/api/audit-log/prune?older_than_days=$olderThanDays"
+                    val request = Request.Builder()
+                        .url(url)
+                        .delete()
+                        .build()
+                    val response = okHttpClient.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        _error.value = "Prune failed (${response.code})"
+                    }
+                }
+                // Reload entries after pruning
+                _offset.value = 0
+                loadEntries()
+            } catch (e: Exception) {
+                _error.value = "Prune error: ${e.message}"
+            }
+        }
+    }
+
+    /**
      * Export audit log as CSV with current filters applied.
      * Downloads the CSV from the server and opens the Android share sheet.
      */

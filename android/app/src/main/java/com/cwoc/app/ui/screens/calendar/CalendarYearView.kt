@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,7 +49,8 @@ fun YearView(
     events: List<ChitEntity>,
     selectedDate: LocalDate,
     weekStartDay: String,
-    onMonthTap: (LocalDate) -> Unit
+    onMonthTap: (LocalDate) -> Unit,
+    onDayTap: (LocalDate) -> Unit = {}
 ) {
     val year = selectedDate.year
     val today = LocalDate.now()
@@ -57,8 +59,12 @@ fun YearView(
 
     // Build a set of days that have events for quick lookup
     val eventDays: Set<LocalDate> = remember(events) {
-        events.mapNotNull { chit ->
-            chit.startDatetime?.let { parseToLocalDate(it) }
+        events.flatMap { chit ->
+            listOfNotNull(
+                chit.startDatetime?.let { parseToLocalDate(it) },
+                chit.dueDatetime?.let { parseToLocalDate(it) },
+                chit.pointInTime?.let { parseToLocalDate(it) }
+            )
         }.toSet()
     }
 
@@ -92,6 +98,7 @@ fun YearView(
                         eventDays = eventDays,
                         firstDayOfWeek = firstDayOfWeek,
                         onMonthTap = { onMonthTap(firstOfMonth) },
+                        onDayTap = onDayTap,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -116,6 +123,7 @@ private fun MiniMonthGrid(
     eventDays: Set<LocalDate>,
     firstDayOfWeek: DayOfWeek,
     onMonthTap: () -> Unit,
+    onDayTap: (LocalDate) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val containerColor = if (isCurrentMonth) {
@@ -197,6 +205,7 @@ private fun MiniMonthGrid(
                                 dayNumber = dayNumber,
                                 hasEvent = hasEvent,
                                 isToday = isToday,
+                                onTap = { onDayTap(date) },
                                 modifier = Modifier.weight(1f)
                             )
                         } else {
@@ -219,10 +228,11 @@ private fun DayCell(
     dayNumber: Int,
     hasEvent: Boolean,
     isToday: Boolean,
+    onTap: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier.aspectRatio(1f),
+        modifier = modifier.aspectRatio(1f).clickable { onTap() },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -236,7 +246,7 @@ private fun DayCell(
                     Modifier
                         .size(16.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(Color(0xFF4A2C2A)) // web's --aged-brown-dark
                 } else {
                     Modifier.size(16.dp)
                 }
@@ -245,7 +255,7 @@ private fun DayCell(
                     text = dayNumber.toString(),
                     fontSize = 8.sp,
                     color = if (isToday) {
-                        MaterialTheme.colorScheme.onPrimary
+                        Color(0xFFFDF5E6) // parchment light
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },

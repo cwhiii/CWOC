@@ -28,6 +28,10 @@ interface ChitDao {
     @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND (startDatetime BETWEEN :dayStart AND :dayEnd OR endDatetime BETWEEN :dayStart AND :dayEnd OR (startDatetime <= :dayStart AND endDatetime >= :dayEnd) OR dueDatetime BETWEEN :dayStart AND :dayEnd OR pointInTime BETWEEN :dayStart AND :dayEnd)")
     fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>>
 
+    /** All recurring chits (for recurrence expansion into any date range). */
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND recurrenceRule IS NOT NULL AND recurrenceRule != '' AND recurrenceRule != 'null'")
+    fun getRecurringChits(): Flow<List<ChitEntity>>
+
     @Query("SELECT * FROM chits WHERE id = :id")
     suspend fun getById(id: String): ChitEntity?
 
@@ -104,6 +108,10 @@ interface ChitDao {
     /** All non-deleted chits (for search). */
     @Query("SELECT * FROM chits WHERE deleted = 0")
     fun getAllNonDeleted(): Flow<List<ChitEntity>>
+
+    /** All non-deleted chits as a one-shot suspend query (for autocomplete/search). */
+    @Query("SELECT * FROM chits WHERE deleted = 0")
+    suspend fun getAllNonDeletedSnapshot(): List<ChitEntity>
 
     // Phase 4 — Widget suspend queries (non-Flow for RemoteViews context)
 

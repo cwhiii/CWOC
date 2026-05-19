@@ -371,6 +371,9 @@ function _restoreUIState() {
       if (activeTab) activeTab.classList.add('active');
     }
 
+    // Update favicon for restored tab
+    if (typeof _updateFavicon === 'function') _updateFavicon(currentTab);
+
     // Restore period select
     var periodSel = document.getElementById('period-select');
     if (periodSel) periodSel.value = currentView;
@@ -1116,6 +1119,7 @@ document.addEventListener("DOMContentLoaded", function () {
         var defTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
         if (defTab) defTab.classList.add('active');
       }
+      if (typeof _updateFavicon === 'function') _updateFavicon(currentTab);
       if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
     }
 
@@ -1335,6 +1339,8 @@ document.addEventListener("DOMContentLoaded", function () {
       currentTab = 'Omni';
       // Remove .active from all C CAPTN tabs — Omni View has no tab highlight
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      // Update favicon to the general CWOC icon for Omni View
+      _updateFavicon('Omni');
       displayChits();
     });
   }

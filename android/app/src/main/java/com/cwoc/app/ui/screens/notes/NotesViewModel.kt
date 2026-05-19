@@ -1,5 +1,6 @@
 package com.cwoc.app.ui.screens.notes
 
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
@@ -32,7 +33,8 @@ class NotesViewModel @Inject constructor(
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
-    private val syncStateManager: SyncStateManager
+    private val syncStateManager: SyncStateManager,
+    private val prefs: SharedPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -40,6 +42,9 @@ class NotesViewModel @Inject constructor(
 
     /** Aggregated sync state for the UI indicator (green/orange/red dot). */
     val syncState: StateFlow<SyncState> = syncStateManager.syncState
+
+    /** Current user ID for stealth/owner comparisons. */
+    val currentUserId: String get() = prefs.getString("user_id", "") ?: ""
 
     /** The chit ID currently pending deletion (undo window active). Null means no pending delete. */
     private val _pendingDeleteChitId = MutableStateFlow<String?>(null)

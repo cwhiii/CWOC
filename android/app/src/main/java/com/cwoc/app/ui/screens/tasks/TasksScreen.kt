@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +68,8 @@ import com.cwoc.app.ui.components.TagChipsRow
 import com.cwoc.app.ui.components.ChecklistProgressBadge
 import com.cwoc.app.ui.components.PeopleChipsRow
 import com.cwoc.app.ui.components.SharingIndicators
+import com.cwoc.app.ui.components.RsvpIndicators
+import com.cwoc.app.ui.components.ReorderableLazyColumn
 import com.cwoc.app.ui.components.ArchiveSnoozeIndicators
 import com.cwoc.app.ui.components.HealthIndicatorBadges
 import com.cwoc.app.ui.components.LocationIndicator
@@ -85,6 +88,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.LaunchedEffect
+import com.cwoc.app.data.remote.dto.RuleHabitDto
 
 /**
  * Tasks screen — flat list of task chits with inline status dropdown, note preview,
@@ -115,6 +120,13 @@ fun TasksScreen(
     val pendingDeleteChitId by viewModel.pendingDeleteChitId.collectAsState()
     val pendingDeleteTitle by viewModel.pendingDeleteTitle.collectAsState()
 
+    val showMapThumbnails by viewModel.showMapThumbnails.collectAsState()
+    val subChitIds by viewModel.subChitIds.collectAsState()
+
+    val contactImages by viewModel.contactImages.collectAsState()
+    val serverUrl = viewModel.serverUrl
+    val authToken = viewModel.authToken
+
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
 
@@ -125,13 +137,27 @@ fun TasksScreen(
     val coroutineScope = rememberCoroutineScope()
 
     // Phase 7: Apply filters then sort. When sort=NONE, use status weight order.
-    val filteredSortedTasks = remember(uiState.tasks, filterState, sortState) {
+    // When sort=MANUAL, apply the saved manual order from FilterSortViewModel.
+    val manualOrder = remember(sortState) {
+        if (sortState.field == SortField.MANUAL) filterSortViewModel?.getManualOrder() ?: emptyList()
+        else emptyList()
+    }
+
+    val filteredSortedTasks = remember(uiState.tasks, filterState, sortState, manualOrder) {
         val filtered = FilterEngine.applyFilters(uiState.tasks, filterState)
-        val sorted = if (sortState.field == SortField.NONE) {
-            // Phase 7.1: Default sort by status weight
-            filtered.sortedBy { statusWeight(it.status) }
-        } else {
-            SortEngine.sort(filtered, sortState.field, sortState.direction)
+        val sorted = when {
+            sortState.field == SortField.NONE -> {
+                // Phase 7.1: Default sort by status weight
+                filtered.sortedBy { statusWeight(it.status) }
+            }
+            sortState.field == SortField.MANUAL && manualOrder.isNotEmpty() -> {
+                // Apply saved manual order: items in order come first, then new items
+                val orderMap = manualOrder.withIndex().associate { (i, id) -> id to i }
+                filtered.sortedBy { orderMap[it.id] ?: Int.MAX_VALUE }
+            }
+            else -> {
+                SortEngine.sort(filtered, sortState.field, sortState.direction)
+            }
         }
         val pinned = sortPinnedFirst(sorted) { it.pinned }
         filterSnoozedItems(pinned)
@@ -169,13 +195,45 @@ fun TasksScreen(
                                         coroutineScope.launch { repo.updateStatus(chitId, newStatus) }
                                     }
                                 },
+                                showMapThumbnails = showMapThumbnails,
+                                subChitIds = subChitIds,
+                                onRsvpAction = { chitId, status -> viewModel.updateRsvp(chitId, status) },
+                                onReorder = { from, to ->
+                                    filterSortViewModel?.reorderItems(
+                                        filteredSortedTasks.map { it.id }, from, to
+                                    )
+                                },
+                                currentUserId = viewModel.currentUserId,
+                                contactImages = contactImages,
+                                serverUrl = serverUrl,
+                                authToken = authToken,
                                 modifier = Modifier.padding(paddingValues)
                             )
                         }
                         "habits" -> {
+                            // Fetch rule habits when habits mode activates
+                            LaunchedEffect(Unit) {
+                                viewModel.fetchRuleHabits()
+                            }
+                            val ruleHabits by viewModel.ruleHabits.collectAsState()
+                            val combinedSuccessRate by viewModel.combinedSuccessRate.collectAsState()
+                            val habitsWindow by viewModel.habitsSuccessWindow.collectAsState()
                             HabitsView(
                                 allTasks = filteredSortedTasks,
+                                ruleHabits = ruleHabits,
+                                combinedSuccessRate = combinedSuccessRate,
+                                windowDays = habitsWindow,
                                 onClickTask = { onNavigateToEditor(it) },
+                                onIncrementHabit = { chitId ->
+                                    chitRepository?.let { repo ->
+                                        coroutineScope.launch { repo.incrementHabitSuccess(chitId) }
+                                    }
+                                },
+                                onDecrementHabit = { chitId ->
+                                    chitRepository?.let { repo ->
+                                        coroutineScope.launch { repo.decrementHabitSuccess(chitId) }
+                                    }
+                                },
                                 modifier = Modifier.padding(paddingValues)
                             )
                         }
@@ -209,6 +267,18 @@ fun TasksScreen(
                                             coroutineScope.launch { repo.updateStatus(chitId, newStatus) }
                                         }
                                     },
+                                    showMapThumbnails = showMapThumbnails,
+                                    subChitIds = subChitIds,
+                                    onRsvpAction = { chitId, status -> viewModel.updateRsvp(chitId, status) },
+                                    onReorder = { from, to ->
+                                        filterSortViewModel?.reorderItems(
+                                            assignedTasks.map { it.id }, from, to
+                                        )
+                                    },
+                                    currentUserId = viewModel.currentUserId,
+                                    contactImages = contactImages,
+                                    serverUrl = serverUrl,
+                                    authToken = authToken,
                                     modifier = Modifier.padding(paddingValues)
                                 )
                             }
@@ -285,27 +355,72 @@ private fun TasksFlatList(
     onClickTask: (String) -> Unit,
     onLongPressTask: (ChitEntity) -> Unit,
     onStatusChange: (String, String) -> Unit,
+    showMapThumbnails: Boolean = false,
+    subChitIds: Set<String> = emptySet(),
+    onRsvpAction: ((String, String) -> Unit)? = null,
+    onReorder: ((Int, Int) -> Unit)? = null,
+    currentUserId: String = "",
+    contactImages: Map<String, String?> = emptyMap(),
+    serverUrl: String = "",
+    authToken: String = "",
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        item { Spacer(modifier = Modifier.height(4.dp)) }
-        items(tasks, key = { it.id }) { task ->
+    // Use ReorderableLazyColumn when manual sort is active and reorder callback provided
+    if (sortState.field == SortField.MANUAL && onReorder != null) {
+        ReorderableLazyColumn(
+            items = tasks,
+            key = { it.id },
+            onReorder = onReorder,
+            enabled = true,
+            modifier = modifier.padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
+        ) { task, isDragging ->
             SwipeableChitCard(onDelete = { onDeleteTask(task.id) }) {
                 TaskCard(
                     task = task,
                     sortState = sortState,
                     onClick = { onClickTask(task.id) },
                     onLongClick = { onLongPressTask(task) },
-                    onStatusChange = onStatusChange
+                    onStatusChange = onStatusChange,
+                    showMapThumbnails = showMapThumbnails,
+                    isSubChit = task.id in subChitIds,
+                    onRsvpAction = onRsvpAction,
+                    currentUserId = currentUserId,
+                    contactImages = contactImages,
+                    serverUrl = serverUrl,
+                    authToken = authToken
                 )
             }
         }
-        item { Spacer(modifier = Modifier.height(80.dp)) } // FAB clearance
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            item { Spacer(modifier = Modifier.height(4.dp)) }
+            items(tasks, key = { it.id }) { task ->
+                SwipeableChitCard(onDelete = { onDeleteTask(task.id) }) {
+                    TaskCard(
+                        task = task,
+                        sortState = sortState,
+                        onClick = { onClickTask(task.id) },
+                        onLongClick = { onLongPressTask(task) },
+                        onStatusChange = onStatusChange,
+                        showMapThumbnails = showMapThumbnails,
+                        isSubChit = task.id in subChitIds,
+                        onRsvpAction = onRsvpAction,
+                        currentUserId = currentUserId,
+                        contactImages = contactImages,
+                        serverUrl = serverUrl,
+                        authToken = authToken
+                    )
+                }
+            }
+            item { Spacer(modifier = Modifier.height(80.dp)) } // FAB clearance
+        }
     }
 }
 
@@ -318,7 +433,14 @@ private fun TaskCard(
     sortState: SortState,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onStatusChange: (String, String) -> Unit
+    onStatusChange: (String, String) -> Unit,
+    showMapThumbnails: Boolean = false,
+    isSubChit: Boolean = false,
+    onRsvpAction: ((String, String) -> Unit)? = null,
+    currentUserId: String = "",
+    contactImages: Map<String, String?> = emptyMap(),
+    serverUrl: String = "",
+    authToken: String = ""
 ) {
     var showStatusDropdown by remember { mutableStateOf(false) }
     var noteExpanded by remember { mutableStateOf(false) }
@@ -326,10 +448,11 @@ private fun TaskCard(
     val cardBgColor = remember(task.color) { CwocChitCardStyle.resolveChitBgColor(task.color) }
     val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
-    // Phase 5: Card-level opacity for completed/archived
+    // Phase 5: Card-level opacity for completed/archived/declined
     val cardAlpha = when {
         task.status == "Complete" || task.status == "Rejected" -> 0.5f
         task.archived -> 0.45f
+        task.availability == "declined" -> 0.5f
         else -> 1f
     }
 
@@ -356,7 +479,7 @@ private fun TaskCard(
                     modifier = Modifier.padding(end = 4.dp)
                 )
                 // Phase 1.3: Indicator icons
-                IndicatorIcons(task = task, textColor = cardTextColor)
+                IndicatorIcons(task = task, textColor = cardTextColor, isSubChit = isSubChit, currentUserId = currentUserId)
                 // Title
                 Text(
                     text = task.title ?: "(Untitled)",
@@ -379,7 +502,8 @@ private fun TaskCard(
                 showDropdown = showStatusDropdown,
                 onToggleDropdown = { showStatusDropdown = it },
                 onStatusChange = onStatusChange,
-                textColor = cardTextColor
+                textColor = cardTextColor,
+                currentUserId = currentUserId
             )
 
             // ── Phase 3: Note preview ──
@@ -395,14 +519,35 @@ private fun TaskCard(
 
             // ── Phase 4: Location indicator ──
             if (!task.location.isNullOrBlank()) {
-                LocationIndicator(location = task.location, modifier = Modifier.padding(top = 4.dp), textColor = cardTextColor.copy(alpha = 0.7f))
+                LocationIndicator(location = task.location, modifier = Modifier.padding(top = 4.dp), showMapThumbnail = showMapThumbnails, textColor = cardTextColor.copy(alpha = 0.7f))
             }
 
             // Existing shared components
             TagChipsRow(tags = task.tags, modifier = Modifier.padding(top = 4.dp))
             ChecklistProgressBadge(checklistJson = task.checklist, modifier = Modifier.padding(top = 4.dp), textColor = cardTextColor)
-            PeopleChipsRow(people = task.people, modifier = Modifier.padding(top = 4.dp))
+            PeopleChipsRow(
+                people = task.people,
+                modifier = Modifier.padding(top = 4.dp),
+                contactImages = contactImages,
+                serverUrl = serverUrl,
+                authToken = authToken
+            )
             SharingIndicators(chit = task, modifier = Modifier.padding(top = 4.dp))
+            RsvpIndicators(
+                sharesJson = task.shares,
+                modifier = Modifier.padding(top = 4.dp),
+                chitId = task.id,
+                onRsvpAction = onRsvpAction
+            )
+            // Assignee badge (matching web's cwoc-assignee-badge)
+            if (!task.assignedTo.isNullOrBlank()) {
+                Text(
+                    text = "📌 ${task.assignedTo}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cardTextColor.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
             HealthIndicatorBadges(healthDataJson = task.healthData, modifier = Modifier.padding(top = 4.dp))
 
             // Habit indicators
@@ -423,8 +568,8 @@ private fun TaskCard(
 // ─── Phase 1.3: Indicator Icons ─────────────────────────────────────────────────
 
 @Composable
-private fun IndicatorIcons(task: ChitEntity, textColor: Color) {
-    // Show inline indicator emojis before the title
+private fun IndicatorIcons(task: ChitEntity, textColor: Color, isSubChit: Boolean = false, currentUserId: String = "") {
+    // Show inline indicator emojis before the title (matching web's _buildChitHeader left side)
     val indicators = buildString {
         if (task.pinned) append("🔖 ")
         if (task.archived) append("📦 ")
@@ -434,9 +579,24 @@ private fun IndicatorIcons(task: ChitEntity, textColor: Color) {
                 if (snoozeEnd.isAfter(Instant.now())) append("😴 ")
             } catch (_: Exception) {}
         }
-        if (task.stealth == true) append("🥷 ")
-        // Sub-chit indicator would require checking parent projects — skip for now
+        // Stealth — only visible to the owner (Requirement 6.5)
+        if (task.stealth == true && (currentUserId.isBlank() || task.ownerId == currentUserId)) append("🥷 ")
+        if (isSubChit) append("🔗📋 ")
+        // Timezone warning — unrecognized timezone on anchored chit
+        if (!task.timezone.isNullOrBlank() && task.startDatetime != null) {
+            try {
+                val tz = java.util.TimeZone.getTimeZone(task.timezone)
+                if (tz.id == "GMT" && task.timezone != "GMT" && task.timezone != "UTC") {
+                    append("⚠️ ")
+                }
+            } catch (_: Exception) { append("⚠️ ") }
+        }
         if (task.alarm == true || task.notification == true) append("🔔 ")
+        // Weather indicator from stored weather_data
+        if (!task.weatherData.isNullOrBlank()) {
+            val emoji = parseWeatherEmojiFromJson(task.weatherData)
+            if (emoji.isNotBlank()) append("$emoji ")
+        }
     }
     if (indicators.isNotEmpty()) {
         Text(
@@ -560,13 +720,19 @@ private fun StatusDropdownRow(
     showDropdown: Boolean,
     onToggleDropdown: (Boolean) -> Unit,
     onStatusChange: (String, String) -> Unit,
-    textColor: Color
+    textColor: Color,
+    currentUserId: String = ""
 ) {
     val status = task.status ?: "ToDo"
     val statusCol = statusColor(status)
     // Phase 1.6: Blocked highlighting
     val isBlocked = status == "Blocked"
     val blockedColor = Color(0xFFDAA520) // configurable blocked_border_color default
+
+    // Viewer-role check: disable status dropdown for viewer-role shared chits
+    val isViewerRole = remember(task.shares, currentUserId) {
+        com.cwoc.app.domain.sharing.SharingUtils.isViewerRole(task, currentUserId)
+    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Status icon
@@ -579,34 +745,38 @@ private fun StatusDropdownRow(
             Surface(
                 shape = RoundedCornerShape(4.dp),
                 color = if (isBlocked) blockedColor else statusCol.copy(alpha = 0.12f),
-                modifier = Modifier.clickable { onToggleDropdown(true) }
+                modifier = Modifier.clickable(enabled = !isViewerRole) { onToggleDropdown(true) }
             ) {
                 Text(
                     text = if (isBlocked && task.prerequisites?.isNotEmpty() == true) "$status ⛓️" else status,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isBlocked) CwocChitCardStyle.contrastTextColor(blockedColor) else statusCol,
                     fontWeight = if (isBlocked) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .alpha(if (isViewerRole) 0.5f else 1f)
                 )
             }
-            DropdownMenu(
-                expanded = showDropdown,
-                onDismissRequest = { onToggleDropdown(false) }
-            ) {
-                listOf("ToDo", "In Progress", "Blocked", "Complete", "Rejected").forEach { s ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = statusIcon(s), fontSize = 12.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = s)
+            if (!isViewerRole) {
+                DropdownMenu(
+                    expanded = showDropdown,
+                    onDismissRequest = { onToggleDropdown(false) }
+                ) {
+                    listOf("ToDo", "In Progress", "Blocked", "Complete", "Rejected").forEach { s ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(text = statusIcon(s), fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(text = s)
+                                }
+                            },
+                            onClick = {
+                                onToggleDropdown(false)
+                                onStatusChange(task.id, s)
                             }
-                        },
-                        onClick = {
-                            onToggleDropdown(false)
-                            onStatusChange(task.id, s)
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -621,13 +791,10 @@ private fun NotePreview(note: String, expanded: Boolean, onToggle: () -> Unit, t
     val maxLines = if (expanded) Int.MAX_VALUE else 3
 
     Column(modifier = Modifier.animateContentSize()) {
-        Text(
-            text = previewText,
-            style = MaterialTheme.typography.bodySmall,
-            color = textColor.copy(alpha = 0.7f),
-            maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 16.sp
+        // Render markdown (matching web's marked.js rendering in note preview)
+        com.cwoc.app.ui.components.MarkdownRenderer(
+            markdown = previewText,
+            modifier = Modifier.fillMaxWidth()
         )
         // Toggle button
         Text(
@@ -780,12 +947,17 @@ private fun HabitIndicatorRow(
 @Composable
 private fun HabitsView(
     allTasks: List<ChitEntity>,
+    ruleHabits: List<RuleHabitDto> = emptyList(),
+    combinedSuccessRate: Int? = null,
+    windowDays: Int = -1,
     onClickTask: (String) -> Unit,
+    onIncrementHabit: (String) -> Unit = {},
+    onDecrementHabit: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val habits = remember(allTasks) { allTasks.filter { it.habit } }
 
-    if (habits.isEmpty()) {
+    if (habits.isEmpty() && ruleHabits.isEmpty()) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = "No habits yet. Mark a recurring chit as a habit in the editor.",
@@ -823,13 +995,41 @@ private fun HabitsView(
         modifier = modifier.fillMaxSize().padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // ── Aggregate Success Rate Bar ──
+        if (combinedSuccessRate != null) {
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFDF5E6)),
+                    border = CwocChitCardStyle.cardBorder,
+                    elevation = CwocChitCardStyle.cardElevation()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "📊 Combined Success Rate: $combinedSuccessRate%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF6B4E31)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { combinedSuccessRate / 100f },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = Color(0xFF6B4E31),
+                            trackColor = Color(0xFFE8D5B7)
+                        )
+                    }
+                }
+            }
+        }
         if (onDeck.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("🔜 On Deck", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF6B4E31))
             }
             items(onDeck, key = { it.id }) { chit ->
-                HabitCard(chit = chit, section = "onDeck", onClick = { onClickTask(chit.id) })
+                HabitCard(chit = chit, section = "onDeck", windowDays = windowDays, onClick = { onClickTask(chit.id) }, onIncrement = { onIncrementHabit(chit.id) }, onDecrement = { onDecrementHabit(chit.id) })
             }
         }
         if (outOfMind.isNotEmpty()) {
@@ -838,7 +1038,7 @@ private fun HabitsView(
                 Text("😌 Out of Mind", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF5C4A3A))
             }
             items(outOfMind, key = { it.id }) { chit ->
-                HabitCard(chit = chit, section = "outOfMind", onClick = { onClickTask(chit.id) })
+                HabitCard(chit = chit, section = "outOfMind", windowDays = windowDays, onClick = { onClickTask(chit.id) }, onIncrement = { onIncrementHabit(chit.id) }, onDecrement = { onDecrementHabit(chit.id) })
             }
         }
         if (accomplished.isNotEmpty()) {
@@ -847,9 +1047,21 @@ private fun HabitsView(
                 Text("✅ Accomplished", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF4A6741))
             }
             items(accomplished, key = { it.id }) { chit ->
-                HabitCard(chit = chit, section = "accomplished", onClick = { onClickTask(chit.id) })
+                HabitCard(chit = chit, section = "accomplished", windowDays = windowDays, onClick = { onClickTask(chit.id) }, onIncrement = { onIncrementHabit(chit.id) }, onDecrement = { onDecrementHabit(chit.id) })
             }
         }
+
+        // ── Rule Habits Section ──
+        if (ruleHabits.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("🤖 Rule Habits", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF6B4E31))
+            }
+            items(ruleHabits, key = { it.id }) { rule ->
+                RuleHabitCard(rule = rule)
+            }
+        }
+
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }
@@ -857,11 +1069,16 @@ private fun HabitsView(
 // ─── HabitCard ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HabitCard(chit: ChitEntity, section: String, onClick: () -> Unit) {
+private fun HabitCard(chit: ChitEntity, section: String, windowDays: Int = -1, onClick: () -> Unit, onIncrement: () -> Unit = {}, onDecrement: () -> Unit = {}) {
     val goal = chit.habitGoal ?: 1
     val success = chit.habitSuccess ?: 0
     val streak = calculateStreak(chit.habitLastActionDate, chit.habitResetPeriod)
     val progressFraction = if (goal > 0) (success.toFloat() / goal.toFloat()).coerceIn(0f, 1f) else 0f
+    val isComplete = success >= goal
+    val isResetActive = isResetPeriodActive(chit)
+    val freqLabel = getFrequencyLabel(chit)
+    val (successRate, metCount, totalPeriods) = calculateHistoricalSuccessRate(chit, windowDays)
+    val cyclePct = if (goal > 0) (success * 100) / goal else 0
 
     val cardBgColor = remember(chit.color) { CwocChitCardStyle.resolveChitBgColor(chit.color) }
     val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
@@ -896,13 +1113,32 @@ private fun HabitCard(chit: ChitEntity, section: String, onClick: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             if (goal == 1) {
+                // Checkbox for goal=1 habits — functional
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = success >= goal, onCheckedChange = null, enabled = false)
+                    Checkbox(
+                        checked = isComplete,
+                        onCheckedChange = { checked ->
+                            if (checked && !isComplete) onIncrement()
+                            else if (!checked && isComplete) onDecrement()
+                        },
+                        enabled = !isResetActive || !isComplete
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (success >= goal) "Complete" else "Not done", style = MaterialTheme.typography.bodySmall, color = cardTextColor.copy(alpha = 0.7f))
+                    Text(
+                        if (isComplete) "Complete" else "Not done",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cardTextColor.copy(alpha = 0.7f)
+                    )
                 }
             } else {
+                // Counter with +/- buttons for goal>1 habits
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onDecrement,
+                        enabled = success > 0,
+                        modifier = Modifier.size(36.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                    ) { Text("−", fontSize = 18.sp) }
                     LinearProgressIndicator(
                         progress = { progressFraction },
                         modifier = Modifier.weight(1f).height(8.dp),
@@ -910,9 +1146,44 @@ private fun HabitCard(chit: ChitEntity, section: String, onClick: () -> Unit) {
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                     Text("$success / $goal", style = MaterialTheme.typography.labelMedium, color = cardTextColor.copy(alpha = 0.8f))
+                    Button(
+                        onClick = onIncrement,
+                        enabled = !isComplete && (!isResetActive || !isComplete),
+                        modifier = Modifier.size(36.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                    ) { Text("+", fontSize = 18.sp) }
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
+            // ── Metrics Row (matching web's habit-metrics) ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Progress text with frequency
+                Text(
+                    text = "$success / $goal${if (freqLabel.isNotBlank()) " $freqLabel" else ""}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cardTextColor.copy(alpha = 0.7f)
+                )
+                // Cycle %
+                Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Text("🎯 $cyclePct%", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                }
+                // Overall success rate (from history)
+                if (totalPeriods > 0 && chit.habitHideOverall != true) {
+                    Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                        Text("📈 $successRate%", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                    }
+                }
+                // Streak
+                if (streak > 0) {
+                    Surface(shape = RoundedCornerShape(3.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                        Text("🔥 $streak", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                    }
+                }
+            }
             val resetDisplay = formatResetPeriod(chit.habitResetPeriod)
             if (resetDisplay != null) {
                 Text("Resets: $resetDisplay", style = MaterialTheme.typography.bodySmall, color = cardTextColor.copy(alpha = 0.7f))
@@ -929,6 +1200,146 @@ private fun HabitCard(chit: ChitEntity, section: String, onClick: () -> Unit) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("✅ Complete for this cycle", style = MaterialTheme.typography.bodySmall, color = Color(0xFF4A6741))
                 }
+            }
+
+            // Note preview (matching web's habit-note-preview)
+            if (!chit.note.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = chit.note.take(120) + if (chit.note.length > 120) "…" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cardTextColor.copy(alpha = 0.6f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// ─── RuleHabitCard ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun RuleHabitCard(rule: RuleHabitDto) {
+    val summary = rule.habitSummary
+    val currentStatus = summary?.currentStatus ?: "due"
+    val streak = summary?.streak ?: 0
+    val successRate = if (summary?.successRate != null) (summary.successRate * 100).toInt() else 0
+    val period = summary?.period ?: "daily"
+
+    val statusColor = when (currentStatus) {
+        "achieved" -> Color(0xFF4A6741)
+        "missed" -> Color(0xFFB22222)
+        else -> Color(0xFF8B6914) // due — amber/brown
+    }
+    val statusIcon = when (currentStatus) {
+        "achieved" -> "✅"
+        "missed" -> "❌"
+        else -> "⏳"
+    }
+    val statusLabel = currentStatus.replaceFirstChar { it.uppercase() }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFDF5E6)),
+        border = CwocChitCardStyle.cardBorder,
+        elevation = CwocChitCardStyle.cardElevation()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // ── Header: 🤖 badge + name + period ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Robot badge
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFFE8DDD0)
+                ) {
+                    Text(
+                        "🤖",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                // Rule name
+                Text(
+                    text = rule.name.ifBlank { "(Unnamed Rule)" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF1A1208),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                // Period label
+                Text(
+                    text = period.replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF6B4E31).copy(alpha = 0.7f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Metrics row: status pill, streak, success rate ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Status pill
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = statusColor.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "$statusIcon $statusLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = statusColor,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+                // Streak
+                if (streak > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "🔥 $streak",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+                // Success rate
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = "📈 $successRate%",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            // ── Description (if present) ──
+            if (!rule.description.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = rule.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF1A1208).copy(alpha = 0.6f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -992,6 +1403,88 @@ private fun formatResetPeriod(resetPeriod: String?): String? {
     }
 }
 
+/**
+ * Calculate historical success rate from recurrence_exceptions rollover snapshots.
+ * Matches web's logic: count periods where habit_success >= habit_goal.
+ * Returns a Triple of (successRate%, metCount, totalPeriods).
+ */
+private fun calculateHistoricalSuccessRate(chit: ChitEntity, windowDays: Int = -1): Triple<Int, Int, Int> {
+    val goal = chit.habitGoal ?: 1
+    val success = chit.habitSuccess ?: 0
+    val isComplete = success >= goal
+
+    // Calculate the cutoff date for window filtering
+    // windowDays: 7, 30, 90 = last N days; -1 = all time
+    val cutoffDate: LocalDate? = if (windowDays > 0) {
+        LocalDate.now().minusDays(windowDays.toLong())
+    } else null // null means include all entries (all time)
+
+    // Parse recurrence_exceptions JSON for period snapshots
+    val exceptions = try {
+        if (!chit.recurrenceExceptions.isNullOrBlank()) {
+            com.google.gson.Gson().fromJson<List<Map<String, Any?>>>(
+                chit.recurrenceExceptions,
+                object : com.google.gson.reflect.TypeToken<List<Map<String, Any?>>>() {}.type
+            ) ?: emptyList()
+        } else emptyList()
+    } catch (_: Exception) { emptyList() }
+
+    // Filter to only entries with habit-specific fields (rollover snapshots)
+    // and apply date window filter
+    val periodEntries = exceptions.filter { ex ->
+        ex.containsKey("habit_success") && ex.containsKey("habit_goal") && ex["broken_off"] != true &&
+            (cutoffDate == null || isEntryWithinWindow(ex, cutoffDate))
+    }
+
+    // Add current period only if goal is met
+    val allEntries = if (isComplete) {
+        periodEntries + mapOf("habit_success" to success.toDouble(), "habit_goal" to goal.toDouble())
+    } else periodEntries
+
+    if (allEntries.isEmpty()) return Triple(0, 0, 0)
+
+    var metCount = 0
+    allEntries.forEach { entry ->
+        val entrySuccess = (entry["habit_success"] as? Number)?.toInt() ?: 0
+        val entryGoal = (entry["habit_goal"] as? Number)?.toInt() ?: 1
+        if (entrySuccess >= entryGoal) metCount++
+    }
+
+    val rate = if (allEntries.isNotEmpty()) (metCount * 100) / allEntries.size else 0
+    return Triple(rate, metCount, allEntries.size)
+}
+
+/**
+ * Check if a recurrence_exceptions entry's date falls within the window (on or after cutoffDate).
+ * Entries have a "date" field in "YYYY-MM-DD" format.
+ */
+private fun isEntryWithinWindow(entry: Map<String, Any?>, cutoffDate: LocalDate): Boolean {
+    val dateStr = entry["date"] as? String ?: return true // If no date field, include by default
+    return try {
+        val entryDate = LocalDate.parse(dateStr)
+        !entryDate.isBefore(cutoffDate)
+    } catch (_: Exception) {
+        true // If date can't be parsed, include by default
+    }
+}
+
+/**
+ * Get the frequency label for display (e.g., "each Week").
+ */
+private fun getFrequencyLabel(chit: ChitEntity): String {
+    val ruleJson = chit.recurrenceRule ?: return ""
+    return try {
+        val rule = com.google.gson.Gson().fromJson(ruleJson, Map::class.java)
+        when ((rule["freq"] as? String)?.uppercase()) {
+            "DAILY" -> "each Day"
+            "WEEKLY" -> "each Week"
+            "MONTHLY" -> "each Month"
+            "YEARLY" -> "each Year"
+            else -> ""
+        }
+    } catch (_: Exception) { "" }
+}
+
 private fun habitUrgencyScore(chit: ChitEntity): Float {
     val goal = chit.habitGoal ?: 1
     val success = chit.habitSuccess ?: 0
@@ -1015,4 +1508,27 @@ private fun habitUrgencyScore(chit: ChitEntity): Float {
         } catch (_: Exception) { daysInCycle }
     } else { daysInCycle }
     return daysLeft.toFloat() / remaining.toFloat()
+}
+
+// ─── Weather Emoji Helper ───────────────────────────────────────────────────────
+
+/**
+ * Parse weather_data JSON and return the weather emoji for the weather code.
+ * Matches web's _getWeatherIcon logic.
+ */
+private fun parseWeatherEmojiFromJson(weatherJson: String?): String {
+    if (weatherJson.isNullOrBlank()) return ""
+    return try {
+        val codeMatch = Regex(""""weather_code"\s*:\s*(\d+)""").find(weatherJson)
+        val code = codeMatch?.groupValues?.get(1)?.toIntOrNull() ?: return ""
+        when (code) {
+            0 -> "☀️"
+            1, 2, 3 -> "⛅"
+            45, 48 -> "🌫️"
+            51, 53, 55, 61, 63, 65, 80, 81, 82 -> "🌧️"
+            71, 73, 75, 77, 85, 86 -> "❄️"
+            95, 96, 99 -> "⛈️"
+            else -> "🌤️"
+        }
+    } catch (_: Exception) { "" }
 }

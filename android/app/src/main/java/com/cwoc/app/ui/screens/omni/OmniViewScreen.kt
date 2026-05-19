@@ -18,10 +18,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -131,7 +128,6 @@ fun OmniViewScreen(
     val emailExpanded by viewModel.emailExpanded.collectAsState()
     val emailPageSize by viewModel.emailPageSize.collectAsState()
     val hasEmailConfigured by viewModel.hasEmailConfigured.collectAsState()
-    val showLayoutDialog by viewModel.showLayoutDialog.collectAsState()
     val hstMode by viewModel.hstMode.collectAsState()
     val hstClockMode by viewModel.hstClockMode.collectAsState()
     val colorMode by viewModel.colorMode.collectAsState()
@@ -141,23 +137,6 @@ fun OmniViewScreen(
         .sortedBy { it.order }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Configure gear icon
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { viewModel.openLayoutDialog() }) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Configure Layout",
-                    tint = OmniColors.MediumBrown
-                )
-            }
-        }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -370,14 +349,6 @@ fun OmniViewScreen(
         }
     }
 
-    // Layout configuration dialog
-    if (showLayoutDialog) {
-        OmniLayoutDialog(
-            sections = sections,
-            onDismiss = { viewModel.closeLayoutDialog() },
-            onSave = { updatedSections -> viewModel.saveLayout(updatedSections) }
-        )
-    }
 }
 
 // ─── Section Header (Pill Capsule with Icon) ────────────────────────────────────

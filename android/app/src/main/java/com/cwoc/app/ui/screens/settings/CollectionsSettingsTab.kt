@@ -268,6 +268,11 @@ private fun TagEditorSection(
             allTags = tags,
             onDismiss = { showAddDialog = false },
             onConfirm = { updatedTag ->
+                // Reserved tag prefix check (matching web's isReservedTagPrefix)
+                if (updatedTag.name.startsWith("CWOC_System/")) {
+                    // Can't create — silently reject (web shows toast but we're in a dialog)
+                    return@EnhancedTagEditDialog
+                }
                 val newTags = tags + updatedTag
                 onTagsChanged(serializeTagsJson(newTags))
                 showAddDialog = false
@@ -1573,12 +1578,8 @@ private fun DefaultNotificationsSection(
             title = "Add Start Time Notification",
             existingOffsets = notifications.startNotifications.map { it.offsetMinutes },
             onDismiss = { showAddStartDialog = false },
-            onConfirm = { offset ->
-                val newRule = NotificationRule(
-                    label = NOTIFICATION_OFFSETS.find { it.second == offset }?.first ?: "$offset minutes before",
-                    offsetMinutes = offset
-                )
-                val newStart = notifications.startNotifications + newRule
+            onConfirm = { rule ->
+                val newStart = notifications.startNotifications + rule
                 val updated = notifications.copy(startNotifications = newStart)
                 onNotificationsChanged(serializeNotificationsJson(updated))
                 showAddStartDialog = false
@@ -1592,12 +1593,8 @@ private fun DefaultNotificationsSection(
             title = "Add Due Time Notification",
             existingOffsets = notifications.dueNotifications.map { it.offsetMinutes },
             onDismiss = { showAddDueDialog = false },
-            onConfirm = { offset ->
-                val newRule = NotificationRule(
-                    label = NOTIFICATION_OFFSETS.find { it.second == offset }?.first ?: "$offset minutes before",
-                    offsetMinutes = offset
-                )
-                val newDue = notifications.dueNotifications + newRule
+            onConfirm = { rule ->
+                val newDue = notifications.dueNotifications + rule
                 val updated = notifications.copy(dueNotifications = newDue)
                 onNotificationsChanged(serializeNotificationsJson(updated))
                 showAddDueDialog = false
@@ -1628,6 +1625,13 @@ private fun NotificationRuleRow(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f)
             )
+            if (rule.afterTarget) {
+                Text(
+                    text = "⏩",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.Delete,
@@ -1645,59 +1649,100 @@ private fun NotificationOffsetDialog(
     title: String,
     existingOffsets: List<Int>,
     onDismiss: () -> Unit,
-    onConfirm: (offsetMinutes: Int) -> Unit
+    onConfirm: (NotificationRule) -> Unit
 ) {
-    var selectedOffset by remember { mutableStateOf<Int?>(null) }
-    var dropdownExpanded by remember { mutableStateOf(false) }
+    var valueText by remember { mutableStateOf("15") }
+    var selectedUnit by remember { mutableStateOf("minutes") }
+    var afterTarget by remember { mutableStateOf(false) }
+    var unitExpanded by remember { mutableStateOf(false) }
 
-    // Filter out already-used offsets
-    val availableOffsets = NOTIFICATION_OFFSETS.filter { it.second !in existingOffsets }
+    val unitOptions = listOf("minutes" to "min", "hours" to "hr", "days" to "day")
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
-                if (availableOffsets.isEmpty()) {
-                    Text("All notification offsets are already in use.")
-                } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Value + Unit row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = valueText,
+                        onValueChange = { newVal ->
+                            valueText = newVal.filter { it.isDigit() }.take(4)
+                        },
+                        label = { Text("Value") },
+                        singleLine = true,
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+
                     ExposedDropdownMenuBox(
-                        expanded = dropdownExpanded,
-                        onExpandedChange = { dropdownExpanded = !dropdownExpanded }
+                        expanded = unitExpanded,
+                        onExpandedChange = { unitExpanded = !unitExpanded }
                     ) {
                         OutlinedTextField(
-                            value = selectedOffset?.let { offset ->
-                                NOTIFICATION_OFFSETS.find { it.second == offset }?.first ?: ""
-                            } ?: "Select offset...",
+                            value = unitOptions.find { it.first == selectedUnit }?.second ?: "min",
                             onValueChange = {},
                             readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                             modifier = Modifier
                                 .menuAnchor()
-                                .fillMaxWidth()
+                                .width(80.dp),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) }
                         )
                         ExposedDropdownMenu(
-                            expanded = dropdownExpanded,
-                            onDismissRequest = { dropdownExpanded = false }
+                            expanded = unitExpanded,
+                            onDismissRequest = { unitExpanded = false }
                         ) {
-                            availableOffsets.forEach { (label, offset) ->
+                            unitOptions.forEach { (value, label) ->
                                 DropdownMenuItem(
                                     text = { Text(label) },
                                     onClick = {
-                                        selectedOffset = offset
-                                        dropdownExpanded = false
+                                        selectedUnit = value
+                                        unitExpanded = false
                                     }
                                 )
                             }
                         }
                     }
                 }
+
+                // Before/After toggle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Direction:", style = MaterialTheme.typography.bodyMedium)
+                    androidx.compose.material3.FilterChip(
+                        selected = !afterTarget,
+                        onClick = { afterTarget = false },
+                        label = { Text("Before") }
+                    )
+                    androidx.compose.material3.FilterChip(
+                        selected = afterTarget,
+                        onClick = { afterTarget = true },
+                        label = { Text("After") }
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { selectedOffset?.let { onConfirm(it) } },
-                enabled = selectedOffset != null
+                onClick = {
+                    val intValue = valueText.toIntOrNull() ?: 15
+                    if (intValue > 0) {
+                        onConfirm(NotificationRule(
+                            value = intValue,
+                            unit = selectedUnit,
+                            afterTarget = afterTarget
+                        ))
+                    }
+                },
+                enabled = (valueText.toIntOrNull() ?: 0) > 0
             ) {
                 Text("Add")
             }
@@ -1749,9 +1794,31 @@ private data class LocationItem(
 )
 
 private data class NotificationRule(
-    val label: String,
+    val value: Int,
+    val unit: String = "minutes",  // "minutes", "hours", "days"
+    val afterTarget: Boolean = false
+) {
+    /** Human-readable label for display */
+    val label: String
+        get() {
+            val direction = if (afterTarget) "after" else "before"
+            val unitLabel = when {
+                unit == "days" && value == 1 -> "day"
+                unit == "hours" && value == 1 -> "hour"
+                unit == "minutes" && value == 1 -> "minute"
+                else -> unit
+            }
+            return "$value $unitLabel $direction"
+        }
+
+    /** Total offset in minutes (for comparison/dedup) */
     val offsetMinutes: Int
-)
+        get() = when (unit) {
+            "hours" -> value * 60
+            "days" -> value * 1440
+            else -> value
+        }
+}
 
 private data class NotificationsData(
     val startNotifications: List<NotificationRule>,
@@ -2008,29 +2075,54 @@ private fun serializeLocationsJson(locations: List<LocationItem>): String {
 private fun parseNotificationsJson(json: String): NotificationsData {
     return try {
         val obj = JSONObject(json)
-        val startArray = obj.optJSONArray("start_notifications") ?: JSONArray()
-        val dueArray = obj.optJSONArray("due_notifications") ?: JSONArray()
+        // Support both web format (start/due) and Android format (start_notifications/due_notifications)
+        val startArray = obj.optJSONArray("start") ?: obj.optJSONArray("start_notifications") ?: JSONArray()
+        val dueArray = obj.optJSONArray("due") ?: obj.optJSONArray("due_notifications") ?: JSONArray()
 
         val startRules = (0 until startArray.length()).map { i ->
             val ruleObj = startArray.getJSONObject(i)
-            val offset = ruleObj.optInt("offset_minutes", 15)
-            NotificationRule(
-                label = ruleObj.optString("label",
-                    NOTIFICATION_OFFSETS.find { it.second == offset }?.first ?: "$offset minutes before"
-                ),
-                offsetMinutes = offset
-            )
+            // Web format: {value, unit, afterTarget}
+            // Android format: {label, offset_minutes}
+            val value = ruleObj.optInt("value", 0)
+            val unit = ruleObj.optString("unit", "minutes")
+            val afterTarget = ruleObj.optBoolean("afterTarget", false)
+            val offsetMinutes = ruleObj.optInt("offset_minutes", 0)
+
+            if (value > 0) {
+                // Web format — convert to unified
+                NotificationRule(
+                    value = value,
+                    unit = unit,
+                    afterTarget = afterTarget
+                )
+            } else if (offsetMinutes > 0) {
+                // Legacy Android format — convert offset_minutes to value+unit
+                val (convertedValue, convertedUnit) = offsetMinutesToValueUnit(offsetMinutes)
+                NotificationRule(
+                    value = convertedValue,
+                    unit = convertedUnit,
+                    afterTarget = false
+                )
+            } else {
+                NotificationRule(value = 15, unit = "minutes", afterTarget = false)
+            }
         }
 
         val dueRules = (0 until dueArray.length()).map { i ->
             val ruleObj = dueArray.getJSONObject(i)
-            val offset = ruleObj.optInt("offset_minutes", 15)
-            NotificationRule(
-                label = ruleObj.optString("label",
-                    NOTIFICATION_OFFSETS.find { it.second == offset }?.first ?: "$offset minutes before"
-                ),
-                offsetMinutes = offset
-            )
+            val value = ruleObj.optInt("value", 0)
+            val unit = ruleObj.optString("unit", "minutes")
+            val afterTarget = ruleObj.optBoolean("afterTarget", false)
+            val offsetMinutes = ruleObj.optInt("offset_minutes", 0)
+
+            if (value > 0) {
+                NotificationRule(value = value, unit = unit, afterTarget = afterTarget)
+            } else if (offsetMinutes > 0) {
+                val (convertedValue, convertedUnit) = offsetMinutesToValueUnit(offsetMinutes)
+                NotificationRule(value = convertedValue, unit = convertedUnit, afterTarget = false)
+            } else {
+                NotificationRule(value = 15, unit = "minutes", afterTarget = false)
+            }
         }
 
         NotificationsData(startNotifications = startRules, dueNotifications = dueRules)
@@ -2039,26 +2131,38 @@ private fun parseNotificationsJson(json: String): NotificationsData {
     }
 }
 
+/** Convert offset in minutes to the most natural value+unit pair */
+private fun offsetMinutesToValueUnit(offsetMinutes: Int): Pair<Int, String> {
+    return when {
+        offsetMinutes >= 1440 && offsetMinutes % 1440 == 0 -> (offsetMinutes / 1440) to "days"
+        offsetMinutes >= 60 && offsetMinutes % 60 == 0 -> (offsetMinutes / 60) to "hours"
+        else -> offsetMinutes to "minutes"
+    }
+}
+
 private fun serializeNotificationsJson(data: NotificationsData): String {
     val obj = JSONObject()
 
+    // Use web format: {start: [...], due: [...]} with items {value, unit, afterTarget}
     val startArray = JSONArray()
     data.startNotifications.forEach { rule ->
         val ruleObj = JSONObject()
-        ruleObj.put("label", rule.label)
-        ruleObj.put("offset_minutes", rule.offsetMinutes)
+        ruleObj.put("value", rule.value)
+        ruleObj.put("unit", rule.unit)
+        ruleObj.put("afterTarget", rule.afterTarget)
         startArray.put(ruleObj)
     }
 
     val dueArray = JSONArray()
     data.dueNotifications.forEach { rule ->
         val ruleObj = JSONObject()
-        ruleObj.put("label", rule.label)
-        ruleObj.put("offset_minutes", rule.offsetMinutes)
+        ruleObj.put("value", rule.value)
+        ruleObj.put("unit", rule.unit)
+        ruleObj.put("afterTarget", rule.afterTarget)
         dueArray.put(ruleObj)
     }
 
-    obj.put("start_notifications", startArray)
-    obj.put("due_notifications", dueArray)
+    obj.put("start", startArray)
+    obj.put("due", dueArray)
     return obj.toString()
 }

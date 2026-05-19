@@ -72,10 +72,26 @@ fun EmailScreen(
     onNavigateToEmailSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: EmailViewModel = hiltViewModel(),
-    bundleViewModel: BundleViewModel = hiltViewModel()
+    bundleViewModel: BundleViewModel = hiltViewModel(),
+    sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val senderImageUrls by viewModel.senderImageUrls.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Get serverUrl and authToken from SharedPreferences for contact avatar loading
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE) }
+    val serverUrl = remember { prefs.getString("server_url", "") ?: "" }
+    val authToken = remember { prefs.getString("auth_token", "") ?: "" }
+
+    // Observe email folder from sidebar state and sync to ViewModel
+    val sidebarEmailFolder = sidebarStateViewModel?.state?.collectAsState()?.value?.emailFolder
+    androidx.compose.runtime.LaunchedEffect(sidebarEmailFolder) {
+        if (sidebarEmailFolder != null && sidebarEmailFolder != uiState.currentFolder) {
+            viewModel.setFolder(sidebarEmailFolder)
+        }
+    }
 
     // Debug logging
     android.util.Log.d("CWOC_EMAIL", "EmailScreen composing, isLoading=${uiState.isLoading}, threads=${uiState.threads.size}")
@@ -89,6 +105,9 @@ fun EmailScreen(
     // Bundle modal state
     var showCreateBundleModal by remember { mutableStateOf(false) }
     var editingBundle by remember { mutableStateOf<BundleDto?>(null) }
+
+    // Bundle picker dialog state (for "Add to Bundle" context menu action)
+    var bundlePickerThreadId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         modifier = modifier,
@@ -183,6 +202,9 @@ fun EmailScreen(
                             totalThreadCount = uiState.totalThreadCount,
                             displayedCount = uiState.threads.size,
                             contextMenuThreadId = contextMenuThreadId,
+                            senderImageUrls = senderImageUrls,
+                            serverUrl = serverUrl,
+                            authToken = authToken,
                             onTapThread = { thread ->
                                 onNavigateToEditor(thread.latestMessage.id)
                             },
@@ -214,6 +236,9 @@ fun EmailScreen(
                             onToggleReadThread = { thread ->
                                 viewModel.toggleReadState(thread.latestMessage.id)
                             },
+                            onAddToBundle = { thread ->
+                                bundlePickerThreadId = thread.latestMessage.id
+                            },
                             onDismissContextMenu = { contextMenuThreadId = null },
                             onLoadMore = { viewModel.loadMore() },
                             onEnterMultiSelect = { thread ->
@@ -243,15 +268,13 @@ fun EmailScreen(
 
     // ─── Tag Picker Modal ────────────────────────────────────────────────────
     if (showTagPicker) {
-        // Note: TagPickerModal requires allTags (TagNode tree) — for now pass empty
-        // The actual tag tree would come from a tags repository/ViewModel
+        val tagTree by viewModel.tagTree.collectAsState()
         TagPickerModal(
             emailCount = uiState.selectedIds.size,
-            allTags = emptyList(), // TODO: Wire to actual tag tree from repository
+            allTags = tagTree,
             initialSelectedTags = emptyList(),
             onApply = { selectedTags ->
-                // Apply tags to all selected emails
-                // This would call a bulk tag function on the ViewModel
+                viewModel.bulkApplyTags(selectedTags)
                 showTagPicker = false
                 viewModel.exitMultiSelect()
             },
@@ -293,6 +316,29 @@ fun EmailScreen(
                 // Navigate to rule editor — for now just dismiss
                 editingBundle = null
             }
+        )
+    }
+
+    // ─── Bundle Picker Dialog (Add to Bundle from context menu) ──────────────
+    bundlePickerThreadId?.let { chitId ->
+        val bundleState by bundleViewModel.uiState.collectAsState()
+        val currentBundleId = viewModel.getCurrentBundleId(chitId, bundleState.bundles)
+
+        BundlePickerDialog(
+            bundles = bundleState.bundles,
+            currentBundleId = currentBundleId,
+            onSelectBundle = { selectedBundleId ->
+                val selectedBundle = bundleState.bundles.find { it.id == selectedBundleId }
+                if (selectedBundle != null) {
+                    viewModel.addEmailToBundle(
+                        chitId = chitId,
+                        bundleId = selectedBundleId,
+                        bundleName = selectedBundle.name ?: "Unnamed"
+                    )
+                }
+                bundlePickerThreadId = null
+            },
+            onDismiss = { bundlePickerThreadId = null }
         )
     }
 }
@@ -479,6 +525,9 @@ private fun EmailListWithDateGroups(
     totalThreadCount: Int,
     displayedCount: Int,
     contextMenuThreadId: String?,
+    senderImageUrls: Map<String, String?> = emptyMap(),
+    serverUrl: String = "",
+    authToken: String = "",
     onTapThread: (EmailThread) -> Unit,
     onLongPressThread: (EmailThread) -> Unit,
     onToggleSelection: (EmailThread) -> Unit,
@@ -486,6 +535,7 @@ private fun EmailListWithDateGroups(
     onArchiveThread: (EmailThread) -> Unit,
     onDeleteThread: (EmailThread) -> Unit,
     onToggleReadThread: (EmailThread) -> Unit,
+    onAddToBundle: (EmailThread) -> Unit,
     onDismissContextMenu: () -> Unit,
     onLoadMore: () -> Unit,
     onEnterMultiSelect: (EmailThread) -> Unit
@@ -524,23 +574,38 @@ private fun EmailListWithDateGroups(
             // Email cards for this group
             items(groupThreads, key = { it.id }) { thread ->
                 Box {
-                    EmailCardEnhanced(
-                        thread = thread,
-                        isMultiSelectMode = isMultiSelectMode,
-                        isSelected = selectedIds.contains(thread.latestMessage.id),
-                        onTap = { onTapThread(thread) },
-                        onLongPress = {
-                            if (!isMultiSelectMode) {
-                                // Show context menu on long-press (Req 9.1)
-                                // Also enters multi-select mode (Req 2.1)
-                                onEnterMultiSelect(thread)
-                            } else {
-                                onLongPressThread(thread)
-                            }
-                        },
-                        onToggleSelection = { onToggleSelection(thread) },
-                        onTogglePin = { onTogglePin(thread) }
-                    )
+                    // Swipe gestures: right → archive, left → delete (matching web)
+                    com.cwoc.app.ui.components.swipe.SwipeToAction(
+                        onArchive = { onArchiveThread(thread) },
+                        onSnooze = { onDeleteThread(thread) } // Left swipe = delete for email
+                    ) {
+                        // Resolve sender image URL from the cached map
+                        val senderEmail = remember(thread.latestMessage.emailFrom) {
+                            extractSenderEmailForAvatar(thread.latestMessage.emailFrom)
+                        }
+                        val senderImageUrl = senderImageUrls[senderEmail]
+
+                        EmailCardEnhanced(
+                            thread = thread,
+                            isMultiSelectMode = isMultiSelectMode,
+                            isSelected = selectedIds.contains(thread.latestMessage.id),
+                            senderImageUrl = senderImageUrl,
+                            serverUrl = serverUrl,
+                            authToken = authToken,
+                            onTap = { onTapThread(thread) },
+                            onLongPress = {
+                                if (!isMultiSelectMode) {
+                                    // Show context menu on long-press (Req 9.1)
+                                    // Also enters multi-select mode (Req 2.1)
+                                    onEnterMultiSelect(thread)
+                                } else {
+                                    onLongPressThread(thread)
+                                }
+                            },
+                            onToggleSelection = { onToggleSelection(thread) },
+                            onTogglePin = { onTogglePin(thread) }
+                        )
+                    }
 
                     // Context menu for this thread (shown on long-press when not in multi-select)
                     if (contextMenuThreadId == thread.id) {
@@ -548,9 +613,13 @@ private fun EmailListWithDateGroups(
                             expanded = true,
                             onDismiss = onDismissContextMenu,
                             isRead = thread.latestMessage.emailRead == true,
+                            isPinned = thread.isPinned,
                             onArchive = { onArchiveThread(thread) },
                             onDelete = { onDeleteThread(thread) },
-                            onToggleRead = { onToggleReadThread(thread) }
+                            onToggleRead = { onToggleReadThread(thread) },
+                            onPin = { onTogglePin(thread) },
+                            onOpenInEditor = { onTapThread(thread) },
+                            onAddToBundle = { onAddToBundle(thread) }
                         )
                     }
                 }
@@ -636,5 +705,23 @@ private fun LoadMoreButton(
                 style = MaterialTheme.typography.labelLarge
             )
         }
+    }
+}
+
+// ─── Helper Functions ────────────────────────────────────────────────────────────
+
+/**
+ * Extracts the email address from a "From" field for avatar lookup.
+ * Handles formats like "John Doe <john@example.com>" → "john@example.com"
+ * or plain "john@example.com" → "john@example.com"
+ */
+private fun extractSenderEmailForAvatar(emailFrom: String?): String {
+    if (emailFrom.isNullOrBlank()) return ""
+    val angleBracketStart = emailFrom.indexOf('<')
+    val angleBracketEnd = emailFrom.indexOf('>')
+    return if (angleBracketStart >= 0 && angleBracketEnd > angleBracketStart) {
+        emailFrom.substring(angleBracketStart + 1, angleBracketEnd).trim()
+    } else {
+        emailFrom.trim()
     }
 }

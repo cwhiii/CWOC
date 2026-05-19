@@ -18,6 +18,7 @@ import javax.inject.Inject
 /**
  * ViewModel for the Trash screen.
  * Queries all soft-deleted chits and provides restore/purge operations.
+ * Supports bulk selection, restore, and purge matching the web implementation.
  *
  * Validates: Requirements 11.3, 11.4, 11.6
  */
@@ -36,6 +37,33 @@ class TrashViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    /** Selected chit IDs for bulk operations. */
+    private val _selectedIds = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+    val selectedIds: StateFlow<Set<String>> = _selectedIds
+
+    fun toggleSelection(chitId: String) {
+        val current = _selectedIds.value.toMutableSet()
+        if (chitId in current) current.remove(chitId) else current.add(chitId)
+        _selectedIds.value = current
+    }
+
+    fun selectAll(chits: List<ChitEntity>) {
+        _selectedIds.value = chits.map { it.id }.toSet()
+    }
+
+    fun deselectAll() {
+        _selectedIds.value = emptySet()
+    }
+
+    fun isSelected(chitId: String): Boolean = chitId in _selectedIds.value
+
+    fun isAllSelected(chits: List<ChitEntity>): Boolean =
+        chits.isNotEmpty() && _selectedIds.value.size == chits.size
+
+    fun toggleSelectAll(chits: List<ChitEntity>) {
+        if (isAllSelected(chits)) deselectAll() else selectAll(chits)
+    }
 
     /**
      * Restores a chit from trash by setting deleted=false,
@@ -59,6 +87,9 @@ class TrashViewModel @Inject constructor(
                     syncPushEngine.pushSingle(chitId)
                 }
             }
+
+            // Remove from selection
+            _selectedIds.value = _selectedIds.value - chitId
         }
     }
 
@@ -82,6 +113,27 @@ class TrashViewModel @Inject constructor(
 
             // 2. Hard-delete from Room (actual DELETE, not soft-delete)
             chitDao.hardDelete(chitId)
+
+            // Remove from selection
+            _selectedIds.value = _selectedIds.value - chitId
+        }
+    }
+
+    /** Bulk restore all selected chits. */
+    fun bulkRestore() {
+        viewModelScope.launch {
+            val ids = _selectedIds.value.toList()
+            ids.forEach { restore(it) }
+            _selectedIds.value = emptySet()
+        }
+    }
+
+    /** Bulk purge all selected chits. */
+    fun bulkPurge() {
+        viewModelScope.launch {
+            val ids = _selectedIds.value.toList()
+            ids.forEach { purge(it) }
+            _selectedIds.value = emptySet()
         }
     }
 }

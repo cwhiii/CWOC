@@ -25,6 +25,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -88,6 +89,9 @@ interface ContactRepository {
 
     /** Get vault contacts from other users. */
     fun getVaultContacts(currentUserId: String): Flow<List<ContactEntity>>
+
+    /** Look up a contact's image URL by email address, with in-memory caching. */
+    suspend fun getImageUrlForEmail(email: String): String?
 }
 
 /**
@@ -104,6 +108,11 @@ class ContactRepositoryImpl @Inject constructor(
 ) : ContactRepository {
 
     private val pushScope = CoroutineScope(Dispatchers.IO)
+
+    /** In-memory cache for email → imageUrl lookups to avoid repeated DB queries.
+     *  Uses a sentinel empty string to represent "looked up, no image found" since
+     *  ConcurrentHashMap does not allow null values. */
+    private val emailImageCache = ConcurrentHashMap<String, String>()
 
     override val allContacts: Flow<List<ContactEntity>>
         get() = contactDao.getAllActive()
@@ -309,6 +318,23 @@ class ContactRepositoryImpl @Inject constructor(
 
     override fun getVaultContacts(currentUserId: String): Flow<List<ContactEntity>> =
         contactDao.getVaultContacts(currentUserId)
+
+    override suspend fun getImageUrlForEmail(email: String): String? {
+        // Sentinel value representing "looked up, no image found"
+        val NO_IMAGE_SENTINEL = "\u0000"
+
+        // Check cache first
+        val cached = emailImageCache[email]
+        if (cached != null) {
+            return if (cached == NO_IMAGE_SENTINEL) null else cached
+        }
+
+        // Not cached — query the DAO
+        val imageUrl = contactDao.findByEmail(email)?.imageUrl
+        // Cache the result (use sentinel for null/no match)
+        emailImageCache[email] = imageUrl ?: NO_IMAGE_SENTINEL
+        return imageUrl
+    }
 
     private fun triggerPushIfOnline() {
         if (connectivityMonitor.isOnline.value) {

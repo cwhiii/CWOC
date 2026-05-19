@@ -88,8 +88,11 @@ fun SidebarContent(
     onIndicatorsCustomRange: (String?, String?) -> Unit = { _, _ -> },
     onIndicatorsVisibleGraphsChange: (Set<String>) -> Unit = {},
     filterContent: @Composable () -> Unit = {},
+    filterActiveCount: Int = 0,
+    onClearFilters: () -> Unit = {},
     sortContent: @Composable () -> Unit = {},
     onClockClick: () -> Unit = {},
+    onWeatherLongPress: () -> Unit = {},
     onCalculatorClick: () -> Unit = {},
     onReferenceClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -163,7 +166,7 @@ fun SidebarContent(
                 }
 
                 CollapsibleSection(title = "Folder", initiallyExpanded = true) {
-                    val folders = listOf("inbox" to "Inbox", "sent" to "Sent", "drafts" to "Drafts", "scheduled" to "Scheduled", "trash" to "Trash")
+                    val folders = listOf("inbox" to "Inbox", "sent" to "Sent", "drafts" to "Drafts", "scheduled" to "Scheduled", "trash" to "Trash", "archived" to "Archive")
                     folders.forEach { (value, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             RadioButton(selected = emailFolder == value, onClick = { onEmailFolderChange(value) })
@@ -345,7 +348,20 @@ fun SidebarContent(
             // ─── 12. Filters ──────────────────────────────────────────────
             HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(8.dp))
-            CollapsibleSection(title = "🔍 Filters", initiallyExpanded = false) {
+            CollapsibleSection(
+                title = "🔍 Filters",
+                initiallyExpanded = false,
+                headerExtra = {
+                    if (filterActiveCount > 0) {
+                        com.cwoc.app.ui.navigation.filter.FilterHeaderButtons(
+                            showClear = true,
+                            showDefaults = false,
+                            onClear = onClearFilters,
+                            onDefaults = {}
+                        )
+                    }
+                }
+            ) {
                 filterContent()
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -363,7 +379,12 @@ fun SidebarContent(
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 SidebarCompactButton(text = "🗺️ Maps", onClick = { onNavigate(Screen.Map); onClose() }, modifier = Modifier.weight(1f))
-                SidebarCompactButton(text = "🌤️ Weather", onClick = { onNavigate(Screen.Weather); onClose() }, modifier = Modifier.weight(1f))
+                SidebarCompactButton(
+                    text = "🌤️ Weather",
+                    onClick = { onWeatherLongPress(); onClose() },
+                    onLongClick = { onWeatherLongPress() },
+                    modifier = Modifier.weight(1f)
+                )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

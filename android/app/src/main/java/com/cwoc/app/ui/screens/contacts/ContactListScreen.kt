@@ -118,6 +118,32 @@ fun ContactListScreen(
         }
     }
 
+    // Share exported file when available
+    val exportedFile by viewModel.exportedFile.collectAsState()
+    LaunchedEffect(exportedFile) {
+        exportedFile?.let { file ->
+            try {
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val mimeType = if (file.name.endsWith(".vcf")) "text/vcard"
+                    else if (file.name.endsWith(".csv")) "text/csv"
+                    else "application/octet-stream"
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share ${file.name}"))
+            } catch (_: Exception) {
+                // Fallback: just show the toast
+            }
+            viewModel.clearExportedFile()
+        }
+    }
+
     // Server URL for image loading
     val serverUrl = remember {
         context.getSharedPreferences("cwoc_secure_prefs", android.content.Context.MODE_PRIVATE)
@@ -224,8 +250,10 @@ fun ContactListScreen(
                 onShareQr = { qrContact = it }
             )
         } else {
-            // Ungrouped flat list
+            // Ungrouped flat list — includes both contacts AND users (matching web)
             LazyColumn {
+                // Merge users into the flat list
+                val allUsers = uiState.users
                 items(contacts, key = { it.id }) { contact ->
                     ContactRow(
                         contact = contact,
@@ -233,6 +261,16 @@ fun ContactListScreen(
                         onTap = { onNavigateToContact(contact.id) },
                         onToggleFavorite = { viewModel.toggleFavorite(contact.id) },
                         onShareQr = { qrContact = contact }
+                    )
+                }
+                // Also show users in flat mode
+                items(allUsers, key = { "user_${it.id}" }) { user ->
+                    UserRow(
+                        user = user,
+                        serverUrl = serverUrl,
+                        onTap = { onNavigateToProfile(user.id) },
+                        isFavorite = viewModel.isUserFavorite(user.id),
+                        onToggleFavorite = { viewModel.toggleUserFavorite(user.id) }
                     )
                 }
             }
@@ -293,12 +331,13 @@ private fun GroupedContactList(
     onShareQr: (ContactEntity) -> Unit
 ) {
     LazyColumn {
-        // ★ Favorites
-        if (uiState.favorites.isNotEmpty()) {
+        // ★ Favorites (contacts + favorited users)
+        val favUsers = uiState.users.filter { isUserFavorite(it.id) }
+        if (uiState.favorites.isNotEmpty() || favUsers.isNotEmpty()) {
             item(key = "header_favorites") {
                 PeopleSectionHeader(
                     label = "★ Favorites",
-                    count = uiState.favorites.size,
+                    count = uiState.favorites.size + favUsers.size,
                     isExpanded = !isSectionCollapsed("favorites"),
                     onToggle = { onToggleSection("favorites") }
                 )
@@ -307,25 +346,27 @@ private fun GroupedContactList(
                 items(uiState.favorites, key = { "fav_${it.id}" }) { contact ->
                     ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) }, { onShareQr(contact) })
                 }
+                // Favorited users also appear in this section (matching web)
+                items(favUsers, key = { "favuser_${it.id}" }) { user ->
+                    UserRow(user, serverUrl, { onUserTap(user.id) }, true, { onToggleUserFavorite(user.id) })
+                }
             }
         }
 
-        // Users
-        if (uiState.users.isNotEmpty()) {
-            val nonFavUsers = uiState.users.filter { !isUserFavorite(it.id) }
-            if (nonFavUsers.isNotEmpty()) {
-                item(key = "header_users") {
-                    PeopleSectionHeader(
-                        label = "Users",
-                        count = nonFavUsers.size,
-                        isExpanded = !isSectionCollapsed("users"),
-                        onToggle = { onToggleSection("users") }
-                    )
-                }
-                if (!isSectionCollapsed("users")) {
-                    items(nonFavUsers, key = { "user_${it.id}" }) { user ->
-                        UserRow(user, serverUrl, { onUserTap(user.id) }, isUserFavorite(user.id), { onToggleUserFavorite(user.id) })
-                    }
+        // Users (non-favorited only)
+        val nonFavUsers = uiState.users.filter { !isUserFavorite(it.id) }
+        if (nonFavUsers.isNotEmpty()) {
+            item(key = "header_users") {
+                PeopleSectionHeader(
+                    label = "Users",
+                    count = nonFavUsers.size,
+                    isExpanded = !isSectionCollapsed("users"),
+                    onToggle = { onToggleSection("users") }
+                )
+            }
+            if (!isSectionCollapsed("users")) {
+                items(nonFavUsers, key = { "user_${it.id}" }) { user ->
+                    UserRow(user, serverUrl, { onUserTap(user.id) }, isUserFavorite(user.id), { onToggleUserFavorite(user.id) })
                 }
             }
         }

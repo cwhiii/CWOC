@@ -254,27 +254,54 @@ private fun LocationForecastCard(location: LocationForecast) {
 
 @Composable
 private fun DailyForecastRow(forecast: DailyForecast) {
+    val isToday = isDateToday(forecast.date)
+    val weatherIcon = getWeatherIcon(forecast.weatherCode)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .then(
+                if (isToday) Modifier
+                    .padding(vertical = 2.dp)
+                    .padding(horizontal = 4.dp)
+                else Modifier.padding(vertical = 4.dp)
+            )
     ) {
-        // First row: date and conditions
+        // First row: date, icon, and conditions
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = formatForecastDate(forecast.date),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = forecast.conditions,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = formatForecastDate(forecast.date),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                if (isToday) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "TODAY",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = weatherIcon,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = forecast.conditions,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(2.dp))
@@ -305,19 +332,24 @@ private fun DailyForecastRow(forecast: DailyForecast) {
             // Precip and wind
             Row {
                 forecast.precipChance?.let { precip ->
-                    Text(
-                        text = "${precip.toInt()} mm",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    if (precip > 0) {
+                        val precipIcon = if (forecast.weatherCode in listOf(71, 73, 75, 77, 85, 86)) "❄️" else "💧"
+                        Text(
+                            text = "$precipIcon ${precip.let { String.format("%.1f", it) }} mm",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
                 }
                 forecast.windSpeed?.let { wind ->
-                    Text(
-                        text = "${wind.toInt()} km/h",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (wind > 0) {
+                        Text(
+                            text = "💨 ${wind.toInt()} km/h",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -364,4 +396,42 @@ private fun getDayOfWeek(year: Int, month: Int, day: Int): Int {
     val t = intArrayOf(0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4)
     val y = if (month < 3) year - 1 else year
     return (y + y / 4 - y / 100 + y / 400 + t[month - 1] + day) % 7
+}
+
+/**
+ * Check if a date string (YYYY-MM-DD) is today.
+ */
+private fun isDateToday(dateStr: String): Boolean {
+    return try {
+        val today = java.time.LocalDate.now()
+        val todayStr = today.toString() // YYYY-MM-DD format
+        dateStr == todayStr
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
+ * Maps WMO weather codes to emoji icons.
+ * Matches the web's _cwocGetWeatherIcon function.
+ */
+private fun getWeatherIcon(code: Int?): String {
+    return when (code) {
+        0 -> "☀️"
+        1 -> "🌤️"
+        2 -> "⛅"
+        3 -> "☁️"
+        45, 48 -> "🌫️"
+        51, 53, 55 -> "🌦️"
+        56, 57 -> "🌧️"
+        61, 63, 65 -> "🌧️"
+        66, 67 -> "🌧️"
+        71, 73, 75 -> "🌨️"
+        77 -> "🌨️"
+        80, 81, 82 -> "🌧️"
+        85, 86 -> "🌨️"
+        95 -> "⛈️"
+        96, 99 -> "⛈️"
+        else -> "❓"
+    }
 }

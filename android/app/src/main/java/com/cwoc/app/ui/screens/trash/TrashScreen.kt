@@ -69,7 +69,9 @@ fun TrashScreen(
     viewModel: TrashViewModel = hiltViewModel()
 ) {
     val trashedChits by viewModel.trashedChits.collectAsState()
+    val selectedIds by viewModel.selectedIds.collectAsState()
     var chitToPurge by remember { mutableStateOf<ChitEntity?>(null) }
+    var showBulkPurgeConfirm by remember { mutableStateOf(false) }
     var emailFilterActive by remember { mutableStateOf(false) }
 
     // Filter chits based on email filter
@@ -99,6 +101,18 @@ fun TrashScreen(
                         )
                     }
                 },
+                actions = {
+                    if (selectedIds.isNotEmpty()) {
+                        // Bulk restore
+                        IconButton(onClick = { viewModel.bulkRestore() }) {
+                            Icon(Icons.Default.RestoreFromTrash, "Restore Selected", tint = Color(0xFF2E7D32))
+                        }
+                        // Bulk purge
+                        IconButton(onClick = { showBulkPurgeConfirm = true }) {
+                            Icon(Icons.Default.Delete, "Delete Selected", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -116,11 +130,38 @@ fun TrashScreen(
                 onFilterChange = { emailFilterActive = it }
             )
 
+            // Count + select all row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Checkbox(
+                    checked = viewModel.isAllSelected(filteredChits),
+                    onCheckedChange = { viewModel.toggleSelectAll(filteredChits) }
+                )
+                Text(
+                    text = "${filteredChits.size} deleted ${if (emailFilterActive) "email" else "chit"}${if (filteredChits.size != 1) "s" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (selectedIds.isNotEmpty()) {
+                    Text(
+                        text = " · ${selectedIds.size} selected",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             if (filteredChits.isEmpty()) {
                 TrashEmptyState()
             } else {
                 TrashList(
                     chits = filteredChits,
+                    selectedIds = selectedIds,
+                    onToggleSelect = { viewModel.toggleSelection(it) },
                     onRestore = { chitId -> viewModel.restore(chitId) },
                     onPurge = { chit -> chitToPurge = chit }
                 )
@@ -137,6 +178,24 @@ fun TrashScreen(
                 chitToPurge = null
             },
             onDismiss = { chitToPurge = null }
+        )
+    }
+
+    // Bulk purge confirmation
+    if (showBulkPurgeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkPurgeConfirm = false },
+            title = { Text("Permanently Delete ${selectedIds.size} Chit(s)") },
+            text = { Text("These chits will be permanently deleted. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.bulkPurge()
+                    showBulkPurgeConfirm = false
+                }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkPurgeConfirm = false }) { Text("Cancel") }
+            }
         )
     }
 }
@@ -203,6 +262,8 @@ private fun TrashEmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun TrashList(
     chits: List<ChitEntity>,
+    selectedIds: Set<String>,
+    onToggleSelect: (String) -> Unit,
     onRestore: (String) -> Unit,
     onPurge: (ChitEntity) -> Unit,
     modifier: Modifier = Modifier
@@ -217,6 +278,8 @@ private fun TrashList(
         items(chits, key = { it.id }) { chit ->
             TrashChitCard(
                 chit = chit,
+                isSelected = chit.id in selectedIds,
+                onToggleSelect = { onToggleSelect(chit.id) },
                 onRestore = { onRestore(chit.id) },
                 onPurge = { onPurge(chit) }
             )
@@ -229,82 +292,120 @@ private fun TrashList(
 @Composable
 private fun TrashChitCard(
     chit: ChitEntity,
+    isSelected: Boolean,
+    onToggleSelect: () -> Unit,
     onRestore: () -> Unit,
     onPurge: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
+        Row(
+            modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 12.dp, end = 12.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            // Title
-            Text(
-                text = chit.title ?: "Untitled",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            // Selection checkbox
+            androidx.compose.material3.Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onToggleSelect() }
             )
 
-            // Deletion date (using modifiedDatetime as the deletion timestamp)
-            chit.modifiedDatetime?.let { deletedAt ->
-                Spacer(modifier = Modifier.height(4.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                // Title
                 Text(
-                    text = "Deleted: ${DateUtils.formatDisplayDate(deletedAt)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = chit.title ?: "Untitled",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
 
-            // Type indicator chips
-            val typeChips = buildChitTypeChips(chit)
-            if (typeChips.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    typeChips.forEach { label ->
-                        AssistChip(
-                            onClick = {},
-                            label = {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        )
+                // Status + Priority row
+                val statusPriority = buildList {
+                    chit.status?.takeIf { it.isNotBlank() }?.let { add("Status: $it") }
+                    chit.priority?.takeIf { it.isNotBlank() }?.let { add("Priority: $it") }
+                }
+                if (statusPriority.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = statusPriority.joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Note preview (first 80 chars, matching web)
+                chit.note?.takeIf { it.isNotBlank() }?.let { note ->
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (note.length > 80) note.take(80) + "…" else note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Deletion date (using modifiedDatetime as the deletion timestamp)
+                chit.modifiedDatetime?.let { deletedAt ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Deleted: ${DateUtils.formatDisplayDate(deletedAt)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Type indicator chips
+                val typeChips = buildChitTypeChips(chit)
+                if (typeChips.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        typeChips.forEach { label ->
+                            AssistChip(
+                                onClick = {},
+                                label = {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
-            }
 
-            // Action buttons
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                OutlinedButton(onClick = onRestore) {
-                    Icon(
-                        imageVector = Icons.Default.RestoreFromTrash,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("Restore")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedButton(onClick = onPurge) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("Purge")
+                // Action buttons
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = onRestore) {
+                        Icon(
+                            imageVector = Icons.Default.RestoreFromTrash,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("Restore")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(onClick = onPurge) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("Purge")
+                    }
                 }
             }
         }

@@ -2,6 +2,7 @@ package com.cwoc.app.ui.screens.calendar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,7 +66,9 @@ fun MonthView(
     selectedDate: LocalDate,
     weekStartDay: String,
     monthMode: String = "compress",
-    onDayTap: (LocalDate) -> Unit
+    onDayTap: (LocalDate) -> Unit,
+    onEventTap: (String) -> Unit = {},
+    onEmptyDayLongPress: (LocalDate) -> Unit = {}
 ) {
     val today = LocalDate.now()
     val yearMonth = YearMonth.from(selectedDate)
@@ -126,7 +130,9 @@ fun MonthView(
                         MonthDayCellView(
                             cell = cell,
                             monthMode = monthMode,
-                            onTap = { onDayTap(cell.date) }
+                            onTap = { onDayTap(cell.date) },
+                            onEventTap = onEventTap,
+                            onLongPress = { onEmptyDayLongPress(cell.date) }
                         )
                     }
                 }
@@ -150,16 +156,18 @@ fun MonthView(
 private fun MonthDayCellView(
     cell: MonthDayCell,
     monthMode: String,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onEventTap: (String) -> Unit = {},
+    onLongPress: () -> Unit = {}
 ) {
     val textColor = when {
-        cell.isToday -> MaterialTheme.colorScheme.onPrimary
+        cell.isToday -> Color(0xFFFDF5E6) // parchment light on dark bg
         cell.isCurrentMonth -> MaterialTheme.colorScheme.onSurface
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     }
 
     val backgroundColor = if (cell.isToday) {
-        MaterialTheme.colorScheme.primary
+        Color(0xFF4A2C2A) // web's --aged-brown-dark
     } else {
         Color.Transparent
     }
@@ -171,7 +179,12 @@ private fun MonthDayCellView(
             .padding(1.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(backgroundColor)
-            .clickable { onTap() }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onLongPress = { onLongPress() }
+                )
+            }
     } else {
         Modifier
             .fillMaxWidth()
@@ -179,7 +192,12 @@ private fun MonthDayCellView(
             .padding(1.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(backgroundColor)
-            .clickable { onTap() }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onTap() },
+                    onLongPress = { onLongPress() }
+                )
+            }
     }
 
     Column(
@@ -203,16 +221,18 @@ private fun MonthDayCellView(
                 cell.events.take(3).forEach { event ->
                     val eventBg = CwocChitCardStyle.resolveChitBgColor(event.color)
                     val eventText = CwocChitCardStyle.contrastTextColor(eventBg)
+                    val isCompleted = event.status == "Complete"
                     Text(
                         text = event.title ?: "Untitled",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = eventText,
+                        color = if (isCompleted) eventText.copy(alpha = 0.5f) else eventText,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(eventBg, RoundedCornerShape(2.dp))
+                            .clickable { onEventTap(event.id) }
                             .padding(horizontal = 2.dp)
                     )
                 }
@@ -231,16 +251,18 @@ private fun MonthDayCellView(
                 cell.events.forEach { event ->
                     val eventBg = CwocChitCardStyle.resolveChitBgColor(event.color)
                     val eventText = CwocChitCardStyle.contrastTextColor(eventBg)
+                    val isCompleted = event.status == "Complete"
                     Text(
                         text = event.title ?: "Untitled",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        color = eventText,
+                        color = if (isCompleted) eventText.copy(alpha = 0.5f) else eventText,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(eventBg, RoundedCornerShape(2.dp))
+                            .clickable { onEventTap(event.id) }
                             .padding(horizontal = 2.dp)
                     )
                 }
@@ -290,11 +312,12 @@ private fun buildMonthGrid(
 
 /**
  * Groups events by their start date for efficient lookup.
+ * Includes events with startDatetime, dueDatetime, or pointInTime.
  */
 private fun groupEventsByDate(events: List<ChitEntity>): Map<LocalDate, List<ChitEntity>> {
     val map = mutableMapOf<LocalDate, MutableList<ChitEntity>>()
     for (event in events) {
-        val dateStr = event.startDatetime ?: event.dueDatetime ?: continue
+        val dateStr = event.startDatetime ?: event.dueDatetime ?: event.pointInTime ?: continue
         val date = try {
             LocalDate.parse(dateStr.substring(0, 10))
         } catch (_: Exception) {

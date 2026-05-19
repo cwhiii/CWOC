@@ -95,7 +95,10 @@ fun isZoneEmpty(zoneId: String, formState: ChitFormState): Boolean {
         "taskSection" -> formState.status.isNullOrBlank()
         "notesSection" -> formState.note.isBlank()
         "checklistSection" -> formState.checklist.isNullOrBlank()
-        "tagsSection" -> formState.tags.isEmpty()
+        "tagsSection" -> formState.tags.none { tag ->
+            tag !in setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes") &&
+                !tag.startsWith("CWOC_System/", ignoreCase = true)
+        }
         "peopleSection" -> formState.people.isEmpty()
         "locationSection" -> formState.location.isNullOrBlank()
         "alertsSection" -> formState.alerts.isNullOrBlank()
@@ -174,11 +177,15 @@ fun buildOverviewRows(formState: ChitFormState): List<com.cwoc.app.ui.screens.ed
         ))
     }
 
-    // Tags
-    if (formState.tags.isNotEmpty()) {
+    // Tags (filter out system tags for display)
+    val userTagsForOverview = formState.tags.filter { tag ->
+        tag !in setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes") &&
+            !tag.startsWith("CWOC_System/", ignoreCase = true)
+    }
+    if (userTagsForOverview.isNotEmpty()) {
         rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
             icon = "🏷️",
-            text = formState.tags.joinToString(", ") { it.substringAfterLast("/") },
+            text = userTagsForOverview.joinToString(", ") { it.substringAfterLast("/") },
             targetZoneId = "tagsSection"
         ))
     }

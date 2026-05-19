@@ -60,7 +60,8 @@ object TagTreeParser {
         val userTags = rawTags.filter { tag ->
             val name = tag.name ?: return@filter false
             !name.startsWith("cwoc_system/", ignoreCase = true) &&
-                !name.startsWith("CWOC_System/", ignoreCase = true)
+                !name.startsWith("CWOC_System/", ignoreCase = true) &&
+                name !in setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes")
         }
 
         val root = mutableListOf<TagNode>()

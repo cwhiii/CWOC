@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,9 +59,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.mapper.ContactFormState
+import com.cwoc.app.ui.components.DropdownWithCustom
+import com.cwoc.app.ui.components.PrefixOptions
+import com.cwoc.app.ui.components.SuffixOptions
 import com.cwoc.app.ui.screens.editor.zones.ColorZone
 import com.cwoc.app.ui.screens.editor.zones.EditorZoneHeader
 import com.google.gson.Gson
@@ -66,6 +76,11 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import com.google.gson.reflect.TypeToken
 
 /**
@@ -107,6 +122,7 @@ fun ContactEditorScreen(
 
     var showUnsavedDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
 
     // Track the initial form state for dirty comparison
     var initialFormState by remember { mutableStateOf<ContactFormState?>(null) }
@@ -184,16 +200,56 @@ fun ContactEditorScreen(
         )
     }
 
+    // ─── QR Code Dialog ─────────────────────────────────────────────────────
+    if (showQrDialog && !formState.isNew) {
+        com.cwoc.app.ui.components.ContactFormQrCodeDialog(
+            givenName = formState.givenName,
+            surname = formState.surname,
+            middleNames = formState.middleNames,
+            prefix = formState.prefix,
+            suffix = formState.suffix,
+            displayName = formState.displayName,
+            phones = formState.phones,
+            emails = formState.emails,
+            addresses = formState.addresses,
+            websites = formState.websites,
+            callSigns = formState.callSigns,
+            xHandles = formState.xHandles,
+            hasSignal = formState.hasSignal,
+            signalUsername = formState.signalUsername,
+            pgpKey = formState.pgpKey,
+            favorite = formState.favorite,
+            organization = formState.organization,
+            nickname = formState.nickname,
+            socialContext = formState.socialContext,
+            color = formState.color,
+            onDismiss = { showQrDialog = false }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        when {
-                            isProfileMode -> "Profile"
-                            formState.isNew -> "New Contact"
-                            else -> "Edit Contact"
+                    // Show computed display name like the web does
+                    val displayTitle = when {
+                        isProfileMode -> "Profile"
+                        formState.isNew -> "New Contact"
+                        else -> {
+                            val parts = listOfNotNull(
+                                formState.prefix.ifBlank { null },
+                                formState.givenName.ifBlank { null },
+                                formState.middleNames.ifBlank { null },
+                                formState.surname.ifBlank { null },
+                                formState.suffix.ifBlank { null }
+                            )
+                            if (parts.isNotEmpty()) parts.joinToString(" ") else "Edit Contact"
                         }
+                    }
+                    Text(
+                        text = displayTitle,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -221,6 +277,25 @@ fun ContactEditorScreen(
                                     imageVector = if (formState.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                     contentDescription = if (formState.favorite) "Remove from favorites" else "Add to favorites",
                                     tint = if (formState.favorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        // Share button (not shown for new contacts or profile mode)
+                        if (!isProfileMode && !formState.isNew) {
+                            val shareContext = LocalContext.current
+                            IconButton(onClick = {
+                                shareContactAsVCard(shareContext, formState)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "Share contact"
+                                )
+                            }
+                            // QR code button (matches web's qrButton)
+                            IconButton(onClick = { showQrDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = "Show QR code"
                                 )
                             }
                         }
@@ -346,6 +421,12 @@ fun ContactEditorScreen(
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // ─── Profile-Only: Password Change Zone ─────────────────────────
+                if (isProfileMode && !isReadOnly) {
+                    PasswordChangeZone()
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                }
 
                 // ─── Delete Button ──────────────────────────────────────────────
                 if (!formState.isNew && !isProfileMode) {
@@ -721,6 +802,52 @@ private fun ContactInfoZone(
             formState.addresses.isNotBlank()
     var isExpanded by remember { mutableStateOf(hasContent) }
 
+    // ─── Address Map Preview: geocode first address for inline map ───────
+    val context = LocalContext.current
+    var mapLat by remember { mutableStateOf<Double?>(null) }
+    var mapLon by remember { mutableStateOf<Double?>(null) }
+    var firstAddressValue by remember { mutableStateOf<String?>(null) }
+
+    // Parse addresses JSON to extract first non-empty address value and check for lat/lon
+    LaunchedEffect(formState.addresses) {
+        mapLat = null
+        mapLon = null
+        firstAddressValue = null
+
+        if (formState.addresses.isBlank()) return@LaunchedEffect
+
+        try {
+            val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+            val entries: List<Map<String, Any?>> = Gson().fromJson(formState.addresses, type) ?: emptyList()
+
+            // First check if any entry has lat/lon fields (geocoded coordinates)
+            for (entry in entries) {
+                val lat = (entry["lat"] as? Number)?.toDouble()
+                val lon = (entry["lon"] as? Number)?.toDouble()
+                if (lat != null && lon != null) {
+                    mapLat = lat
+                    mapLon = lon
+                    firstAddressValue = (entry["value"] as? String)?.trim()
+                    return@LaunchedEffect
+                }
+            }
+
+            // No stored coordinates — geocode the first non-empty address
+            val firstAddr = entries.firstOrNull { ((it["value"] as? String) ?: "").trim().isNotBlank() }
+            val addrValue = (firstAddr?.get("value") as? String)?.trim()
+            if (addrValue.isNullOrBlank()) return@LaunchedEffect
+
+            firstAddressValue = addrValue
+            val result = com.cwoc.app.ui.util.GeocodingUtil.geocode(addrValue)
+            if (result != null) {
+                mapLat = result.lat
+                mapLon = result.lon
+            }
+        } catch (_: Exception) {
+            // JSON parse or geocoding failure — hide map
+        }
+    }
+
     EditorZoneHeader(
         title = "Contact Info",
         isExpanded = isExpanded,
@@ -766,8 +893,26 @@ private fun ContactInfoZone(
                 itemLabel = "Address",
                 onValueChange = { onUpdate(formState.copy(addresses = it)) },
                 defaultLabel = "Home",
-                valuePlaceholder = "123 Main St, City, ST 12345"
+                valuePlaceholder = "123 Main St, City, ST 12345",
+                showMapButton = true
             )
+
+            // ─── Inline Map Preview (Req 18.4, 18.5) ────────────────────────
+            // Show map preview when geocoded coordinates are available
+            val lat = mapLat
+            val lon = mapLon
+            if (lat != null && lon != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                ContactMapPreview(
+                    lat = lat,
+                    lon = lon,
+                    onTap = {
+                        // Open full maps app with the address
+                        val addr = firstAddressValue ?: "$lat,$lon"
+                        openAddressInMaps(context, addr)
+                    }
+                )
+            }
         }
     }
 }
@@ -969,6 +1114,15 @@ private fun SecurityZone(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                // Signal message button (shown when username is not blank)
+                if (formState.signalUsername.isNotBlank()) {
+                    val signalContext = LocalContext.current
+                    TextButton(
+                        onClick = { openSignalMessage(signalContext, formState.signalUsername) }
+                    ) {
+                        Text("💬 Message on Signal")
+                    }
+                }
             }
             // PGP Key field
             OutlinedTextField(
@@ -980,6 +1134,27 @@ private fun SecurityZone(
                 maxLines = 5,
                 modifier = Modifier.fillMaxWidth()
             )
+            // PGP Validation button + result
+            if (formState.pgpKey.isNotBlank()) {
+                var pgpValidationResult by remember { mutableStateOf<String?>(null) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(onClick = {
+                        pgpValidationResult = validatePgpKey(formState.pgpKey)
+                    }) {
+                        Text("✓ Validate Key")
+                    }
+                    pgpValidationResult?.let { result ->
+                        Text(
+                            text = result,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (result.startsWith("✅")) Color(0xFF1B5E20) else Color(0xFFB22222)
+                        )
+                    }
+                }
+            }
             // Shared to Vault toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1235,9 +1410,11 @@ private fun MultiValueField(
     itemLabel: String,
     onValueChange: (String) -> Unit,
     defaultLabel: String = "",
-    valuePlaceholder: String = ""
+    valuePlaceholder: String = "",
+    showMapButton: Boolean = false
 ) {
     val entries = remember(jsonValue) { parseMultiValueEntries(jsonValue) }
+    val mapContext = if (showMapButton) LocalContext.current else null
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -1278,6 +1455,15 @@ private fun MultiValueField(
                     singleLine = true,
                     modifier = Modifier.weight(0.55f)
                 )
+                // Open in Maps button (for addresses)
+                if (showMapButton && entry.value.isNotBlank() && mapContext != null) {
+                    IconButton(
+                        onClick = { openAddressInMaps(mapContext, entry.value) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("🗺️", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
                 // Remove button
                 IconButton(
                     onClick = {
@@ -1420,4 +1606,382 @@ private fun serializeDateEntries(entries: List<DateEntry>): String {
         mapOf("label" to it.label, "value" to it.value, "show_on_calendar" to it.showOnCalendar)
     }
     return Gson().toJson(maps)
+}
+
+// ─── Password Change Zone (profile mode only) ──────────────────────────────────
+
+/**
+ * Password change zone — only shown in profile mode for the user's own profile.
+ * Matches the web's "Change Password" zone with current/new/confirm fields.
+ */
+@Composable
+private fun PasswordChangeZone() {
+    var isExpanded by remember { mutableStateOf(false) }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    EditorZoneHeader(
+        title = "🔑 Change Password",
+        isExpanded = isExpanded,
+        onToggle = { isExpanded = !isExpanded }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = currentPassword,
+                onValueChange = { currentPassword = it },
+                label = { Text("Current Password") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+            )
+            OutlinedTextField(
+                value = newPassword,
+                onValueChange = { newPassword = it },
+                label = { Text("New Password") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+            )
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                label = { Text("Confirm New Password") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+            )
+
+            message?.let { msg ->
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isError) Color(0xFFB22222) else Color(0xFF1B5E20)
+                )
+            }
+
+            TextButton(onClick = {
+                if (currentPassword.isBlank() || newPassword.isBlank() || confirmPassword.isBlank()) {
+                    message = "Please fill in all password fields."
+                    isError = true
+                    return@TextButton
+                }
+                if (newPassword != confirmPassword) {
+                    message = "New passwords do not match."
+                    isError = true
+                    return@TextButton
+                }
+                coroutineScope.launch {
+                    val result = changePassword(context, currentPassword, newPassword)
+                    if (result == null) {
+                        message = "Password changed successfully."
+                        isError = false
+                        currentPassword = ""
+                        newPassword = ""
+                        confirmPassword = ""
+                    } else {
+                        message = result
+                        isError = true
+                    }
+                }
+            }) {
+                Text("🔑 Change Password")
+            }
+        }
+    }
+}
+
+/**
+ * Calls PUT /api/auth/password to change the user's password.
+ * Returns null on success, or an error message string on failure.
+ */
+private suspend fun changePassword(
+    context: android.content.Context,
+    currentPassword: String,
+    newPassword: String
+): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    try {
+        val prefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+        val serverUrl = prefs.getString("server_url", null)?.trimEnd('/') ?: return@withContext "No server URL"
+        val authToken = prefs.getString("auth_token", "") ?: ""
+
+        val json = """{"current_password":"$currentPassword","new_password":"$newPassword"}"""
+        val requestBody = json.toRequestBody("application/json".toMediaType())
+        val request = okhttp3.Request.Builder()
+            .url("$serverUrl/api/auth/password")
+            .addHeader("Authorization", "Bearer $authToken")
+            .put(requestBody)
+            .build()
+
+        val response = okhttp3.OkHttpClient().newCall(request).execute()
+        when {
+            response.code == 403 -> "Current password is incorrect."
+            !response.isSuccessful -> "Failed to change password (${response.code})"
+            else -> null
+        }
+    } catch (e: Exception) {
+        "Error: ${e.message}"
+    }
+}
+
+// ─── Helper Functions (Share, Signal, Maps) ─────────────────────────────────────
+
+/**
+ * Share a contact as vCard text via Android share sheet.
+ * Mirrors the web's shareContact() → generateContactVCard() → share intent.
+ */
+private fun shareContactAsVCard(context: android.content.Context, form: ContactFormState) {
+    val lines = mutableListOf<String>()
+    lines.add("BEGIN:VCARD")
+    lines.add("VERSION:3.0")
+
+    // N property
+    val surname = form.surname
+    val givenName = form.givenName
+    val middleNames = form.middleNames
+    val prefix = form.prefix
+    val suffix = form.suffix
+    lines.add("N:$surname;$givenName;$middleNames;$prefix;$suffix")
+
+    // FN property
+    val displayName = listOfNotNull(
+        prefix.ifBlank { null },
+        givenName.ifBlank { null },
+        middleNames.ifBlank { null },
+        surname.ifBlank { null },
+        suffix.ifBlank { null }
+    ).joinToString(" ")
+    if (displayName.isNotBlank()) {
+        lines.add("FN:$displayName")
+    }
+
+    // Multi-value fields
+    fun addMulti(prop: String, json: String) {
+        val entries = parseMultiValueEntries(json)
+        for (entry in entries) {
+            if (entry.value.isBlank()) continue
+            if (entry.label.isNotBlank()) {
+                lines.add("$prop;TYPE=${entry.label}:${entry.value}")
+            } else {
+                lines.add("$prop:${entry.value}")
+            }
+        }
+    }
+
+    addMulti("TEL", form.phones)
+    addMulti("EMAIL", form.emails)
+
+    // Addresses
+    val addresses = parseMultiValueEntries(form.addresses)
+    for (entry in addresses) {
+        if (entry.value.isBlank()) continue
+        val adrValue = ";;${entry.value};;;;"
+        if (entry.label.isNotBlank()) {
+            lines.add("ADR;TYPE=${entry.label}:$adrValue")
+        } else {
+            lines.add("ADR:$adrValue")
+        }
+    }
+
+    addMulti("URL", form.websites)
+    addMulti("X-CALLSIGN", form.callSigns)
+    addMulti("X-XHANDLE", form.xHandles)
+
+    if (form.hasSignal) lines.add("X-SIGNAL:true")
+    if (form.pgpKey.isNotBlank()) lines.add("X-PGP-KEY:${form.pgpKey}")
+    if (form.favorite) lines.add("X-FAVORITE:true")
+    if (form.organization.isNotBlank()) lines.add("ORG:${form.organization}")
+    if (form.nickname.isNotBlank()) lines.add("NICKNAME:${form.nickname}")
+
+    val extraNotes = mutableListOf<String>()
+    if (form.socialContext.isNotBlank()) extraNotes.add("Social Context: ${form.socialContext}")
+    if (form.signalUsername.isNotBlank()) extraNotes.add("Signal: ${form.signalUsername}")
+    if (form.color.isNotBlank()) extraNotes.add("Color: ${form.color}")
+    if (extraNotes.isNotEmpty()) {
+        lines.add("NOTE:${extraNotes.joinToString("\\n")}")
+    }
+
+    lines.add("END:VCARD")
+    val vcardStr = lines.joinToString("\r\n")
+
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/vcard"
+        putExtra(android.content.Intent.EXTRA_TEXT, vcardStr)
+        putExtra(android.content.Intent.EXTRA_SUBJECT, displayName.ifBlank { "Contact" })
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "Share Contact"))
+}
+
+/**
+ * Open Signal to message a contact. Mirrors the web's openSignalMessage().
+ * If the value looks like a phone number, uses signal.me/#p/+number.
+ * Otherwise treats it as a Signal username and uses signal.me/#u/username.
+ */
+private fun openSignalMessage(context: android.content.Context, signalValue: String) {
+    val val_ = signalValue.trim()
+    if (val_.isBlank()) return
+
+    val url = if (val_.matches(Regex("^\\+?[\\d\\s\\-().]+$"))) {
+        // Phone number
+        val phone = val_.replace(Regex("[\\s\\-().]+"), "")
+        val normalized = if (phone.startsWith("+")) phone else "+$phone"
+        "https://signal.me/#p/$normalized"
+    } else {
+        // Username
+        val username = if (val_.startsWith("@")) val_.substring(1) else val_
+        "https://signal.me/#u/$username"
+    }
+
+    try {
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        // Signal not installed — open in browser
+        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        context.startActivity(browserIntent)
+    }
+}
+
+/**
+ * Open an address in the device's maps app.
+ * Mirrors the web's "Open in Maps" button behavior.
+ */
+private fun openAddressInMaps(context: android.content.Context, address: String) {
+    if (address.isBlank()) return
+    val uri = android.net.Uri.parse("geo:0,0?q=${android.net.Uri.encode(address)}")
+    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        // No maps app — fall back to browser with Google Maps
+        val browserUri = android.net.Uri.parse("https://www.google.com/maps/search/?api=1&query=${android.net.Uri.encode(address)}")
+        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, browserUri)
+        context.startActivity(browserIntent)
+    }
+}
+
+/**
+ * Validates a PGP public key by checking for proper BEGIN/END markers
+ * and extracting basic info. Mirrors the web's validatePgpKey() behavior.
+ * Full cryptographic validation would require BouncyCastle, but basic
+ * structural validation catches most errors.
+ */
+private fun validatePgpKey(keyText: String): String {
+    val trimmed = keyText.trim()
+    if (!trimmed.contains("-----BEGIN PGP PUBLIC KEY BLOCK-----")) {
+        return "❌ Missing BEGIN PGP PUBLIC KEY BLOCK header"
+    }
+    if (!trimmed.contains("-----END PGP PUBLIC KEY BLOCK-----")) {
+        return "❌ Missing END PGP PUBLIC KEY BLOCK header"
+    }
+    // Extract the base64 content between headers
+    val startIdx = trimmed.indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----")
+    val endIdx = trimmed.indexOf("-----END PGP PUBLIC KEY BLOCK-----")
+    if (startIdx >= endIdx) {
+        return "❌ Invalid key structure"
+    }
+    val body = trimmed.substring(
+        startIdx + "-----BEGIN PGP PUBLIC KEY BLOCK-----".length,
+        endIdx
+    ).trim()
+    // Remove any header lines (Version:, Comment:, etc.)
+    val lines = body.lines().filter { line ->
+        !line.contains(":") && line.isNotBlank() && line != ""
+    }
+    if (lines.isEmpty()) {
+        return "❌ No key data found"
+    }
+    // Check that the content is valid base64
+    val base64Content = lines.joinToString("")
+    val validBase64 = base64Content.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' }
+    if (!validBase64) {
+        return "❌ Invalid base64 encoding"
+    }
+    val byteCount = (base64Content.length * 3) / 4
+    return "✅ Valid PGP key (${byteCount} bytes)"
+}
+
+// ─── Contact Address Map Preview ────────────────────────────────────────────────
+
+/**
+ * Static inline map preview showing a contact's geocoded address location.
+ * Uses osmdroid MapView wrapped in AndroidView with MAPNIK tiles.
+ * Touch interactions are disabled — the map is a visual preview only.
+ * Tapping the map triggers the onTap callback (to open full maps app).
+ *
+ * Uses DisposableEffect for proper MapView lifecycle management,
+ * matching the pattern from MapScreen.kt.
+ *
+ * Validates: Requirements 18.1, 18.2, 18.3
+ */
+@Composable
+fun ContactMapPreview(lat: Double, lon: Double, onTap: () -> Unit) {
+    val context = LocalContext.current
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onTap() }
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                MapView(ctx).apply {
+                    // Configure osmdroid
+                    Configuration.getInstance().apply {
+                        userAgentValue = "CWOC-Android/1.0"
+                        osmdroidTileCache = ctx.cacheDir.resolve("osmdroid").also { it.mkdirs() }
+                    }
+
+                    // Set tile source and zoom
+                    setTileSource(TileSourceFactory.MAPNIK)
+                    controller.setZoom(15.0)
+                    controller.setCenter(GeoPoint(lat, lon))
+
+                    // Disable all touch interactions (static preview)
+                    setMultiTouchControls(false)
+                    setBuiltInZoomControls(false)
+                    isHorizontalMapRepetitionEnabled = false
+                    isVerticalMapRepetitionEnabled = false
+
+                    // Intercept all touch events so the map doesn't respond to gestures
+                    setOnTouchListener { _, _ -> true }
+
+                    // Place marker at geocoded coordinates
+                    val marker = Marker(this)
+                    marker.position = GeoPoint(lat, lon)
+                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    marker.setOnMarkerClickListener { _, _ -> true } // consume click
+                    overlays.add(marker)
+
+                    mapViewRef = this
+                }
+            },
+            update = { view ->
+                // Update center and marker if coordinates change
+                view.controller.setCenter(GeoPoint(lat, lon))
+                view.overlays.removeAll { it is Marker }
+                val marker = Marker(view)
+                marker.position = GeoPoint(lat, lon)
+                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                marker.setOnMarkerClickListener { _, _ -> true }
+                view.overlays.add(marker)
+                view.invalidate()
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+
+    // Proper lifecycle management for the MapView
+    DisposableEffect(Unit) {
+        onDispose {
+            mapViewRef?.onDetach()
+        }
+    }
 }

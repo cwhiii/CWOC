@@ -77,6 +77,12 @@ class AttachmentsViewModel @Inject constructor(
     private val _sortOrder = MutableStateFlow(AttachmentSort.DateNewest)
     val sortOrder: StateFlow<AttachmentSort> = _sortOrder.asStateFlow()
 
+    private val _sizeMinMb = MutableStateFlow<Float?>(null)
+    val sizeMinMb: StateFlow<Float?> = _sizeMinMb.asStateFlow()
+
+    private val _sizeMaxMb = MutableStateFlow<Float?>(null)
+    val sizeMaxMb: StateFlow<Float?> = _sizeMaxMb.asStateFlow()
+
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
 
@@ -110,6 +116,16 @@ class AttachmentsViewModel @Inject constructor(
         val query = _searchQuery.value.trim().lowercase()
         if (query.isNotEmpty()) {
             list = list.filter { it.filename.lowercase().contains(query) }
+        }
+
+        // Apply size range filter
+        val minBytes = _sizeMinMb.value?.let { (it * 1048576).toLong() }
+        val maxBytes = _sizeMaxMb.value?.let { (it * 1048576).toLong() }
+        if (minBytes != null) {
+            list = list.filter { it.size >= minBytes }
+        }
+        if (maxBytes != null) {
+            list = list.filter { it.size <= maxBytes }
         }
 
         // Apply sort
@@ -149,6 +165,22 @@ class AttachmentsViewModel @Inject constructor(
 
     fun setSortOrder(sort: AttachmentSort) {
         _sortOrder.value = sort
+    }
+
+    fun setSizeMin(mb: Float?) {
+        _sizeMinMb.value = mb
+    }
+
+    fun setSizeMax(mb: Float?) {
+        _sizeMaxMb.value = mb
+    }
+
+    /**
+     * Returns the download URL for an attachment (for opening in browser or share intent).
+     */
+    fun getDownloadUrl(attachment: AttachmentItem): String {
+        val serverUrl = getServerUrl()
+        return "$serverUrl/api/chits/${attachment.chitId}/attachments/${attachment.attachmentId}"
     }
 
     fun toggleSelection(attachmentId: String) {

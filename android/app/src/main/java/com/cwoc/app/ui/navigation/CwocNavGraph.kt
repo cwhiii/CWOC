@@ -86,6 +86,16 @@ fun CwocNavGraph(
             )
         }
 
+        composable(Screen.Notebook.route) {
+            com.cwoc.app.ui.screens.notebook.NotebookScreen(
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                },
+                filterSortViewModel = filterSortViewModel,
+                chitRepository = chitRepository
+            )
+        }
+
         composable(Screen.Calendar.route) {
             CalendarScreen(
                 onNavigateToEditor = { chitId ->
@@ -276,12 +286,22 @@ fun CwocNavGraph(
             )
         }
 
-        composable(Screen.AuditLog.route) {
+        composable(
+            route = Screen.AuditLog.route,
+            arguments = listOf(
+                navArgument("entityType") { type = NavType.StringType; defaultValue = "" },
+                navArgument("entityId") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val entityType = backStackEntry.arguments?.getString("entityType") ?: ""
+            val entityId = backStackEntry.arguments?.getString("entityId") ?: ""
             AuditLogScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
-                }
+                },
+                initialEntityType = entityType.ifBlank { null },
+                initialEntityId = entityId.ifBlank { null }
             )
         }
 
@@ -330,7 +350,8 @@ fun CwocNavGraph(
             com.cwoc.app.ui.screens.email.EmailScreen(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
-                }
+                },
+                sidebarStateViewModel = sidebarStateViewModel
             )
         }
 

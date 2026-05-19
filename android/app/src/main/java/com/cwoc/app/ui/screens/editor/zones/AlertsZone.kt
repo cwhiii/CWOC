@@ -48,14 +48,29 @@ import java.util.UUID
 /**
  * Represents a single alert/alarm/reminder attached to a chit.
  *
+ * Matches the web's alert data model:
+ * - Notifications: {_type:"notification", value, unit, atTarget, afterTarget, targetType}
+ * - Alarms: {_type:"alarm", time, days, enabled, name, delete_after_dismiss}
+ * - Timers: {_type:"timer", duration, name, loop}
+ * - Stopwatches: {_type:"stopwatch", name}
+ *
  * @param id Unique identifier for this alert
- * @param type Alert type: "notification", "alarm", "timer", or "stopwatch" (L1 fix: matches web types)
+ * @param type Alert type: "notification", "alarm", "timer", or "stopwatch"
  * @param offsetMinutes Relative offset in minutes before start/due (for relative alerts)
  * @param absoluteTime Absolute time string in HH:mm format (for absolute time alerts)
  * @param label Optional user-provided label for the alert
- * @param daysOfWeek Days of week for repeating alarms (L3): e.g., "mon,tue,wed"
- * @param durationSeconds Duration in seconds for timers (L4)
- * @param loop Whether the timer should loop/repeat (L5)
+ * @param daysOfWeek Days of week for repeating alarms: e.g., "Mon,Tue,Wed"
+ * @param durationSeconds Duration in seconds for timers
+ * @param loop Whether the timer should loop/repeat
+ * @param enabled Whether the alarm is active (alarms only)
+ * @param atTarget True if notification fires exactly at the target time
+ * @param afterTarget True if notification fires after the target time (false = before)
+ * @param targetType Which date field to reference: "start", "end", "due", "point"
+ * @param unit Time unit for notifications: "minutes", "hours", "days", "weeks"
+ * @param value Numeric value for the offset (used with unit)
+ * @param deleteAfterDismiss Whether to delete the chit after the alarm is dismissed
+ * @param weatherCondition Weather condition type for weather notifications
+ * @param weatherThreshold Numeric threshold for weather condition (stored in canonical units: °C, km/h, mm)
  */
 data class AlertItem(
     val id: String = UUID.randomUUID().toString(),
@@ -65,7 +80,16 @@ data class AlertItem(
     val label: String? = null,
     val daysOfWeek: String? = null,
     val durationSeconds: Int? = null,
-    val loop: Boolean = false
+    val loop: Boolean = false,
+    val enabled: Boolean = true,
+    val atTarget: Boolean = false,
+    val afterTarget: Boolean = false,
+    val targetType: String? = null,
+    val unit: String? = null,
+    val value: Int? = null,
+    val deleteAfterDismiss: Boolean = false,
+    val weatherCondition: String? = null,
+    val weatherThreshold: Double? = null
 )
 
 // ─── AlertsZone Composable ──────────────────────────────────────────────────────
@@ -136,7 +160,15 @@ fun AlertsZone(
                     onDelete = {
                         val updated = alerts.filter { it.id != alert.id }
                         onAlertsChanged(serializeAlerts(updated))
-                    }
+                    },
+                    onToggleEnabled = if (alert.type == "alarm") {
+                        {
+                            val updated = alerts.map {
+                                if (it.id == alert.id) it.copy(enabled = !it.enabled) else it
+                            }
+                            onAlertsChanged(serializeAlerts(updated))
+                        }
+                    } else null
                 )
             }
 
@@ -168,13 +200,14 @@ fun AlertsZone(
 // ─── Alert Row ──────────────────────────────────────────────────────────────────
 
 /**
- * Displays a single alert as a row with type icon, description text, and delete button.
+ * Displays a single alert as a row with type icon, description text, enable toggle, and delete button.
  */
 @Composable
 private fun AlertRow(
     alert: AlertItem,
     timeFormat: String,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleEnabled: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -186,7 +219,8 @@ private fun AlertRow(
         Icon(
             imageVector = alertTypeIcon(alert.type),
             contentDescription = alert.type,
-            tint = MaterialTheme.colorScheme.primary
+            tint = if (alert.enabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
         )
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -195,7 +229,9 @@ private fun AlertRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = formatAlertDescription(alert, timeFormat),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (alert.enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
             if (!alert.label.isNullOrBlank()) {
                 Text(
@@ -204,6 +240,15 @@ private fun AlertRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+
+        // Enable/disable toggle for alarms
+        if (alert.type == "alarm" && onToggleEnabled != null) {
+            androidx.compose.material3.Switch(
+                checked = alert.enabled,
+                onCheckedChange = { onToggleEnabled() },
+                modifier = Modifier.padding(end = 4.dp)
+            )
         }
 
         // Delete button
@@ -244,6 +289,16 @@ private fun AddAlertForm(
     var durationSeconds by remember { mutableStateOf("0") }
     // L5: Loop toggle for timers
     var loopTimer by remember { mutableStateOf(false) }
+    // Direction and target type for notifications (matching web)
+    var direction by remember { mutableStateOf("before") } // "before", "after", "at", "weather"
+    var targetType by remember { mutableStateOf("start") } // "start", "end", "due", "point"
+    var notifUnit by remember { mutableStateOf("minutes") } // "minutes", "hours", "days", "weeks"
+    var notifValue by remember { mutableStateOf<Int?>(15) }
+    // Delete after dismiss for alarms
+    var deleteAfterDismiss by remember { mutableStateOf(false) }
+    // Weather notification state
+    var weatherCondition by remember { mutableStateOf("high_above") }
+    var weatherThreshold by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -261,14 +316,129 @@ private fun AddAlertForm(
             onTypeSelected = { selectedType = it }
         )
 
-        // --- Offset or Absolute Time picker ---
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(
-                onClick = { useAbsoluteTime = false }
+        // --- Notification direction & target type (Before/After/At + Start/End/Due) ---
+        if (selectedType == "notification") {
+            // Direction row
+            Text("Direction", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                listOf("before" to "Before", "after" to "After", "at" to "At", "weather" to "Weather").forEach { (value, label2) ->
+                    androidx.compose.material3.FilterChip(
+                        selected = direction == value,
+                        onClick = { direction = value },
+                        label = { Text(label2, style = MaterialTheme.typography.labelSmall) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (direction == "weather") {
+                // Weather condition selector
+                Text("Condition", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                var condExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = condExpanded,
+                    onExpandedChange = { condExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = weatherConditionLabel(weatherCondition),
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        label = { Text("Weather Condition") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = condExpanded) },
+                        singleLine = true
+                    )
+                    ExposedDropdownMenu(
+                        expanded = condExpanded,
+                        onDismissRequest = { condExpanded = false }
+                    ) {
+                        WEATHER_CONDITIONS.forEach { (value, label2) ->
+                            DropdownMenuItem(
+                                text = { Text(label2) },
+                                onClick = {
+                                    weatherCondition = value
+                                    condExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Threshold input (for conditions that need a number)
+                if (weatherCondition in listOf("high_above", "high_below", "low_above", "low_below", "wind_above")) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = weatherThreshold,
+                        onValueChange = { weatherThreshold = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Threshold") },
+                        placeholder = { Text(if (weatherCondition.contains("wind")) "km/h" else "°C") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+                }
+            } else {
+                // Target type row (not shown for weather)
+                Text("Relative to", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("start" to "Start", "end" to "End", "due" to "Due", "point" to "Point").forEach { (value, label2) ->
+                        androidx.compose.material3.FilterChip(
+                            selected = targetType == value,
+                            onClick = { targetType = value },
+                            label = { Text(label2, style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Value + Unit row (hidden when direction is "at")
+                if (direction != "at") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = (notifValue ?: 15).toString(),
+                            onValueChange = { notifValue = it.toIntOrNull() },
+                            modifier = Modifier.width(80.dp),
+                            singleLine = true,
+                            label = { Text("#") },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            )
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("minutes" to "Min", "hours" to "Hr", "days" to "Day", "weeks" to "Wk").forEach { (value, label2) ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = notifUnit == value,
+                                    onClick = { notifUnit = value },
+                                    label = { Text(label2, style = MaterialTheme.typography.labelSmall) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Offset or Absolute Time picker (for alarms) ---
+        if (selectedType == "alarm") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { useAbsoluteTime = false }
+                ) {
                 Text(
                     text = "Relative",
                     color = if (!useAbsoluteTime) MaterialTheme.colorScheme.primary
@@ -313,6 +483,7 @@ private fun AddAlertForm(
                 onOffsetSelected = { selectedOffsetMinutes = it }
             )
         }
+        } // end if (selectedType == "alarm")
 
         // --- Optional label ---
         OutlinedTextField(
@@ -350,6 +521,19 @@ private fun AddAlertForm(
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+
+            // Delete after dismiss toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Delete chit after dismiss", style = MaterialTheme.typography.bodySmall)
+                androidx.compose.material3.Switch(
+                    checked = deleteAfterDismiss,
+                    onCheckedChange = { deleteAfterDismiss = it }
+                )
             }
         }
 
@@ -423,16 +607,31 @@ private fun AddAlertForm(
                         (durationSeconds.toIntOrNull() ?: 0)
                     val newAlert = AlertItem(
                         type = selectedType,
-                        offsetMinutes = if (!useAbsoluteTime) selectedOffsetMinutes else null,
-                        absoluteTime = if (useAbsoluteTime) absoluteTime else null,
+                        offsetMinutes = if (selectedType == "notification" && !useAbsoluteTime && direction != "weather") selectedOffsetMinutes else null,
+                        absoluteTime = if (selectedType == "alarm" || useAbsoluteTime) absoluteTime else null,
                         label = label.ifBlank { null },
                         daysOfWeek = if (selectedType == "alarm" && daysOfWeek.isNotBlank()) daysOfWeek else null,
                         durationSeconds = if (selectedType == "timer" && totalDurationSec > 0) totalDurationSec else null,
-                        loop = if (selectedType == "timer") loopTimer else false
+                        loop = if (selectedType == "timer") loopTimer else false,
+                        enabled = true,
+                        atTarget = if (selectedType == "notification" && direction != "weather") direction == "at" else false,
+                        afterTarget = if (selectedType == "notification" && direction != "weather") direction == "after" else false,
+                        targetType = if (selectedType == "notification" && direction != "weather") targetType else null,
+                        unit = if (selectedType == "notification" && direction == "weather") "weather"
+                            else if (selectedType == "notification" && !useAbsoluteTime) notifUnit else null,
+                        value = if (selectedType == "notification" && !useAbsoluteTime && direction != "weather") notifValue else null,
+                        deleteAfterDismiss = if (selectedType == "alarm") deleteAfterDismiss else false,
+                        weatherCondition = if (selectedType == "notification" && direction == "weather") weatherCondition else null,
+                        weatherThreshold = if (selectedType == "notification" && direction == "weather") weatherThreshold.toDoubleOrNull() else null
                     )
                     onAdd(newAlert)
                 },
-                enabled = if (useAbsoluteTime) absoluteTime != null else selectedOffsetMinutes != null
+                enabled = when (selectedType) {
+                    "notification" -> direction != "unset"
+                    "alarm" -> absoluteTime != null
+                    "timer" -> true
+                    else -> true
+                }
             ) {
                 Text("Add")
             }
@@ -576,6 +775,24 @@ private fun OffsetPicker(
 /** Available alert types (L1: matches web's 4 types) */
 private val ALERT_TYPES = listOf("notification", "alarm", "timer", "stopwatch")
 
+/** Weather condition options matching the web's notification weather selector */
+private val WEATHER_CONDITIONS = listOf(
+    "high_above" to "High temp above",
+    "high_below" to "High temp below",
+    "low_above" to "Low temp above",
+    "low_below" to "Low temp below",
+    "precipitation" to "Any precipitation",
+    "rain" to "Rain in forecast",
+    "snow" to "Snow in forecast",
+    "hail" to "Hail in forecast",
+    "wind_above" to "Wind speed above"
+)
+
+/** Returns a human-readable label for a weather condition code */
+private fun weatherConditionLabel(condition: String): String {
+    return WEATHER_CONDITIONS.firstOrNull { it.first == condition }?.second ?: condition
+}
+
 /** Common offset values in minutes */
 private val OFFSET_OPTIONS = listOf(5, 10, 15, 30, 60, 120, 1440)
 
@@ -635,10 +852,44 @@ private fun alertTypeLabel(type: String): String {
  * Formats an alert's time/offset for display in the alert row.
  */
 private fun formatAlertDescription(alert: AlertItem, timeFormat: String): String {
-    return when {
-        alert.offsetMinutes != null -> formatOffsetMinutes(alert.offsetMinutes)
-        alert.absoluteTime != null -> "At ${formatTimeForDisplay(alert.absoluteTime, timeFormat)}"
-        else -> alertTypeLabel(alert.type)
+    return when (alert.type) {
+        "notification" -> {
+            if (alert.unit == "weather" || alert.weatherCondition != null) {
+                // Weather notification
+                val condLabel = alert.weatherCondition?.let { weatherConditionLabel(it) } ?: "Weather"
+                val threshold = alert.weatherThreshold?.let { " ${it.toInt()}" } ?: ""
+                "🌤️ $condLabel$threshold"
+            } else {
+                val direction = when {
+                    alert.atTarget -> "At"
+                    alert.afterTarget -> "After"
+                    else -> "Before"
+                }
+                val target = alert.targetType ?: "start"
+                if (alert.atTarget) {
+                    "At $target"
+                } else {
+                    val value = alert.value ?: alert.offsetMinutes ?: 0
+                    val unit = alert.unit ?: "minutes"
+                    "$value $unit $direction $target"
+                }
+            }
+        }
+        "alarm" -> {
+            val timeStr = alert.absoluteTime?.let { formatTimeForDisplay(it, timeFormat) } ?: "No time set"
+            val daysStr = if (!alert.daysOfWeek.isNullOrBlank()) " (${alert.daysOfWeek})" else ""
+            "🔔 $timeStr$daysStr"
+        }
+        "timer" -> {
+            val dur = alert.durationSeconds ?: 0
+            val h = dur / 3600
+            val m = (dur % 3600) / 60
+            val s = dur % 60
+            val timeStr = if (h > 0) "${h}h ${m}m ${s}s" else if (m > 0) "${m}m ${s}s" else "${s}s"
+            "⏱️ $timeStr${if (alert.loop) " (loop)" else ""}"
+        }
+        "stopwatch" -> "⏱️ Stopwatch"
+        else -> alert.type
     }
 }
 

@@ -184,4 +184,19 @@ class EmailRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun addRuleToBundle(bundleId: String, matchType: String, matchValue: String): Result<Unit> {
+        return try {
+            val body = mapOf("match_type" to matchType, "match_value" to matchValue)
+            val response = apiService.addRuleToBundle(bundleId, body)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("Add rule to bundle failed (${response.code()}): $errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

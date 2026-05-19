@@ -188,6 +188,41 @@ class SyncEngine @Inject constructor(
                 Log.d(TAG, "Settings replaced successfully")
             }
 
+            // If settings weren't included in sync response but local settings have
+            // missing critical fields (tags, saved_locations), force-fetch from API.
+            // This handles the case where settings were updated on the server after
+            // the app's initial sync, and the settings sync_version wasn't bumped.
+            if (body.settings == null) {
+                val localSettings = settingsDao.get()
+                if (localSettings != null && (localSettings.tags.isNullOrBlank() || localSettings.tags == "[]" || localSettings.tags == "null" ||
+                    localSettings.savedLocations.isNullOrBlank() || localSettings.savedLocations == "[]" || localSettings.savedLocations == "null")) {
+                    Log.d(TAG, "Local settings missing tags or savedLocations — force-fetching from API")
+                    try {
+                        val settingsResp = apiService.getSettings(localSettings.userId)
+                        if (settingsResp.isSuccessful) {
+                            val serverMap = settingsResp.body()
+                            if (serverMap != null) {
+                                val serverTags = serverMap["tags"]
+                                val serverLocations = serverMap["saved_locations"]
+                                val tagsJson = serverTags?.let { gson.toJson(it) }
+                                val locationsJson = serverLocations?.let { gson.toJson(it) }
+                                if ((tagsJson != null && tagsJson != "null" && tagsJson != "[]") ||
+                                    (locationsJson != null && locationsJson != "null" && locationsJson != "[]")) {
+                                    val updatedEntity = localSettings.copy(
+                                        tags = if (tagsJson != null && tagsJson != "null" && tagsJson != "[]") tagsJson else localSettings.tags,
+                                        savedLocations = if (locationsJson != null && locationsJson != "null" && locationsJson != "[]") locationsJson else localSettings.savedLocations
+                                    )
+                                    settingsDao.replace(updatedEntity)
+                                    Log.d(TAG, "Force-fetched settings: tags=${tagsJson?.take(50)}, savedLocations=${locationsJson?.take(50)}")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to force-fetch settings (best-effort): ${e.message}")
+                    }
+                }
+            }
+
             // Process tag renames — propagate to all local chits without dirtying
             body.tag_renames?.let { tagRenames ->
                 if (tagRenames.isNotEmpty()) {

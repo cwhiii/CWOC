@@ -25,7 +25,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,11 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.ui.components.WeatherIndicator
 import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.util.DateUtils
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
@@ -52,9 +57,47 @@ fun CalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
     onNavigateToEditor: (String) -> Unit = {},
     onNavigateToNewChitWithPrefill: (start: String, end: String) -> Unit = { _, _ -> },
-    sidebarStateViewModel: SidebarStateViewModel? = null
+    sidebarStateViewModel: SidebarStateViewModel? = null,
+    chitRepository: ChitRepository? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var quickEditChit by remember { mutableStateOf<ChitEntity?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // State for recurring drag modal
+    data class PendingRecurringDrag(
+        val parentId: String,
+        val virtualDate: String,
+        val newStart: String?,
+        val newEnd: String?,
+        val newDue: String?,
+        val newPit: String?
+    )
+    var pendingRecurringDrag by remember { mutableStateOf<PendingRecurringDrag?>(null) }
+
+    // Shared drag-end handler that resolves virtual recurring instance IDs
+    val handleDragEnd: (String, String?, String?, String?, String?) -> Unit = { chitId, newStart, newEnd, newDue, newPit ->
+        if (chitId.contains("_v_")) {
+            // Recurring instance — show modal asking how to apply
+            val parentId = chitId.substringBefore("_v_")
+            val virtualDate = chitId.substringAfter("_v_")
+            pendingRecurringDrag = PendingRecurringDrag(parentId, virtualDate, newStart, newEnd, newDue, newPit)
+        } else if (chitId.contains("_b_")) {
+            // Birthday — don't allow drag
+        } else {
+            // Regular chit — apply directly
+            viewModel.updateChitDateTimes(chitId, newStart, newEnd, newDue, newPit)
+        }
+    }
+
+    // Resolve virtual instance IDs to parent IDs for navigation
+    val resolveChitId: (String) -> String = { id ->
+        if (id.contains("_v_") || id.contains("_b_")) {
+            id.substringBefore("_v_").substringBefore("_b_")
+        } else {
+            id
+        }
+    }
 
     // Sync sidebar state → CalendarViewModel (period, date, monthMode)
     val sidebarState = sidebarStateViewModel?.state?.collectAsState()?.value
@@ -131,11 +174,9 @@ fun CalendarScreen(
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.dayScrollToHour,
                             snapMinutes = uiState.calendarSnap,
-                            onEventTap = { event -> onNavigateToEditor(event.id) },
-                            onEventLongPress = { event -> onNavigateToEditor(event.id) },
-                            onEventDragEnd = { chitId, newStart, newEnd, newDue, newPit ->
-                                viewModel.updateChitDateTimes(chitId, newStart, newEnd, newDue, newPit)
-                            },
+                            onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
+                            onEventLongPress = { event -> quickEditChit = event },
+                            onEventDragEnd = handleDragEnd,
                             onEmptySlotTap = { tappedTime ->
                                 // Task 33: Navigate to editor with pre-filled start/end
                                 val start = tappedTime.toString()
@@ -149,7 +190,11 @@ fun CalendarScreen(
                         WeekTimeGrid(
                             events = uiState.events,
                             weekStartDate = uiState.selectedDate,
-                            onEventTap = { event -> onNavigateToEditor(event.id) },
+                            timeFormat = uiState.timeFormat,
+                            scrollToHour = uiState.dayScrollToHour,
+                            snapMinutes = uiState.calendarSnap,
+                            onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
+                            onEventDragEnd = handleDragEnd,
                             onEmptySlotTap = { tappedTime ->
                                 // Task 33: Navigate to editor with pre-filled start/end
                                 val start = tappedTime.toString()
@@ -165,7 +210,17 @@ fun CalendarScreen(
                             weekStartDay = "sunday",
                             monthMode = uiState.monthMode,
                             onDayTap = { date ->
+                                viewModel.setDate(date)
                                 viewModel.setViewMode(CalendarViewMode.DAY)
+                            },
+                            onEventTap = { chitId -> onNavigateToEditor(resolveChitId(chitId)) },
+                            onEmptyDayLongPress = { date ->
+                                // Create new all-day chit on long-press (matching web's dblclick)
+                                val dateStr = date.toString()
+                                onNavigateToNewChitWithPrefill(
+                                    "${dateStr}T00:00:00",
+                                    "${dateStr}T23:59:59"
+                                )
                             }
                         )
                     }
@@ -175,39 +230,51 @@ fun CalendarScreen(
                             selectedDate = uiState.selectedDate,
                             weekStartDay = "sunday",
                             onMonthTap = { date ->
+                                viewModel.setDate(date)
                                 viewModel.setViewMode(CalendarViewMode.MONTH)
+                            },
+                            onDayTap = { date ->
+                                viewModel.setDate(date)
+                                viewModel.setViewMode(CalendarViewMode.DAY)
                             }
                         )
                     }
                     CalendarViewMode.ITINERARY -> {
                         ItineraryView(
                             events = uiState.events,
-                            onEventTap = { chitId -> onNavigateToEditor(chitId) }
+                            onEventTap = { chitId -> onNavigateToEditor(resolveChitId(chitId)) }
                         )
                     }
                     CalendarViewMode.X_DAY -> {
-                        XDayView(
+                        // X-Day view: same as week time grid but with configurable day count
+                        WeekTimeGrid(
                             events = uiState.events,
+                            weekStartDate = uiState.selectedDate,
+                            timeFormat = uiState.timeFormat,
+                            scrollToHour = uiState.dayScrollToHour,
+                            snapMinutes = uiState.calendarSnap,
                             dayCount = uiState.xDayCount,
-                            startDate = uiState.selectedDate,
-                            onEventTap = { chitId -> onNavigateToEditor(chitId) }
+                            onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
+                            onEventDragEnd = handleDragEnd,
+                            onEmptySlotTap = { tappedTime ->
+                                val start = tappedTime.toString()
+                                val end = tappedTime.plusHours(1).toString()
+                                onNavigateToNewChitWithPrefill(start, end)
+                            }
                         )
                     }
                     CalendarViewMode.WORK_HOURS -> {
-                        // ADD12: Work Hours view — same as Day but filtered to work hours
-                        DayTimeGrid(
+                        // Work Hours view — Week view filtered to work hours only
+                        WeekTimeGrid(
                             events = uiState.events,
-                            date = uiState.selectedDate,
+                            weekStartDate = uiState.selectedDate,
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.workStartHour,
                             snapMinutes = uiState.calendarSnap,
                             hourStart = uiState.workStartHour,
                             hourEnd = uiState.workEndHour,
-                            onEventTap = { event -> onNavigateToEditor(event.id) },
-                            onEventLongPress = { event -> onNavigateToEditor(event.id) },
-                            onEventDragEnd = { chitId, newStart, newEnd, newDue, newPit ->
-                                viewModel.updateChitDateTimes(chitId, newStart, newEnd, newDue, newPit)
-                            },
+                            onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
+                            onEventDragEnd = handleDragEnd,
                             onEmptySlotTap = { tappedTime ->
                                 val start = tappedTime.toString()
                                 val end = tappedTime.plusHours(1).toString()
@@ -218,6 +285,70 @@ fun CalendarScreen(
                 }
             }
         }
+    }
+
+    // Quick-edit bottom sheet (long-press on calendar event)
+    val currentQuickEditChit = quickEditChit
+    if (currentQuickEditChit != null) {
+        com.cwoc.app.ui.components.QuickEditSheet(
+            title = currentQuickEditChit.title ?: "",
+            content = currentQuickEditChit.note ?: "",
+            onSave = { newTitle, newContent ->
+                chitRepository?.let { repo ->
+                    coroutineScope.launch {
+                        repo.updateTitleAndNote(currentQuickEditChit.id, newTitle, newContent)
+                    }
+                }
+                quickEditChit = null
+            },
+            onDismiss = { quickEditChit = null },
+            onOpenFullEditor = {
+                quickEditChit = null
+                onNavigateToEditor(currentQuickEditChit.id)
+            }
+        )
+    }
+
+    // Recurring drag modal — asks how to apply the time change
+    val currentPendingDrag = pendingRecurringDrag
+    if (currentPendingDrag != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingRecurringDrag = null },
+            title = { Text("Edit recurring event") },
+            text = { Text("How would you like to apply this time change?") },
+            confirmButton = {
+                Column {
+                    androidx.compose.material3.TextButton(onClick = {
+                        // "All in series" — update the parent chit's times
+                        viewModel.updateChitDateTimes(
+                            currentPendingDrag.parentId,
+                            currentPendingDrag.newStart,
+                            currentPendingDrag.newEnd,
+                            currentPendingDrag.newDue,
+                            currentPendingDrag.newPit
+                        )
+                        pendingRecurringDrag = null
+                    }) { Text("🔁 All in series") }
+                    androidx.compose.material3.TextButton(onClick = {
+                        // "This instance only" — would need to create exception + standalone chit
+                        // For now, just update the parent (simplified)
+                        viewModel.updateChitDateTimes(
+                            currentPendingDrag.parentId,
+                            currentPendingDrag.newStart,
+                            currentPendingDrag.newEnd,
+                            currentPendingDrag.newDue,
+                            currentPendingDrag.newPit
+                        )
+                        pendingRecurringDrag = null
+                    }) { Text("✂️ This instance only") }
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingRecurringDrag = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

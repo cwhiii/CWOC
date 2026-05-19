@@ -6,14 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.domain.recurrence.RecurrenceEngine
+import com.cwoc.app.domain.recurrence.RecurrenceException
+import com.cwoc.app.domain.recurrence.RecurrenceRule
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
@@ -69,7 +76,8 @@ data class CalendarUiState(
 class CalendarViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
     private val settingsRepository: SettingsRepository,
-    private val sharedPreferences: SharedPreferences
+    private val sharedPreferences: SharedPreferences,
+    private val apiService: com.cwoc.app.data.remote.CwocApiService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CalendarUiState())
@@ -169,12 +177,196 @@ class CalendarViewModel @Inject constructor(
             val state = _uiState.value
             val (dayStart, dayEnd) = getDateRange(state.selectedDate, state.viewMode, state.xDayCount)
 
-            chitRepository.getChitsForDay(dayStart, dayEnd).collect { events ->
+            // Combine non-recurring events in range with expanded recurring events
+            combine(
+                chitRepository.getChitsForDay(dayStart, dayEnd),
+                chitRepository.getRecurringChits()
+            ) { rangeEvents, recurringChits ->
+                // Parse the date range for recurrence expansion
+                val rangeStartDate = state.selectedDate.minusDays(7) // buffer
+                val rangeEndDate = when (state.viewMode) {
+                    CalendarViewMode.DAY, CalendarViewMode.WORK_HOURS -> state.selectedDate.plusDays(1)
+                    CalendarViewMode.WEEK -> state.selectedDate.plusDays(7)
+                    CalendarViewMode.MONTH -> state.selectedDate.plusMonths(1).plusDays(7)
+                    CalendarViewMode.YEAR -> state.selectedDate.plusYears(1)
+                    CalendarViewMode.ITINERARY -> state.selectedDate.plusDays(31)
+                    CalendarViewMode.X_DAY -> state.selectedDate.plusDays(state.xDayCount.toLong())
+                }
+
+                // Expand recurring chits into virtual instances
+                val engine = RecurrenceEngine()
+                val expandedInstances = mutableListOf<ChitEntity>()
+                val recurringIds = mutableSetOf<String>()
+
+                recurringChits.forEach { chit ->
+                    recurringIds.add(chit.id)
+                    val rule = parseRecurrenceRule(chit.recurrenceRule) ?: return@forEach
+                    val baseStart = parseLocalDateTime(chit.startDatetime ?: chit.dueDatetime ?: chit.pointInTime) ?: return@forEach
+                    val baseEnd = chit.endDatetime?.let { parseLocalDateTime(it) }
+                    val exceptions = parseRecurrenceExceptions(chit.recurrenceExceptions)
+
+                    val instances = engine.expand(
+                        rule = rule,
+                        baseStart = baseStart,
+                        baseEnd = baseEnd,
+                        rangeStart = rangeStartDate,
+                        rangeEnd = rangeEndDate,
+                        exceptions = exceptions,
+                        timezone = chit.timezone ?: "UTC"
+                    )
+
+                    instances.forEach { instance ->
+                        // Create a virtual copy of the chit with the instance's dates
+                        val virtualChit = chit.copy(
+                            id = "${chit.id}_v_${instance.date}",
+                            startDatetime = instance.startDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                            endDatetime = instance.endDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                            // Clear recurrence on virtual instances so they don't get re-expanded
+                            recurrenceRule = null
+                        )
+                        expandedInstances.add(virtualChit)
+                    }
+                }
+
+                // Merge: non-recurring events from range + expanded instances + birthdays
+                // Exclude the base recurring chits from rangeEvents (they're replaced by instances)
+                val nonRecurring = rangeEvents.filter { it.id !in recurringIds }
+                val birthdayChits = loadBirthdayChits()
+                // Expand birthday recurrences too (they repeat yearly)
+                val expandedBirthdays = mutableListOf<ChitEntity>()
+                birthdayChits.forEach { bChit ->
+                    val bRule = parseRecurrenceRule(bChit.recurrenceRule)
+                    if (bRule != null) {
+                        val bStart = parseLocalDateTime(bChit.startDatetime) ?: return@forEach
+                        val bInstances = engine.expand(bRule, bStart, null, rangeStartDate, rangeEndDate)
+                        bInstances.forEach { inst ->
+                            expandedBirthdays.add(bChit.copy(
+                                id = "${bChit.id}_b_${inst.date}",
+                                startDatetime = inst.startDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                                endDatetime = inst.endDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                                recurrenceRule = null
+                            ))
+                        }
+                    } else {
+                        // Non-recurring birthday — include if in range
+                        val bDate = parseLocalDateTime(bChit.startDatetime)?.toLocalDate()
+                        if (bDate != null && !bDate.isBefore(rangeStartDate) && !bDate.isAfter(rangeEndDate)) {
+                            expandedBirthdays.add(bChit)
+                        }
+                    }
+                }
+                nonRecurring + expandedInstances + expandedBirthdays
+            }.collect { mergedEvents ->
                 _uiState.update {
-                    it.copy(isLoading = false, events = events)
+                    it.copy(isLoading = false, events = mergedEvents)
                 }
             }
         }
+    }
+
+    // ── Recurrence parsing helpers ───────────────────────────────────────────
+
+    /** Cached birthday chits — fetched once and reused across date navigations. */
+    private var _birthdayChits: List<ChitEntity>? = null
+
+    private suspend fun loadBirthdayChits(): List<ChitEntity> {
+        _birthdayChits?.let { return it }
+        return try {
+            val response = apiService.getContactBirthdays()
+            if (!response.isSuccessful) return emptyList()
+            val rawList = response.body() ?: return emptyList()
+            val chits = rawList.mapNotNull { map ->
+                try {
+                    ChitEntity(
+                        id = (map["id"] as? String) ?: return@mapNotNull null,
+                        title = map["title"] as? String,
+                        note = null,
+                        tags = null,
+                        startDatetime = map["start_datetime"] as? String,
+                        endDatetime = map["end_datetime"] as? String,
+                        dueDatetime = map["due_datetime"] as? String,
+                        pointInTime = map["point_in_time"] as? String,
+                        completedDatetime = null,
+                        status = null,
+                        priority = null,
+                        severity = null,
+                        checklist = null,
+                        alarm = null,
+                        notification = null,
+                        recurrence = null,
+                        recurrenceId = null,
+                        recurrenceRule = map["recurrence_rule"]?.let { Gson().toJson(it) },
+                        recurrenceExceptions = null,
+                        location = null,
+                        color = map["color"] as? String,
+                        people = (map["people"] as? List<*>)?.filterIsInstance<String>(),
+                        pinned = false,
+                        archived = false,
+                        deleted = false,
+                        createdDatetime = null,
+                        modifiedDatetime = null,
+                        isProjectMaster = false,
+                        childChits = null,
+                        allDay = (map["all_day"] as? Boolean) ?: true,
+                        timezone = null,
+                        alerts = null,
+                        progressPercent = null,
+                        timeEstimate = null,
+                        weatherData = null,
+                        healthData = null,
+                        habit = false,
+                        habitGoal = null,
+                        habitSuccess = null,
+                        showOnCalendar = true,
+                        habitResetPeriod = null,
+                        habitLastActionDate = null,
+                        habitHideOverall = null,
+                        perpetual = false,
+                        shares = null,
+                        stealth = null,
+                        assignedTo = null,
+                        ownerId = null,
+                        hasUnviewedConflict = false,
+                        availability = null,
+                        snoozedUntil = null,
+                        prerequisites = null,
+                        syncVersion = 0,
+                        lastSyncedAt = null
+                    )
+                } catch (_: Exception) { null }
+            }
+            _birthdayChits = chits
+            chits
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun parseRecurrenceRule(json: String?): RecurrenceRule? {
+        if (json.isNullOrBlank() || json == "null") return null
+        return try {
+            val gson = Gson()
+            gson.fromJson(json, RecurrenceRule::class.java)
+        } catch (_: Exception) { null }
+    }
+
+    private fun parseRecurrenceExceptions(json: String?): List<RecurrenceException> {
+        if (json.isNullOrBlank() || json == "null" || json == "[]") return emptyList()
+        return try {
+            val gson = Gson()
+            val type = object : TypeToken<List<RecurrenceException>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun parseLocalDateTime(dateStr: String?): LocalDateTime? {
+        if (dateStr.isNullOrBlank()) return null
+        return try {
+            val cleaned = dateStr.replace("Z", "")
+            if (cleaned.contains("T")) {
+                LocalDateTime.parse(cleaned, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            } else {
+                LocalDate.parse(cleaned).atStartOfDay()
+            }
+        } catch (_: Exception) { null }
     }
 
     private fun getDateRange(date: LocalDate, mode: CalendarViewMode, xDayCount: Int): Pair<String, String> {

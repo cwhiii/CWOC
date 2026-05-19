@@ -32,9 +32,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
@@ -45,6 +47,9 @@ import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.components.HealthIndicatorBadges
+import com.cwoc.app.ui.components.LocationIndicator
+import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.components.QuickEditSheet
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.SwipeableChitCard
@@ -52,12 +57,14 @@ import com.cwoc.app.ui.components.UndoToast
 import com.cwoc.app.ui.components.TagChipsRow
 import com.cwoc.app.ui.components.PeopleChipsRow
 import com.cwoc.app.ui.components.SharingIndicators
+import com.cwoc.app.ui.components.RsvpIndicators
 import com.cwoc.app.ui.components.ArchiveSnoozeIndicators
+import com.cwoc.app.ui.components.WeatherIndicator
 import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.sortPinnedFirst
-import com.cwoc.app.ui.util.MarkdownRenderer
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /**
  * Notes screen displaying note chits with title and markdown preview.
@@ -135,6 +142,7 @@ fun NotesScreen(
                         onNoteClick = { chitId -> onNavigateToEditor(chitId) },
                         onNoteDelete = { chitId -> viewModel.softDelete(chitId) },
                         onNoteLongPress = { chit -> quickEditChit = chit },
+                        currentUserId = viewModel.currentUserId,
                         modifier = Modifier
                     )
                 }
@@ -254,6 +262,7 @@ private fun NotesList(
     onNoteClick: (String) -> Unit,
     onNoteDelete: (String) -> Unit,
     onNoteLongPress: (ChitEntity) -> Unit,
+    currentUserId: String,
     modifier: Modifier = Modifier
 ) {
     // D1: Masonry layout using LazyVerticalStaggeredGrid
@@ -271,7 +280,8 @@ private fun NotesList(
             NoteCard(
                 note = note,
                 onClick = { onNoteClick(note.id) },
-                onLongClick = { onNoteLongPress(note) }
+                onLongClick = { onNoteLongPress(note) },
+                currentUserId = currentUserId
             )
         }
     }
@@ -282,7 +292,8 @@ private fun NotesList(
 private fun NoteCard(
     note: ChitEntity,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    currentUserId: String
 ) {
     // D7: Expandable card — tap to expand/collapse preview
     var isExpanded by remember { mutableStateOf(false) }
@@ -291,18 +302,20 @@ private fun NoteCard(
     val cardBgColor = remember(note.color) { CwocChitCardStyle.resolveChitBgColor(note.color) }
     val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
+    // Declined chit opacity (matches web's .declined-chit class)
+    val isDeclined = note.availability == "declined"
+    val cardAlpha = if (isDeclined) 0.5f else 1f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(cardAlpha)
             .animateContentSize()
             .combinedClickable(
                 onClick = {
-                    // Single tap toggles expand; double-tap or long-press for other actions
                     if (isExpanded) {
-                        // When expanded, tap navigates to full editor
                         onClick()
                     } else {
-                        // When collapsed, tap expands the preview
                         isExpanded = true
                     }
                 },
@@ -315,12 +328,22 @@ private fun NoteCard(
         Column(
             modifier = Modifier.padding(12.dp)
         ) {
-            // D2: Drag handle row at top of card
+            // Title row with indicator icons (matches web's titleRow)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Indicator icons before title (pinned, archived, snoozed, stealth, alerts, habit, recurrence, attachments)
+                val indicators = remember(note, currentUserId) { buildNoteIndicators(note, currentUserId) }
+                if (indicators.isNotEmpty()) {
+                    Text(
+                        text = indicators,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+
                 if (!note.title.isNullOrBlank()) {
                     Text(
                         text = note.title,
@@ -332,8 +355,15 @@ private fun NoteCard(
                         modifier = Modifier.weight(1f)
                     )
                 } else {
-                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "(Untitled)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = cardTextColor.copy(alpha = 0.5f),
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+
                 // Drag handle icon
                 Text(
                     text = "⋮⋮",
@@ -342,21 +372,39 @@ private fun NoteCard(
                 )
             }
 
-            if (!note.title.isNullOrBlank()) {
+            // Owner badge — show when owner differs from current user
+            if (!note.ownerDisplayName.isNullOrBlank() && note.ownerId != currentUserId) {
+                Text(
+                    text = "👤 ${note.ownerDisplayName}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cardTextColor.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            // Assignee badge
+            if (!note.assignedTo.isNullOrBlank()) {
+                Text(
+                    text = "📌 ${note.assignedTo}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = cardTextColor.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            if (!note.title.isNullOrBlank() || !note.ownerDisplayName.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
+            // Note content — full markdown rendering via composable MarkdownRenderer
             if (!note.note.isNullOrBlank()) {
-                val previewText = if (isExpanded) note.note else note.note.take(300)
-                Text(
-                    text = MarkdownRenderer.renderToAnnotatedString(previewText),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cardTextColor.copy(alpha = 0.8f),
-                    maxLines = if (isExpanded) Int.MAX_VALUE else 5,
-                    overflow = if (isExpanded) TextOverflow.Clip else TextOverflow.Ellipsis
-                )
-                // D7: Collapse button when expanded
                 if (isExpanded) {
+                    // Full markdown rendering when expanded
+                    MarkdownRenderer(
+                        markdown = note.note,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Collapse button
                     Text(
                         text = "▲ Collapse",
                         style = MaterialTheme.typography.labelSmall,
@@ -365,8 +413,31 @@ private fun NoteCard(
                             .padding(top = 4.dp)
                             .clickable { isExpanded = false }
                     )
+                } else {
+                    // Truncated preview (plain text AnnotatedString for compact display)
+                    Text(
+                        text = com.cwoc.app.ui.util.MarkdownRenderer.renderToAnnotatedString(note.note.take(300)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cardTextColor.copy(alpha = 0.8f),
+                        maxLines = 5,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
+
+            // B6: Weather indicator (for notes with location + weather data)
+            WeatherIndicator(
+                weatherDataJson = note.weatherData,
+                modifier = Modifier.padding(top = 4.dp),
+                textColor = cardTextColor.copy(alpha = 0.7f)
+            )
+
+            // B7: Location indicator
+            LocationIndicator(
+                location = note.location,
+                modifier = Modifier.padding(top = 4.dp),
+                textColor = cardTextColor.copy(alpha = 0.7f)
+            )
 
             // B1: Tag chips
             TagChipsRow(
@@ -386,23 +457,50 @@ private fun NoteCard(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
+            // B15: RSVP indicators
+            RsvpIndicators(
+                sharesJson = note.shares,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
             // B9: Archive/snooze indicators
             ArchiveSnoozeIndicators(
                 chit = note,
                 modifier = Modifier.padding(top = 4.dp)
             )
 
-            // Pin indicator
-            if (note.pinned) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "📌 Pinned",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cardTextColor.copy(alpha = 0.7f)
-                )
-            }
+            // B10: Health indicator badges
+            HealthIndicatorBadges(
+                healthDataJson = note.healthData,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
+}
+
+/**
+ * Build indicator emoji string for a note card, matching web's titleRow icons.
+ * Shows: pinned, archived, snoozed, stealth (owner only), alarm/notification, habit, recurrence, attachments.
+ */
+private fun buildNoteIndicators(note: ChitEntity, currentUserId: String): String {
+    return buildString {
+        if (note.pinned) append("🔖 ")
+        if (note.archived) append("📦 ")
+        if (!note.snoozedUntil.isNullOrBlank()) {
+            try {
+                val snoozeEnd = Instant.parse(note.snoozedUntil)
+                if (snoozeEnd.isAfter(Instant.now())) append("😴 ")
+            } catch (_: Exception) {}
+        }
+        // Stealth — only visible to the owner (matches web's Requirement 6.5)
+        if (note.stealth == true && note.ownerId == currentUserId) append("🥷 ")
+        if (note.alarm == true || note.notification == true) append("🔔 ")
+        if (note.habit) append("🎯 ")
+        else if (!note.recurrenceRule.isNullOrBlank()) append("🔁 ")
+        // Attachment indicator
+        val attachRaw = note.attachments
+        if (!attachRaw.isNullOrBlank() && attachRaw != "[]") append("📎 ")
+    }.trim()
 }
 
 @Composable

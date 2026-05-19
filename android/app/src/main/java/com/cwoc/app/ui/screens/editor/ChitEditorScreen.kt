@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Redo
@@ -106,11 +107,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.domain.tags.TagNode
 import com.cwoc.app.ui.components.CalculatorSheet
+import com.cwoc.app.ui.components.ContactAvatar
 import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.screens.editor.zones.AlertsZone
@@ -140,9 +146,12 @@ fun ChitEditorScreen(
     val editorSettings by viewModel.editorSettings.collectAsState()
     val showUnsavedDialog by viewModel.showUnsavedDialog.collectAsState()
     val tagTree by viewModel.tagTree.collectAsState()
+    val recentTags by viewModel.recentTags.collectAsState()
     val lastSavedAt by viewModel.lastSavedAt.collectAsState()
     val contactNames by viewModel.contactNames.collectAsState()
     val contactColors by viewModel.contactColors.collectAsState()
+    val contactImages by viewModel.contactImages.collectAsState()
+    val peopleSearchResults by viewModel.peopleSearchResults.collectAsState()
 
     var isPinned by remember { mutableStateOf(false) }
     var isArchived by remember { mutableStateOf(false) }
@@ -150,6 +159,7 @@ fun ChitEditorScreen(
     var showOptionsMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCalculator by remember { mutableStateOf(false) }
+    var showQrDialog by remember { mutableStateOf(false) }
     // 18.1: Timezone detected from Location zone geocoding, passed to DateZone for suggestion prompt
     var suggestedTimezone by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -273,6 +283,10 @@ fun ChitEditorScreen(
                 onClick = { showCalculator = true }
             ))
             add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                label = "📱 QR Code",
+                onClick = { showQrDialog = true }
+            ))
+            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
                 label = "😴 Snooze",
                 onClick = { showSnoozeDialog = true }
             ))
@@ -323,8 +337,34 @@ fun ChitEditorScreen(
             title = { Text("Options") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // Hide in Calendar toggle
+                    TextButton(onClick = {
+                        showOptionsMenu = false
+                        viewModel.updateForm(formState.copy(showOnCalendar = !(formState.showOnCalendar ?: true)))
+                    }) {
+                        Text(if (formState.showOnCalendar == false) "Show in Calendar" else "Hide in Calendar")
+                    }
+                    // Reminder toggle
+                    TextButton(onClick = {
+                        showOptionsMenu = false
+                        viewModel.updateForm(formState.copy(notification = !(formState.notification ?: false)))
+                    }) {
+                        Text(if (formState.notification == true) "Remove Reminder" else "Mark as Reminder")
+                    }
                     if (!formState.isNew) {
+                        // Archive/Unarchive
+                        TextButton(onClick = {
+                            showOptionsMenu = false
+                            chitRepository?.let { repo ->
+                                coroutineScope.launch {
+                                    if (isArchived) { repo.unarchive(formState.id); isArchived = false }
+                                    else { repo.archive(formState.id); isArchived = true }
+                                }
+                            }
+                        }) { Text(if (isArchived) "📦 Unarchive" else "📦 Archive") }
+                        // Duplicate
                         TextButton(onClick = { showOptionsMenu = false; viewModel.duplicateChit() }) { Text("Duplicate") }
+                        // Share
                         TextButton(onClick = {
                             showOptionsMenu = false
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -334,7 +374,15 @@ fun ChitEditorScreen(
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Chit"))
                         }) { Text("Share") }
+                        // Make Email
                         TextButton(onClick = { showOptionsMenu = false; viewModel.updateForm(formState.copy(emailStatus = "draft")) }) { Text("Make Email") }
+                        // QR Code
+                        TextButton(onClick = { showOptionsMenu = false; showQrDialog = true }) { Text("📱 QR Code") }
+                        // Delete
+                        HorizontalDivider()
+                        TextButton(onClick = { showOptionsMenu = false; showDeleteConfirm = true }) {
+                            Text("🗑️ Delete", color = Color(0xFFB22222))
+                        }
                     }
                 }
             },
@@ -352,19 +400,48 @@ fun ChitEditorScreen(
             }
         } else {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                // Sticky nav header
-                com.cwoc.app.ui.screens.editor.zones.EditorZoneNavHeader(
-                    chitTitle = formState.title,
-                    currentZoneIndex = zoneState.currentZoneIndex,
-                    totalZones = zoneState.totalZones,
-                    currentZoneLabel = zoneState.currentZone.label,
-                    chitColor = chitNavColor,
-                    hasUnsavedChanges = isDirty,
-                    repeatEnabled = !formState.recurrenceRule.isNullOrBlank(),
-                    habitActive = formState.habit,
-                    onActionsClick = { zoneState.showActionsSidebar = true },
-                    onZoneListClick = { zoneState.showZoneList = true }
-                )
+                // Sticky nav header with swipe for prev/next zone (matching web)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            var startX = 0f
+                            var startTime = 0L
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset ->
+                                    startX = offset.x
+                                    startTime = System.currentTimeMillis()
+                                },
+                                onDragEnd = {},
+                                onDragCancel = {},
+                                onHorizontalDrag = { change, _ ->
+                                    val elapsed = System.currentTimeMillis() - startTime
+                                    val totalDrag = change.position.x - startX
+                                    if (elapsed < 500 && kotlin.math.abs(totalDrag) > 80) {
+                                        if (totalDrag < 0) {
+                                            zoneState.nextZone()
+                                        } else {
+                                            zoneState.prevZone()
+                                        }
+                                        startX = change.position.x // reset
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    com.cwoc.app.ui.screens.editor.zones.EditorZoneNavHeader(
+                        chitTitle = formState.title,
+                        currentZoneIndex = zoneState.currentZoneIndex,
+                        totalZones = zoneState.totalZones,
+                        currentZoneLabel = zoneState.currentZone.label,
+                        chitColor = chitNavColor,
+                        hasUnsavedChanges = isDirty,
+                        repeatEnabled = !formState.recurrenceRule.isNullOrBlank(),
+                        habitActive = formState.habit,
+                        onActionsClick = { zoneState.showActionsSidebar = true },
+                        onZoneListClick = { zoneState.showZoneList = true }
+                    )
+                }
 
                 // Zone content — single zone at a time, scrollable
                 Box(
@@ -415,13 +492,36 @@ fun ChitEditorScreen(
                                 )
                                 // Title input always visible in overview
                                 Spacer(modifier = Modifier.height(12.dp))
-                                OutlinedTextField(
-                                    value = formState.title,
-                                    onValueChange = { viewModel.updateForm(formState.copy(title = it)) },
-                                    label = { Text("Title") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Pin button (matches web's bookmark icon in title row)
+                                    IconButton(
+                                        onClick = {
+                                            chitRepository?.let { repo ->
+                                                coroutineScope.launch {
+                                                    if (isPinned) { repo.unpin(formState.id); isPinned = false }
+                                                    else { repo.pin(formState.id); isPinned = true }
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isPinned) "📌" else "📍",
+                                            fontSize = 18.sp
+                                        )
+                                    }
+                                    OutlinedTextField(
+                                        value = formState.title,
+                                        onValueChange = { viewModel.updateForm(formState.copy(title = it)) },
+                                        label = { Text("Title") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                                 TitleMetadataRow(formState = formState)
                             }
 
@@ -528,10 +628,13 @@ fun ChitEditorScreen(
                             }
 
                             "notesSection" -> {
+                                val chitLinkSuggestions by viewModel.chitLinkSuggestions.collectAsState()
                                 NotesZone(
                                     note = formState.note,
                                     onNoteChange = { viewModel.updateForm(formState.copy(note = it)) },
-                                    context = context
+                                    context = context,
+                                    chitLinkSuggestions = chitLinkSuggestions,
+                                    onChitLinkSearch = { viewModel.searchChitTitles(it) }
                                 )
                             }
 
@@ -554,19 +657,38 @@ fun ChitEditorScreen(
                                 TagsZone(
                                     tags = formState.tags,
                                     tagTree = tagTree,
+                                    recentTags = recentTags,
                                     onTagsChange = { viewModel.updateForm(formState.copy(tags = it)) },
-                                    onTagCreated = { viewModel.onTagCreated(it) }
+                                    onTagCreated = { viewModel.onTagCreated(it) },
+                                    onTagTracked = { viewModel.trackRecentTag(it) },
+                                    currentColor = formState.color,
+                                    onAutoColor = { color ->
+                                        viewModel.updateForm(formState.copy(color = color))
+                                    }
                                 )
                             }
 
                             "peopleSection" -> {
+                                val prefs = context.getSharedPreferences("cwoc_prefs", Context.MODE_PRIVATE)
+                                val serverUrl = prefs.getString("server_url", "") ?: ""
+                                val authToken = prefs.getString("auth_token", "") ?: ""
                                 PeopleZone(
                                     people = formState.people,
                                     stealth = formState.stealth,
                                     contactNames = contactNames,
                                     contactColors = contactColors,
+                                    contactImages = contactImages,
+                                    serverUrl = serverUrl,
+                                    authToken = authToken,
+                                    shares = formState.shares,
+                                    sharedUsers = editorSettings.sharedUsers,
+                                    assignedTo = formState.assignedTo,
+                                    peopleSearchResults = peopleSearchResults,
+                                    onPeopleSearchQueryChange = { viewModel.updatePeopleSearchQuery(it) },
                                     onPeopleChange = { viewModel.updateForm(formState.copy(people = it)) },
-                                    onStealthChange = { viewModel.updateForm(formState.copy(stealth = it)) }
+                                    onStealthChange = { viewModel.updateForm(formState.copy(stealth = it)) },
+                                    onSharesChange = { viewModel.updateForm(formState.copy(shares = it)) },
+                                    onAssignedToChange = { viewModel.updateForm(formState.copy(assignedTo = it)) }
                                 )
                             }
 
@@ -589,11 +711,20 @@ fun ChitEditorScreen(
                             }
 
                             "projectsSection" -> {
+                                // Load child chit summaries when child IDs change
+                                LaunchedEffect(formState.childChits) {
+                                    viewModel.loadChildChitSummaries(formState.childChits)
+                                }
+                                val childChitSummaries by viewModel.childChitSummaries.collectAsState()
                                 ProjectsZone(
                                     isProjectMaster = formState.isProjectMaster,
                                     childChits = formState.childChits,
+                                    childChitSummaries = childChitSummaries,
                                     onProjectMasterChange = { viewModel.updateForm(formState.copy(isProjectMaster = it)) },
-                                    onChildChitsChange = { viewModel.updateForm(formState.copy(childChits = it)) }
+                                    onChildChitsChange = { viewModel.updateForm(formState.copy(childChits = it)) },
+                                    onChildStatusChange = { childId, newStatus ->
+                                        viewModel.updateChildChitStatus(childId, newStatus)
+                                    }
                                 )
                             }
 
@@ -606,9 +737,11 @@ fun ChitEditorScreen(
                             }
 
                             "healthIndicatorsSection" -> {
+                                val indicatorObjects by viewModel.indicatorObjects.collectAsState()
                                 HealthIndicatorsZone(
                                     healthData = formState.healthData,
-                                    onHealthDataChange = { viewModel.updateForm(formState.copy(healthData = it)) }
+                                    onHealthDataChange = { viewModel.updateForm(formState.copy(healthData = it)) },
+                                    indicatorObjects = indicatorObjects
                                 )
                             }
 
@@ -621,7 +754,14 @@ fun ChitEditorScreen(
                                     attachmentsJson = formState.attachments,
                                     onAttachmentsChange = { viewModel.updateForm(formState.copy(attachments = it)) },
                                     serverUrl = serverUrl,
-                                    authToken = authToken
+                                    authToken = authToken,
+                                    isNewChit = formState.isNew,
+                                    onCommitAttachments = { callback ->
+                                        if (callback != null) viewModel.registerOnSaveCallback(callback)
+                                    },
+                                    onRollbackAttachments = { callback ->
+                                        if (callback != null) viewModel.registerOnDiscardCallback(callback)
+                                    }
                                 )
                             }
 
@@ -729,6 +869,25 @@ fun ChitEditorScreen(
                 viewModel.updateForm(formState.copy(note = currentNote + result))
                 showCalculator = false
             }
+        )
+    }
+
+    // QR Code dialog (matches web's _showQRCode with link/data toggle)
+    if (showQrDialog && !formState.isNew) {
+        val prefs = context.getSharedPreferences("cwoc_prefs", Context.MODE_PRIVATE)
+        val serverUrl = prefs.getString("server_url", "") ?: ""
+        com.cwoc.app.ui.components.ChitQrCodeDialog(
+            chitId = formState.id,
+            chitTitle = formState.title,
+            chitStatus = formState.status ?: "",
+            chitPriority = formState.priority ?: "",
+            chitTags = formState.tags,
+            chitNote = formState.note,
+            chitDue = formState.dueDatetime ?: "",
+            chitStart = formState.startDatetime ?: "",
+            chitEnd = formState.endDatetime ?: "",
+            serverUrl = serverUrl,
+            onDismiss = { showQrDialog = false }
         )
     }
 }
@@ -934,22 +1093,38 @@ private fun TagsZone(
         favs
     }
 
+    // Count only user tags (exclude system tags) for display
+    val userTagCount = remember(tags) {
+        tags.count { tag ->
+            tag !in setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes") &&
+                !tag.startsWith("CWOC_System/", ignoreCase = true)
+        }
+    }
+
     EditorZoneHeader(
         title = "Tags",
         isExpanded = isExpanded,
         onToggle = { isExpanded = !isExpanded },
         trailingContent = {
-            if (!isExpanded && tags.isNotEmpty()) {
+            if (!isExpanded && userTagCount > 0) {
                 Text(
-                    text = "${tags.size} tag${if (tags.size != 1) "s" else ""}",
+                    text = "$userTagCount tag${if (userTagCount != 1) "s" else ""}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     ) {
+        // Filter out system tags — they're auto-computed and not user-editable
+        val displayTags = remember(tags) {
+            tags.filter { tag ->
+                tag !in setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes") &&
+                    !tag.startsWith("CWOC_System/", ignoreCase = true)
+            }
+        }
+
         // Active tags section (selected tags with clear label)
-        if (tags.isNotEmpty()) {
+        if (displayTags.isNotEmpty()) {
             Text(
                 "Active Tags",
                 style = MaterialTheme.typography.labelMedium,
@@ -960,7 +1135,7 @@ private fun TagsZone(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                tags.forEach { tagPath ->
+                displayTags.forEach { tagPath ->
                     val node = tagNodeMap[tagPath]
                     val chipColor = node?.color?.let { parseTagColorLocal(it) }
                     InputChip(
@@ -1076,7 +1251,8 @@ private fun TagsZone(
 // ─── People Zone (gaps 29-32) ────────────────────────────────────────────────────
 
 /**
- * People zone with stealth toggle, contact chips, autocomplete from contacts, and add new inline.
+ * People zone with stealth toggle, contact chips, autocomplete from contacts,
+ * sharing (viewer/manager roles), and add new inline.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1085,8 +1261,18 @@ private fun PeopleZone(
     stealth: Boolean?,
     contactNames: List<String>,
     contactColors: Map<String, String> = emptyMap(),
+    contactImages: Map<String, String?> = emptyMap(),
+    serverUrl: String = "",
+    authToken: String = "",
+    shares: String? = null,
+    sharedUsers: List<String> = emptyList(),
+    assignedTo: String? = null,
+    peopleSearchResults: List<String> = emptyList(),
+    onPeopleSearchQueryChange: (String) -> Unit = {},
     onPeopleChange: (List<String>) -> Unit,
-    onStealthChange: (Boolean?) -> Unit
+    onStealthChange: (Boolean?) -> Unit,
+    onSharesChange: (String?) -> Unit = {},
+    onAssignedToChange: (String?) -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(people.isNotEmpty()) }
     var newPersonText by remember { mutableStateOf("") }
@@ -1096,11 +1282,21 @@ private fun PeopleZone(
     // M5: Full-screen people expand modal state
     var showExpandModal by remember { mutableStateOf(false) }
 
-    // Filter contacts based on current input text (exclude already-added people)
-    val suggestions = remember(newPersonText, contactNames, people) {
-        if (newPersonText.length < 2) emptyList()
-        else contactNames
-            .filter { it.contains(newPersonText, ignoreCase = true) && !people.contains(it) }
+    // Parse shares JSON into a list of share entries
+    val shareEntries = remember(shares) {
+        if (shares.isNullOrBlank()) emptyList()
+        else try {
+            com.google.gson.Gson().fromJson<List<Map<String, Any?>>>(
+                shares,
+                object : com.google.gson.reflect.TypeToken<List<Map<String, Any?>>>() {}.type
+            ) ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    // Filter contacts based on full-field DAO search (exclude already-added people)
+    val suggestions = remember(peopleSearchResults, people) {
+        peopleSearchResults
+            .filter { !people.contains(it) }
             .take(5)
     }
 
@@ -1133,6 +1329,10 @@ private fun PeopleZone(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        // Stealth greyout: when stealth is active, reduce opacity of sharing controls
+        val stealthAlpha = if (stealth == true) 0.35f else 1f
+
+        Column(modifier = Modifier.alpha(stealthAlpha)) {
         // People chips (removable, colorized by contact color)
         if (people.isNotEmpty()) {
             FlowRow(
@@ -1149,21 +1349,14 @@ private fun PeopleZone(
                         onClick = { onPeopleChange(people - person) },
                         label = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Contact initial avatar with color
-                                Box(
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(chipBgColor ?: MaterialTheme.colorScheme.primaryContainer),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = person.firstOrNull()?.uppercase() ?: "?",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = chipTextColor ?: MaterialTheme.colorScheme.onPrimaryContainer,
-                                        fontSize = 10.sp
-                                    )
-                                }
+                                // Contact avatar (profile image or initials fallback)
+                                ContactAvatar(
+                                    imageUrl = contactImages[person],
+                                    name = person,
+                                    size = 18.dp,
+                                    serverUrl = serverUrl,
+                                    authToken = authToken
+                                )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     person,
@@ -1191,6 +1384,180 @@ private fun PeopleZone(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
+        // ── Shared Users Section (viewer/manager roles) ──────────────────────
+        if (shareEntries.isNotEmpty()) {
+            Text(
+                "Shared With",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            shareEntries.forEach { share ->
+                val userId = share["user_id"] as? String ?: return@forEach
+                val displayName = share["display_name"] as? String ?: userId
+                val role = share["role"] as? String ?: "viewer"
+                val rsvpStatus = share["rsvp_status"] as? String ?: "invited"
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // User avatar
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = displayName.firstOrNull()?.uppercase() ?: "?",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Name
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // RSVP badge
+                    Text(
+                        text = when (rsvpStatus) {
+                            "accepted" -> "✓"
+                            "declined" -> "✗"
+                            else -> "⏳"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when (rsvpStatus) {
+                            "accepted" -> Color(0xFF388E3C)
+                            "declined" -> Color(0xFFD32F2F)
+                            else -> Color(0xFFB8860B)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Role pill toggle (Viewer / Manager)
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable {
+                                val newRole = if (role == "viewer") "manager" else "viewer"
+                                val updatedShares = shareEntries.map { s ->
+                                    if ((s["user_id"] as? String) == userId) {
+                                        s.toMutableMap().apply { put("role", newRole) }
+                                    } else s
+                                }
+                                onSharesChange(com.google.gson.Gson().toJson(updatedShares))
+                            }
+                            .padding(horizontal = 2.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "V",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (role == "viewer") FontWeight.Bold else FontWeight.Normal,
+                            color = if (role == "viewer") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .background(
+                                    if (role == "viewer") MaterialTheme.colorScheme.primary
+                                    else Color.Transparent,
+                                    RoundedCornerShape(3.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            text = "M",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (role == "manager") FontWeight.Bold else FontWeight.Normal,
+                            color = if (role == "manager") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .background(
+                                    if (role == "manager") MaterialTheme.colorScheme.primary
+                                    else Color.Transparent,
+                                    RoundedCornerShape(3.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Remove share button
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Remove share",
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable {
+                                val updatedShares = shareEntries.filter {
+                                    (it["user_id"] as? String) != userId
+                                }
+                                onSharesChange(
+                                    if (updatedShares.isEmpty()) null
+                                    else com.google.gson.Gson().toJson(updatedShares)
+                                )
+                            },
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        // ── Add Shared User (from system users list) ─────────────────────────
+        if (sharedUsers.isNotEmpty()) {
+            val availableUsers = sharedUsers.filter { user ->
+                shareEntries.none { (it["display_name"] as? String) == user }
+            }
+            if (availableUsers.isNotEmpty()) {
+                var showUserPicker by remember { mutableStateOf(false) }
+                Box {
+                    AssistChip(
+                        onClick = { showUserPicker = true },
+                        label = { Text("Share With…") },
+                        leadingIcon = { Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(16.dp)) }
+                    )
+                    DropdownMenu(
+                        expanded = showUserPicker,
+                        onDismissRequest = { showUserPicker = false }
+                    ) {
+                        availableUsers.forEach { userName ->
+                            DropdownMenuItem(
+                                text = { Text(userName) },
+                                onClick = {
+                                    val newShare = mapOf(
+                                        "user_id" to userName,
+                                        "role" to "viewer",
+                                        "display_name" to userName,
+                                        "rsvp_status" to "invited"
+                                    )
+                                    val updatedShares = shareEntries + newShare
+                                    onSharesChange(com.google.gson.Gson().toJson(updatedShares))
+                                    showUserPicker = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
         // Add person input with autocomplete suggestions
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1207,9 +1574,11 @@ private fun PeopleZone(
                                 onPeopleChange(people + newPeople)
                             }
                             newPersonText = parts.last().trimStart()
+                            onPeopleSearchQueryChange(parts.last().trimStart())
                         } else {
                             newPersonText = newText
                             showSuggestions = newText.length >= 2
+                            onPeopleSearchQueryChange(newText)
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -1225,6 +1594,7 @@ private fun PeopleZone(
                                 onPeopleChange(people + newPersonText.trim())
                                 newPersonText = ""
                                 showSuggestions = false
+                                onPeopleSearchQueryChange("")
                             }
                         }
                     )
@@ -1235,6 +1605,7 @@ private fun PeopleZone(
                         onPeopleChange(people + newPersonText.trim())
                         newPersonText = ""
                         showSuggestions = false
+                        onPeopleSearchQueryChange("")
                     }
                 }) {
                     Icon(Icons.Default.Add, "Add person")
@@ -1261,6 +1632,7 @@ private fun PeopleZone(
                                     onPeopleChange(people + suggestion)
                                     newPersonText = ""
                                     showSuggestions = false
+                                    onPeopleSearchQueryChange("")
                                 }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                             style = MaterialTheme.typography.bodyMedium
@@ -1271,21 +1643,156 @@ private fun PeopleZone(
 
             // M1: Browse contacts button (opens grouped contact tree)
             Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Assigned-To Dropdown ─────────────────────────────────────────
+            if (sharedUsers.isNotEmpty()) {
+                var assignedExpanded by remember { mutableStateOf(false) }
+                val assignableUsers = listOf("") + sharedUsers
+                ExposedDropdownMenuBox(
+                    expanded = assignedExpanded,
+                    onExpandedChange = { assignedExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = assignedTo ?: "(Unassigned)",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Assigned To") },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(assignedExpanded) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = assignedExpanded,
+                        onDismissRequest = { assignedExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("(Unassigned)") },
+                            onClick = { onAssignedToChange(null); assignedExpanded = false }
+                        )
+                        sharedUsers.forEach { user ->
+                            DropdownMenuItem(
+                                text = { Text(user) },
+                                onClick = { onAssignedToChange(user); assignedExpanded = false }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
                     onClick = { showContactBrowser = true },
                     label = { Text("Browse") },
                     leadingIcon = { Icon(Icons.Default.Contacts, null, modifier = Modifier.size(16.dp)) }
                 )
-                // M5: Expand button for full-screen people picker
-                AssistChip(
-                    onClick = { showExpandModal = true },
-                    label = { Text("Expand") },
-                    leadingIcon = { Icon(Icons.Default.Fullscreen, null, modifier = Modifier.size(16.dp)) }
+                // M5: Expand button — hidden on mobile (matches web behavior: if (window.innerWidth <= 768) return)
+            }
+        } // end stealth Column
+    }
+
+    // M1: Contact tree browser bottom sheet
+    if (showContactBrowser) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var browserSearch by remember { mutableStateOf("") }
+
+        // Group contacts alphabetically, favorites first
+        val groupedContacts = remember(contactNames, people, browserSearch) {
+            val available = contactNames.filter { !people.contains(it) }
+            val filtered = if (browserSearch.isBlank()) available
+                else available.filter { it.contains(browserSearch, ignoreCase = true) }
+            filtered.groupBy { (it.firstOrNull() ?: '?').uppercaseChar() }
+                .toSortedMap()
+        }
+
+        ModalBottomSheet(
+            onDismissRequest = { showContactBrowser = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp)
+            ) {
+                Text(
+                    "Browse Contacts",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Search field
+                OutlinedTextField(
+                    value = browserSearch,
+                    onValueChange = { browserSearch = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search contacts…") },
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Grouped contact list
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                ) {
+                    groupedContacts.forEach { (letter, contacts) ->
+                        item {
+                            Text(
+                                text = "$letter (${contacts.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(contacts, key = { it }) { contact ->
+                            val chipColor = contactColors[contact]?.let { parseTagColorLocal(it) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onPeopleChange(people + contact)
+                                        showContactBrowser = false
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Avatar (profile image or initials fallback)
+                                ContactAvatar(
+                                    imageUrl = contactImages[contact],
+                                    name = contact,
+                                    size = 28.dp,
+                                    serverUrl = serverUrl,
+                                    authToken = authToken
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = contact,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                    if (groupedContacts.isEmpty()) {
+                        item {
+                            Text(
+                                text = if (browserSearch.isBlank()) "No contacts available"
+                                    else "No matches for \"$browserSearch\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
+}
 }
 
 // ─── Location Zone (gaps 15-17, H1-H6) ───────────────────────────────────────────
@@ -1459,6 +1966,18 @@ private fun LocationZone(
                 leadingIcon = { Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(16.dp)) },
                 enabled = !location.isNullOrBlank()
             )
+            // Clear location
+            AssistChip(
+                onClick = {
+                    onLocationChange("")
+                    geocodeResult = null
+                    geocodeError = null
+                    onCoordinatesChange?.invoke(null, null)
+                },
+                label = { Text("Clear") },
+                leadingIcon = { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) },
+                enabled = !location.isNullOrBlank()
+            )
         }
 
         // H1/H2: Geocode result display (coordinates + resolved address)
@@ -1514,7 +2033,10 @@ private fun NotesZone(
     onNoteChange: (String) -> Unit,
     context: Context,
     // J4: Move lines to checklist callback
-    onMoveToChecklist: ((List<String>) -> Unit)? = null
+    onMoveToChecklist: ((List<String>) -> Unit)? = null,
+    // J5: Chit link autocomplete
+    chitLinkSuggestions: List<Pair<String, String>> = emptyList(),
+    onChitLinkSearch: (String) -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(note.isNotBlank()) }
     var showPreview by remember { mutableStateOf(false) }
@@ -1629,14 +2151,59 @@ private fun NotesZone(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // J5: Chit link autocomplete indicator
+            // J5: Chit link autocomplete with suggestions dropdown
             if (showChitLinkPicker) {
-                Text(
-                    text = "🔗 Type chit title to link… (close with ]])",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                )
+                // Trigger search when query changes
+                LaunchedEffect(chitLinkQuery) {
+                    onChitLinkSearch(chitLinkQuery)
+                }
+
+                if (chitLinkSuggestions.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(4.dp)
+                    ) {
+                        Text(
+                            text = "🔗 Select chit to link:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        )
+                        chitLinkSuggestions.forEach { (_, title) ->
+                            Text(
+                                text = title,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        // Insert the title and close with ]]
+                                        val lastBrackets = note.lastIndexOf("[[")
+                                        if (lastBrackets >= 0) {
+                                            val before = note.substring(0, lastBrackets + 2)
+                                            val afterClose = note.indexOf("]]", lastBrackets)
+                                            val after = if (afterClose >= 0) note.substring(afterClose)
+                                                else "]]" + note.substring(lastBrackets + 2 + chitLinkQuery.length)
+                                            onNoteChange(before + title + "]]")
+                                        }
+                                        showChitLinkPicker = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "🔗 Type chit title to link… (close with ]])",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                    )
+                }
             }
 
             // Data actions (gap 26/34)
@@ -1891,8 +2458,10 @@ private fun FullEditorModal(
 private fun ProjectsZone(
     isProjectMaster: Boolean,
     childChits: List<String>?,
+    childChitSummaries: List<ChitEditorViewModel.ChildChitSummary> = emptyList(),
     onProjectMasterChange: (Boolean) -> Unit,
     onChildChitsChange: (List<String>?) -> Unit,
+    onChildStatusChange: ((String, String) -> Unit)? = null,
     // N1: Chit picker callback
     onPickChit: (() -> Unit)? = null,
     // N2: Create new child callback
@@ -1932,8 +2501,86 @@ private fun ProjectsZone(
             }
 
             if (isProjectMaster) {
-                // Child chits list
-                if (!childChits.isNullOrEmpty()) {
+                // Child chits grouped by status (Kanban-style)
+                if (childChitSummaries.isNotEmpty()) {
+                    val statusGroups = listOf("ToDo", "In Progress", "Blocked", "Complete")
+                    statusGroups.forEach { status ->
+                        val chitsInStatus = childChitSummaries.filter {
+                            (it.status ?: "ToDo") == status
+                        }
+                        if (chitsInStatus.isNotEmpty()) {
+                            Text(
+                                text = "$status (${chitsInStatus.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
+                            chitsInStatus.forEach { child ->
+                                var showStatusMenu by remember { mutableStateOf(false) }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable { showStatusMenu = true }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = child.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    // Status badge (tappable to change)
+                                    Box {
+                                        Text(
+                                            text = when (child.status) {
+                                                "In Progress" -> "🔄"
+                                                "Blocked" -> "🚫"
+                                                "Complete" -> "✅"
+                                                else -> "📋"
+                                            },
+                                            modifier = Modifier.clickable { showStatusMenu = true }
+                                        )
+                                        DropdownMenu(
+                                            expanded = showStatusMenu,
+                                            onDismissRequest = { showStatusMenu = false }
+                                        ) {
+                                            listOf("ToDo", "In Progress", "Blocked", "Complete").forEach { newStatus ->
+                                                DropdownMenuItem(
+                                                    text = { Text(newStatus) },
+                                                    onClick = {
+                                                        showStatusMenu = false
+                                                        onChildStatusChange?.invoke(child.id, newStatus)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    // Remove button
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Remove",
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clickable {
+                                                onChildChitsChange(
+                                                    childChits?.filter { it != child.id }?.ifEmpty { null }
+                                                )
+                                            },
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (!childChits.isNullOrEmpty()) {
+                    // Fallback: show raw IDs if summaries haven't loaded yet
                     Text("Child Chits:", style = MaterialTheme.typography.labelMedium)
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -2035,9 +2682,15 @@ private fun ProjectsZone(
 @Composable
 private fun HealthIndicatorsZone(
     healthData: String?,
-    onHealthDataChange: (String?) -> Unit
+    onHealthDataChange: (String?) -> Unit,
+    indicatorObjects: List<com.cwoc.app.data.remote.IndicatorObject> = emptyList()
 ) {
     var isExpanded by remember { mutableStateOf(!healthData.isNullOrBlank()) }
+
+    // Build a lookup map: object ID → IndicatorObject
+    val objectMap = remember(indicatorObjects) {
+        indicatorObjects.associateBy { it.id }
+    }
 
     EditorZoneHeader(
         title = "Health Indicators",
@@ -2045,61 +2698,169 @@ private fun HealthIndicatorsZone(
         onToggle = { isExpanded = !isExpanded },
         trailingContent = {
             if (!isExpanded && !healthData.isNullOrBlank()) {
-                Text("Has data", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val count = try {
+                    val map = com.google.gson.Gson().fromJson<Map<String, Any>>(
+                        healthData, object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
+                    )
+                    map?.count { it.value != null } ?: 0
+                } catch (_: Exception) { 0 }
+                if (count > 0) {
+                    Text("$count recorded", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     ) {
-        // O1: Structured UI instead of raw JSON
+        // Parse health data as UUID-keyed map
         val indicators = remember(healthData) {
             try {
-                if (healthData.isNullOrBlank()) emptyMap()
-                else com.google.gson.Gson().fromJson<Map<String, Any>>(
+                if (healthData.isNullOrBlank()) mutableMapOf()
+                else com.google.gson.Gson().fromJson<MutableMap<String, Any?>>(
                     healthData,
-                    object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
-                ) ?: emptyMap()
-            } catch (e: Exception) { emptyMap() }
+                    object : com.google.gson.reflect.TypeToken<MutableMap<String, Any?>>() {}.type
+                ) ?: mutableMapOf()
+            } catch (_: Exception) { mutableMapOf() }
         }
 
         if (indicators.isEmpty()) {
             Text(
-                text = "No health indicators configured",
+                text = "No health indicators recorded. Add readings below or configure indicators in Custom Objects.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            // Show each indicator type with its latest value
-            indicators.forEach { (name, value) ->
+            // Render each indicator with an editable value field
+            indicators.forEach { (key, value) ->
+                val indicatorObj = objectMap[key]
+                val displayName = indicatorObj?.name ?: key.take(8) + if (key.length > 8) "…" else ""
+                val unitLabel = indicatorObj?.units ?: ""
+
+                var editValue by remember(key, value) {
+                    mutableStateOf(
+                        when (value) {
+                            is Number -> value.toString().removeSuffix(".0")
+                            is Boolean -> if (value) "true" else "false"
+                            else -> value?.toString() ?: ""
+                        }
+                    )
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Name label (from Custom Object or truncated UUID)
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(0.4f)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Editable value
+                    OutlinedTextField(
+                        value = editValue,
+                        onValueChange = { newVal ->
+                            editValue = newVal
+                            // Update the map and serialize
+                            val updated = indicators.toMutableMap()
+                            updated[key] = when {
+                                newVal.isBlank() -> null
+                                newVal.toDoubleOrNull() != null -> newVal.toDouble()
+                                newVal == "true" -> true
+                                newVal == "false" -> false
+                                else -> newVal
+                            }
+                            onHealthDataChange(com.google.gson.Gson().toJson(updated))
+                        },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+
+                    // Unit label
+                    if (unitLabel.isNotBlank()) {
                         Text(
-                            text = name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "Latest: ${getLatestValue(value)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = unitLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp)
                         )
                     }
-                    // O1: Add reading button
-                    AssistChip(
-                        onClick = { /* Would open a number input dialog for new reading */ },
-                        label = { Text("+ Add") }
-                    )
+
+                    // Clear button
+                    if (editValue.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                editValue = ""
+                                val updated = indicators.toMutableMap()
+                                updated[key] = null
+                                onHealthDataChange(com.google.gson.Gson().toJson(updated))
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(16.dp))
+                        }
+                    }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
             }
         }
 
-        // Fallback: raw JSON editor for advanced users
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Add new indicator reading
+        var newKey by remember { mutableStateOf("") }
+        var newValue by remember { mutableStateOf("") }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = newKey,
+                onValueChange = { newKey = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("ID") },
+                placeholder = { Text("Indicator ID") }
+            )
+            OutlinedTextField(
+                value = newValue,
+                onValueChange = { newValue = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text("Value") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
+            )
+            IconButton(
+                onClick = {
+                    if (newKey.isNotBlank()) {
+                        val updated = indicators.toMutableMap()
+                        updated[newKey.trim()] = when {
+                            newValue.toDoubleOrNull() != null -> newValue.toDouble()
+                            newValue == "true" -> true
+                            newValue == "false" -> false
+                            newValue.isBlank() -> null
+                            else -> newValue
+                        }
+                        onHealthDataChange(com.google.gson.Gson().toJson(updated))
+                        newKey = ""
+                        newValue = ""
+                    }
+                },
+                enabled = newKey.isNotBlank()
+            ) {
+                Icon(Icons.Default.Add, "Add indicator")
+            }
+        }
+
+        // Raw JSON toggle for advanced editing
         var showRawJson by remember { mutableStateOf(false) }
         TextButton(onClick = { showRawJson = !showRawJson }) {
             Text(if (showRawJson) "Hide JSON" else "Edit Raw JSON")

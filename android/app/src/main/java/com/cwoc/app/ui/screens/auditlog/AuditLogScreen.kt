@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.auditlog
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,9 +21,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,6 +118,8 @@ private val pageSizeOptions = listOf(25, 50, 100, 200)
 fun AuditLogScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEditor: ((String) -> Unit)? = null,
+    initialEntityType: String? = null,
+    initialEntityId: String? = null,
     viewModel: AuditLogViewModel = hiltViewModel()
 ) {
     val entries by viewModel.entries.collectAsState()
@@ -121,6 +127,13 @@ fun AuditLogScreen(
     val isExporting by viewModel.isExporting.collectAsState()
     val error by viewModel.error.collectAsState()
     val entityTypeFilter by viewModel.entityTypeFilter.collectAsState()
+
+    // Apply initial filters from navigation args (deep-link support)
+    LaunchedEffect(initialEntityType) {
+        if (!initialEntityType.isNullOrBlank()) {
+            viewModel.setEntityTypeFilter(initialEntityType)
+        }
+    }
     val actorFilter by viewModel.actorFilter.collectAsState()
     val sinceFilter by viewModel.sinceFilter.collectAsState()
     val untilFilter by viewModel.untilFilter.collectAsState()
@@ -134,6 +147,8 @@ fun AuditLogScreen(
     // Date picker state
     var showSincePicker by remember { mutableStateOf(false) }
     var showUntilPicker by remember { mutableStateOf(false) }
+    var showPruneDialog by remember { mutableStateOf(false) }
+    var showRevertConfirm by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -166,6 +181,14 @@ fun AuditLogScreen(
                                 tint = ParchmentBrown
                             )
                         }
+                    }
+                    // Prune/Delete button
+                    IconButton(onClick = { showPruneDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete old entries",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -227,7 +250,8 @@ fun AuditLogScreen(
                         items(entries, key = { it.id }) { entry ->
                             AuditEntryCard(
                                 entry = entry,
-                                onNavigateToEditor = onNavigateToEditor
+                                onNavigateToEditor = onNavigateToEditor,
+                                onRevert = { entryId -> showRevertConfirm = entryId }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -266,6 +290,39 @@ fun AuditLogScreen(
                 showUntilPicker = false
             },
             onDismiss = { showUntilPicker = false }
+        )
+    }
+
+    // Prune dialog
+    if (showPruneDialog) {
+        PruneAuditDialog(
+            onConfirm = { days ->
+                viewModel.pruneEntries(days)
+                showPruneDialog = false
+            },
+            onDismiss = { showPruneDialog = false }
+        )
+    }
+
+    // Revert confirmation dialog
+    showRevertConfirm?.let { entryId ->
+        AlertDialog(
+            onDismissRequest = { showRevertConfirm = null },
+            title = { Text("⏪ Revert Chit?") },
+            text = { Text("This will undo the changes from this edit and create a new audit entry.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.revertEntry(entryId)
+                    showRevertConfirm = null
+                }) {
+                    Text("Revert", color = Color(0xFF0C5460))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevertConfirm = null }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
@@ -529,7 +586,8 @@ private fun DateRangeRow(
 @Composable
 private fun AuditEntryCard(
     entry: AuditEntry,
-    onNavigateToEditor: ((String) -> Unit)? = null
+    onNavigateToEditor: ((String) -> Unit)? = null,
+    onRevert: ((String) -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val changes = entry.changes ?: emptyList()
@@ -623,6 +681,21 @@ private fun AuditEntryCard(
                             text = if (expanded) "Show less" else "Show more (${changes.size - 2} more)",
                             color = ParchmentBrown,
                             style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+
+                // Revert button — only for "updated" chit entries with changes
+                if (entry.action.lowercase() == "updated" && entry.entityType == "chit" && entry.entityId != null && onRevert != null) {
+                    TextButton(
+                        onClick = { onRevert(entry.id) },
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = "⏪ Revert",
+                            color = Color(0xFF0C5460),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -879,4 +952,66 @@ private fun formatDateLabel(dateStr: String): String {
     } catch (e: Exception) {
         dateStr
     }
+}
+
+// ─── Prune Audit Dialog ─────────────────────────────────────────────────────────
+
+private val pruneOptions = listOf(
+    7 to "Older than 7 days",
+    30 to "Older than 30 days",
+    90 to "Older than 90 days",
+    180 to "Older than 6 months",
+    365 to "Older than 1 year"
+)
+
+@Composable
+private fun PruneAuditDialog(
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedDays by remember { mutableStateOf<Int?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🗑️ Delete Audit Logs") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Select entries to delete:", style = MaterialTheme.typography.bodyMedium)
+                pruneOptions.forEach { (days, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedDays = days }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = selectedDays == days,
+                            onClick = { selectedDays = days }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Text(
+                    "⚠️ This cannot be undone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { selectedDays?.let { onConfirm(it) } },
+                enabled = selectedDays != null
+            ) {
+                Text("☢️ Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

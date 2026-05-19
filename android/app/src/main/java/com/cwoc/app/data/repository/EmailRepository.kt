@@ -88,4 +88,14 @@ interface EmailRepository {
      * @return Result with the raw EML bytes, or error.
      */
     suspend fun downloadRawEml(chitId: String): Result<ByteArray>
+
+    /**
+     * Add a classification rule to a bundle so future matching emails are auto-classified.
+     * Calls POST /api/bundles/{bundleId}/add-rule with match_type and match_value.
+     * @param bundleId The ID of the target bundle.
+     * @param matchType "sender" or "subject".
+     * @param matchValue The sender email or subject text to match.
+     * @return Result indicating success or failure.
+     */
+    suspend fun addRuleToBundle(bundleId: String, matchType: String, matchValue: String): Result<Unit>
 }

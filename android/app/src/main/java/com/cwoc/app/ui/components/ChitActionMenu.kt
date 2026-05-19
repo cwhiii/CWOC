@@ -97,9 +97,10 @@ fun ChitActionMenu(
             }
         )
 
-        // Snooze
+        // Snooze / Unsnooze
+        val isSnoozed = !chit.snoozedUntil.isNullOrBlank()
         DropdownMenuItem(
-            text = { Text("Snooze") },
+            text = { Text(if (isSnoozed) "Unsnooze" else "Snooze") },
             onClick = {
                 onSnooze()
                 onDismiss()
@@ -107,7 +108,7 @@ fun ChitActionMenu(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Filled.Snooze,
-                    contentDescription = "Snooze"
+                    contentDescription = if (isSnoozed) "Unsnooze" else "Snooze"
                 )
             }
         )

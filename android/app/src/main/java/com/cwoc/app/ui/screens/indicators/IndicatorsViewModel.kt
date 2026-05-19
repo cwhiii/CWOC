@@ -2,6 +2,8 @@ package com.cwoc.app.ui.screens.indicators
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.IndicatorObject
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.domain.chart.ChartDataPoint
 import com.cwoc.app.domain.chart.ChartDataTransformer
@@ -29,16 +31,19 @@ data class HealthEntry(
     val date: LocalDate,
     val indicatorType: String,
     val value: Float,
-    val chitTitle: String?
+    val chitTitle: String?,
+    val objectId: String? = null
 )
 
 /**
  * ViewModel for the Indicators/Health Charts view.
  * Loads health data from chits and groups by indicator type.
+ * Fetches Custom Objects for range classification in Calendar view.
  */
 @HiltViewModel
 class IndicatorsViewModel @Inject constructor(
-    private val chitRepository: ChitRepository
+    private val chitRepository: ChitRepository,
+    private val apiService: CwocApiService
 ) : ViewModel() {
 
     private val _charts = MutableStateFlow<List<IndicatorChart>>(emptyList())
@@ -47,11 +52,25 @@ class IndicatorsViewModel @Inject constructor(
     private val _selectedRange = MutableStateFlow(TimeRange.THIRTY_DAYS)
     val selectedRange: StateFlow<TimeRange> = _selectedRange.asStateFlow()
 
+    /** Custom Objects for range classification. */
+    private val _indicatorObjects = MutableStateFlow<List<IndicatorObject>>(emptyList())
+    val indicatorObjects: StateFlow<List<IndicatorObject>> = _indicatorObjects.asStateFlow()
+
     /** All health entries for calendar and log views. */
     private val _healthEntries = MutableStateFlow<List<HealthEntry>>(emptyList())
     val healthEntries: StateFlow<List<HealthEntry>> = _healthEntries.asStateFlow()
 
     init {
+        // Fetch Custom Objects for range classification
+        viewModelScope.launch {
+            try {
+                val response = apiService.getCustomObjectsForZone("indicators_zone")
+                if (response.isSuccessful) {
+                    _indicatorObjects.value = response.body() ?: emptyList()
+                }
+            } catch (_: Exception) {}
+        }
+
         viewModelScope.launch {
             chitRepository.getIndicatorChits().collect { chits ->
                 val allPoints = chits.flatMap { chit ->

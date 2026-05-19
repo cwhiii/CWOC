@@ -733,6 +733,7 @@ class FakePushChitDao : ChitDao {
     override fun getNoteChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override fun getCalendarChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override fun getRecurringChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override suspend fun getCount(): Int = entities.size
     override suspend fun getFirstFive(): List<ChitEntity> = entities.values.take(5)
 

@@ -4,113 +4,9 @@ Every view, zone, page, modal, and cross-cutting behavior that needs exhaustive 
 
 **Process:** For each item, read every function that runs on it in the web code, compare against what the Android app does, document discrepancies, and fix them. Only then mark the "Code Verified" column. The "User Verified" column is marked by the user after hands-on testing.
 
----
-
-## Dashboard Views
-
-| # | Item | Code Verified | User Verified |
-|---|------|:---:|:---:|
-| 1 | Calendar — Day | ⬜ | ⬜ |
-| 2 | Calendar — Week | ⬜ | ⬜ |
-| 3 | Calendar — Work Hours | ⬜ | ⬜ |
-| 4 | Calendar — X-Day/SevenDay | ⬜ | ⬜ |
-| 5 | Calendar — Month | ⬜ | ⬜ |
-| 6 | Calendar — Year | ⬜ | ⬜ |
-| 7 | Calendar — Itinerary | ⬜ | ⬜ |
-| 8 | Tasks (all 3 sub-modes: Tasks, Habits, Assigned) | ⬜ | ⬜ |
-| 9 | Checklists | ⬜ | ⬜ |
-| 10 | Notes | ⬜ | ⬜ |
-| 11 | Notebook (combined Notes+Checklists) | ⬜ | ⬜ |
-| 12 | Projects (Kanban + List sub-modes) | ⬜ | ⬜ |
-| 13 | Alerts (all 4 sub-modes: Independent, List, Notifications, Reminders) | ⬜ | ⬜ |
-| 14 | Indicators (all 3 sub-modes: Charts, Calendar, Log) | ⬜ | ⬜ |
-| 15 | Email (all 6 folders + bundles + thread expansion + compose) | ⬜ | ⬜ |
-| 16 | Search | ⬜ | ⬜ |
-| 17 | Omni View (all 12 configurable sections) | ⬜ | ⬜ |
-
-## Editor Zones
-
-| # | Item | Code Verified | User Verified |
-|---|------|:---:|:---:|
-| 18 | Header (title, status, priority, pin, archive) | ⬜ | ⬜ |
-| 19 | Dates & Times | ⬜ | ⬜ |
-| 20 | Tags | ⬜ | ⬜ |
-| 21 | People | ⬜ | ⬜ |
-| 22 | Location | ⬜ | ⬜ |
-| 23 | Notes | ⬜ | ⬜ |
-| 24 | Alerts | ⬜ | ⬜ |
-| 25 | Color | ⬜ | ⬜ |
-| 26 | Health Indicators | ⬜ | ⬜ |
-| 27 | Checklist | ⬜ | ⬜ |
-| 28 | Projects | ⬜ | ⬜ |
-| 29 | Email Compose | ⬜ | ⬜ |
-| 30 | Attachments | ⬜ | ⬜ |
-| 31 | Recurrence (inline in Dates on web) | ⬜ | ⬜ |
-| 32 | Habits | ⬜ | ⬜ |
-| 33 | Mobile zone navigation (one-zone-at-a-time with prev/next) | ⬜ | ⬜ |
-
-## Standalone Pages
-
-| # | Item | Code Verified | User Verified |
-|---|------|:---:|:---:|
-| 34 | Settings — General tab | ⬜ | ⬜ |
-| 35 | Settings — Views tab | ⬜ | ⬜ |
-| 36 | Settings — Collections tab | ⬜ | ⬜ |
-| 37 | Settings — Email tab | ⬜ | ⬜ |
-| 38 | Settings — Administration tab | ⬜ | ⬜ |
-| 39 | People / Contact List | ⬜ | ⬜ |
-| 40 | Contact Editor | ⬜ | ⬜ |
-| 41 | Contact Trash | ⬜ | ⬜ |
-| 42 | Trash | ⬜ | ⬜ |
-| 43 | Weather | ⬜ | ⬜ |
-| 44 | Maps (all 3 modes: Chits, People, Both) | ⬜ | ⬜ |
-| 45 | Help | ⬜ | ⬜ |
-| 46 | Audit Log | ⬜ | ⬜ |
-| 47 | Attachments Browser | ⬜ | ⬜ |
-| 48 | Rules Manager | ⬜ | ⬜ |
-| 49 | Rule Editor | ⬜ | ⬜ |
-| 50 | Custom Objects Editor | ⬜ | ⬜ |
-| 51 | User Admin | ⬜ | ⬜ |
-| 52 | Admin Chits | ⬜ | ⬜ |
-| 53 | Kiosk | ⬜ | ⬜ |
-| 54 | Notifications | ⬜ | ⬜ |
-| 55 | Login | ⬜ | ⬜ |
-
-## Modals & Overlays
-
-| # | Item | Code Verified | User Verified |
-|---|------|:---:|:---:|
-| 56 | Clock Modal | ⬜ | ⬜ |
-| 57 | Weather Modal | ⬜ | ⬜ |
-| 58 | Quick-Edit Modal | ⬜ | ⬜ |
-| 59 | Alert/Timer Done Modal | ⬜ | ⬜ |
-| 60 | QR Code Modal | ⬜ | ⬜ |
-| 61 | Omni Layout Modal | ⬜ | ⬜ |
-| 62 | Arrange Views Modal | ⬜ | ⬜ |
-| 63 | Calculator | ⬜ | ⬜ |
-| 64 | Release Notes Modal | ⬜ | ⬜ |
-| 65 | Tag Create/Edit Modal | ⬜ | ⬜ |
-| 66 | Recurring Edit Modal | ⬜ | ⬜ |
-| 67 | Project Quick Menu | ⬜ | ⬜ |
-| 68 | Bundle Edit/Create Modals | ⬜ | ⬜ |
-| 69 | Email Expand Modal | ⬜ | ⬜ |
-| 70 | Image View Modal | ⬜ | ⬜ |
-| 71 | Attachment Preview Modal | ⬜ | ⬜ |
-
-## Cross-Cutting Behaviors
-
-| # | Item | Code Verified | User Verified |
-|---|------|:---:|:---:|
-| 72 | Card rendering (tags, color, progress, people, indicators, map thumbnails, sharing badges) | ⬜ | ⬜ |
-| 73 | Sidebar / navigation drawer | ⬜ | ⬜ |
-| 74 | Profile menu (avatar, switch user, logout) | ⬜ | ⬜ |
-| 75 | Parchment theme / Lora font (applied consistently everywhere) | ⬜ | ⬜ |
-| 76 | Filters & sort (all filter types, manual drag sort, active filter badge) | ⬜ | ⬜ |
-| 77 | Widgets (Calendar, Tasks, Quick-Add, Refresh) | ⬜ | ⬜ |
-| 78 | Unit conversion system | ⬜ | ⬜ |
-
 
 ---
+
 
 ## Verification Spec — What "Code Verified" Means
 
@@ -186,3 +82,112 @@ If the mobile browser does something and the Android app doesn't, the Android ap
 ### What "User Verified" Means
 
 The user opens both the Android app and the mobile browser side by side. They interact with every feature on that screen. They confirm that every button, every gesture, every display, every animation, every state, every edge case behaves identically. If anything is different — anything at all — it goes back to ⬜ in both columns and the discrepancy is documented and fixed.
+
+
+---
+
+## Dashboard Views
+
+| # | Item | Code Verified | User Verified |
+|---|------|:---:|:---:|
+| 1 | Calendar — Day | ✅ | ⬜ |
+| 2 | Calendar — Week | ✅ | ⬜ |
+| 3 | Calendar — Work Hours | ✅ | ⬜ |
+| 4 | Calendar — X-Day/SevenDay | ✅ | ⬜ |
+| 5 | Calendar — Month | ✅ | ⬜ |
+| 6 | Calendar — Year | ✅ | ⬜ |
+| 7 | Calendar — Itinerary | ✅ | ⬜ |
+| 8 | Tasks (all 3 sub-modes: Tasks, Habits, Assigned) | ✅ | ⬜ |
+| 9 | Checklists | ✅ | ⬜ |
+| 10 | Notes | ✅ | ⬜ |
+| 11 | Notebook (combined Notes+Checklists) | ✅ | ⬜ |
+| 12 | Projects (Kanban + List sub-modes) | ✅ | ⬜ |
+| 13 | Alerts (all 4 sub-modes: Independent, List, Notifications, Reminders) | ✅ | ⬜ |
+| 14 | Indicators (all 3 sub-modes: Charts, Calendar, Log) | ✅ | ⬜ |
+| 15 | Email (all 6 folders + bundles + thread expansion + compose) | ✅ | ⬜ |
+| 16 | Search | ✅ | ⬜ |
+| 17 | Omni View (all 12 configurable sections) | ✅ | ⬜ |
+
+## Editor Zones
+
+| # | Item | Code Verified | User Verified |
+|---|------|:---:|:---:|
+| 18 | Header (title, status, priority, pin, archive) | ✅ | ⬜ |
+| 19 | Dates & Times | ✅ | ⬜ |
+| 20 | Tags | ✅ | ⬜ |
+| 21 | People | ✅ | ⬜ |
+| 22 | Location | ✅ | ⬜ |
+| 23 | Notes | ✅ | ⬜ |
+| 24 | Alerts | ✅ | ⬜ |
+| 25 | Color | ✅ | ⬜ |
+| 26 | Health Indicators | ✅ | ⬜ |
+| 27 | Checklist | ✅ | ⬜ |
+| 28 | Projects | ✅ | ⬜ |
+| 29 | Email Compose | ✅ | ⬜ |
+| 30 | Attachments | ✅ | ⬜ |
+| 31 | Recurrence (inline in Dates on web) | ✅ | ⬜ |
+| 32 | Habits | ✅ | ⬜ |
+| 33 | Mobile zone navigation (one-zone-at-a-time with prev/next) | ✅ | ⬜ |
+
+## Standalone Pages
+
+| # | Item | Code Verified | User Verified |
+|---|------|:---:|:---:|
+| 34 | Settings — General tab | ✅ | ⬜ |
+| 35 | Settings — Views tab | ✅ | ⬜ |
+| 36 | Settings — Collections tab | ✅ | ⬜ |
+| 37 | Settings — Email tab | ✅ | ⬜ |
+| 38 | Settings — Administration tab | ✅ | ⬜ |
+| 39 | People / Contact List | ✅ | ⬜ |
+| 40 | Contact Editor | ✅ | ⬜ |
+| 41 | Contact Trash | ✅ | ⬜ |
+| 42 | Trash | ✅ | ⬜ |
+| 43 | Weather | ✅ | ⬜ |
+| 44 | Maps (all 3 modes: Chits, People, Both) | ✅ | ⬜ |
+| 45 | Help | ✅ | ⬜ |
+| 46 | Audit Log | ✅ | ⬜ |
+| 47 | Attachments Browser | ✅ | ⬜ |
+| 48 | Rules Manager | ✅ | ⬜ |
+| 49 | Rule Editor | ✅ | ⬜ |
+| 50 | Custom Objects Editor | ✅ | ⬜ |
+| 51 | User Admin | ✅ | ⬜ |
+| 52 | Admin Chits | ✅ | ⬜ |
+| 53 | Kiosk | ✅ | ⬜ |
+| 54 | Notifications | ✅ | ⬜ |
+| 55 | Login | ✅ | ⬜ |
+
+## Modals & Overlays
+
+| # | Item | Code Verified | User Verified |
+|---|------|:---:|:---:|
+| 56 | Clock Modal | ✅ | ⬜ |
+| 57 | Weather Modal | ✅ | ⬜ |
+| 58 | Quick-Edit Modal | ✅ | ⬜ |
+| 59 | Alert/Timer Done Modal | ✅ | ⬜ |
+| 60 | QR Code Modal | ✅ | ⬜ |
+| 61 | Omni Layout Modal | ✅ | ⬜ |
+| 62 | Arrange Views Modal | ✅ | ⬜ |
+| 63 | Calculator | ✅ | ⬜ |
+| 64 | Release Notes Modal | ✅ | ⬜ |
+| 65 | Tag Create/Edit Modal | ✅ | ⬜ |
+| 66 | Recurring Edit Modal | ✅ | ⬜ |
+| 67 | Project Quick Menu | ✅ | ⬜ |
+| 68 | Bundle Edit/Create Modals | ✅ | ⬜ |
+| 69 | Email Expand Modal | ✅ | ⬜ |
+| 70 | Image View Modal | ✅ | ⬜ |
+| 71 | Attachment Preview Modal | ✅ | ⬜ |
+
+## Cross-Cutting Behaviors
+
+| # | Item | Code Verified | User Verified |
+|---|------|:---:|:---:|
+| 72 | Card rendering (tags, color, progress, people, indicators, map thumbnails, sharing badges) | ✅ | ⬜ |
+| 73 | Sidebar / navigation drawer | ✅ | ⬜ |
+| 74 | Profile menu (avatar, switch user, logout) | ✅ | ⬜ |
+| 75 | Parchment theme / Lora font (applied consistently everywhere) | ✅ | ⬜ |
+| 76 | Filters & sort (all filter types, manual drag sort, active filter badge) | ✅ | ⬜ |
+| 77 | Widgets (Calendar, Tasks, Quick-Add, Refresh) | ✅ | ⬜ |
+| 78 | Unit conversion system | ✅ | ⬜ |
+
+
+---

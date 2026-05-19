@@ -3,6 +3,7 @@ package com.cwoc.app.data.mapper
 import com.cwoc.app.ui.screens.settings.SettingsFormState
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.json.JSONObject
 
 /**
  * API payload mapper for Settings.
@@ -39,6 +40,11 @@ object SettingsPayloadMapper {
         "hidden_views",
         "enabled_periods",
         "chit_options",
+        "checklist_autosave",
+        "autosave_desktop",
+        "autosave_mobile",
+        "show_map_thumbnails",
+        "hide_declined",
         "visual_indicators",
         "combine_alerts",
         "custom_view_filters",
@@ -109,6 +115,14 @@ object SettingsPayloadMapper {
      * so that Gson serializes them as proper JSON in the final payload.
      */
     fun mapFormStateToPayload(formState: SettingsFormState): Map<String, Any?> {
+        // Parse chit_options to extract fields that the server expects as separate top-level keys
+        val chitOpts = try {
+            gson.fromJson<Map<String, Any?>>(
+                formState.chitOptions,
+                object : TypeToken<Map<String, Any?>>() {}.type
+            ) ?: emptyMap()
+        } catch (_: Exception) { emptyMap() }
+
         return buildMap {
             put("time_format", formState.timeFormat)
             put("sex", formState.sex)
@@ -124,7 +138,22 @@ object SettingsPayloadMapper {
             put("view_order", parseJsonOrRaw(formState.viewOrder))
             put("hidden_views", parseJsonOrRaw(formState.hiddenViews))
             put("enabled_periods", formState.enabledPeriods)
-            put("chit_options", parseJsonOrRaw(formState.chitOptions))
+            // chit_options: send the core 6 fields as the JSON object (matching web)
+            val coreChitOptions = mapOf(
+                "fade_past_chits" to (chitOpts["fade_past_chits"] ?: true),
+                "highlight_overdue_chits" to (chitOpts["highlight_overdue_chits"] ?: true),
+                "highlight_blocked_chits" to (chitOpts["highlight_blocked_chits"] ?: true),
+                "delete_past_alarm_chits" to (chitOpts["delete_past_alarm_chits"] ?: false),
+                "show_tab_counts" to (chitOpts["show_tab_counts"] ?: false),
+                "prefer_google_maps" to (chitOpts["prefer_google_maps"] ?: false)
+            )
+            put("chit_options", coreChitOptions)
+            // These are SEPARATE top-level settings columns on the server (not inside chit_options)
+            put("checklist_autosave", if (chitOpts["checklist_autosave"] == true) "1" else "0")
+            put("autosave_desktop", if (chitOpts["auto_save_desktop"] == true) "1" else "0")
+            put("autosave_mobile", if (chitOpts["auto_save_mobile"] == true) "1" else "0")
+            put("show_map_thumbnails", if (chitOpts["show_map_thumbnails"] != false) "1" else "0")
+            put("hide_declined", if (chitOpts["hide_declined"] == true) "1" else "0")
             put("visual_indicators", parseJsonOrRaw(formState.visualIndicators))
             put("combine_alerts", formState.combineAlerts)
             put("custom_view_filters", parseJsonOrRaw(formState.customViewFilters))
@@ -199,7 +228,7 @@ object SettingsPayloadMapper {
     fun mapPayloadToFormState(payload: Map<String, Any?>): SettingsFormState {
         return SettingsFormState(
             timeFormat = payload.getString("time_format") ?: "12hour",
-            sex = payload.getString("sex") ?: "man",
+            sex = payload.getString("sex") ?: "Man",
             snoozeLength = payload.getString("snooze_length") ?: "5",
             calendarSnapInterval = payload.getString("calendar_snap") ?: "15",
             defaultTimezone = payload.getString("default_timezone") ?: "America/New_York",
@@ -209,8 +238,27 @@ object SettingsPayloadMapper {
             landingView = payload.getString("default_view") ?: "Calendar",
             viewOrder = payload.toJsonString("view_order")
                 ?: "[\"Calendar\",\"Checklists\",\"Alarms\",\"Projects\",\"Tasks\",\"Notes\",\"Email\",\"Indicators\"]",
-            chitOptions = payload.toJsonString("chit_options")
-                ?: "{\"checklist_autosave\":false,\"auto_save_desktop\":false,\"auto_save_mobile\":false,\"fade_past_chits\":true,\"highlight_overdue_chits\":true,\"highlight_blocked_chits\":true,\"delete_past_alarm_chits\":false,\"show_tab_counts\":false,\"prefer_google_maps\":false,\"show_map_thumbnails\":false,\"hide_declined\":false}",
+            chitOptions = run {
+                // Merge the core chit_options JSON with the separate top-level fields
+                val baseOpts = payload.toJsonString("chit_options")
+                    ?: "{}"
+                val merged = try {
+                    val obj = org.json.JSONObject(baseOpts)
+                    // Overlay separate top-level fields into the JSON for the Android UI
+                    val checklistAutosave = payload.getString("checklist_autosave")
+                    if (checklistAutosave != null) obj.put("checklist_autosave", checklistAutosave == "1")
+                    val autosaveDesktop = payload.getString("autosave_desktop")
+                    if (autosaveDesktop != null) obj.put("auto_save_desktop", autosaveDesktop == "1")
+                    val autosaveMobile = payload.getString("autosave_mobile")
+                    if (autosaveMobile != null) obj.put("auto_save_mobile", autosaveMobile == "1")
+                    val showMapThumbs = payload.getString("show_map_thumbnails")
+                    if (showMapThumbs != null) obj.put("show_map_thumbnails", showMapThumbs != "0")
+                    val hideDeclined = payload.getString("hide_declined")
+                    if (hideDeclined != null) obj.put("hide_declined", hideDeclined == "1")
+                    obj.toString()
+                } catch (_: Exception) { baseOpts }
+                merged
+            },
             visualIndicators = payload.toJsonString("visual_indicators")
                 ?: "{\"alarm\":\"always\",\"notification\":\"always\",\"timer\":\"always\",\"stopwatch\":\"always\",\"combined_alert\":\"always\",\"weather\":\"always\",\"people\":\"always\",\"indicators\":\"always\",\"custom_data\":\"always\",\"combine_alerts\":false}",
             customViewFilters = payload.toJsonString("custom_view_filters") ?: "{}",
@@ -246,7 +294,7 @@ object SettingsPayloadMapper {
             sharedTags = payload.toJsonString("tags") ?: "[]",
             customColors = payload.toJsonString("custom_colors") ?: "[]",
             savedLocations = payload.toJsonString("saved_locations") ?: "[]",
-            defaultNotifications = payload.toJsonString("default_notifications") ?: "{\"start_notifications\":[],\"due_notifications\":[]}",
+            defaultNotifications = payload.toJsonString("default_notifications") ?: "{\"start\":[],\"due\":[]}",
             instanceName = payload.getString("instance_name") ?: "",
             welcomeMessage = payload.getString("welcome_message") ?: "",
             sessionLifetime = payload.getString("session_lifetime") ?: "24",

@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +59,42 @@ fun ItineraryView(
         ) {
             item { Spacer(modifier = Modifier.height(4.dp)) }
 
+            val today = LocalDate.now()
+            var nowBarInserted = false
+
             groupedEvents.forEach { (date, dayEvents) ->
+                // Insert "Now" bar before the first future day
+                if (!nowBarInserted && !date.isBefore(today)) {
+                    nowBarInserted = true
+                    item(key = "now_bar") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(2.dp)
+                                    .background(Color(0xFF4A2C2A))
+                            )
+                            Text(
+                                text = " ▶ Now ",
+                                color = Color(0xFF4A2C2A),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(2.dp)
+                                    .background(Color(0xFF4A2C2A))
+                            )
+                        }
+                    }
+                }
+
                 item(key = "header_$date") {
                     ItineraryDayHeader(date = date)
                 }
@@ -105,6 +141,7 @@ private fun ItineraryEmptyState() {
 @Composable
 private fun ItineraryDayHeader(date: LocalDate) {
     val today = LocalDate.now()
+    val isToday = date == today
     val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy")
     val dateText = when (date) {
         today -> "Today — ${date.format(formatter)}"
@@ -112,14 +149,18 @@ private fun ItineraryDayHeader(date: LocalDate) {
         else -> date.format(formatter)
     }
 
+    val bgColor = if (isToday) Color(0xFF4A2C2A) else Color.Transparent
+    val textColor = if (isToday) Color(0xFFFDF5E6) else MaterialTheme.colorScheme.primary
+
     Text(
         text = dateText,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
+        color = textColor,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .background(bgColor, androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+            .padding(vertical = 8.dp, horizontal = 8.dp)
     )
 }
 
@@ -128,13 +169,14 @@ private fun ItineraryEventCard(
     event: ChitEntity,
     onTap: () -> Unit
 ) {
-    // Full background color matching web's applyChitColors(el, chitColor(chit))
     val cardBgColor = remember(event.color) { CwocChitCardStyle.resolveChitBgColor(event.color) }
     val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
+    val isCompleted = event.status == "Complete"
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (isCompleted) 0.6f else 1f)
             .clickable(onClick = onTap),
         colors = CardDefaults.cardColors(
             containerColor = cardBgColor
@@ -146,13 +188,20 @@ private fun ItineraryEventCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                val prefix = when {
+                    event.dueDatetime != null && event.startDatetime == null -> "⌚ "
+                    event.pointInTime != null && event.startDatetime == null -> "📌 "
+                    event.pinned == true -> "📌 "
+                    else -> ""
+                }
                 Text(
-                    text = event.title ?: "Untitled Event",
+                    text = "$prefix${event.title ?: "Untitled Event"}",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = cardTextColor,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
                 )
 
                 val timeText = buildItineraryTimeText(event)
@@ -171,7 +220,7 @@ private fun ItineraryEventCard(
 
 /**
  * Groups events by their start date, sorted chronologically.
- * Events without a startDatetime are excluded.
+ * Includes events with startDatetime, dueDatetime, or pointInTime.
  * Days with no events are not included in the result.
  */
 private fun groupEventsByDay(events: List<ChitEntity>): List<Pair<LocalDate, List<ChitEntity>>> {
@@ -179,12 +228,13 @@ private fun groupEventsByDay(events: List<ChitEntity>): List<Pair<LocalDate, Lis
 
     return events
         .mapNotNull { event ->
-            val date = event.startDatetime?.let { dateStr ->
+            val dateStr = event.startDatetime ?: event.dueDatetime ?: event.pointInTime
+            val date = dateStr?.let { ds ->
                 try {
-                    LocalDateTime.parse(dateStr, isoFormatter).toLocalDate()
+                    LocalDateTime.parse(ds, isoFormatter).toLocalDate()
                 } catch (_: DateTimeParseException) {
                     try {
-                        LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
+                        LocalDate.parse(ds, DateTimeFormatter.ISO_LOCAL_DATE)
                     } catch (_: DateTimeParseException) {
                         null
                     }
@@ -195,7 +245,7 @@ private fun groupEventsByDay(events: List<ChitEntity>): List<Pair<LocalDate, Lis
         .groupBy({ it.first }, { it.second })
         .toSortedMap()
         .map { (date, dayEvents) ->
-            date to dayEvents.sortedBy { it.startDatetime }
+            date to dayEvents.sortedBy { it.startDatetime ?: it.dueDatetime ?: it.pointInTime }
         }
 }
 

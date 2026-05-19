@@ -1,6 +1,8 @@
 package com.cwoc.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
@@ -20,20 +22,33 @@ import androidx.compose.ui.unit.sp
  * - 1dp border (#5A3F2A)
  * - Compact padding, smaller text (~12sp)
  * - Use with Modifier.weight(1f) in a Row to fill half width
+ * - Optional onLongClick for secondary actions (e.g., weather modal)
  *
  * @param text Button label text
  * @param onClick Action when tapped
+ * @param onLongClick Optional action when long-pressed
  * @param modifier Modifier (use .weight(1f) in a Row for half-width)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SidebarCompactButton(
     text: String,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(38.dp),
+        modifier = modifier
+            .height(38.dp)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else Modifier
+            ),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFF8B5A2B),
             contentColor = Color(0xFFFFF8E1)

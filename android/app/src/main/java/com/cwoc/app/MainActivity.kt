@@ -56,6 +56,7 @@ import com.cwoc.app.ui.components.ProfileMenu
 import com.cwoc.app.ui.components.ClockModal
 import com.cwoc.app.ui.components.CalculatorSheet
 import com.cwoc.app.ui.navigation.CCaptnTab
+import com.cwoc.app.ui.navigation.FilterPanel
 
 import com.cwoc.app.ui.navigation.CwocNavGraph
 import com.cwoc.app.ui.navigation.RightEdgeSwipeDetector
@@ -92,6 +93,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var syncMetadataDao: SyncMetadataDao
 
+    @Inject
+    lateinit var contactRepository: com.cwoc.app.data.repository.ContactRepository
+
     private val filterSortViewModel: FilterSortViewModel by viewModels()
     private val notificationBadgeViewModel: NotificationBadgeViewModel by viewModels()
     private val emailBadgeViewModel: EmailBadgeViewModel by viewModels()
@@ -112,7 +116,8 @@ class MainActivity : ComponentActivity() {
                 settingsRepository = settingsRepository,
                 sidebarStateViewModel = sidebarStateViewModel,
                 syncEngine = syncEngine,
-                syncMetadataDao = syncMetadataDao
+                syncMetadataDao = syncMetadataDao,
+                contactRepository = contactRepository
             )
         }
     }
@@ -130,7 +135,8 @@ private fun CwocApp(
     settingsRepository: SettingsRepository,
     sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel,
     syncEngine: SyncEngine,
-    syncMetadataDao: SyncMetadataDao
+    syncMetadataDao: SyncMetadataDao,
+    contactRepository: com.cwoc.app.data.repository.ContactRepository
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -176,6 +182,7 @@ private fun CwocApp(
 
     // Dialog states
     var showClockDialog by remember { mutableStateOf(false) }
+    var showWeatherDialog by remember { mutableStateOf(false) }
     var showCalculatorSheet by remember { mutableStateOf(false) }
     var showReferenceDialog by remember { mutableStateOf(false) }
 
@@ -245,6 +252,7 @@ private fun CwocApp(
                     ModalDrawerSheet(
                         drawerContainerColor = Color(0xFFFDF5E6) // Parchment light
                     ) {
+                    val currentFilterState by filterSortViewModel.filterState.collectAsState()
                     SidebarContent(
                         selectedTab = selectedTab,
                         onNavigate = { screen ->
@@ -263,6 +271,8 @@ private fun CwocApp(
                             scope.launch { drawerState.close() }
                         },
                         sidebarState = sidebarState,
+                        emailFolder = sidebarState.emailFolder,
+                        onEmailFolderChange = { sidebarStateViewModel.setEmailFolder(it) },
                         onTodayClick = { sidebarStateViewModel.goToToday() },
                         onPrevPeriod = { sidebarStateViewModel.previousPeriod() },
                         onNextPeriod = { sidebarStateViewModel.nextPeriod() },
@@ -277,8 +287,83 @@ private fun CwocApp(
                         onIndicatorsCustomRange = { s, e -> sidebarStateViewModel.setIndicatorsCustomRange(s, e) },
                         onIndicatorsVisibleGraphsChange = { sidebarStateViewModel.setIndicatorsVisibleGraphs(it) },
                         onClockClick = { showClockDialog = true },
+                        onWeatherLongPress = { showWeatherDialog = true },
                         onCalculatorClick = { showCalculatorSheet = true },
-                        onReferenceClick = { showReferenceDialog = true }
+                        onReferenceClick = { showReferenceDialog = true },
+                        filterActiveCount = currentFilterState.activeFilterCount,
+                        onClearFilters = { filterSortViewModel.clearFilters() },
+                        filterContent = {
+                            val filterState by filterSortViewModel.filterState.collectAsState()
+
+                            // Parse tags from settings
+                            val availableTags = remember(currentSettings?.tags) {
+                                parseTagItemsFromSettings(currentSettings?.tags)
+                            }
+
+                            // Load contacts from repository as people items
+                            val contacts by contactRepository.allContacts.collectAsState(initial = emptyList())
+                            val availablePeople = remember(contacts) {
+                                contacts.mapNotNull { c ->
+                                    val name = c.displayName ?: c.givenName.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                    com.cwoc.app.ui.navigation.filter.PersonItem(
+                                        name = name,
+                                        color = c.color,
+                                        imageUrl = c.imageUrl,
+                                        favorite = c.favorite,
+                                        prefix = c.prefix,
+                                        isSystemUser = false
+                                    )
+                                }
+                            }
+
+                            // Load project masters from chit repository
+                            val projectChits by chitRepository.getProjectMasterChits().collectAsState(initial = emptyList())
+                            val availableProjects = remember(projectChits) {
+                                projectChits.map { chit ->
+                                    com.cwoc.app.ui.navigation.filter.ProjectItem(
+                                        id = chit.id,
+                                        title = chit.title?.takeIf { it.isNotBlank() } ?: "(Untitled Project)"
+                                    )
+                                }.sortedBy { it.title.lowercase() }
+                            }
+
+                            // Load saved searches from SharedPreferences
+                            val savedSearches = remember {
+                                try {
+                                    val json = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+                                        .getString("saved_searches", null)
+                                    if (json != null) {
+                                        val arr = org.json.JSONArray(json)
+                                        (0 until arr.length()).map { arr.getString(it) }
+                                    } else emptyList()
+                                } catch (_: Exception) { emptyList<String>() }
+                            }
+
+                            FilterPanel(
+                                filterState = filterState,
+                                onFilterStateChanged = { filterSortViewModel.updateFilter(it) },
+                                availableTags = availableTags,
+                                availablePeople = availablePeople,
+                                availableProjects = availableProjects,
+                                savedSearches = savedSearches,
+                                onSavedSearchDelete = { search ->
+                                    val prefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+                                    val current = try {
+                                        val json = prefs.getString("saved_searches", null)
+                                        if (json != null) {
+                                            val arr = org.json.JSONArray(json)
+                                            (0 until arr.length()).map { arr.getString(it) }.toMutableList()
+                                        } else mutableListOf()
+                                    } catch (_: Exception) { mutableListOf() }
+                                    current.remove(search)
+                                    prefs.edit().putString("saved_searches", org.json.JSONArray(current).toString()).apply()
+                                },
+                                currentTab = selectedTab.route,
+                                hasCustomDefaults = false,
+                                onClearAll = { filterSortViewModel.clearFilters() },
+                                onApplyDefaults = { filterSortViewModel.clearFilters() }
+                            )
+                        }
                     )
                     }
                 }
@@ -515,6 +600,23 @@ private fun CwocApp(
             )
         }
 
+        if (showWeatherDialog) {
+            val weatherContext = androidx.compose.ui.platform.LocalContext.current
+            val weatherPrefs = weatherContext.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+            val serverUrl = weatherPrefs.getString("server_url", "") ?: ""
+            val authToken = weatherPrefs.getString("auth_token", "") ?: ""
+            com.cwoc.app.ui.components.WeatherModal(
+                savedLocations = currentSettings?.savedLocations,
+                serverUrl = serverUrl.trimEnd('/'),
+                authToken = authToken,
+                onDismiss = { showWeatherDialog = false },
+                onFullForecast = {
+                    showWeatherDialog = false
+                    navController.navigate(com.cwoc.app.ui.navigation.Screen.Weather.route)
+                }
+            )
+        }
+
         if (showCalculatorSheet) {
             CalculatorSheet(
                 onDismiss = { showCalculatorSheet = false },
@@ -527,5 +629,30 @@ private fun CwocApp(
                 onDismiss = { showReferenceDialog = false }
             )
         }
+    }
+}
+
+/**
+ * Parse tag items from the settings sharedTags JSON string.
+ * Format: JSON array of objects with "name", "color", "favorite" fields.
+ */
+private fun parseTagItemsFromSettings(sharedTagsJson: String?): List<com.cwoc.app.ui.navigation.filter.TagItem> {
+    if (sharedTagsJson.isNullOrBlank()) return emptyList()
+    return try {
+        val systemTags = setOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes")
+        val arr = org.json.JSONArray(sharedTagsJson)
+        (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+            val name = obj.optString("name", "").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            // Filter out system tags
+            if (name in systemTags || name.startsWith("CWOC_System/", ignoreCase = true)) return@mapNotNull null
+            com.cwoc.app.ui.navigation.filter.TagItem(
+                name = name,
+                color = obj.optString("color", "").takeIf { it.isNotBlank() },
+                favorite = obj.optBoolean("favorite", false)
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 }

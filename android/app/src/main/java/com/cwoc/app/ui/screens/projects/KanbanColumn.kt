@@ -9,7 +9,8 @@ enum class KanbanStatus(val displayName: String) {
     TODO("ToDo"),
     IN_PROGRESS("In Progress"),
     BLOCKED("Blocked"),
-    COMPLETE("Complete");
+    COMPLETE("Complete"),
+    REJECTED("Rejected");
 
     companion object {
         /**
@@ -23,6 +24,7 @@ enum class KanbanStatus(val displayName: String) {
                 "in progress", "inprogress", "in-progress" -> IN_PROGRESS
                 "blocked" -> BLOCKED
                 "complete", "completed", "done" -> COMPLETE
+                "rejected" -> REJECTED
                 else -> TODO
             }
         }

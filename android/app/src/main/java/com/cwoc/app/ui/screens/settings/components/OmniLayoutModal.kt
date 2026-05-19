@@ -56,7 +56,8 @@ data class OmniLayout(
     val fullWidth: List<String> = emptyList(),
     val leftColumn: List<String> = emptyList(),
     val rightColumn: List<String> = emptyList(),
-    val unused: List<String> = emptyList()
+    val unused: List<String> = emptyList(),
+    val hideWhenEmpty: Map<String, Boolean> = emptyMap()
 )
 
 /**
@@ -90,7 +91,8 @@ val ALL_OMNI_SECTIONS = listOf(
 private data class ZonedSection(
     val id: String,
     val label: String,
-    val zone: OmniZone
+    val zone: OmniZone,
+    val hideWhenEmpty: Boolean = true
 )
 
 private enum class OmniZone {
@@ -128,21 +130,22 @@ fun OmniLayoutModal(
     // Build mutable state from the current layout
     val sections = remember(currentLayout) {
         val list = mutableStateListOf<ZonedSection>()
+        val hwe = currentLayout.hideWhenEmpty
         currentLayout.fullWidth.forEach { id ->
             val section = ALL_OMNI_SECTIONS.find { it.id == id }
-            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.FULL_WIDTH))
+            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.FULL_WIDTH, hwe[id] ?: true))
         }
         currentLayout.leftColumn.forEach { id ->
             val section = ALL_OMNI_SECTIONS.find { it.id == id }
-            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.LEFT_COLUMN))
+            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.LEFT_COLUMN, hwe[id] ?: true))
         }
         currentLayout.rightColumn.forEach { id ->
             val section = ALL_OMNI_SECTIONS.find { it.id == id }
-            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.RIGHT_COLUMN))
+            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.RIGHT_COLUMN, hwe[id] ?: true))
         }
         currentLayout.unused.forEach { id ->
             val section = ALL_OMNI_SECTIONS.find { it.id == id }
-            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.UNUSED))
+            if (section != null) list.add(ZonedSection(id, section.label, OmniZone.UNUSED, hwe[id] ?: true))
         }
         // Add any sections not present in the layout (new sections added later)
         val existingIds = list.map { it.id }.toSet()
@@ -213,6 +216,7 @@ fun OmniLayoutModal(
                             onMoveUp = { moveWithinZone(sections, section, -1) },
                             onMoveDown = { moveWithinZone(sections, section, 1) },
                             onMoveToZone = { targetZone -> moveToZone(sections, section, targetZone) },
+                            onToggleHideWhenEmpty = { toggleHideWhenEmpty(sections, section) },
                             currentZone = OmniZone.FULL_WIDTH
                         )
                     }
@@ -237,6 +241,7 @@ fun OmniLayoutModal(
                             onMoveUp = { moveWithinZone(sections, section, -1) },
                             onMoveDown = { moveWithinZone(sections, section, 1) },
                             onMoveToZone = { targetZone -> moveToZone(sections, section, targetZone) },
+                            onToggleHideWhenEmpty = { toggleHideWhenEmpty(sections, section) },
                             currentZone = OmniZone.LEFT_COLUMN
                         )
                     }
@@ -261,6 +266,7 @@ fun OmniLayoutModal(
                             onMoveUp = { moveWithinZone(sections, section, -1) },
                             onMoveDown = { moveWithinZone(sections, section, 1) },
                             onMoveToZone = { targetZone -> moveToZone(sections, section, targetZone) },
+                            onToggleHideWhenEmpty = { toggleHideWhenEmpty(sections, section) },
                             currentZone = OmniZone.RIGHT_COLUMN
                         )
                     }
@@ -285,6 +291,7 @@ fun OmniLayoutModal(
                             onMoveUp = { moveWithinZone(sections, section, -1) },
                             onMoveDown = { moveWithinZone(sections, section, 1) },
                             onMoveToZone = { targetZone -> moveToZone(sections, section, targetZone) },
+                            onToggleHideWhenEmpty = { toggleHideWhenEmpty(sections, section) },
                             currentZone = OmniZone.UNUSED
                         )
                     }
@@ -354,6 +361,7 @@ private fun SectionCard(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onMoveToZone: (OmniZone) -> Unit,
+    onToggleHideWhenEmpty: () -> Unit,
     currentZone: OmniZone
 ) {
     val isUnused = currentZone == OmniZone.UNUSED
@@ -421,6 +429,19 @@ private fun SectionCard(
                 .padding(horizontal = 4.dp)
         )
 
+        // Hide when empty toggle (eye icon)
+        if (!isUnused) {
+            IconButton(
+                onClick = onToggleHideWhenEmpty,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Text(
+                    text = if (section.hideWhenEmpty) "👁" else "👁‍🗨",
+                    fontSize = 14.sp
+                )
+            }
+        }
+
         // Zone move button — shows target zone options
         ZoneMoveButton(
             currentZone = currentZone,
@@ -460,6 +481,18 @@ private fun ZoneMoveButton(
             .clickable { onMoveToZone(nextZone) }
             .padding(horizontal = 8.dp, vertical = 4.dp)
     )
+}
+
+/**
+ * Toggles the hideWhenEmpty flag on a section.
+ */
+private fun toggleHideWhenEmpty(
+    sections: MutableList<ZonedSection>,
+    section: ZonedSection
+) {
+    val index = sections.indexOf(section)
+    if (index < 0) return
+    sections[index] = section.copy(hideWhenEmpty = !section.hideWhenEmpty)
 }
 
 /**
@@ -515,6 +548,7 @@ private fun buildLayoutFromSections(sections: List<ZonedSection>): OmniLayout {
         fullWidth = sections.filter { it.zone == OmniZone.FULL_WIDTH }.map { it.id },
         leftColumn = sections.filter { it.zone == OmniZone.LEFT_COLUMN }.map { it.id },
         rightColumn = sections.filter { it.zone == OmniZone.RIGHT_COLUMN }.map { it.id },
-        unused = sections.filter { it.zone == OmniZone.UNUSED }.map { it.id }
+        unused = sections.filter { it.zone == OmniZone.UNUSED }.map { it.id },
+        hideWhenEmpty = sections.associate { it.id to it.hideWhenEmpty }
     )
 }

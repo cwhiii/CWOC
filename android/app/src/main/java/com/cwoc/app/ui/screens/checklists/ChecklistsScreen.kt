@@ -13,8 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,10 +30,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
@@ -43,6 +44,7 @@ import com.cwoc.app.domain.checklist.ChecklistOperations
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
+import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.SnoozePickerDialog
@@ -50,10 +52,12 @@ import com.cwoc.app.ui.components.TagChipsRow
 import com.cwoc.app.ui.components.ChecklistProgressBadge
 import com.cwoc.app.ui.components.PeopleChipsRow
 import com.cwoc.app.ui.components.SharingIndicators
+import com.cwoc.app.ui.components.RsvpIndicators
 import com.cwoc.app.ui.components.ArchiveSnoozeIndicators
 import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.sortPinnedFirst
+import com.cwoc.app.ui.components.ReorderableStaggeredGrid
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
 
@@ -80,6 +84,9 @@ fun ChecklistsScreen(
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
+
+    // Determine if manual sort is active (enables drag-to-reorder)
+    val isManualSort = sortState.field == SortField.MANUAL
 
     // Long-press action menu state
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
@@ -112,20 +119,25 @@ fun ChecklistsScreen(
                 )
             }
             else -> {
-                LazyColumn(
+                ReorderableStaggeredGrid(
+                    items = filteredSortedChits,
+                    key = { it.id },
+                    columns = StaggeredGridCells.Fixed(1),
+                    onReorder = { fromIndex, toIndex ->
+                        viewModel.reorderChecklists(filteredSortedChits, fromIndex, toIndex)
+                    },
+                    enabled = isManualSort,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    items(filteredSortedChits, key = { it.id }) { chit ->
-                        ChecklistChitCard(
-                            chit = chit,
-                            onToggleItem = { index -> viewModel.toggleItem(chit.id, index) },
-                            onCardTap = { onNavigateToEditor(chit.id) },
-                            onCardLongPress = { menuChit = chit }
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalItemSpacing = 8.dp
+                ) { chit, _ ->
+                    ChecklistChitCard(
+                        chit = chit,
+                        onToggleItem = { index -> viewModel.toggleItem(chit.id, index) },
+                        onCardTap = { onNavigateToEditor(chit.id) },
+                        onCardLongPress = { menuChit = chit }
+                    )
                 }
             }
         }
@@ -213,19 +225,23 @@ private fun ChecklistChitCard(
 ) {
     val items = ChecklistOperations.parseChecklist(chit.checklist)
 
-    // Filter out system tags — only show user-created tags
-    val SYSTEM_TAGS = listOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes")
-    val userTags = chit.tags?.filter { tag ->
-        tag !in SYSTEM_TAGS && !tag.startsWith("CWOC_System/") && !tag.startsWith("cwoc_system/")
-    }
-
     // Full background color matching web's applyChitColors(el, chitColor(chit))
     val cardBgColor = remember(chit.color) { CwocChitCardStyle.resolveChitBgColor(chit.color) }
     val cardTextColor = remember(cardBgColor) { CwocChitCardStyle.contrastTextColor(cardBgColor) }
 
+    // Declined chit opacity (matches web's .declined-chit class)
+    val isDeclined = chit.availability == "declined"
+    val cardAlpha = if (isDeclined) 0.5f else 1f
+
+    // All-done check: every non-empty checklist item is checked
+    val allDone = remember(items) {
+        items.isNotEmpty() && items.all { it.checked }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(cardAlpha)
             .animateContentSize()
             .combinedClickable(
                 onClick = onCardTap,
@@ -236,15 +252,34 @@ private fun ChecklistChitCard(
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Chit title + checklist progress
+            // Chit title + indicator icons + checklist progress
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Indicator icons (pinned, archived, snoozed, stealth, alerts)
+                val indicators = buildString {
+                    if (chit.pinned) append("🔖 ")
+                    if (chit.archived) append("📦 ")
+                    if (!chit.snoozedUntil.isNullOrBlank()) append("😴 ")
+                    if (chit.stealth == true) append("🥷 ")
+                    if (chit.alarm == true || chit.notification == true) append("🔔 ")
+                }.trim()
+                if (indicators.isNotEmpty()) {
+                    Text(
+                        text = indicators,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+
+                // Title with strikethrough when all items are checked
+                val allChecked = items.isNotEmpty() && items.all { it.checked }
                 Text(
                     text = chit.title ?: "Untitled",
                     style = MaterialTheme.typography.titleSmall,
-                    color = cardTextColor,
+                    color = if (allChecked) cardTextColor.copy(alpha = 0.5f) else cardTextColor,
+                    textDecoration = if (allChecked) TextDecoration.LineThrough else TextDecoration.None,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -262,18 +297,11 @@ private fun ChecklistChitCard(
             // B8: Sharing/stealth indicators
             SharingIndicators(chit = chit)
 
+            // B15: RSVP indicators
+            RsvpIndicators(sharesJson = chit.shares)
+
             // B9: Archive/snooze indicators
             ArchiveSnoozeIndicators(chit = chit)
-
-            // Pin indicator
-            if (chit.pinned) {
-                Text(
-                    text = "📌 Pinned",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cardTextColor.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-            }
 
             // Checklist items — only show unchecked items (checked are counted in progress badge)
             items.forEachIndexed { index, item ->
@@ -286,20 +314,26 @@ private fun ChecklistChitCard(
                 }
             }
 
-            // Tags at the bottom (non-system tags only)
-            if (!userTags.isNullOrEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                TagChipsRow(
-                    tags = userTags,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
+            // Tags at the bottom (system tags filtered by TagChipsRow)
+            TagChipsRow(
+                tags = chit.tags,
+                modifier = Modifier.padding(top = 4.dp)
+            )
 
             // B4: People chips
             if (!chit.people.isNullOrEmpty()) {
                 PeopleChipsRow(
                     people = chit.people,
                     modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            // Location indicator
+            if (!chit.location.isNullOrBlank()) {
+                com.cwoc.app.ui.components.LocationIndicator(
+                    location = chit.location,
+                    modifier = Modifier.padding(top = 4.dp),
+                    textColor = cardTextColor.copy(alpha = 0.7f)
                 )
             }
         }

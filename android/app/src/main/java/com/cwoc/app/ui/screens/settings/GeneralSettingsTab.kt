@@ -332,10 +332,10 @@ fun GeneralSettingsTab(
             modifier = Modifier.padding(bottom = 8.dp)
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            val sexOptions = listOf("man" to "♂ Man", "woman" to "♀ Woman")
+            val sexOptions = listOf("Man" to "♂ Man", "Woman" to "♀ Woman")
             sexOptions.forEachIndexed { index, (value, label) ->
                 SegmentedButton(
-                    selected = formState.sex == value,
+                    selected = formState.sex.equals(value, ignoreCase = true),
                     onClick = { onUpdateSetting("sex", value) },
                     shape = SegmentedButtonDefaults.itemShape(
                         index = index,
@@ -904,6 +904,18 @@ private fun CustomFiltersSection(
         }
     }
 
+    // Parse available tags from formState.sharedTags for the filter modal
+    val availableTags = remember(formState.sharedTags) {
+        try {
+            val arr = JSONArray(formState.sharedTags)
+            (0 until arr.length()).mapNotNull { i ->
+                val obj = arr.optJSONObject(i)
+                val name = obj?.optString("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                TagItem(id = name, name = name)
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
     CollapsibleSection(
         title = "Custom Filters & Sorting",
         sectionId = "custom_filters"
@@ -1011,7 +1023,7 @@ private fun CustomFiltersSection(
         CustomFilterModal(
             viewName = viewName,
             currentFilter = currentFilter,
-            availableTags = emptyList(),
+            availableTags = availableTags,
             availableContacts = emptyList(),
             availableProjects = emptyList(),
             onDone = { filter ->

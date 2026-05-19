@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
@@ -38,13 +37,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.domain.email.ContrastColor
+import com.cwoc.app.ui.components.ContactAvatar
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.parseHexColor
 import com.google.gson.Gson
@@ -71,6 +70,9 @@ fun EmailCardEnhanced(
     isMultiSelectMode: Boolean,
     isSelected: Boolean,
     tagColorMap: Map<String, String> = emptyMap(),
+    senderImageUrl: String? = null,
+    serverUrl: String = "",
+    authToken: String = "",
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onToggleSelection: () -> Unit,
@@ -102,14 +104,6 @@ fun EmailCardEnhanced(
     val senderName = remember(latestMessage.emailFrom) {
         extractSenderDisplayName(latestMessage.emailFrom)
     }
-    val senderInitial = remember(senderName) {
-        extractInitial(senderName)
-    }
-
-    // Avatar background color (deterministic from sender name)
-    val avatarColor = remember(senderName) {
-        avatarColorForName(senderName)
-    }
 
     // Parse attachments
     val attachments = remember(latestMessage.attachments) {
@@ -119,7 +113,8 @@ fun EmailCardEnhanced(
     // Non-system tags for tag chips
     val nonSystemTags = remember(latestMessage.tags) {
         latestMessage.tags?.filter { tag ->
-            tag !in SYSTEM_TAGS
+            tag !in SYSTEM_TAGS &&
+                !tag.startsWith("CWOC_System/", ignoreCase = true)
         } ?: emptyList()
     }
 
@@ -177,21 +172,14 @@ fun EmailCardEnhanced(
                         )
                     )
                 } else {
-                    // Normal mode: show circular contact avatar
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(avatarColor),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = senderInitial,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
+                    // Normal mode: show circular contact avatar with image or initials
+                    ContactAvatar(
+                        imageUrl = senderImageUrl,
+                        name = senderName,
+                        size = 40.dp,
+                        serverUrl = serverUrl,
+                        authToken = authToken
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -558,42 +546,6 @@ private fun extractSenderDisplayName(emailFrom: String?): String {
     } else {
         emailFrom.trim()
     }
-}
-
-/**
- * Extracts the initial character from a sender display name.
- * Returns the uppercase first character after trimming whitespace and quotes.
- */
-private fun extractInitial(displayName: String): String {
-    val trimmed = displayName.trim().trimStart('"', '\'', ' ')
-    return if (trimmed.isNotEmpty()) {
-        trimmed.first().uppercase()
-    } else {
-        "?"
-    }
-}
-
-/**
- * Generates a deterministic avatar background color from a sender name.
- * Uses a hash to pick from a palette of distinct colors.
- */
-private fun avatarColorForName(name: String): Color {
-    val colors = listOf(
-        Color(0xFF1565C0), // Blue
-        Color(0xFF2E7D32), // Green
-        Color(0xFF6A1B9A), // Purple
-        Color(0xFFC62828), // Red
-        Color(0xFFEF6C00), // Orange
-        Color(0xFF00838F), // Cyan
-        Color(0xFF4527A0), // Deep Purple
-        Color(0xFF283593), // Indigo
-        Color(0xFF558B2F), // Light Green
-        Color(0xFF6D4C41), // Brown
-        Color(0xFF00695C), // Teal
-        Color(0xFFAD1457)  // Pink
-    )
-    val index = (name.hashCode().and(0x7FFFFFFF)) % colors.size
-    return colors[index]
 }
 
 /**

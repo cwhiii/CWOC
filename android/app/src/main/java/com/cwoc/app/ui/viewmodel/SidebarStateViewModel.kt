@@ -44,7 +44,10 @@ data class SidebarState(
 
     // Search
     val searchText: String = "",
-    val savedSearches: List<String> = emptyList()
+    val savedSearches: List<String> = emptyList(),
+
+    // Email folder
+    val emailFolder: String = "inbox"
 )
 
 /**
@@ -152,6 +155,12 @@ class SidebarStateViewModel @Inject constructor(
     fun setTasksViewMode(mode: String) {
         _state.update { it.copy(tasksViewMode = mode) }
         prefs.edit().putString("sidebar_tasks_mode", mode).apply()
+    }
+
+    // ── Email Folder ─────────────────────────────────────────────────────
+
+    fun setEmailFolder(folder: String) {
+        _state.update { it.copy(emailFolder = folder) }
     }
 
     // ── Calendar Options ─────────────────────────────────────────────────

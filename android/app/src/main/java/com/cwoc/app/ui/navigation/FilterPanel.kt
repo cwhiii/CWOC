@@ -1,358 +1,162 @@
 package com.cwoc.app.ui.navigation
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.filter.FilterState
-import com.cwoc.app.domain.filter.TagMatchMode
+import com.cwoc.app.ui.components.CollapsibleSection
+import com.cwoc.app.ui.navigation.filter.AnyToggleCheckboxGroup
+import com.cwoc.app.ui.navigation.filter.DisplayToggleCheckboxes
+import com.cwoc.app.ui.navigation.filter.FilterTextSection
+import com.cwoc.app.ui.navigation.filter.PeopleChipFilter
+import com.cwoc.app.ui.navigation.filter.PersonItem
+import com.cwoc.app.ui.navigation.filter.ProjectFilterDropdown
+import com.cwoc.app.ui.navigation.filter.ProjectItem
+import com.cwoc.app.ui.navigation.filter.TagItem
+import com.cwoc.app.ui.navigation.filter.TagTreeFilter
 
 /**
- * Filter panel embedded in the SidebarContent.
- * Provides multi-select chips for status/priority, tag checkboxes with match mode,
- * people chip selection, boolean toggles, and a "Clear All Filters" button.
+ * Filter panel embedded in the SidebarContent's "🔍 Filters" collapsible section.
+ * Achieves exact visual and functional parity with the mobile web sidebar filter panel.
  *
- * Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.9
+ * Structure (in order):
+ *   1. Filter Text (always visible, not collapsible)
+ *   2. Status (collapsible, starts collapsed)
+ *   3. Priority (collapsible, starts collapsed)
+ *   4. Tags (collapsible, starts collapsed)
+ *   5. People (collapsible, starts collapsed)
+ *   6. Project (collapsible, starts collapsed)
+ *   7. Display (collapsible, starts collapsed)
+ *
+ * All filter changes immediately invoke onFilterStateChanged (no Apply button).
+ * Color and Date Range sections are intentionally omitted (not on web).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FilterPanel(
     filterState: FilterState,
     onFilterStateChanged: (FilterState) -> Unit,
-    availableTags: List<String>,
-    availablePeople: List<String>,
+    availableTags: List<TagItem>,
+    availablePeople: List<PersonItem>,
+    availableProjects: List<ProjectItem>,
+    savedSearches: List<String>,
+    onSavedSearchDelete: (String) -> Unit,
+    currentTab: String?,
+    hasCustomDefaults: Boolean,
     onClearAll: () -> Unit,
+    onApplyDefaults: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 4.dp)
     ) {
-        Text(
-            text = "Filters",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
+        // ─── 1. Filter Text (always visible) ─────────────────────────────
+        FilterTextSection(
+            searchText = filterState.searchText,
+            onSearchTextChanged = { text ->
+                onFilterStateChanged(filterState.copy(searchText = text))
+            },
+            savedSearches = savedSearches,
+            onSavedSearchTap = { text ->
+                onFilterStateChanged(filterState.copy(searchText = text))
+            },
+            onSavedSearchDelete = onSavedSearchDelete
         )
 
-        // --- Status multi-select chips ---
-        Text(
-            text = "Status",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // V1: Include "Rejected" in status options
-            val statusOptions = listOf("ToDo", "In Progress", "Blocked", "Complete", "Rejected")
-            statusOptions.forEach { status ->
-                val selected = status in filterState.statuses
-                FilterChip(
-                    selected = selected,
-                    onClick = {
-                        val newStatuses = if (selected) {
-                            filterState.statuses - status
-                        } else {
-                            filterState.statuses + status
-                        }
-                        onFilterStateChanged(filterState.copy(statuses = newStatuses))
-                    },
-                    label = { Text(status) }
-                )
-            }
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // --- Priority multi-select chips ---
-        Text(
-            text = "Priority",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val priorityOptions = listOf("Critical", "High", "Medium", "Low")
-            priorityOptions.forEach { priority ->
-                val selected = priority in filterState.priorities
-                FilterChip(
-                    selected = selected,
-                    onClick = {
-                        val newPriorities = if (selected) {
-                            filterState.priorities - priority
-                        } else {
-                            filterState.priorities + priority
-                        }
-                        onFilterStateChanged(filterState.copy(priorities = newPriorities))
-                    },
-                    label = { Text(priority) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // --- Tags with checkboxes + match mode toggle ---
-        if (availableTags.isNotEmpty()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Tags",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                // Match mode toggle (ANY / ALL)
-                TextButton(
-                    onClick = {
-                        val newMode = if (filterState.tagMatchMode == TagMatchMode.ANY) {
-                            TagMatchMode.ALL
-                        } else {
-                            TagMatchMode.ANY
-                        }
-                        onFilterStateChanged(filterState.copy(tagMatchMode = newMode))
-                    }
-                ) {
-                    Text(
-                        text = if (filterState.tagMatchMode == TagMatchMode.ANY) "ANY" else "ALL",
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-
-            availableTags.forEach { tag ->
-                val checked = tag in filterState.tags
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp)
-                ) {
-                    Checkbox(
-                        checked = checked,
-                        onCheckedChange = { isChecked ->
-                            val newTags = if (isChecked) {
-                                filterState.tags + tag
-                            } else {
-                                filterState.tags - tag
-                            }
-                            onFilterStateChanged(filterState.copy(tags = newTags))
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = tag,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        // --- People chip selection ---
-        if (availablePeople.isNotEmpty()) {
-            Text(
-                text = "People",
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                availablePeople.forEach { person ->
-                    val selected = person in filterState.people
-                    FilterChip(
-                        selected = selected,
-                        onClick = {
-                            val newPeople = if (selected) {
-                                filterState.people - person
-                            } else {
-                                filterState.people + person
-                            }
-                            onFilterStateChanged(filterState.copy(people = newPeople))
-                        },
-                        label = { Text(person) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-
-        // --- Boolean toggles ---
-        Text(
-            text = "Show",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        FilterToggleRow(
-            label = "Archived",
-            checked = filterState.showArchived,
-            onCheckedChange = {
-                onFilterStateChanged(filterState.copy(showArchived = it))
-            }
-        )
-        FilterToggleRow(
-            label = "Pinned",
-            checked = filterState.showPinned,
-            onCheckedChange = {
-                onFilterStateChanged(filterState.copy(showPinned = it))
-            }
-        )
-        FilterToggleRow(
-            label = "Snoozed",
-            checked = filterState.showSnoozed,
-            onCheckedChange = {
-                onFilterStateChanged(filterState.copy(showSnoozed = it))
-            }
-        )
-        FilterToggleRow(
-            label = "Past Due",
-            checked = filterState.showPastDue,
-            onCheckedChange = {
-                onFilterStateChanged(filterState.copy(showPastDue = it))
-            }
-        )
-        // V2: Show Declined toggle
-        FilterToggleRow(
-            label = "Show Declined",
-            checked = filterState.showDeclined,
-            onCheckedChange = {
-                onFilterStateChanged(filterState.copy(showDeclined = it))
-            }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // V3: Color filter chips
-        Text(
-            text = "Color",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val colorOptions = listOf(
-                "#C66B6B" to "Red",
-                "#D68A59" to "Orange",
-                "#E3B23C" to "Yellow",
-                "#8A9A5B" to "Green",
-                "#6B8299" to "Blue",
-                "#8B6B99" to "Purple"
-            )
-            colorOptions.forEach { (color, label) ->
-                val selected = color in filterState.colors
-                FilterChip(
-                    selected = selected,
-                    onClick = {
-                        val newColors = if (selected) filterState.colors - color
-                        else filterState.colors + color
-                        onFilterStateChanged(filterState.copy(colors = newColors))
-                    },
-                    label = { Text(label) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // V4: Date range filter
-        Text(
-            text = "Date Range",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = filterState.dateRangeStart ?: "",
-                onValueChange = {
-                    onFilterStateChanged(filterState.copy(dateRangeStart = it.ifBlank { null }))
+        // ─── 2. Status (collapsible) ─────────────────────────────────────
+        CollapsibleSection(title = "Status", initiallyExpanded = false) {
+            AnyToggleCheckboxGroup(
+                options = listOf("ToDo", "In Progress", "Blocked", "Complete", "Rejected"),
+                selectedOptions = filterState.statuses,
+                onSelectionChanged = { newStatuses ->
+                    onFilterStateChanged(filterState.copy(statuses = newStatuses))
                 },
-                label = { Text("From") },
-                placeholder = { Text("YYYY-MM-DD") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
+                onClear = {
+                    onFilterStateChanged(filterState.copy(statuses = emptySet()))
+                }
             )
-            androidx.compose.material3.OutlinedTextField(
-                value = filterState.dateRangeEnd ?: "",
-                onValueChange = {
-                    onFilterStateChanged(filterState.copy(dateRangeEnd = it.ifBlank { null }))
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ─── 3. Priority (collapsible) ───────────────────────────────────
+        CollapsibleSection(title = "Priority", initiallyExpanded = false) {
+            AnyToggleCheckboxGroup(
+                options = listOf("Low", "Medium", "High"),
+                selectedOptions = filterState.priorities,
+                onSelectionChanged = { newPriorities ->
+                    onFilterStateChanged(filterState.copy(priorities = newPriorities))
                 },
-                label = { Text("To") },
-                placeholder = { Text("YYYY-MM-DD") },
-                singleLine = true,
-                modifier = Modifier.weight(1f)
+                onClear = {
+                    onFilterStateChanged(filterState.copy(priorities = emptySet()))
+                }
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // --- Clear All Filters button ---
-        TextButton(
-            onClick = onClearAll,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Clear All Filters")
+        // ─── 4. Tags (collapsible) ───────────────────────────────────────
+        CollapsibleSection(title = "Tags", initiallyExpanded = false) {
+            TagTreeFilter(
+                tags = availableTags,
+                selectedTags = filterState.tags,
+                onSelectionChanged = { newTags ->
+                    onFilterStateChanged(filterState.copy(tags = newTags))
+                },
+                onClear = {
+                    onFilterStateChanged(filterState.copy(tags = emptySet()))
+                }
+            )
         }
-    }
-}
 
-/**
- * A single row with a label and a Switch toggle for boolean filter options.
- */
-@Composable
-private fun FilterToggleRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ─── 5. People (collapsible) ─────────────────────────────────────
+        CollapsibleSection(title = "People", initiallyExpanded = false) {
+            PeopleChipFilter(
+                people = availablePeople,
+                selectedPeople = filterState.people,
+                onSelectionChanged = { newPeople ->
+                    onFilterStateChanged(filterState.copy(people = newPeople))
+                },
+                onClear = {
+                    onFilterStateChanged(filterState.copy(people = emptySet()))
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ─── 6. Project (collapsible) ────────────────────────────────────
+        CollapsibleSection(title = "Project", initiallyExpanded = false) {
+            ProjectFilterDropdown(
+                projects = availableProjects,
+                selectedProjectId = filterState.projectFilter,
+                onSelectionChanged = { projectId ->
+                    onFilterStateChanged(filterState.copy(projectFilter = projectId))
+                },
+                onClear = {
+                    onFilterStateChanged(filterState.copy(projectFilter = null))
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // ─── 7. Display (collapsible) ────────────────────────────────────
+        CollapsibleSection(title = "Display", initiallyExpanded = false) {
+            DisplayToggleCheckboxes(
+                filterState = filterState,
+                onFilterStateChanged = onFilterStateChanged
+            )
+        }
     }
 }

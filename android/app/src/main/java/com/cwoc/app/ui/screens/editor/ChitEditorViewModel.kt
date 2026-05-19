@@ -19,11 +19,17 @@ import com.cwoc.app.domain.tags.TagTreeParser
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -132,6 +138,7 @@ class ChitEditorViewModel @Inject constructor(
             current.assignedTo != saved.assignedTo ||
             current.prerequisites != saved.prerequisites ||
             current.stealth != saved.stealth ||
+            current.shares != saved.shares ||
             current.autoCompleteChecklist != saved.autoCompleteChecklist ||
             current.checklistAutosave != saved.checklistAutosave ||
             current.healthData != saved.healthData ||
@@ -206,6 +213,54 @@ class ChitEditorViewModel @Inject constructor(
     private val _contactColors = MutableStateFlow<Map<String, String>>(emptyMap())
     val contactColors: StateFlow<Map<String, String>> = _contactColors.asStateFlow()
 
+    /** Map of contact display name → profile image URL for people chips. */
+    private val _contactImages = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val contactImages: StateFlow<Map<String, String?>> = _contactImages.asStateFlow()
+
+    /** People zone search query — drives full-field DAO search. */
+    private val _peopleSearchQuery = MutableStateFlow("")
+    val peopleSearchQuery: StateFlow<String> = _peopleSearchQuery.asStateFlow()
+
+    /**
+     * People zone search results from full-field DAO query (searches name, email, phone,
+     * address, organization, notes, etc.). Emits display names of matching contacts.
+     */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    val peopleSearchResults: StateFlow<List<String>> = _peopleSearchQuery
+        .debounce(200L)
+        .flatMapLatest { query ->
+            if (query.length < 2) {
+                flowOf(emptyList())
+            } else {
+                contactDao.searchAll(query).map { contacts ->
+                    contacts.mapNotNull { contact ->
+                        contact.displayName
+                            ?: listOfNotNull(contact.givenName, contact.surname)
+                                .joinToString(" ").ifBlank { null }
+                    }
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Update the people search query (called from PeopleZone composable). */
+    fun updatePeopleSearchQuery(query: String) {
+        _peopleSearchQuery.value = query
+    }
+
+    /** Child chit summaries for the Projects zone Kanban view. */
+    data class ChildChitSummary(val id: String, val title: String, val status: String?)
+    private val _childChitSummaries = MutableStateFlow<List<ChildChitSummary>>(emptyList())
+    val childChitSummaries: StateFlow<List<ChildChitSummary>> = _childChitSummaries.asStateFlow()
+
+    /** Chit link suggestions for the Notes zone [[title]] autocomplete. */
+    private val _chitLinkSuggestions = MutableStateFlow<List<Pair<String, String>>>(emptyList()) // (id, title)
+    val chitLinkSuggestions: StateFlow<List<Pair<String, String>>> = _chitLinkSuggestions.asStateFlow()
+
+    /** Indicator objects from Custom Objects API for the Health Indicators zone. */
+    private val _indicatorObjects = MutableStateFlow<List<com.cwoc.app.data.remote.IndicatorObject>>(emptyList())
+    val indicatorObjects: StateFlow<List<com.cwoc.app.data.remote.IndicatorObject>> = _indicatorObjects.asStateFlow()
+
     init {
         if (!isNew) {
             loadExistingChit()
@@ -214,6 +269,7 @@ class ChitEditorViewModel @Inject constructor(
         loadTagTree()
         loadRecentTags()
         loadContactNames()
+        loadIndicatorObjects()
     }
 
     /**
@@ -339,6 +395,23 @@ class ChitEditorViewModel @Inject constructor(
     }
 
     /**
+     * Loads indicator objects from the Custom Objects API for the Health Indicators zone.
+     * Fetches objects assigned to the indicators_zone to get names, units, and value types.
+     */
+    private fun loadIndicatorObjects() {
+        viewModelScope.launch {
+            try {
+                val response = apiService.getCustomObjectsForZone("indicators_zone")
+                if (response.isSuccessful) {
+                    _indicatorObjects.value = response.body() ?: emptyList()
+                }
+            } catch (_: Exception) {
+                // Non-critical — zone will show raw UUIDs as fallback
+            }
+        }
+    }
+
+    /**
      * Loads all active contact display names and colors for the People zone.
      */
     private fun loadContactNames() {
@@ -350,15 +423,89 @@ class ChitEditorViewModel @Inject constructor(
                 }
                 // Build color map: display name → color hex
                 val colorMap = mutableMapOf<String, String>()
+                // Build image map: display name → imageUrl
+                val imageMap = mutableMapOf<String, String?>()
                 contacts.forEach { contact ->
                     val name = contact.displayName
                         ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ").ifBlank { null }
                     if (name != null && !contact.color.isNullOrBlank()) {
                         colorMap[name] = contact.color
                     }
+                    if (name != null && !contact.imageUrl.isNullOrBlank()) {
+                        imageMap[name] = contact.imageUrl
+                    }
                 }
                 _contactColors.value = colorMap
+                _contactImages.value = imageMap
             }
+        }
+    }
+
+    /**
+     * Loads child chit summaries (id, title, status) for the Projects zone.
+     * Called when formState.childChits changes.
+     */
+    fun loadChildChitSummaries(childIds: List<String>?) {
+        if (childIds.isNullOrEmpty()) {
+            _childChitSummaries.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            val summaries = childIds.mapNotNull { id ->
+                chitDao.getById(id)?.let { entity ->
+                    ChildChitSummary(
+                        id = entity.id,
+                        title = entity.title ?: "(untitled)",
+                        status = entity.status
+                    )
+                }
+            }
+            _childChitSummaries.value = summaries
+        }
+    }
+
+    /**
+     * Updates a child chit's status (for the Projects zone Kanban).
+     * Marks the child chit dirty and triggers sync.
+     */
+    fun updateChildChitStatus(childId: String, newStatus: String) {
+        viewModelScope.launch {
+            val entity = chitDao.getById(childId) ?: return@launch
+            val updated = entity.copy(
+                status = newStatus,
+                isDirty = true,
+                modifiedDatetime = java.time.Instant.now().toString(),
+                dirtyFields = "status"
+            )
+            chitDao.upsert(updated)
+            dirtyTracker.markDirty(childId, setOf("status"))
+            if (connectivityMonitor.isOnline.value) {
+                syncPushEngine.pushAll()
+            }
+            // Refresh summaries
+            loadChildChitSummaries(_formState.value.childChits)
+        }
+    }
+
+    /**
+     * Searches chit titles for the [[link]] autocomplete in the Notes zone.
+     * Returns up to 8 matching chits (excluding the current chit).
+     */
+    fun searchChitTitles(query: String) {
+        if (query.isBlank()) {
+            _chitLinkSuggestions.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            val currentId = _formState.value.id
+            val lowerQuery = query.lowercase()
+            // Get all non-deleted chits and filter by title
+            val allChits = chitDao.getAllNonDeletedSnapshot()
+            val matches = allChits
+                .filter { it.id != currentId && it.title != null && it.title.lowercase().contains(lowerQuery) }
+                .take(8)
+                .map { it.id to (it.title ?: "") }
+            _chitLinkSuggestions.value = matches
         }
     }
 
@@ -509,6 +656,11 @@ class ChitEditorViewModel @Inject constructor(
             // Update originalEntity so subsequent saves detect changes correctly
             originalEntity = entity
 
+            // Run post-save callbacks (e.g., commit staged attachment deletes)
+            _onSaveCallbacks.forEach { callback ->
+                try { callback() } catch (_: Exception) { /* best effort */ }
+            }
+
             // Signal navigation back
             _isSaved.value = true
         }
@@ -553,6 +705,11 @@ class ChitEditorViewModel @Inject constructor(
             _savedState.value = form
             originalEntity = entity
             _lastSavedAt.value = now
+
+            // Run post-save callbacks (e.g., commit staged attachment deletes)
+            _onSaveCallbacks.forEach { callback ->
+                try { callback() } catch (_: Exception) { /* best effort */ }
+            }
 
             // If this was a new chit, update the form state to reflect it's no longer new
             if (isNew) {
@@ -723,9 +880,30 @@ class ChitEditorViewModel @Inject constructor(
 
     /**
      * Discards changes and navigates back without any DB writes.
+     * Runs any registered rollback callbacks (e.g., attachment rollback).
      */
     fun discard() {
-        _isSaved.value = true
+        viewModelScope.launch {
+            // Run rollback callbacks (e.g., delete pending attachment uploads)
+            _onDiscardCallbacks.forEach { callback ->
+                try { callback() } catch (_: Exception) { /* best effort */ }
+            }
+            _isSaved.value = true
+        }
+    }
+
+    // ─── Attachment lifecycle hooks ─────────────────────────────────────────────
+    private val _onSaveCallbacks = mutableListOf<suspend () -> Unit>()
+    private val _onDiscardCallbacks = mutableListOf<suspend () -> Unit>()
+
+    /** Register a callback to run after successful save (e.g., commit staged deletes). */
+    fun registerOnSaveCallback(callback: suspend () -> Unit) {
+        _onSaveCallbacks.add(callback)
+    }
+
+    /** Register a callback to run on discard (e.g., rollback pending uploads). */
+    fun registerOnDiscardCallback(callback: suspend () -> Unit) {
+        _onDiscardCallbacks.add(callback)
     }
 
     /**
@@ -762,7 +940,13 @@ class ChitEditorViewModel @Inject constructor(
      */
     fun discardAndExit() {
         _showUnsavedDialog.value = false
-        _isSaved.value = true
+        viewModelScope.launch {
+            // Run rollback callbacks (e.g., delete pending attachment uploads)
+            _onDiscardCallbacks.forEach { callback ->
+                try { callback() } catch (_: Exception) { /* best effort */ }
+            }
+            _isSaved.value = true
+        }
     }
 
     /**

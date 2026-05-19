@@ -31,6 +31,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,7 @@ fun HelpScreen(
     val topics by viewModel.topics.collectAsState()
     val selectedTopic by viewModel.selectedTopic.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
 
     // BackHandler: if viewing a topic detail, go back to list; otherwise exit screen
     BackHandler(enabled = true) {
@@ -135,8 +139,15 @@ fun HelpScreen(
                     HelpErrorState()
                 }
                 else -> {
+                    val filteredTopics = if (searchQuery.isBlank()) topics
+                        else topics.filter { topic ->
+                            topic.title.contains(searchQuery, ignoreCase = true) ||
+                            topic.content.contains(searchQuery, ignoreCase = true)
+                        }
                     HelpTopicList(
-                        topics = topics,
+                        topics = filteredTopics,
+                        searchQuery = searchQuery,
+                        onSearchChange = { searchQuery = it },
                         onTopicClick = { slug -> viewModel.selectTopic(slug) },
                         modifier = Modifier.padding(paddingValues)
                     )
@@ -151,6 +162,8 @@ fun HelpScreen(
 @Composable
 private fun HelpTopicList(
     topics: List<HelpTopic>,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
     onTopicClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -160,7 +173,29 @@ private fun HelpTopicList(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            // Search bar matching web's help-search-bar
+            androidx.compose.material3.OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                placeholder = { Text("Search help topics...") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        if (topics.isEmpty() && searchQuery.isNotBlank()) {
+            item {
+                Text(
+                    text = "No topics match \"$searchQuery\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+            }
+        }
 
         items(topics, key = { it.slug }) { topic ->
             HelpTopicCard(

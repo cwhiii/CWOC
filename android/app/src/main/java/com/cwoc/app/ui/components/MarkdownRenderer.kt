@@ -351,6 +351,7 @@ private val boldRegex = Regex("""\*\*(.+?)\*\*|__(.+?)__""")
 private val italicRegex = Regex("""\*(.+?)\*|_(.+?)_""")
 private val linkRegex = Regex("""\[([^\]]+)]\(([^)]+)\)""")
 private val imageInlineRegex = Regex("""!\[([^\]]*)]\(([^)]+)\)""")
+private val chitLinkRegex = Regex("""\[\[([^\]]+)]]""")
 
 private fun parseInlineFormatting(text: String): AnnotatedString {
     return buildAnnotatedString {
@@ -362,6 +363,7 @@ private fun parseInlineFormatting(text: String): AnnotatedString {
             val candidates = listOfNotNull(
                 inlineCodeRegex.find(remaining)?.let { MatchInfo(it, "code") },
                 imageInlineRegex.find(remaining)?.let { MatchInfo(it, "image") },
+                chitLinkRegex.find(remaining)?.let { MatchInfo(it, "chitlink") },
                 boldItalicRegex.find(remaining)?.let { MatchInfo(it, "bolditalic") },
                 boldRegex.find(remaining)?.let { MatchInfo(it, "bold") },
                 italicRegex.find(remaining)?.let { MatchInfo(it, "italic") },
@@ -406,6 +408,19 @@ private fun parseInlineFormatting(text: String): AnnotatedString {
                         )
                     ) {
                         append("🖼 ${altText.ifEmpty { "Image" }}")
+                    }
+                }
+
+                "chitlink" -> {
+                    // [[Title]] inter-chit link — render as styled text (navigation handled by tap)
+                    val linkTitle = match.groupValues[1]
+                    withStyle(
+                        SpanStyle(
+                            color = Color(0xFF4682B4), // Steel blue matching web
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ) {
+                        append(linkTitle)
                     }
                 }
 

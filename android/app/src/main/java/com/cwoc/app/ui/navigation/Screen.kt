@@ -31,10 +31,15 @@ sealed class Screen(val route: String) {
     data object Help : Screen("help")
     data object Weather : Screen("weather")
     data object OmniView : Screen("omni")
+    data object Notebook : Screen("notebook")
     data object Notifications : Screen("notifications")
 
     // Z1-Z4: Missing pages
-    data object AuditLog : Screen("audit-log")
+    data object AuditLog : Screen("audit-log?entity_type={entityType}&entity_id={entityId}") {
+        fun createRoute(entityType: String? = null, entityId: String? = null): String {
+            return "audit-log?entity_type=${entityType ?: ""}&entity_id=${entityId ?: ""}"
+        }
+    }
     data object CustomObjects : Screen("custom-objects")
     data object RulesManager : Screen("rules-manager")
     data object UserAdmin : Screen("user-admin")

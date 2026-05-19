@@ -301,7 +301,7 @@ fun TagsPickerSheet(
             if (showTagCreateDialog) {
                 com.cwoc.app.ui.components.TagCreateDialog(
                     parentTags = allTags,
-                    onConfirm = { name, color, parentPath ->
+                    onConfirm = { name, color, fontColor, parentPath, favorite ->
                         // Create the tag with color info
                         val fullName = if (parentPath != null) "$parentPath/$name" else name
                         onTagCreated(fullName)

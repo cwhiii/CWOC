@@ -101,6 +101,7 @@ fun EmailComposeZone(
     emailBodyHtml: String?,
     attachmentsJson: String?,
     serverUrl: String,
+    authToken: String = "",
     isSenderKnown: Boolean,
     externalContentSetting: String,
 
@@ -414,7 +415,8 @@ fun EmailComposeZone(
         // ─── Attachment Bar (Requirement 56.1-56.6) ──────────────────────────
         AttachmentBar(
             attachmentsJson = attachmentsJson,
-            serverUrl = serverUrl
+            serverUrl = serverUrl,
+            authToken = authToken
         )
 
         Spacer(modifier = Modifier.height(4.dp))

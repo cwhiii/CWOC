@@ -7,6 +7,7 @@ import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.domain.checklist.ChecklistItem
 import com.cwoc.app.domain.checklist.ChecklistOperations
+import com.cwoc.app.domain.sort.ChitReorderHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChecklistsViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
-    private val chitDao: ChitDao
+    private val chitDao: ChitDao,
+    private val chitReorderHelper: ChitReorderHelper
 ) : ViewModel() {
 
     val checklistChits: StateFlow<List<ChitEntity>> = chitRepository.getChecklistChits()
@@ -69,6 +71,29 @@ class ChecklistsViewModel @Inject constructor(
                 )
             )
             chitRepository.markDirty(chitId, "checklist")
+        }
+    }
+
+    /**
+     * Reorder checklist cards in the staggered grid.
+     * Persists the new order both locally (SharedPreferences) and remotely (API).
+     * Called from the ReorderableStaggeredGrid onReorder callback.
+     *
+     * @param currentChits The current ordered list of chits displayed in the grid
+     * @param fromIndex The index of the card being moved
+     * @param toIndex The target index for the card
+     *
+     * Validates: Requirements 9.3
+     */
+    fun reorderChecklists(currentChits: List<ChitEntity>, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch {
+            val chitIds = currentChits.map { it.id }
+            chitReorderHelper.persistReorder(
+                tab = "Checklists",
+                currentIds = chitIds,
+                fromIndex = fromIndex,
+                toIndex = toIndex
+            )
         }
     }
 }

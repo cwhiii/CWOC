@@ -597,9 +597,9 @@ fun DateZone(
             }
 
             // ── Repeat Row (inline recurrence) ───────────────────────────────
-            // 12.2: Shown when date mode is Start/End or Due, hidden when habit active
-            // Section 11.1: Hidden when mode is None, Point in Time, or Perpetual
-            if (!habitActive && (currentMode == DateMode.START_END || currentMode == DateMode.DUE)) {
+            // 12.2: Shown when date mode is Start/End, Due, or Perpetual; hidden when habit active
+            // Section 11.1: Hidden when mode is None or Point in Time
+            if (!habitActive && (currentMode == DateMode.START_END || currentMode == DateMode.DUE || currentMode == DateMode.PERPETUAL)) {
                 Spacer(modifier = Modifier.height(8.dp))
                 InlineRecurrenceRow(
                     recurrenceRule = recurrenceRule,
@@ -1083,6 +1083,10 @@ private fun InlineRecurrenceRow(
 
         // 12.3: Inline options (shown when checkbox is checked)
         if (isEnabled && parsedRule != null) {
+            // Local state to show the until date field even before a date is picked
+            val endsNever = parsedRule.until.isNullOrBlank() && parsedRule.count == null
+            var showUntilField by remember(recurrenceRule) { mutableStateOf(!endsNever) }
+
             // Date_Mode_Fields style: margin-left 22dp, flex-wrap, gap 6dp
             FlowRow(
                 modifier = Modifier
@@ -1179,17 +1183,16 @@ private fun InlineRecurrenceRow(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    val endsNever = parsedRule.until == null && parsedRule.count == null
                     Checkbox(
-                        checked = endsNever,
+                        checked = endsNever && !showUntilField,
                         onCheckedChange = { checked ->
                             if (checked) {
+                                showUntilField = false
                                 val updated = parsedRule.copy(until = null, count = null)
                                 onRecurrenceRuleChanged(Gson().toJson(updated))
                             } else {
-                                // Uncheck "ends never" — set until to empty string to show input
-                                val updated = parsedRule.copy(until = "", count = null)
-                                onRecurrenceRuleChanged(Gson().toJson(updated))
+                                // Uncheck "ends never" — show the date picker field
+                                showUntilField = true
                             }
                         },
                         modifier = Modifier
@@ -1207,7 +1210,7 @@ private fun InlineRecurrenceRow(
             }
 
             // 12.8: Until-date input — shown when "Ends never" is unchecked
-            if (parsedRule.until != null) {
+            if (showUntilField || !parsedRule.until.isNullOrBlank()) {
                 var showUntilPicker by remember { mutableStateOf(false) }
                 Row(
                     modifier = Modifier

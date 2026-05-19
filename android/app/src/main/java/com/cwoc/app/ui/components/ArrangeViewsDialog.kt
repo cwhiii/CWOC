@@ -1,5 +1,6 @@
 package com.cwoc.app.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Task
@@ -43,9 +44,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.R
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 import org.json.JSONArray
 import org.json.JSONObject
@@ -70,6 +73,7 @@ private val ALL_TAB_ENTRIES = listOf(
     ViewTabEntry("Projects", "Projects", Icons.Default.Folder),
     ViewTabEntry("Tasks", "Tasks", Icons.Default.Task),
     ViewTabEntry("Notes", "Notes", Icons.Default.Notes),
+    ViewTabEntry("Notebook", "Notebook", Icons.Default.Notes),
     ViewTabEntry("Email", "Email", Icons.Default.Email),
     ViewTabEntry("Indicators", "Indicators", Icons.Default.ShowChart)
 )
@@ -320,12 +324,13 @@ private fun OmniFixedRow() {
             )
         }
 
-        // Omni icon
-        Icon(
-            imageVector = Icons.Default.Layers,
+        // Omni icon (CWOC logo)
+        Image(
+            painter = painterResource(id = R.drawable.cwoc_logo),
             contentDescription = null,
-            tint = CwocZoneHeaderBrown,
-            modifier = Modifier.padding(horizontal = 8.dp)
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .size(24.dp)
         )
 
         // Omni label

@@ -73,6 +73,11 @@ class RuleEditorViewModel @Inject constructor(
     private val _isHabit = MutableStateFlow(false)
     val isHabit: StateFlow<Boolean> = _isHabit.asStateFlow()
 
+    // ─── Condition Tree State ───────────────────────────────────────────────
+
+    private val _conditionTree = MutableStateFlow(ConditionNode.Group())
+    val conditionTree: StateFlow<ConditionNode.Group> = _conditionTree.asStateFlow()
+
     private var _ruleId: String? = null
     val isNewRule: Boolean get() = _ruleId == null || _ruleId == "new"
 
@@ -101,6 +106,7 @@ class RuleEditorViewModel @Inject constructor(
     fun setActionConfigJson(value: String) { _actionConfigJson.value = value }
     fun setEnabled(value: Boolean) { _enabled.value = value }
     fun setIsHabit(value: Boolean) { _isHabit.value = value }
+    fun setConditionTree(tree: ConditionNode.Group) { _conditionTree.value = tree }
 
     fun saveRule(onSuccess: () -> Unit) {
         viewModelScope.launch {
@@ -198,6 +204,9 @@ class RuleEditorViewModel @Inject constructor(
         if (rule.actionConfig != null) {
             _actionConfigJson.value = gson.toJson(rule.actionConfig)
         }
+
+        // Deserialize condition tree from API response
+        _conditionTree.value = deserializeTree(rule.conditions)
     }
 
     private fun buildRequestBody(): String {
@@ -223,11 +232,15 @@ class RuleEditorViewModel @Inject constructor(
             null
         }
 
+        // Serialize condition tree to API format (strips internal IDs)
+        val conditions = serializeTree(_conditionTree.value)
+
         val body = mutableMapOf<String, Any?>(
             "name" to _name.value,
             "description" to _description.value,
             "trigger_type" to _triggerType.value,
             "trigger_config" to triggerConfig,
+            "conditions" to conditions,
             "action_type" to _actionType.value,
             "action_config" to actionConfig,
             "enabled" to _enabled.value,

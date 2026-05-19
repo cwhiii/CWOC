@@ -29,13 +29,26 @@ data class RuleItem(
     @SerializedName("trigger_config") val triggerConfig: Map<String, Any>?,
     @SerializedName("action_type") val actionType: String?,
     @SerializedName("action_config") val actionConfig: Map<String, Any>?,
+    val conditions: Any? = null, // JSON condition tree (Map or String from API)
     val enabled: Boolean,
     val priority: Int?,
     @SerializedName("owner_id") val ownerId: String?,
     @SerializedName("created_datetime") val createdDatetime: String?,
     @SerializedName("modified_datetime") val modifiedDatetime: String?,
     @SerializedName("schedule_config") val scheduleConfig: Map<String, Any>?,
-    @SerializedName("is_habit") val isHabit: Boolean?
+    @SerializedName("is_habit") val isHabit: Boolean?,
+    @SerializedName("last_run_datetime") val lastRunDatetime: String? = null,
+    @SerializedName("run_count") val runCount: Int? = null
+)
+
+/**
+ * A pending confirmation from the rules engine awaiting user accept/dismiss.
+ */
+data class RuleConfirmation(
+    val id: String,
+    @SerializedName("rule_name") val ruleName: String,
+    @SerializedName("action_description") val actionDescription: String,
+    @SerializedName("created_datetime") val createdDatetime: String?
 )
 
 // ─── ViewModel ──────────────────────────────────────────────────────────────────
@@ -61,8 +74,12 @@ class RulesManagerViewModel @Inject constructor(
     private val _actionMessage = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
 
+    private val _confirmations = MutableStateFlow<List<RuleConfirmation>>(emptyList())
+    val confirmations: StateFlow<List<RuleConfirmation>> = _confirmations.asStateFlow()
+
     init {
         loadRules()
+        loadConfirmations()
     }
 
     // ─── Public API ─────────────────────────────────────────────────────────
@@ -98,6 +115,57 @@ class RulesManagerViewModel @Inject constructor(
 
     fun clearActionMessage() {
         _actionMessage.value = null
+    }
+
+    fun deleteRule(ruleId: String) {
+        viewModelScope.launch {
+            try {
+                val success = performDeleteRule(ruleId)
+                if (success) {
+                    _actionMessage.value = "Rule deleted"
+                    loadRules()
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to delete rule: ${e.message}"
+            }
+        }
+    }
+
+    fun loadConfirmations() {
+        viewModelScope.launch {
+            try {
+                fetchConfirmations()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun acceptConfirmation(confirmationId: String) {
+        viewModelScope.launch {
+            try {
+                val success = postConfirmationAction(confirmationId, "accept")
+                if (success) {
+                    _actionMessage.value = "Action applied"
+                    loadConfirmations()
+                    loadRules()
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to accept: ${e.message}"
+            }
+        }
+    }
+
+    fun dismissConfirmation(confirmationId: String) {
+        viewModelScope.launch {
+            try {
+                val success = postConfirmationAction(confirmationId, "dismiss")
+                if (success) {
+                    _actionMessage.value = "Action dismissed"
+                    loadConfirmations()
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to dismiss: ${e.message}"
+            }
+        }
     }
 
     // ─── Private Network Calls ──────────────────────────────────────────────
@@ -151,6 +219,48 @@ class RulesManagerViewModel @Inject constructor(
                 return@withContext false
             }
             true
+        }
+    }
+
+    private suspend fun performDeleteRule(ruleId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            val serverUrl = prefs.getString("server_url", null)
+            if (serverUrl.isNullOrBlank()) return@withContext false
+            val url = serverUrl.trimEnd('/') + "/api/rules/$ruleId"
+            val request = Request.Builder().url(url).delete().build()
+            val response = okHttpClient.newCall(request).execute()
+            response.isSuccessful
+        }
+    }
+
+    private suspend fun fetchConfirmations() {
+        withContext(Dispatchers.IO) {
+            try {
+                val serverUrl = prefs.getString("server_url", null) ?: return@withContext
+                val url = serverUrl.trimEnd('/') + "/api/rules/confirmations"
+                val request = Request.Builder().url(url).get().build()
+                val response = okHttpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (body != null) {
+                        val listType = object : TypeToken<List<RuleConfirmation>>() {}.type
+                        _confirmations.value = gson.fromJson(body, listType) ?: emptyList()
+                    }
+                }
+            } catch (_: Exception) {
+                _confirmations.value = emptyList()
+            }
+        }
+    }
+
+    private suspend fun postConfirmationAction(confirmationId: String, action: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            val serverUrl = prefs.getString("server_url", null) ?: return@withContext false
+            val url = serverUrl.trimEnd('/') + "/api/rules/confirmations/$confirmationId/$action"
+            val requestBody = "".toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url(url).post(requestBody).build()
+            val response = okHttpClient.newCall(request).execute()
+            response.isSuccessful
         }
     }
 }

@@ -17,7 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,7 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -43,9 +48,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.ui.components.CwocChitCardStyle
+
+/** System tags that should not be displayed in search result cards. */
+private val SEARCH_SYSTEM_TAGS = setOf(
+    "Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"
+)
 
 /**
  * Search screen with auto-focused search field in the TopAppBar,
@@ -112,18 +123,45 @@ fun SearchScreen(
     ) { paddingValues ->
         when {
             query.isBlank() -> {
-                // Initial state — no query entered yet
-                Box(
+                // Initial state — show search hints
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
+                        .padding(paddingValues)
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Search by title, notes, tags, or people",
+                        text = "Search by title, notes, tags, people, location, or email",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Search operators hint
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Search Tips",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6B4E31)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Operators: && (AND) · || (OR) · ! (NOT)\n" +
+                                    "#tag — filter by tag\n" +
+                                    "field::value — search specific field\n\n" +
+                                    "Fields: title, note, location, status, priority,\n" +
+                                    "people, checklist, subject, from, to, cc, bcc,\n" +
+                                    "body, due, start, end, assigned",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4A3520),
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
                 }
             }
             results.isEmpty() -> {
@@ -142,22 +180,95 @@ fun SearchScreen(
                 }
             }
             else -> {
-                // Display results
-                LazyColumn(
+                // Display results with filter row
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
-                    items(results, key = { it.chitId }) { result ->
-                        SearchResultCard(
-                            result = result,
-                            onClick = { onNavigateToEditor(result.chitId) }
-                        )
+                    // Filter chips row
+                    val statusFilter by viewModel.statusFilter.collectAsState()
+                    val priorityFilter by viewModel.priorityFilter.collectAsState()
+                    val emailFilter by viewModel.emailFilter.collectAsState()
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Status filter chip
+                        var showStatusMenu by remember { mutableStateOf(false) }
+                        Box {
+                            FilterChip(
+                                selected = statusFilter.isNotBlank(),
+                                onClick = { showStatusMenu = true },
+                                label = { Text(if (statusFilter.isBlank()) "Status" else statusFilter, fontSize = 12.sp) }
+                            )
+                            DropdownMenu(expanded = showStatusMenu, onDismissRequest = { showStatusMenu = false }) {
+                                DropdownMenuItem(text = { Text("Any") }, onClick = { viewModel.setStatusFilter(""); showStatusMenu = false })
+                                listOf("ToDo", "In Progress", "Blocked", "Complete").forEach { s ->
+                                    DropdownMenuItem(text = { Text(s) }, onClick = { viewModel.setStatusFilter(s); showStatusMenu = false })
+                                }
+                            }
+                        }
+
+                        // Priority filter chip
+                        var showPriorityMenu by remember { mutableStateOf(false) }
+                        Box {
+                            FilterChip(
+                                selected = priorityFilter.isNotBlank(),
+                                onClick = { showPriorityMenu = true },
+                                label = { Text(if (priorityFilter.isBlank()) "Priority" else priorityFilter, fontSize = 12.sp) }
+                            )
+                            DropdownMenu(expanded = showPriorityMenu, onDismissRequest = { showPriorityMenu = false }) {
+                                DropdownMenuItem(text = { Text("Any") }, onClick = { viewModel.setPriorityFilter(""); showPriorityMenu = false })
+                                listOf("Critical", "High", "Medium", "Low").forEach { p ->
+                                    DropdownMenuItem(text = { Text(p) }, onClick = { viewModel.setPriorityFilter(p); showPriorityMenu = false })
+                                }
+                            }
+                        }
+
+                        // Email filter chip
+                        var showEmailMenu by remember { mutableStateOf(false) }
+                        Box {
+                            FilterChip(
+                                selected = emailFilter != "no_email",
+                                onClick = { showEmailMenu = true },
+                                label = { Text(when (emailFilter) { "all" -> "All"; "only_email" -> "Emails Only"; else -> "No Email" }, fontSize = 12.sp) }
+                            )
+                            DropdownMenu(expanded = showEmailMenu, onDismissRequest = { showEmailMenu = false }) {
+                                DropdownMenuItem(text = { Text("Exclude Emails") }, onClick = { viewModel.setEmailFilter("no_email"); showEmailMenu = false })
+                                DropdownMenuItem(text = { Text("All") }, onClick = { viewModel.setEmailFilter("all"); showEmailMenu = false })
+                                DropdownMenuItem(text = { Text("Only Emails") }, onClick = { viewModel.setEmailFilter("only_email"); showEmailMenu = false })
+                            }
+                        }
                     }
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
+
+                    // Results count
+                    Text(
+                        text = "${results.size} result${if (results.size != 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+
+                    // Results list
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item { Spacer(modifier = Modifier.height(4.dp)) }
+                        items(results, key = { it.chitId }) { result ->
+                            SearchResultCard(
+                                result = result,
+                                onClick = { onNavigateToEditor(result.chitId) }
+                            )
+                        }
+                        item { Spacer(modifier = Modifier.height(8.dp)) }
+                    }
                 }
             }
         }
@@ -235,7 +346,11 @@ private fun SearchResultCard(
             }
 
             // Status and tags row
-            if (chit.status != null || !chit.tags.isNullOrEmpty()) {
+            val userTags = chit.tags?.filter { tag ->
+                tag !in SEARCH_SYSTEM_TAGS &&
+                    !tag.startsWith("CWOC_System/", ignoreCase = true)
+            }
+            if (chit.status != null || !userTags.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -249,9 +364,9 @@ private fun SearchResultCard(
                             color = statusColor(chit.status)
                         )
                     }
-                    if (!chit.tags.isNullOrEmpty()) {
+                    if (!userTags.isNullOrEmpty()) {
                         Text(
-                            text = chit.tags.joinToString(", ") { "#$it" },
+                            text = userTags.joinToString(", ") { "#$it" },
                             style = MaterialTheme.typography.labelSmall,
                             color = cardTextColor.copy(alpha = 0.7f),
                             maxLines = 1,

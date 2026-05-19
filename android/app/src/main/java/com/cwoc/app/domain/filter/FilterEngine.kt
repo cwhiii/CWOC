@@ -15,7 +15,14 @@ object FilterEngine {
         chits: List<ChitEntity>,
         filters: FilterState
     ): List<ChitEntity> {
-        return applyFilters(chits, filters, emptyMap())
+        // Auto-build project child IDs from the chit list for project filter support
+        val projectChildIds = if (filters.projectFilter != null) {
+            chits.filter { it.isProjectMaster }
+                .associate { it.id to (it.childChits?.toSet() ?: emptySet()) }
+        } else {
+            emptyMap()
+        }
+        return applyFilters(chits, filters, projectChildIds)
     }
 
     /**
@@ -40,6 +47,9 @@ object FilterEngine {
 
     /**
      * Check project filter separately since it needs external context.
+     * Includes the project master itself in results for specific project and __any__ filters.
+     * When no project context is available (empty map), the filter is skipped to avoid
+     * incorrectly hiding all chits in views that don't load project masters.
      */
     private fun passesProjectFilter(
         chit: ChitEntity,
@@ -48,12 +58,14 @@ object FilterEngine {
         projectChildIds: Map<String, Set<String>>
     ): Boolean {
         if (filters.projectFilter == null) return true
+        // If no project context is available, skip filtering to avoid hiding everything
+        if (projectChildIds.isEmpty() && allProjectChildIds.isEmpty()) return true
         return when (filters.projectFilter) {
-            "__any__" -> chit.id in allProjectChildIds
-            "__none__" -> chit.id !in allProjectChildIds
+            "__any__" -> chit.id in allProjectChildIds || chit.isProjectMaster
+            "__none__" -> chit.id !in allProjectChildIds && !chit.isProjectMaster
             else -> {
                 val children = projectChildIds[filters.projectFilter] ?: emptySet()
-                chit.id in children
+                chit.id == filters.projectFilter || chit.id in children
             }
         }
     }

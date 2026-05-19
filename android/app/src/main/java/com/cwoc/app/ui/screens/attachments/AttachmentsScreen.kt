@@ -169,7 +169,11 @@ fun AttachmentsScreen(
                 typeFilter = typeFilter,
                 onTypeFilterChange = { viewModel.setTypeFilter(it) },
                 sortOrder = sortOrder,
-                onSortChange = { viewModel.setSortOrder(it) }
+                onSortChange = { viewModel.setSortOrder(it) },
+                sizeMinMb = viewModel.sizeMinMb.collectAsState().value,
+                sizeMaxMb = viewModel.sizeMaxMb.collectAsState().value,
+                onSizeMinChange = { viewModel.setSizeMin(it) },
+                onSizeMaxChange = { viewModel.setSizeMax(it) }
             )
 
             when {
@@ -262,7 +266,11 @@ private fun FilterBar(
     typeFilter: AttachmentTypeFilter,
     onTypeFilterChange: (AttachmentTypeFilter) -> Unit,
     sortOrder: AttachmentSort,
-    onSortChange: (AttachmentSort) -> Unit
+    onSortChange: (AttachmentSort) -> Unit,
+    sizeMinMb: Float?,
+    sizeMaxMb: Float?,
+    onSizeMinChange: (Float?) -> Unit,
+    onSizeMaxChange: (Float?) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -350,6 +358,37 @@ private fun FilterBar(
                     }
                 }
             }
+        }
+
+        // Size range filter (min/max MB)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Size:", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 4.dp))
+            OutlinedTextField(
+                value = sizeMinMb?.toString() ?: "",
+                onValueChange = { text ->
+                    onSizeMinChange(text.toFloatOrNull())
+                },
+                placeholder = { Text("Min MB") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                textStyle = MaterialTheme.typography.bodySmall
+            )
+            Text("—", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(
+                value = sizeMaxMb?.toString() ?: "",
+                onValueChange = { text ->
+                    onSizeMaxChange(text.toFloatOrNull())
+                },
+                placeholder = { Text("Max MB") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                textStyle = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

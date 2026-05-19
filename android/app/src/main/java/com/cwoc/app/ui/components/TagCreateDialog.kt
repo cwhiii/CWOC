@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,6 +40,17 @@ import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.tags.TagNode
 
 /**
+ * Data class for passing existing tag data to the edit dialog.
+ */
+data class TagEditData(
+    val name: String,
+    val color: String? = null,
+    val fontColor: String? = null,
+    val favorite: Boolean = false,
+    val parentPath: String? = null
+)
+
+/**
  * Color palette for tag creation — matches the ColorZone default palette.
  */
 private val TAG_COLOR_PALETTE = listOf(
@@ -58,29 +70,38 @@ private val TAG_COLOR_PALETTE = listOf(
 )
 
 /**
- * Dialog for creating a new tag with name, color, and optional parent tag.
+ * Dialog for creating or editing a tag with name, color, font color, favorite, and optional parent tag.
+ * Matches the web's cwocTagModal behavior.
  *
  * Accessible from:
  * - Editor Tags zone → "Create Tag" button at bottom of tag picker sheet
  * - Settings Collections tab → Tag Editor
- *
- * On save: adds to shared_tags in settings and syncs.
+ * - Long-press on a tag chip → Edit mode
  *
  * @param parentTags List of available parent tag names for the dropdown
- * @param onConfirm Callback with (name, color, parentPath) when tag is created
+ * @param editingTag If non-null, the tag being edited (enables edit mode with rename/delete)
+ * @param onConfirm Callback with (name, color, fontColor, parentPath, favorite) when tag is saved
+ * @param onDelete Callback when tag is deleted (edit mode only)
  * @param onDismiss Callback when dialog is dismissed
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TagCreateDialog(
     parentTags: List<TagNode> = emptyList(),
-    onConfirm: (name: String, color: String?, parentPath: String?) -> Unit,
+    editingTag: TagEditData? = null,
+    onConfirm: (name: String, color: String?, fontColor: String?, parentPath: String?, favorite: Boolean) -> Unit = { _, _, _, _, _ -> },
+    onDelete: ((String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var tagName by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf<String?>(null) }
-    var selectedParent by remember { mutableStateOf<String?>(null) }
+    var tagName by remember { mutableStateOf(editingTag?.name ?: "") }
+    var selectedColor by remember { mutableStateOf<String?>(editingTag?.color) }
+    var selectedFontColor by remember { mutableStateOf<String?>(editingTag?.fontColor ?: "#5c3317") }
+    var isFavorite by remember { mutableStateOf(editingTag?.favorite ?: false) }
+    var selectedParent by remember { mutableStateOf<String?>(editingTag?.parentPath) }
     var parentExpanded by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    val isEditMode = editingTag != null
 
     // Flatten parent tags for dropdown
     val flatParentTags = remember(parentTags) {
@@ -96,27 +117,62 @@ fun TagCreateDialog(
         flat
     }
 
+    // Delete confirmation
+    if (showDeleteConfirm && editingTag != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Tag") },
+            text = { Text("Delete \"${editingTag.name}\"? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete?.invoke(editingTag.name)
+                }) { Text("Delete", color = androidx.compose.ui.graphics.Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
+        return
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Tag") },
+        title = { Text(if (isEditMode) "Edit Tag" else "Create Tag") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Name field
-                OutlinedTextField(
-                    value = tagName,
-                    onValueChange = { tagName = it },
-                    label = { Text("Tag Name") },
-                    placeholder = { Text("Enter tag name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Favorite toggle + Name field row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Favorite star toggle
+                    Text(
+                        text = if (isFavorite) "★" else "☆",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (isFavorite) androidx.compose.ui.graphics.Color(0xFFD4AF37) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clickable { isFavorite = !isFavorite }
+                            .padding(end = 8.dp)
+                    )
 
-                // Color picker (swatches)
+                    // Name field
+                    OutlinedTextField(
+                        value = tagName,
+                        onValueChange = { tagName = it },
+                        label = { Text("Tag Name") },
+                        placeholder = { Text("Enter tag name") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Background Color picker (swatches)
                 Text(
-                    text = "Color",
+                    text = "Background Color",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -171,6 +227,22 @@ fun TagCreateDialog(
                     }
                 }
 
+                // Live preview chip
+                val previewBg = selectedColor?.let { parseTagColorHex(it) } ?: MaterialTheme.colorScheme.surfaceVariant
+                val previewFg = selectedFontColor?.let { parseTagColorHex(it) } ?: Color(0xFF5C3317)
+                Box(
+                    modifier = Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                        .background(previewBg)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = tagName.ifBlank { "Preview" },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = previewFg
+                    )
+                }
+
                 // Optional parent tag dropdown
                 if (flatParentTags.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -219,11 +291,21 @@ fun TagCreateDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { onConfirm(tagName.trim(), selectedColor, selectedParent) },
-                enabled = tagName.isNotBlank()
-            ) {
-                Text("Create")
+            androidx.compose.foundation.layout.Column {
+                TextButton(
+                    onClick = { onConfirm(tagName.trim(), selectedColor, selectedFontColor, selectedParent, isFavorite) },
+                    enabled = tagName.isNotBlank()
+                ) {
+                    Text(if (isEditMode) "Save" else "Create")
+                }
+                // Delete button (edit mode only)
+                if (isEditMode && onDelete != null) {
+                    TextButton(
+                        onClick = { showDeleteConfirm = true }
+                    ) {
+                        Text("🗑️ Delete", color = androidx.compose.ui.graphics.Color.Red)
+                    }
+                }
             }
         },
         dismissButton = {

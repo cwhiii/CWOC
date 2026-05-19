@@ -25,11 +25,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -39,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.cwoc.app.data.remote.BundleDto
 import kotlin.math.roundToInt
 
@@ -177,6 +181,7 @@ private fun BundleTabsRow(
     var dropTargetIndex by remember { mutableIntStateOf(-1) }
     val tabPositions = remember { mutableMapOf<Int, Float>() }
     val tabWidths = remember { mutableMapOf<Int, Float>() }
+    var isDragging by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -224,7 +229,25 @@ private fun BundleTabsRow(
                     }
                     .then(
                         if (draggedIndex == index) {
-                            Modifier.offset { IntOffset(dragOffsetX.roundToInt(), 0) }
+                            // Dragged tab: offset, elevated, scaled up, on top
+                            Modifier
+                                .zIndex(10f)
+                                .offset { IntOffset(dragOffsetX.roundToInt(), 0) }
+                                .scale(1.08f)
+                                .shadow(8.dp, RoundedCornerShape(16.dp))
+                        } else if (isDragging && draggedIndex >= 0) {
+                            // Non-dragged tabs: shift to make room for the drop target
+                            val shiftPx = if (dropTargetIndex in 0 until bundles.size) {
+                                val draggedWidth = tabWidths[draggedIndex] ?: 0f
+                                when {
+                                    // Tab needs to shift right (dragged is moving left past it)
+                                    index >= dropTargetIndex && index < draggedIndex -> draggedWidth * 0.3f
+                                    // Tab needs to shift left (dragged is moving right past it)
+                                    index <= dropTargetIndex && index > draggedIndex -> -(draggedWidth * 0.3f)
+                                    else -> 0f
+                                }
+                            } else 0f
+                            Modifier.offset { IntOffset(shiftPx.roundToInt(), 0) }
                         } else {
                             Modifier
                         }
@@ -235,6 +258,7 @@ private fun BundleTabsRow(
                             onDragStart = {
                                 draggedIndex = index
                                 dragOffsetX = 0f
+                                isDragging = true
                                 onStartReordering()
                             },
                             onDrag = { change, dragAmount ->
@@ -259,12 +283,14 @@ private fun BundleTabsRow(
                                 draggedIndex = -1
                                 dragOffsetX = 0f
                                 dropTargetIndex = -1
+                                isDragging = false
                                 onStopReordering()
                             },
                             onDragCancel = {
                                 draggedIndex = -1
                                 dragOffsetX = 0f
                                 dropTargetIndex = -1
+                                isDragging = false
                                 onStopReordering()
                             }
                         )

@@ -2,6 +2,7 @@ package com.cwoc.app.data.repository
 
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
@@ -25,7 +26,8 @@ class ChitRepository @Inject constructor(
     private val chitDao: ChitDao,
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: Lazy<SyncPushEngine>,
-    private val connectivityMonitor: ConnectivityMonitor
+    private val connectivityMonitor: ConnectivityMonitor,
+    private val apiService: Lazy<CwocApiService>
 ) {
 
     private val pushScope = CoroutineScope(Dispatchers.IO)
@@ -45,6 +47,10 @@ class ChitRepository @Inject constructor(
     /** Calendar chits for a specific day range. */
     fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> =
         chitDao.getChitsForDay(dayStart, dayEnd)
+
+    /** All recurring chits (for recurrence expansion). */
+    fun getRecurringChits(): Flow<List<ChitEntity>> =
+        chitDao.getRecurringChits()
 
     /** All deleted chits (for trash screen). */
     fun getDeletedChits(): Flow<List<ChitEntity>> = chitDao.getDeletedChits()
@@ -148,6 +154,16 @@ class ChitRepository @Inject constructor(
         triggerPushIfOnline(chitId)
     }
 
+    /** Update RSVP status for a shared chit. Sends directly to server. */
+    suspend fun updateRsvp(chitId: String, rsvpStatus: String): Boolean {
+        return try {
+            val response = apiService.get().patchRsvp(chitId, mapOf("rsvp_status" to rsvpStatus))
+            response.isSuccessful
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** Update a chit's title and note content. Marks dirty, triggers sync push if online. */
     suspend fun updateTitleAndNote(chitId: String, title: String, note: String) {
         val entity = chitDao.getById(chitId) ?: return
@@ -189,6 +205,35 @@ class ChitRepository @Inject constructor(
 
         chitDao.upsert(updated)
         dirtyTracker.markDirty(chitId, dirtyFields)
+        triggerPushIfOnline(chitId)
+    }
+
+    /** Increment a habit's success count. Marks dirty, triggers sync push. */
+    suspend fun incrementHabitSuccess(chitId: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        val currentSuccess = entity.habitSuccess ?: 0
+        val todayStr = java.time.LocalDate.now().toString()
+        chitDao.upsert(entity.copy(
+            habitSuccess = currentSuccess + 1,
+            habitLastActionDate = todayStr,
+            modifiedDatetime = now
+        ))
+        dirtyTracker.markDirty(chitId, setOf("habit_success", "habit_last_action_date"))
+        triggerPushIfOnline(chitId)
+    }
+
+    /** Decrement a habit's success count. Marks dirty, triggers sync push. */
+    suspend fun decrementHabitSuccess(chitId: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val currentSuccess = entity.habitSuccess ?: 0
+        if (currentSuccess <= 0) return
+        val now = Instant.now().toString()
+        chitDao.upsert(entity.copy(
+            habitSuccess = currentSuccess - 1,
+            modifiedDatetime = now
+        ))
+        dirtyTracker.markDirty(chitId, setOf("habit_success"))
         triggerPushIfOnline(chitId)
     }
 

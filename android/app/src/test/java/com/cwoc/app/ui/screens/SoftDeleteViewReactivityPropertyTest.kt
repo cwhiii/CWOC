@@ -403,6 +403,9 @@ class ReactiveChitDao : ChitDao {
     override fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> =
         storeState.map { emptyList() }
 
+    override fun getRecurringChits(): Flow<List<ChitEntity>> =
+        storeState.map { emptyList() }
+
     override suspend fun upsertAll(chits: List<ChitEntity>) {
         storeState.value = storeState.value + chits.associateBy { it.id }
     }

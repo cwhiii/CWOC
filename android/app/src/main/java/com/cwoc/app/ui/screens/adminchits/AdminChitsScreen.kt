@@ -73,6 +73,11 @@ private val StatusInProgress = Color(0xFF1976D2)
 private val StatusBlocked = Color(0xFFC62828)
 private val StatusComplete = Color(0xFF2E7D32)
 
+/** System tags that should not be displayed as tag chips on admin chit cards. */
+private val ADMIN_SYSTEM_TAGS = setOf(
+    "Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"
+)
+
 // ─── Main Screen ────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,8 +135,10 @@ fun AdminChitsScreen(
                 BulkActionBar(
                     owners = uiState.owners,
                     onDelete = { viewModel.bulkDelete() },
+                    onUndelete = { viewModel.bulkUndelete() },
                     onChangeOwner = { viewModel.bulkChangeOwner(it) },
-                    onChangeStatus = { viewModel.bulkChangeStatus(it) }
+                    onChangeStatus = { viewModel.bulkChangeStatus(it) },
+                    onChangePriority = { viewModel.bulkChangePriority(it) }
                 )
             }
         },
@@ -145,9 +152,13 @@ fun AdminChitsScreen(
             // Filter bar
             FilterBar(
                 ownerFilter = uiState.ownerFilter,
+                statusFilter = uiState.statusFilter,
+                showDeleted = uiState.showDeleted,
                 searchQuery = uiState.searchQuery,
                 owners = uiState.owners,
                 onOwnerFilterChange = { viewModel.setOwnerFilter(it) },
+                onStatusFilterChange = { viewModel.setStatusFilter(it) },
+                onShowDeletedChange = { viewModel.setShowDeleted(it) },
                 onSearchQueryChange = { viewModel.setSearchQuery(it) }
             )
 
@@ -207,12 +218,17 @@ fun AdminChitsScreen(
 @Composable
 private fun FilterBar(
     ownerFilter: String,
+    statusFilter: String,
+    showDeleted: Boolean,
     searchQuery: String,
     owners: List<String>,
     onOwnerFilterChange: (String) -> Unit,
+    onStatusFilterChange: (String) -> Unit,
+    onShowDeletedChange: (Boolean) -> Unit,
     onSearchQueryChange: (String) -> Unit
 ) {
     var ownerDropdownExpanded by remember { mutableStateOf(false) }
+    var statusDropdownExpanded by remember { mutableStateOf(false) }
     var localSearch by remember { mutableStateOf(searchQuery) }
 
     Column(
@@ -280,6 +296,50 @@ private fun FilterBar(
                         }
                     )
                 }
+            }
+        }
+
+        // Status filter and Show Deleted row
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status filter dropdown
+            Box {
+                OutlinedButton(
+                    onClick = { statusDropdownExpanded = true }
+                ) {
+                    Text(
+                        text = if (statusFilter.isBlank()) "All Statuses" else statusFilter,
+                        color = ParchmentText
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = statusDropdownExpanded,
+                    onDismissRequest = { statusDropdownExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("All Statuses") },
+                        onClick = { onStatusFilterChange(""); statusDropdownExpanded = false }
+                    )
+                    listOf("ToDo", "In Progress", "Blocked", "Complete").forEach { status ->
+                        DropdownMenuItem(
+                            text = { Text(status) },
+                            onClick = { onStatusFilterChange(status); statusDropdownExpanded = false }
+                        )
+                    }
+                }
+            }
+
+            // Show Deleted toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = showDeleted,
+                    onCheckedChange = onShowDeletedChange,
+                    colors = CheckboxDefaults.colors(checkedColor = ParchmentBrown)
+                )
+                Text("Deleted", style = MaterialTheme.typography.bodySmall, color = ParchmentText)
             }
         }
     }
@@ -360,6 +420,31 @@ private fun AdminChitCard(
                     )
                 }
 
+                // Assignee
+                if (!chit.assignedToUsername.isNullOrBlank()) {
+                    Text(
+                        text = "Assignee: ${chit.assignedToUsername}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Deleted badge
+                if (chit.deleted) {
+                    Surface(
+                        shape = RoundedCornerShape(3.dp),
+                        color = Color(0xFFF8D7DA)
+                    ) {
+                        Text(
+                            text = "🗑️ Deleted",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFB22222),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 // Created date
                 if (!chit.createdDatetime.isNullOrBlank()) {
                     Text(
@@ -371,13 +456,19 @@ private fun AdminChitCard(
 
                 // Tags
                 if (!chit.tags.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        chit.tags.forEach { tag ->
-                            TagChip(tag = tag)
+                    val userTags = chit.tags.filter { tag ->
+                        tag !in ADMIN_SYSTEM_TAGS &&
+                            !tag.startsWith("CWOC_System/", ignoreCase = true)
+                    }
+                    if (userTags.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            userTags.forEach { tag ->
+                                TagChip(tag = tag)
+                            }
                         }
                     }
                 }
@@ -435,12 +526,15 @@ private fun TagChip(tag: String) {
 private fun BulkActionBar(
     owners: List<String>,
     onDelete: () -> Unit,
+    onUndelete: () -> Unit,
     onChangeOwner: (String) -> Unit,
-    onChangeStatus: (String) -> Unit
+    onChangeStatus: (String) -> Unit,
+    onChangePriority: (String) -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showOwnerDropdown by remember { mutableStateOf(false) }
     var showStatusDropdown by remember { mutableStateOf(false) }
+    var showPriorityDropdown by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -504,6 +598,32 @@ private fun BulkActionBar(
                         )
                     }
                 }
+            }
+
+            // Change Priority
+            Box {
+                OutlinedButton(onClick = { showPriorityDropdown = true }) {
+                    Text("Priority", color = ParchmentText)
+                }
+                DropdownMenu(
+                    expanded = showPriorityDropdown,
+                    onDismissRequest = { showPriorityDropdown = false }
+                ) {
+                    listOf("Low", "Medium", "High", "Critical").forEach { priority ->
+                        DropdownMenuItem(
+                            text = { Text(priority) },
+                            onClick = {
+                                onChangePriority(priority)
+                                showPriorityDropdown = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Undelete button
+            OutlinedButton(onClick = { onUndelete() }) {
+                Text("Restore", color = Color(0xFF2E7D32))
             }
         }
     }

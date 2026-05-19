@@ -341,6 +341,7 @@ class FakeChitDao : ChitDao {
     override fun getNoteChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override fun getCalendarChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> = flowOf(emptyList())
+    override fun getRecurringChits(): Flow<List<ChitEntity>> = flowOf(emptyList())
     override suspend fun getCount(): Int = store.size
     override suspend fun getFirstFive(): List<ChitEntity> = store.values.take(5)
     override suspend fun getDirtyChits(): List<ChitEntity> = store.values.filter { it.isDirty }

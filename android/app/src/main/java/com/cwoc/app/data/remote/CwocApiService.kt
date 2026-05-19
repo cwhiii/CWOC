@@ -2,6 +2,7 @@ package com.cwoc.app.data.remote
 
 import com.cwoc.app.data.remote.dto.ArchiveOriginalRequest
 import com.cwoc.app.data.remote.dto.CreateBundleRequest
+import com.cwoc.app.data.remote.dto.RuleHabitDto
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
 import com.cwoc.app.data.remote.dto.DeviceTokenResponse
 import com.cwoc.app.data.remote.dto.MarkReadRequest
@@ -18,7 +19,6 @@ import com.cwoc.app.data.remote.dto.ClientLogResponse
 import com.cwoc.app.data.remote.dto.AttachmentUploadResponse
 import com.cwoc.app.data.remote.dto.UpdateBundleRequest
 import okhttp3.MultipartBody
-import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -26,6 +26,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -175,6 +176,16 @@ interface CwocApiService {
     suspend fun patchChecklist(
         @Path("id") chitId: String,
         @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
+
+    /**
+     * Update RSVP status for a shared chit.
+     * Used by card-level accept/decline buttons (matching web's PATCH /api/chits/{id}/rsvp).
+     */
+    @retrofit2.http.PATCH("/api/chits/{id}/rsvp")
+    suspend fun patchRsvp(
+        @Path("id") chitId: String,
+        @Body body: Map<String, String>
     ): Response<Unit>
 
     /**
@@ -611,6 +622,17 @@ interface CwocApiService {
         @Body request: ReorderBundlesRequest
     ): Response<Unit>
 
+    /**
+     * Add a classification rule to a bundle for auto-classifying future emails.
+     * POST /api/bundles/{bundleId}/add-rule
+     * Body: { "match_type": "sender"|"subject", "match_value": "..." }
+     */
+    @POST("/api/bundles/{bundleId}/add-rule")
+    suspend fun addRuleToBundle(
+        @Path("bundleId") bundleId: String,
+        @Body body: Map<String, String>
+    ): Response<Map<String, Any>>
+
     // ─── Email operation endpoints ──────────────────────────────────────────
 
     /**
@@ -665,7 +687,86 @@ interface CwocApiService {
      */
     @POST("/api/settings/reset-sort-orders")
     suspend fun resetSortOrders(): Response<ResetSortOrdersResponse>
+
+    /**
+     * Get all manual sort orders for all views.
+     */
+    @GET("/api/sort-orders")
+    suspend fun getSortOrders(): Response<Map<String, List<String>>>
+
+    /**
+     * Save manual sort order for a specific view tab.
+     */
+    @PUT("/api/sort-orders/{tab}")
+    suspend fun saveSortOrder(
+        @Path("tab") tab: String,
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<Unit>
+
+    /**
+     * Persist reordered chit IDs for a specific view tab (typed version).
+     * Used by drag-to-reorder in Notes, Checklists, Projects, and Email Bundles.
+     */
+    @PUT("/api/sort-orders/{tab}")
+    suspend fun reorderChits(
+        @Path("tab") tab: String,
+        @Body request: com.cwoc.app.data.remote.dto.ReorderRequest
+    ): Response<Unit>
+
+    /**
+     * Get all sort preferences (field + direction per tab).
+     */
+    @GET("/api/sort-preferences")
+    suspend fun getSortPreferences(): Response<Map<String, Map<String, String>>>
+
+    /**
+     * Save sort preference for a specific view tab.
+     */
+    @PUT("/api/sort-preferences/{tab}")
+    suspend fun saveSortPreference(
+        @Path("tab") tab: String,
+        @Body body: Map<String, String>
+    ): Response<Unit>
+
+    /**
+     * Fetch custom objects assigned to a specific zone.
+     * Used by the Health Indicators zone to get indicator names, units, and value types.
+     */
+    @GET("/api/custom-objects/zone/{zoneId}")
+    suspend fun getCustomObjectsForZone(
+        @Path("zoneId") zoneId: String
+    ): Response<List<IndicatorObject>>
+
+    // ─── Rules endpoints ────────────────────────────────────────────────────
+
+    /**
+     * Fetch habit rules from the rules engine.
+     * When habit=true, returns only rules with habit_mode enabled,
+     * each including a computed habit_summary with streak/status info.
+     */
+    @GET("/api/rules")
+    suspend fun getHabitRules(
+        @Query("habit") habit: Boolean = true
+    ): Response<List<RuleHabitDto>>
 }
+
+/**
+ * A custom object assigned to the indicators_zone.
+ * Used by the Health Indicators zone to display human-readable names and units.
+ */
+data class IndicatorObject(
+    val id: String,
+    val name: String,
+    val value_type: String? = null, // "integer", "decimal", "boolean", "string"
+    val units: String? = null,
+    val metric_units: String? = null,
+    val range_min: Double? = null,
+    val range_max: Double? = null,
+    val zone_config: Map<String, Any?>? = null,
+    val conditional_display: Map<String, String>? = null,
+    val type: String? = null,
+    val sub_type: String? = null
+)
 
 /**
  * Response from GET /api/docs — the documentation index.

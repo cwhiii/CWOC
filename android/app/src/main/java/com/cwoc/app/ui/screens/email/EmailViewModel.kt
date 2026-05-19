@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.repository.ContactRepository
 import com.cwoc.app.data.repository.EmailRepository
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
@@ -119,11 +120,16 @@ class EmailViewModel @Inject constructor(
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
     private val emailRepository: EmailRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val contactRepository: ContactRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EmailUiState())
     val uiState: StateFlow<EmailUiState> = _uiState.asStateFlow()
+
+    /** Tag tree for the bulk tag picker modal. */
+    private val _tagTree = MutableStateFlow<List<com.cwoc.app.domain.tags.TagNode>>(emptyList())
+    val tagTree: StateFlow<List<com.cwoc.app.domain.tags.TagNode>> = _tagTree.asStateFlow()
 
     /** All email chits from the database (unfiltered). */
     private var allEmailChits: List<ChitEntity> = emptyList()
@@ -136,6 +142,10 @@ class EmailViewModel @Inject constructor(
 
     /** Undo countdown job. */
     private var undoCountdownJob: Job? = null
+
+    /** Cached sender email → image URL mappings for email card avatars. */
+    private val _senderImageUrls = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val senderImageUrls: StateFlow<Map<String, String?>> = _senderImageUrls.asStateFlow()
 
     init {
         // Observe all chits for email filtering and nested chit lookup
@@ -157,6 +167,9 @@ class EmailViewModel @Inject constructor(
                 val paginateEnabled = settings.paginateEmail == "true"
                 val groupByDate = settings.emailGroupBy != "none"
                 val accounts = parseAccountsFromSettings(settings.emailAccounts)
+
+                // Load tag tree for bulk tag picker
+                _tagTree.value = com.cwoc.app.domain.tags.TagTreeParser.parseTagTree(settings.tags)
 
                 _uiState.update {
                     it.copy(
@@ -479,6 +492,57 @@ class EmailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Adds an email to a bundle by updating its tags to include the bundle's tag
+     * and calling the add-rule API to create a matching rule for future emails.
+     *
+     * The bundle tag format is "CWOC_System/Bundle/{BundleName}".
+     * Existing bundle tags are stripped first (single-placement mode).
+     *
+     * Validates: Requirements 15.3, 15.4
+     */
+    fun addEmailToBundle(chitId: String, bundleId: String, bundleName: String) {
+        viewModelScope.launch {
+            val entity = chitDao.getById(chitId) ?: return@launch
+            val now = Instant.now().toString()
+
+            // Strip existing bundle tags and add the new one
+            val currentTags = entity.tags.orEmpty().toMutableList()
+            currentTags.removeAll { it.startsWith("CWOC_System/Bundle/") }
+            currentTags.add("CWOC_System/Bundle/$bundleName")
+
+            chitDao.upsert(entity.copy(tags = currentTags, modifiedDatetime = now))
+            dirtyTracker.markDirty(chitId, setOf("tags"))
+            triggerPushIfOnline(chitId)
+
+            // Also call the add-rule API so future emails from this sender go to the bundle
+            val senderEmail = entity.emailFrom?.let { extractSenderEmail(it) }
+            if (!senderEmail.isNullOrBlank()) {
+                try {
+                    emailRepository.addRuleToBundle(bundleId, "sender", senderEmail)
+                } catch (_: Exception) {
+                    // Rule creation is best-effort; the immediate tag assignment already worked
+                }
+            }
+
+            recomputeState()
+        }
+    }
+
+    /**
+     * Returns the current bundle ID for an email, if any.
+     * Looks at the email's tags for a "CWOC_System/Bundle/{name}" tag and matches
+     * it against the known bundles list.
+     */
+    fun getCurrentBundleId(chitId: String, bundles: List<com.cwoc.app.data.remote.BundleDto>): String? {
+        val entity = allEmailChits.find { it.id == chitId } ?: return null
+        val bundleTags = entity.tags.orEmpty().filter { it.startsWith("CWOC_System/Bundle/") }
+        if (bundleTags.isEmpty()) return null
+
+        val bundleName = bundleTags.first().removePrefix("CWOC_System/Bundle/")
+        return bundles.find { it.name == bundleName }?.id
+    }
+
     // ─── Bulk Actions ────────────────────────────────────────────────────────
 
     /** Bulk archive all selected emails. */
@@ -527,6 +591,24 @@ class EmailViewModel @Inject constructor(
             }
             exitMultiSelect()
             onResult(success, failed)
+        }
+    }
+
+    /** Bulk apply tags to all selected emails. */
+    fun bulkApplyTags(tags: List<String>) {
+        viewModelScope.launch {
+            val ids = _uiState.value.selectedIds.toList()
+            for (id in ids) {
+                try {
+                    val chit = chitDao.getById(id) ?: continue
+                    val existingTags = chit.tags ?: emptyList()
+                    val mergedTags = (existingTags + tags).distinct()
+                    val now = java.time.Instant.now().toString()
+                    chitDao.upsert(chit.copy(tags = mergedTags, modifiedDatetime = now, isDirty = true))
+                    chitRepository.markDirty(id, "tags")
+                } catch (_: Exception) {}
+            }
+            exitMultiSelect()
         }
     }
 
@@ -816,6 +898,30 @@ class EmailViewModel @Inject constructor(
                 isLoading = false
             )
         }
+
+        // Resolve sender image URLs for visible threads
+        resolveSenderImages(displayedThreads)
+    }
+
+    /**
+     * Resolves sender email addresses to contact image URLs for the visible threads.
+     * Uses ContactRepository's cached lookup to avoid repeated DB queries.
+     */
+    private fun resolveSenderImages(threads: List<EmailThread>) {
+        viewModelScope.launch {
+            val newMappings = mutableMapOf<String, String?>()
+            for (thread in threads) {
+                val emailFrom = thread.latestMessage.emailFrom ?: continue
+                val senderEmail = extractSenderEmail(emailFrom)
+                if (senderEmail.isNotBlank() && senderEmail !in _senderImageUrls.value) {
+                    val imageUrl = contactRepository.getImageUrlForEmail(senderEmail)
+                    newMappings[senderEmail] = imageUrl
+                }
+            }
+            if (newMappings.isNotEmpty()) {
+                _senderImageUrls.update { it + newMappings }
+            }
+        }
     }
 
     /**
@@ -1046,6 +1152,21 @@ class EmailViewModel @Inject constructor(
             viewModelScope.launch {
                 syncPushEngine.pushSingle(chitId)
             }
+        }
+    }
+
+    /**
+     * Extracts the email address from a "From" field.
+     * Handles formats like "John Doe <john@example.com>" → "john@example.com"
+     * or plain "john@example.com" → "john@example.com"
+     */
+    private fun extractSenderEmail(emailFrom: String): String {
+        val angleBracketStart = emailFrom.indexOf('<')
+        val angleBracketEnd = emailFrom.indexOf('>')
+        return if (angleBracketStart >= 0 && angleBracketEnd > angleBracketStart) {
+            emailFrom.substring(angleBracketStart + 1, angleBracketEnd).trim()
+        } else {
+            emailFrom.trim()
         }
     }
 

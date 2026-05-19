@@ -66,6 +66,83 @@ private val ACTION_TYPES = listOf(
     "create_chit", "update_chit", "send_notification", "webhook", "run_script"
 )
 
+// ─── Condition Field Options by Trigger Type ────────────────────────────────────
+
+private val CHIT_FIELDS = listOf(
+    FieldOption("title", "Title"),
+    FieldOption("note", "Note"),
+    FieldOption("status", "Status"),
+    FieldOption("priority", "Priority"),
+    FieldOption("severity", "Severity"),
+    FieldOption("location", "Location"),
+    FieldOption("color", "Color"),
+    FieldOption("tags", "Tags"),
+    FieldOption("people", "People"),
+    FieldOption("archived", "Archived"),
+    FieldOption("pinned", "Pinned"),
+    FieldOption("all_day", "All Day"),
+    FieldOption("habit", "Habit"),
+    FieldOption("created_datetime", "Created Date"),
+    FieldOption("modified_datetime", "Modified Date"),
+    FieldOption("start_datetime", "Start Date"),
+    FieldOption("due_datetime", "Due Date"),
+    FieldOption("point_in_time", "Point in Time"),
+    FieldOption("completed_datetime", "Completed Date")
+)
+
+private val EMAIL_FIELDS = listOf(
+    FieldOption("title", "Title / Subject"),
+    FieldOption("note", "Note / Body"),
+    FieldOption("email_from", "Email From"),
+    FieldOption("email_to", "Email To"),
+    FieldOption("email_cc", "Email CC"),
+    FieldOption("email_bcc", "Email BCC"),
+    FieldOption("email_account_id", "Email Account"),
+    FieldOption("email_subject", "Email Subject"),
+    FieldOption("email_body_text", "Email Body"),
+    FieldOption("email_folder", "Email Folder"),
+    FieldOption("email_read", "Email Read"),
+    FieldOption("email_date", "Email Date"),
+    FieldOption("status", "Status"),
+    FieldOption("priority", "Priority"),
+    FieldOption("tags", "Tags"),
+    FieldOption("people", "People"),
+    FieldOption("location", "Location"),
+    FieldOption("created_datetime", "Created Date"),
+    FieldOption("modified_datetime", "Modified Date"),
+    FieldOption("start_datetime", "Start Date"),
+    FieldOption("due_datetime", "Due Date"),
+    FieldOption("completed_datetime", "Completed Date")
+)
+
+private val CONTACT_FIELDS = listOf(
+    FieldOption("given_name", "First Name"),
+    FieldOption("surname", "Last Name"),
+    FieldOption("organization", "Organization"),
+    FieldOption("tags", "Tags"),
+    FieldOption("emails", "Emails"),
+    FieldOption("phones", "Phones"),
+    FieldOption("addresses", "Addresses")
+)
+
+private val WEATHER_FIELDS = listOf(
+    FieldOption("weather_code", "Weather Code (WMO)"),
+    FieldOption("weather_temperature_high", "Temperature High (°C)"),
+    FieldOption("weather_temperature_low", "Temperature Low (°C)"),
+    FieldOption("weather_precipitation", "Precipitation (mm)"),
+    FieldOption("weather_wind_speed", "Wind Speed (km/h)")
+)
+
+/** Returns the available condition fields based on the current trigger type. */
+private fun getFieldsForTrigger(triggerType: String, eventType: String): List<FieldOption> {
+    return when {
+        triggerType == "event" && eventType == "email_received" -> EMAIL_FIELDS
+        triggerType == "event" && (eventType == "contact_created" || eventType == "contact_updated") -> CONTACT_FIELDS
+        triggerType == "cron" -> CHIT_FIELDS + WEATHER_FIELDS
+        else -> CHIT_FIELDS
+    }
+}
+
 // ─── Main Screen ────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +166,7 @@ fun RuleEditorScreen(
     val actionConfigJson by viewModel.actionConfigJson.collectAsState()
     val enabled by viewModel.enabled.collectAsState()
     val isHabit by viewModel.isHabit.collectAsState()
+    val conditionTree by viewModel.conditionTree.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -221,6 +299,20 @@ fun RuleEditorScreen(
                     }
                     // "manual" — no config needed
                 }
+
+                // ─── Conditions Section ─────────────────────────────────────
+                Text(
+                    text = "Conditions",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = ParchmentText
+                )
+
+                ConditionTreeBuilder(
+                    root = conditionTree,
+                    onTreeChange = { updatedTree -> viewModel.setConditionTree(updatedTree) },
+                    availableFields = getFieldsForTrigger(triggerType, eventType)
+                )
 
                 // ─── Action Section ─────────────────────────────────────────
                 Text(

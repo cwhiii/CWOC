@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -33,8 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.R
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 
 
@@ -122,6 +125,7 @@ fun ViewsPanel(
                         ViewsPanelItem(
                             label = tab.label,
                             icon = tab.icon,
+                            drawableResId = if (tab == CCaptnTab.Omni) R.drawable.cwoc_logo else null,
                             isSelected = isSelected,
                             onClick = {
                                 onNavigate(tab.route)
@@ -157,7 +161,8 @@ fun ViewsPanel(
 @Composable
 private fun ViewsPanelItem(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
+    drawableResId: Int? = null,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
@@ -173,13 +178,21 @@ private fun ViewsPanelItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(20.dp),
-            tint = if (isSelected) CwocZoneHeaderBrown
-                   else Color(0xFF4A2C2A).copy(alpha = 0.7f)
-        )
+        if (drawableResId != null) {
+            Image(
+                painter = painterResource(id = drawableResId),
+                contentDescription = label,
+                modifier = Modifier.size(20.dp)
+            )
+        } else if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(20.dp),
+                tint = if (isSelected) CwocZoneHeaderBrown
+                       else Color(0xFF4A2C2A).copy(alpha = 0.7f)
+            )
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,

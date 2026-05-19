@@ -1,13 +1,15 @@
 package com.cwoc.app.data.remote.dto
 
+import com.google.gson.annotations.SerializedName
+
 /**
  * Response from the server after a successful attachment upload.
- * Contains the server-assigned URL for the uploaded file.
+ * Matches the JSON returned by POST /api/chits/{chit_id}/attachments.
  */
 data class AttachmentUploadResponse(
     val id: String,
-    val url: String,
     val filename: String,
-    val sizeBytes: Long,
+    val size: Long,
+    @SerializedName("mime_type")
     val mimeType: String?
 )

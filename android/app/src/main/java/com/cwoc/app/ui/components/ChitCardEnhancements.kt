@@ -13,23 +13,31 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.util.GeocodingUtil
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.time.LocalDate
@@ -47,9 +55,16 @@ import java.time.format.DateTimeFormatter
 
 // ─── B1: Tag Chips ──────────────────────────────────────────────────────────────
 
+/** System tags that are auto-assigned by the backend and should never display as chips. */
+private val SYSTEM_TAGS = setOf(
+    "Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"
+)
+
 /**
  * Renders tag chips for a chit card. Shows colored pills with tag names.
  * Tags are stored as a List<String> on ChitEntity.
+ * System tags (Calendar, Checklists, Alarms, Projects, Tasks, Notes) and
+ * internal CWOC_System/ prefixed tags are automatically filtered out.
  *
  * @param tags List of tag name strings from the chit
  * @param tagColorMap Optional map of tag name → hex color string from settings.
@@ -67,18 +82,28 @@ fun TagChipsRow(
 ) {
     if (tags.isNullOrEmpty()) return
 
+    // Filter out system tags and internal CWOC_System/ prefixed tags
+    val userTags = remember(tags) {
+        tags.filter { tag ->
+            tag !in SYSTEM_TAGS &&
+                !tag.startsWith("CWOC_System/", ignoreCase = true)
+        }
+    }
+
+    if (userTags.isEmpty()) return
+
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        val displayTags = if (tags.size > maxTags) tags.take(maxTags) else tags
+        val displayTags = if (userTags.size > maxTags) userTags.take(maxTags) else userTags
         displayTags.forEach { tag ->
             TagChip(tagName = tag, configuredColor = tagColorMap?.get(tag))
         }
-        if (tags.size > maxTags) {
+        if (userTags.size > maxTags) {
             Text(
-                text = "+${tags.size - maxTags}",
+                text = "+${userTags.size - maxTags}",
                 style = MaterialTheme.typography.labelSmall,
                 color = overflowTextColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 2.dp)
@@ -260,6 +285,9 @@ private fun countChecklistItems(items: List<Map<String, Any>>): Pair<Int, Int> {
 fun PeopleChipsRow(
     people: List<String>?,
     modifier: Modifier = Modifier,
+    contactImages: Map<String, String?> = emptyMap(),
+    serverUrl: String = "",
+    authToken: String = "",
     maxPeople: Int = 3,
     overflowTextColor: Color? = null
 ) {
@@ -272,7 +300,12 @@ fun PeopleChipsRow(
     ) {
         val displayPeople = if (people.size > maxPeople) people.take(maxPeople) else people
         displayPeople.forEach { person ->
-            PersonChip(name = person)
+            PersonChip(
+                name = person,
+                imageUrl = contactImages[person],
+                serverUrl = serverUrl,
+                authToken = authToken
+            )
         }
         if (people.size > maxPeople) {
             Text(
@@ -285,7 +318,12 @@ fun PeopleChipsRow(
 }
 
 @Composable
-private fun PersonChip(name: String) {
+private fun PersonChip(
+    name: String,
+    imageUrl: String? = null,
+    serverUrl: String = "",
+    authToken: String = ""
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -295,21 +333,14 @@ private fun PersonChip(name: String) {
             )
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
-        // Small avatar circle with initial
-        Box(
-            modifier = Modifier
-                .size(14.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = name.firstOrNull()?.uppercase() ?: "?",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontSize = 8.sp
-            )
-        }
+        // Profile image or initials circle
+        ContactAvatar(
+            imageUrl = imageUrl,
+            name = name,
+            size = 14.dp,
+            serverUrl = serverUrl,
+            authToken = authToken
+        )
         Spacer(modifier = Modifier.width(3.dp))
         Text(
             text = name,
@@ -427,34 +458,115 @@ fun Modifier.overdueBorder(chit: ChitEntity): Modifier {
 
 /**
  * Shows a location indicator on cards that have a location set.
- * Displays a map pin icon with the location text (truncated).
- * Full map thumbnail would require an image loading library (Coil/Glide);
- * this provides the location context without that dependency.
+ * When showMapThumbnail is true, displays an OSM tile image with a pin overlay
+ * (matching the web's _buildMapThumbnail behavior). Falls back to pin icon + text
+ * when geocoding hasn't resolved yet or thumbnails are disabled.
+ *
+ * @param location The location text string from the chit
+ * @param showMapThumbnail Whether to show the OSM tile thumbnail (from show_map_thumbnails setting)
+ * @param modifier Modifier for the composable
+ * @param textColor Optional text color override
  */
 @Composable
 fun LocationIndicator(
     location: String?,
     modifier: Modifier = Modifier,
+    showMapThumbnail: Boolean = false,
     textColor: Color? = null
 ) {
     if (location.isNullOrBlank()) return
 
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Text(
-            text = "📍",
-            style = MaterialTheme.typography.labelSmall
-        )
-        Text(
-            text = location,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    if (showMapThumbnail) {
+        // Async geocode and show map tile
+        var geoResult by remember { mutableStateOf<com.cwoc.app.ui.util.GeocodingUtil.GeoResult?>(null) }
+        var geocodeFailed by remember { mutableStateOf(false) }
+
+        LaunchedEffect(location) {
+            val result = GeocodingUtil.geocode(location)
+            if (result != null) {
+                geoResult = result
+            } else {
+                geocodeFailed = true
+            }
+        }
+
+        if (geoResult != null) {
+            // Show OSM tile thumbnail with pin overlay (matching web's _renderMapTile)
+            val tileUrl = remember(geoResult) {
+                val lat = geoResult!!.lat
+                val lon = geoResult!!.lon
+                val zoom = 14
+                val tileX = ((lon + 180.0) / 360.0 * Math.pow(2.0, zoom.toDouble())).toInt()
+                val latRad = Math.toRadians(lat)
+                val tileY = ((1.0 - Math.log(Math.tan(latRad) + 1.0 / Math.cos(latRad)) / Math.PI) / 2.0 * Math.pow(2.0, zoom.toDouble())).toInt()
+                "https://tile.openstreetmap.org/$zoom/$tileX/$tileY.png"
+            }
+
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(tileUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Map of $location",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                // Pin overlay
+                Text(
+                    text = "📍",
+                    fontSize = 16.sp,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        } else {
+            // Fallback: pin icon + text while geocoding or if failed
+            Row(
+                modifier = modifier,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = "📍",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = location,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = textColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    } else {
+        // Simple pin icon + text (no thumbnail)
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = "📍",
+                style = MaterialTheme.typography.labelSmall
+            )
+            Text(
+                text = location,
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -479,13 +591,13 @@ fun SharingIndicators(
     ) {
         if (hasShares) {
             Text(
-                text = "👥",
+                text = "🔗",
                 style = MaterialTheme.typography.labelSmall
             )
         }
         if (isStealth) {
             Text(
-                text = "👁‍🗨",
+                text = "🥷",
                 style = MaterialTheme.typography.labelSmall
             )
         }
@@ -688,6 +800,93 @@ fun filterSnoozedItems(items: List<ChitEntity>, hideSnoozed: Boolean = true): Li
                 snoozeEnd.isBefore(now)
             } catch (e: Exception) {
                 true // Can't parse — show it
+            }
+        }
+    }
+}
+
+// ─── B15: RSVP Indicators ───────────────────────────────────────────────────────
+
+/**
+ * Shows RSVP status indicators for shared chits on cards.
+ * Displays ✓ (accepted), ✗ (declined), or ⏳ (invited) for each shared user.
+ * Also shows accept/decline action buttons for the current user if they're a shared user.
+ * Matches the web's cwoc-rsvp-indicators + cwoc-rsvp-actions behavior.
+ *
+ * @param sharesJson The shares JSON string from the chit (array of {user_id, role, display_name, rsvp_status})
+ * @param chitId The chit ID (needed for RSVP action API calls)
+ * @param onRsvpAction Callback when user taps accept/decline: (chitId, rsvpStatus) -> Unit
+ */
+@Composable
+fun RsvpIndicators(
+    sharesJson: String?,
+    modifier: Modifier = Modifier,
+    chitId: String? = null,
+    onRsvpAction: ((String, String) -> Unit)? = null
+) {
+    if (sharesJson.isNullOrBlank() || sharesJson == "[]") return
+
+    val shares = remember(sharesJson) {
+        try {
+            val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+            Gson().fromJson<List<Map<String, Any?>>>(sharesJson, type) ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    if (shares.isEmpty()) return
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // RSVP status indicators for each shared user
+        shares.forEach { share ->
+            val rsvpStatus = (share["rsvp_status"] as? String) ?: "invited"
+            val displayName = (share["display_name"] as? String)
+                ?: (share["user_id"] as? String)
+                ?: "Unknown"
+            val (icon, color) = when (rsvpStatus) {
+                "accepted" -> "✓" to Color(0xFF388E3C)
+                "declined" -> "✗" to Color(0xFFD32F2F)
+                else -> "⏳" to Color(0xFF795548)
+            }
+            Text(
+                text = icon,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // RSVP action buttons (accept/decline) if callback provided
+        if (onRsvpAction != null && chitId != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Surface(
+                onClick = { onRsvpAction(chitId, "accepted") },
+                shape = RoundedCornerShape(4.dp),
+                color = Color(0xFF388E3C).copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = "✓",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF388E3C),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Surface(
+                onClick = { onRsvpAction(chitId, "declined") },
+                shape = RoundedCornerShape(4.dp),
+                color = Color(0xFFD32F2F).copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = "✗",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFD32F2F),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
         }
     }

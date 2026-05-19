@@ -14,13 +14,20 @@ interface ContactDao {
     fun getAllActive(): Flow<List<ContactEntity>>
 
     @Query("""SELECT * FROM contacts WHERE deleted = 0 AND (
-        displayName LIKE '%' || :query || '%' OR givenName LIKE '%' || :query || '%' OR 
-        surname LIKE '%' || :query || '%' OR nickname LIKE '%' || :query || '%' OR 
-        organization LIKE '%' || :query || '%' OR socialContext LIKE '%' || :query || '%' OR 
-        emails LIKE '%' || :query || '%' OR phones LIKE '%' || :query || '%' OR 
-        addresses LIKE '%' || :query || '%' OR callSigns LIKE '%' || :query || '%' OR 
-        xHandles LIKE '%' || :query || '%' OR websites LIKE '%' || :query || '%' OR 
-        dates LIKE '%' || :query || '%' OR notes LIKE '%' || :query || '%' OR 
+        givenName LIKE '%' || :query || '%' OR
+        surname LIKE '%' || :query || '%' OR
+        middleNames LIKE '%' || :query || '%' OR
+        displayName LIKE '%' || :query || '%' OR
+        nickname LIKE '%' || :query || '%' OR
+        organization LIKE '%' || :query || '%' OR
+        socialContext LIKE '%' || :query || '%' OR
+        emails LIKE '%' || :query || '%' OR
+        phones LIKE '%' || :query || '%' OR
+        addresses LIKE '%' || :query || '%' OR
+        callSigns LIKE '%' || :query || '%' OR
+        xHandles LIKE '%' || :query || '%' OR
+        websites LIKE '%' || :query || '%' OR
+        notes LIKE '%' || :query || '%' OR
         tags LIKE '%' || :query || '%')
         ORDER BY favorite DESC, displayName COLLATE NOCASE ASC""")
     fun searchAll(query: String): Flow<List<ContactEntity>>
@@ -31,6 +38,9 @@ interface ContactDao {
 
     @Query("SELECT * FROM contacts WHERE id = :id")
     suspend fun getById(id: String): ContactEntity?
+
+    @Query("SELECT * FROM contacts WHERE emails LIKE '%' || :email || '%' AND deleted = 0 LIMIT 1")
+    suspend fun findByEmail(email: String): ContactEntity?
 
     @Query("SELECT * FROM contacts WHERE isDirty = 1")
     suspend fun getDirtyContacts(): List<ContactEntity>

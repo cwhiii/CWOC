@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,13 +33,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,8 +69,10 @@ fun RulesManagerScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val actionMessage by viewModel.actionMessage.collectAsState()
+    val confirmations by viewModel.confirmations.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    var showDeleteConfirm by remember { mutableStateOf<RuleItem?>(null) }
 
     // Show snackbar for action messages
     LaunchedEffect(actionMessage) {
@@ -121,12 +129,36 @@ fun RulesManagerScreen(
                             .padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Pending confirmations section
+                        if (confirmations.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "⚠️ Pending Confirmations (${confirmations.size})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE65100),
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                )
+                            }
+                            items(confirmations, key = { it.id }) { confirmation ->
+                                ConfirmationCard(
+                                    confirmation = confirmation,
+                                    onAccept = { viewModel.acceptConfirmation(confirmation.id) },
+                                    onDismiss = { viewModel.dismissConfirmation(confirmation.id) }
+                                )
+                            }
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+
                         item { Spacer(modifier = Modifier.height(4.dp)) }
                         items(rules, key = { it.id }) { rule ->
                             RuleCard(
                                 rule = rule,
                                 onToggle = { viewModel.toggleRule(rule.id) },
-                                onClick = { onNavigateToEditor(rule.id) }
+                                onClick = { onNavigateToEditor(rule.id) },
+                                onDelete = { showDeleteConfirm = rule }
                             )
                         }
                         item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -134,6 +166,28 @@ fun RulesManagerScreen(
                 }
             }
         }
+    }
+
+    // Delete confirmation dialog
+    showDeleteConfirm?.let { rule ->
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            title = { Text("Delete Rule") },
+            text = { Text("Delete rule \"${rule.name}\"? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteRule(rule.id)
+                    showDeleteConfirm = null
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -143,7 +197,8 @@ fun RulesManagerScreen(
 private fun RuleCard(
     rule: RuleItem,
     onToggle: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -163,22 +218,63 @@ private fun RuleCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = rule.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = ParchmentText,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = rule.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = ParchmentText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    // Bundle badge
+                    if (rule.name.startsWith("Bundle: ")) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("📦", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = rule.description ?: getTriggerSummary(rule),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Trigger + Priority row
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = getTriggerSummary(rule),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    rule.priority?.let { p ->
+                        Text(
+                            text = "P$p",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = ParchmentBrown
+                        )
+                    }
+                }
+                // Last run + run count
+                if (rule.lastRunDatetime != null || (rule.runCount ?: 0) > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rule.lastRunDatetime?.let { dt ->
+                            Text(
+                                text = "Last: ${dt.take(16).replace("T", " ")}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if ((rule.runCount ?: 0) > 0) {
+                            Text(
+                                text = "Runs: ${rule.runCount}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            // Delete button
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Text("🗑️", style = MaterialTheme.typography.bodyMedium)
             }
             Switch(
                 checked = rule.enabled,
@@ -204,8 +300,61 @@ private fun getTriggerSummary(rule: RuleItem): String {
             val eventType = rule.triggerConfig?.get("event_type") as? String
             if (eventType != null) "Event: $eventType" else "Event-triggered"
         }
+        "chit_created" -> "Chit Created"
+        "chit_updated" -> "Chit Updated"
+        "email_received" -> "Email Received"
+        "contact_created" -> "Contact Created"
+        "contact_updated" -> "Contact Updated"
+        "scheduled" -> "Scheduled"
         "manual" -> "Manual trigger"
         else -> rule.triggerType ?: "No trigger"
+    }
+}
+
+// ─── Confirmation Card ──────────────────────────────────────────────────────────
+
+@Composable
+private fun ConfirmationCard(
+    confirmation: RuleConfirmation,
+    onAccept: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFFF3E0) // Light orange background
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "🤖 ${confirmation.ruleName}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = ParchmentText
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = confirmation.actionDescription,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onAccept,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                ) {
+                    Text("✅ Accept")
+                }
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                ) {
+                    Text("❌ Dismiss")
+                }
+            }
+        }
     }
 }
 

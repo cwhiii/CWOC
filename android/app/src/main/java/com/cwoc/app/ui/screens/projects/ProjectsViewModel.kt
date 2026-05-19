@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.domain.sort.ChitReorderHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,7 +31,8 @@ data class ProjectWithChildren(
 @HiltViewModel
 class ProjectsViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
-    private val chitDao: ChitDao
+    private val chitDao: ChitDao,
+    private val chitReorderHelper: ChitReorderHelper
 ) : ViewModel() {
 
     private val _projects = MutableStateFlow<List<ProjectWithChildren>>(emptyList())
@@ -167,6 +169,29 @@ class ProjectsViewModel @Inject constructor(
             // Mark both as dirty and push
             chitRepository.markDirty(newId, "title")
             chitRepository.markDirty(projectId, "childChits")
+        }
+    }
+
+    /**
+     * Reorder project cards in the list.
+     * Persists the new order both locally (SharedPreferences) and remotely (API).
+     * Called from the ReorderableStaggeredGrid onReorder callback.
+     *
+     * @param currentProjects The current ordered list of ProjectWithChildren displayed
+     * @param fromIndex The index of the card being moved
+     * @param toIndex The target index for the card
+     *
+     * Validates: Requirements 11.3
+     */
+    fun reorderProjects(currentProjects: List<ProjectWithChildren>, fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch {
+            val chitIds = currentProjects.map { it.project.id }
+            chitReorderHelper.persistReorder(
+                tab = "Projects",
+                currentIds = chitIds,
+                fromIndex = fromIndex,
+                toIndex = toIndex
+            )
         }
     }
 }

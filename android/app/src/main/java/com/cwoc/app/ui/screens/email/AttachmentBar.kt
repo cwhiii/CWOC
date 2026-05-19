@@ -44,8 +44,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.gson.Gson
@@ -70,6 +68,7 @@ import com.google.gson.reflect.TypeToken
 fun AttachmentBar(
     attachmentsJson: String?,
     serverUrl: String,
+    authToken: String = "",
     modifier: Modifier = Modifier
 ) {
     val attachments = remember(attachmentsJson) {
@@ -119,12 +118,21 @@ fun AttachmentBar(
         }
     }
 
-    // Preview modal
+    // Preview modal — uses the full MIME-type-based preview dialog
     if (previewAttachment != null) {
         AttachmentPreviewDialog(
             attachment = previewAttachment!!,
             serverUrl = serverUrl,
-            onDismiss = { previewAttachment = null }
+            authToken = authToken,
+            onDismiss = { previewAttachment = null },
+            onOpenExternal = {
+                val url = buildAttachmentUrl(previewAttachment!!.url, serverUrl)
+                if (url != null) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    context.startActivity(intent)
+                }
+                previewAttachment = null
+            }
         )
     }
 }
@@ -222,129 +230,6 @@ private fun AttachmentChip(
                     onDownload()
                 }
             )
-        }
-    }
-}
-
-/**
- * Preview dialog for an attachment.
- * Image attachments show the full image; non-image show file info.
- */
-@Composable
-private fun AttachmentPreviewDialog(
-    attachment: AttachmentBarItem,
-    serverUrl: String,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            tonalElevation = 6.dp,
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Title
-                Text(
-                    text = attachment.filename,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (attachment.isImage) {
-                    // Show full image preview
-                    val imageUrl = buildAttachmentUrl(attachment.url, serverUrl)
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(imageUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = attachment.filename,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    // Show file info for non-image
-                    Icon(
-                        imageVector = fileTypeIcon(attachment.contentType, attachment.filename),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (attachment.contentType != null) {
-                        Text(
-                            text = "Type: ${attachment.contentType}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                if (attachment.size != null && attachment.size > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Size: ${formatFileSize(attachment.size)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Action buttons
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Surface(
-                        onClick = {
-                            val url = buildAttachmentUrl(attachment.url, serverUrl)
-                            if (url != null) {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                context.startActivity(intent)
-                            }
-                            onDismiss()
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary
-                    ) {
-                        Text(
-                            text = "Open",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-
-                    Surface(
-                        onClick = onDismiss,
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = "Close",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
         }
     }
 }

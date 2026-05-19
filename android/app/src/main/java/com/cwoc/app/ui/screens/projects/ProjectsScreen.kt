@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,10 +60,12 @@ import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
+import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.CwocPromptDialog
+import com.cwoc.app.ui.components.ReorderableStaggeredGrid
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.parseHexColor
@@ -93,6 +99,9 @@ fun ProjectsScreen(
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
+
+    // Determine if manual sort is active (enables drag-to-reorder)
+    val isManualSort = sortState.field == SortField.MANUAL
 
     // Long-press action menu state
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
@@ -128,26 +137,40 @@ fun ProjectsScreen(
                 )
             }
             else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    when (projectsMode) {
-                        "kanban" -> {
-                            items(filteredSortedProjects, key = { it.project.id }) { projectWithChildren ->
-                                ProjectCard(
-                                    project = projectWithChildren,
-                                    isExpanded = projectWithChildren.project.id in expandedIds,
-                                    onToggleExpand = { viewModel.toggleExpanded(projectWithChildren.project.id) },
-                                    onChildTap = { chitId -> onNavigateToEditor(chitId) },
-                                    onLongPress = { menuChit = projectWithChildren.project },
-                                    onCreateChild = { title -> viewModel.createChildChit(projectWithChildren.project.id, title) }
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
+                when (projectsMode) {
+                    "kanban" -> {
+                        // Kanban mode: project cards with expandable boards
+                        // Uses ReorderableStaggeredGrid for drag-to-reorder when sort is manual
+                        ReorderableStaggeredGrid(
+                            items = filteredSortedProjects,
+                            key = { it.project.id },
+                            columns = StaggeredGridCells.Fixed(1),
+                            onReorder = { fromIndex, toIndex ->
+                                viewModel.reorderProjects(filteredSortedProjects, fromIndex, toIndex)
+                            },
+                            enabled = isManualSort,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalItemSpacing = 8.dp
+                        ) { projectWithChildren, _ ->
+                            ProjectCard(
+                                project = projectWithChildren,
+                                isExpanded = projectWithChildren.project.id in expandedIds,
+                                onToggleExpand = { viewModel.toggleExpanded(projectWithChildren.project.id) },
+                                onChildTap = { chitId -> onNavigateToEditor(chitId) },
+                                onLongPress = { menuChit = projectWithChildren.project },
+                                onCreateChild = { title -> viewModel.createChildChit(projectWithChildren.project.id, title) },
+                                onStatusChange = { chitId, newStatus -> viewModel.moveToColumn(chitId, newStatus) }
+                            )
                         }
-                        "list" -> {
+                    }
+                    "list" -> {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
                             filteredSortedProjects.forEach { projectWithChildren ->
                                 val allChildren = projectWithChildren.children.values.flatten()
                                 // Project header
@@ -319,7 +342,8 @@ private fun ProjectCard(
     onToggleExpand: () -> Unit,
     onChildTap: (String) -> Unit,
     onLongPress: () -> Unit,
-    onCreateChild: (String) -> Unit = {}
+    onCreateChild: (String) -> Unit = {},
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null
 ) {
     // Determine project card background color from chit color
     val projectBgColor = remember(project.project.color) {
@@ -442,7 +466,8 @@ private fun ProjectCard(
             ) {
                 KanbanBoard(
                     columns = project.children,
-                    onChildTap = onChildTap
+                    onChildTap = onChildTap,
+                    onStatusChange = onStatusChange
                 )
             }
         }
@@ -452,7 +477,8 @@ private fun ProjectCard(
 @Composable
 private fun KanbanBoard(
     columns: Map<KanbanStatus, List<ChitEntity>>,
-    onChildTap: (String) -> Unit
+    onChildTap: (String) -> Unit,
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -466,17 +492,20 @@ private fun KanbanBoard(
                 status = status,
                 chits = chits,
                 onChildTap = onChildTap,
+                onStatusChange = onStatusChange,
                 modifier = Modifier.weight(1f)
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun KanbanColumnView(
     status: KanbanStatus,
     chits: List<ChitEntity>,
     onChildTap: (String) -> Unit,
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
     modifier: Modifier = Modifier,
     // Q5: Add existing chit to this column
     onAddExisting: (() -> Unit)? = null,
@@ -535,24 +564,56 @@ private fun KanbanColumnView(
                 if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFDF5E6)
             }
 
+            var showStatusMenu by remember { mutableStateOf(false) }
+
+            Box {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
-                    .clickable { onChildTap(chit.id) },
+                    .combinedClickable(
+                        onClick = { onChildTap(chit.id) },
+                        onLongClick = { showStatusMenu = true }
+                    ),
                 border = CwocChitCardStyle.cardBorder,
                 colors = CardDefaults.cardColors(containerColor = cardBgColor),
                 elevation = CwocChitCardStyle.cardElevation()
             ) {
                 Column(modifier = Modifier.padding(4.dp)) {
+                    // Indicator icons (pinned, stealth, alerts, prereqs)
+                    val indicators = buildString {
+                        if (chit.pinned) append("🔖 ")
+                        if (chit.stealth == true) append("🥷 ")
+                        if (chit.alarm == true || chit.notification == true) append("🔔 ")
+                        if (!chit.prerequisites.isNullOrEmpty()) append("⛓️ ")
+                    }.trim()
+                    if (indicators.isNotEmpty()) {
+                        Text(
+                            text = indicators,
+                            fontSize = 8.sp,
+                            modifier = Modifier.padding(bottom = 1.dp)
+                        )
+                    }
+
                     Text(
                         text = chit.title ?: "Untitled",
                         style = MaterialTheme.typography.bodySmall,
                         color = cardTextColor,
                         fontSize = 10.sp,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        textDecoration = if (status == KanbanStatus.COMPLETE || status == KanbanStatus.REJECTED)
+                            TextDecoration.LineThrough else TextDecoration.None
                     )
+                    // Priority/severity
+                    if (!chit.priority.isNullOrBlank()) {
+                        Text(
+                            text = chit.priority,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.7f),
+                            fontSize = 8.sp
+                        )
+                    }
                     // Due date on child cards
                     if (chit.dueDatetime != null) {
                         Text(
@@ -562,8 +623,58 @@ private fun KanbanColumnView(
                             fontSize = 8.sp
                         )
                     }
+                    // Checklist progress
+                    if (!chit.checklist.isNullOrBlank() && chit.checklist != "[]") {
+                        com.cwoc.app.ui.components.ChecklistProgressBadge(
+                            checklistJson = chit.checklist,
+                            textColor = cardTextColor.copy(alpha = 0.7f)
+                        )
+                    }
+                    // Note preview (first line, truncated)
+                    if (!chit.note.isNullOrBlank()) {
+                        Text(
+                            text = chit.note.lines().firstOrNull()?.take(50) ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.6f),
+                            fontSize = 8.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    // Owner badge
+                    if (!chit.ownerDisplayName.isNullOrBlank()) {
+                        Text(
+                            text = "👤 ${chit.ownerDisplayName}",
+                            fontSize = 8.sp,
+                            color = cardTextColor.copy(alpha = 0.6f)
+                        )
+                    }
+                    // Assignee badge
+                    if (!chit.assignedTo.isNullOrBlank()) {
+                        Text(
+                            text = "📌 ${chit.assignedTo}",
+                            fontSize = 8.sp,
+                            color = cardTextColor.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
+            // Long-press status change dropdown
+            DropdownMenu(
+                expanded = showStatusMenu,
+                onDismissRequest = { showStatusMenu = false }
+            ) {
+                KanbanStatus.entries.filter { it != status }.forEach { targetStatus ->
+                    DropdownMenuItem(
+                        text = { Text("→ ${targetStatus.displayName}", fontSize = 12.sp) },
+                        onClick = {
+                            showStatusMenu = false
+                            onStatusChange?.invoke(chit.id, targetStatus)
+                        }
+                    )
+                }
+            }
+            } // end Box
         }
 
         if (chits.isEmpty()) {

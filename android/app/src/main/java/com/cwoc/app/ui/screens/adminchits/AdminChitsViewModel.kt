@@ -26,7 +26,12 @@ data class AdminChitItem(
     val title: String?,
     @SerializedName("owner_id") val ownerId: String?,
     @SerializedName("owner_username") val ownerUsername: String?,
+    @SerializedName("assigned_to") val assignedTo: String?,
+    @SerializedName("assigned_to_username") val assignedToUsername: String?,
     val status: String?,
+    val deleted: Boolean = false,
+    val attachments: Any? = null,
+    @SerializedName("modified_datetime") val modifiedDatetime: String?,
     @SerializedName("created_datetime") val createdDatetime: String?,
     val tags: List<String>?
 )
@@ -37,7 +42,9 @@ data class AdminChitsUiState(
     val error: String? = null,
     val actionMessage: String? = null,
     val ownerFilter: String = "",
+    val statusFilter: String = "",
     val searchQuery: String = "",
+    val showDeleted: Boolean = false,
     val owners: List<String> = emptyList(),
     val offset: Int = 0,
     val limit: Int = 25,
@@ -82,6 +89,16 @@ class AdminChitsViewModel @Inject constructor(
 
     fun setSearchQuery(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query, offset = 0)
+        loadChits()
+    }
+
+    fun setStatusFilter(status: String) {
+        _uiState.value = _uiState.value.copy(statusFilter = status, offset = 0)
+        loadChits()
+    }
+
+    fun setShowDeleted(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showDeleted = show, offset = 0)
         loadChits()
     }
 
@@ -191,6 +208,48 @@ class AdminChitsViewModel @Inject constructor(
         }
     }
 
+    fun bulkChangePriority(newPriority: String) {
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(error = null)
+            try {
+                val success = executeBulkAction(ids, "change_priority", newPriority)
+                if (success) {
+                    _uiState.value = _uiState.value.copy(
+                        actionMessage = "Changed priority for ${ids.size} chit(s)",
+                        isSelectionMode = false,
+                        selectedIds = emptySet()
+                    )
+                    loadChits()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = "Failed to change priority: ${e.message}")
+            }
+        }
+    }
+
+    fun bulkUndelete() {
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(error = null)
+            try {
+                val success = executeBulkAction(ids, "undelete", null)
+                if (success) {
+                    _uiState.value = _uiState.value.copy(
+                        actionMessage = "Restored ${ids.size} chit(s)",
+                        isSelectionMode = false,
+                        selectedIds = emptySet()
+                    )
+                    loadChits()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(error = "Failed to restore: ${e.message}")
+            }
+        }
+    }
+
     fun clearActionMessage() {
         _uiState.value = _uiState.value.copy(actionMessage = null)
     }
@@ -209,15 +268,16 @@ class AdminChitsViewModel @Inject constructor(
                 val state = _uiState.value
                 val urlBuilder = StringBuilder(serverUrl.trimEnd('/') + "/api/admin/chits")
                 val params = mutableListOf<String>()
-                params.add("offset=${state.offset}")
-                params.add("limit=${state.limit}")
-                if (state.ownerFilter.isNotBlank()) {
-                    params.add("owner=${state.ownerFilter}")
-                }
                 if (state.searchQuery.isNotBlank()) {
-                    params.add("search=${state.searchQuery}")
+                    params.add("q=${state.searchQuery}")
                 }
-                urlBuilder.append("?${params.joinToString("&")}")
+                if (state.ownerFilter.isNotBlank()) {
+                    params.add("owner_id=${state.ownerFilter}")
+                }
+                params.add("limit=1000")
+                if (params.isNotEmpty()) {
+                    urlBuilder.append("?${params.joinToString("&")}")
+                }
 
                 val request = Request.Builder().url(urlBuilder.toString()).get().build()
                 val response = okHttpClient.newCall(request).execute()
@@ -227,13 +287,23 @@ class AdminChitsViewModel @Inject constructor(
                     if (body != null) {
                         val listType = object : TypeToken<List<AdminChitItem>>() {}.type
                         val chitList: List<AdminChitItem> = gson.fromJson(body, listType)
+
+                        // Client-side filters (matching web behavior)
+                        var display = chitList.toList()
+                        if (!state.showDeleted) {
+                            display = display.filter { !it.deleted }
+                        }
+                        if (state.statusFilter.isNotBlank()) {
+                            display = display.filter { it.status == state.statusFilter }
+                        }
+
                         // Extract unique owners for filter dropdown
                         val allOwners = chitList.mapNotNull { it.ownerUsername }.distinct().sorted()
                         val currentOwners = if (_uiState.value.owners.isEmpty()) allOwners else _uiState.value.owners
                         _uiState.value = _uiState.value.copy(
-                            chits = chitList,
+                            chits = display,
                             owners = if (state.ownerFilter.isBlank()) allOwners else currentOwners,
-                            hasMore = chitList.size >= state.limit
+                            hasMore = display.size >= state.limit
                         )
                     } else {
                         _uiState.value = _uiState.value.copy(error = "Empty response from server")
@@ -263,18 +333,26 @@ class AdminChitsViewModel @Inject constructor(
                 return@withContext false
             }
 
-            val bodyMap = mutableMapOf<String, Any>(
-                "chit_ids" to chitIds,
-                "action" to action
-            )
-            if (value != null) {
-                bodyMap["value"] = value
+            // Build the updates map matching the server's BulkUpdateRequest format:
+            // POST /api/admin/chits/bulk-update with { chit_ids: [...], updates: { field: value } }
+            val updates = mutableMapOf<String, Any?>()
+            when (action) {
+                "delete" -> updates["deleted"] = true
+                "undelete" -> updates["deleted"] = false
+                "change_owner" -> updates["owner_id"] = value
+                "change_status" -> updates["status"] = value
+                "change_priority" -> updates["priority"] = value
             }
 
+            val bodyMap = mapOf(
+                "chit_ids" to chitIds,
+                "updates" to updates
+            )
+
             val json = gson.toJson(bodyMap)
-            val url = serverUrl.trimEnd('/') + "/api/admin/chits/bulk"
+            val url = serverUrl.trimEnd('/') + "/api/admin/chits/bulk-update"
             val requestBody = json.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(url).put(requestBody).build()
+            val request = Request.Builder().url(url).post(requestBody).build()
             val response = okHttpClient.newCall(request).execute()
 
             if (!response.isSuccessful) {

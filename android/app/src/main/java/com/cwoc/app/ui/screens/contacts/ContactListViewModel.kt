@@ -148,8 +148,9 @@ class ContactListViewModel @Inject constructor(
             try {
                 val file = contactRepository.exportAll(appContext, format)
                 if (file != null) {
+                    _exportedFile.value = file
                     _uiState.value = _uiState.value.copy(
-                        exportSuccess = "Exported to ${file.name}"
+                        exportSuccess = "Exported ${file.name} — tap to share"
                     )
                 } else {
                     _uiState.value = _uiState.value.copy(
@@ -162,6 +163,14 @@ class ContactListViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** The last exported file, available for sharing via intent. */
+    private val _exportedFile = MutableStateFlow<File?>(null)
+    val exportedFile: StateFlow<File?> = _exportedFile.asStateFlow()
+
+    fun clearExportedFile() {
+        _exportedFile.value = null
     }
 
     fun clearImportResult() {

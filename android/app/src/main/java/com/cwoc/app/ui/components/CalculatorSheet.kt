@@ -69,8 +69,8 @@ fun CalculatorSheet(
 
             // Number pad and operators grid
             CalculatorKeypad(
-                onDigit = { digit -> expression += digit },
-                onOperator = { op -> expression += " $op " },
+                onDigit = { digit -> if (expression.length < 50) expression += digit },
+                onOperator = { op -> if (expression.length < 50) expression += " $op " },
                 onClear = { expression = "" },
                 onBackspace = {
                     if (expression.isNotEmpty()) {

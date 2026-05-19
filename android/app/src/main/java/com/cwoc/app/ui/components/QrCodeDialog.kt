@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.mapper.VCardBuilder
-import com.cwoc.app.ui.theme.CwocParchment
+import com.cwoc.app.ui.theme.CwocBackground
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -201,8 +201,8 @@ fun ChitQrCodeDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (mode == "data") CwocZoneHeaderBrown else CwocParchment,
-                            contentColor = if (mode == "data") CwocParchment else CwocZoneHeaderBrown
+                            containerColor = if (mode == "data") CwocZoneHeaderBrown else CwocBackground,
+                            contentColor = if (mode == "data") CwocBackground else CwocZoneHeaderBrown
                         )
                     ) {
                         Text("📦 Data")
@@ -212,8 +212,8 @@ fun ChitQrCodeDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (mode == "link") CwocZoneHeaderBrown else CwocParchment,
-                            contentColor = if (mode == "link") CwocParchment else CwocZoneHeaderBrown
+                            containerColor = if (mode == "link") CwocZoneHeaderBrown else CwocBackground,
+                            contentColor = if (mode == "link") CwocBackground else CwocZoneHeaderBrown
                         )
                     ) {
                         Text("🔗 Link")
@@ -225,4 +225,169 @@ fun ChitQrCodeDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+}
+
+/**
+ * QR code dialog for contacts from the contact editor (uses ContactFormState).
+ * Builds a vCard from the form state and displays it as a QR code.
+ * Matches the web's contact-editor.js qrButton behavior.
+ */
+@Composable
+fun ContactFormQrCodeDialog(
+    givenName: String,
+    surname: String,
+    middleNames: String = "",
+    prefix: String = "",
+    suffix: String = "",
+    displayName: String = "",
+    phones: String = "",
+    emails: String = "",
+    addresses: String = "",
+    websites: String = "",
+    callSigns: String = "",
+    xHandles: String = "",
+    hasSignal: Boolean = false,
+    signalUsername: String = "",
+    pgpKey: String = "",
+    favorite: Boolean = false,
+    organization: String = "",
+    nickname: String = "",
+    socialContext: String = "",
+    color: String = "",
+    onDismiss: () -> Unit
+) {
+    val name = displayName.ifBlank {
+        listOf(prefix, givenName, middleNames, surname, suffix)
+            .filter { it.isNotBlank() }.joinToString(" ")
+    }.ifBlank { "Contact" }
+
+    // Build vCard from form fields (mirrors VCardBuilder.build logic)
+    val vcard = remember(givenName, surname, phones, emails) {
+        buildVCardFromForm(
+            givenName, surname, middleNames, prefix, suffix, displayName,
+            phones, emails, addresses, websites, callSigns, xHandles,
+            hasSignal, signalUsername, pgpKey, favorite, organization, nickname,
+            socialContext, color
+        )
+    }
+    val byteSize = remember(vcard) { vcard.toByteArray(Charsets.UTF_8).size }
+    val fitsInQr = byteSize <= VCardBuilder.MAX_QR_BYTES
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share: $name") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (fitsInQr) {
+                    val qrBitmap = remember(vcard) { generateQrBitmap(vcard, 300) }
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "QR Code for $name",
+                            modifier = Modifier.size(250.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "$name — vCard ($byteSize bytes)",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "Contact data too large for QR ($byteSize bytes).\nUse Export instead.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+/**
+ * Build a vCard 3.0 string from form state fields.
+ */
+private fun buildVCardFromForm(
+    givenName: String, surname: String, middleNames: String,
+    prefix: String, suffix: String, displayName: String,
+    phones: String, emails: String, addresses: String,
+    websites: String, callSigns: String, xHandles: String,
+    hasSignal: Boolean, signalUsername: String, pgpKey: String,
+    favorite: Boolean, organization: String, nickname: String,
+    socialContext: String, color: String
+): String {
+    val lines = mutableListOf<String>()
+    lines.add("BEGIN:VCARD")
+    lines.add("VERSION:3.0")
+    lines.add("N:$surname;$givenName;$middleNames;$prefix;$suffix")
+
+    val fn = displayName.ifBlank {
+        listOf(prefix, givenName, middleNames, surname, suffix)
+            .filter { it.isNotBlank() }.joinToString(" ")
+    }
+    if (fn.isNotBlank()) lines.add("FN:$fn")
+
+    // Parse JSON multi-value fields
+    val gson = com.google.gson.Gson()
+    val listType = object : com.google.gson.reflect.TypeToken<List<Map<String, Any?>>>() {}.type
+
+    fun addMulti(prop: String, json: String) {
+        if (json.isBlank() || json == "[]") return
+        try {
+            val entries: List<Map<String, Any?>> = gson.fromJson(json, listType)
+            entries.forEach { entry ->
+                val value = entry["value"] as? String ?: return@forEach
+                if (value.isBlank()) return@forEach
+                val label = entry["label"] as? String
+                if (!label.isNullOrBlank()) lines.add("$prop;TYPE=$label:$value")
+                else lines.add("$prop:$value")
+            }
+        } catch (_: Exception) {}
+    }
+
+    addMulti("TEL", phones)
+    addMulti("EMAIL", emails)
+
+    // ADR
+    if (addresses.isNotBlank() && addresses != "[]") {
+        try {
+            val entries: List<Map<String, Any?>> = gson.fromJson(addresses, listType)
+            entries.forEach { entry ->
+                val value = entry["value"] as? String ?: return@forEach
+                if (value.isBlank()) return@forEach
+                val label = entry["label"] as? String
+                val adrValue = ";;$value;;;;"
+                if (!label.isNullOrBlank()) lines.add("ADR;TYPE=$label:$adrValue")
+                else lines.add("ADR:$adrValue")
+            }
+        } catch (_: Exception) {}
+    }
+
+    addMulti("URL", websites)
+    if (hasSignal) lines.add("X-SIGNAL:true")
+    if (pgpKey.isNotBlank()) lines.add("X-PGP-KEY:$pgpKey")
+    addMulti("X-CALLSIGN", callSigns)
+    addMulti("X-XHANDLE", xHandles)
+    if (favorite) lines.add("X-FAVORITE:true")
+    if (organization.isNotBlank()) lines.add("ORG:$organization")
+    if (nickname.isNotBlank()) lines.add("NICKNAME:$nickname")
+
+    val extraNotes = mutableListOf<String>()
+    if (socialContext.isNotBlank()) extraNotes.add("Social Context: $socialContext")
+    if (signalUsername.isNotBlank()) extraNotes.add("Signal: $signalUsername")
+    if (color.isNotBlank()) extraNotes.add("Color: $color")
+    if (extraNotes.isNotEmpty()) lines.add("NOTE:${extraNotes.joinToString("\\n")}")
+
+    lines.add("END:VCARD")
+    return lines.joinToString("\r\n")
 }

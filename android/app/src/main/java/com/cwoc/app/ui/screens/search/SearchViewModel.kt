@@ -55,27 +55,54 @@ class SearchViewModel @Inject constructor(
     /** The current search query text, updated by the UI. */
     val query = MutableStateFlow("")
 
+    /** Status filter (empty = show all) */
+    val statusFilter = MutableStateFlow("")
+
+    /** Priority filter (empty = show all) */
+    val priorityFilter = MutableStateFlow("")
+
+    /** Email filter: "no_email" (default), "all", "only_email" */
+    val emailFilter = MutableStateFlow("no_email")
+
+    fun onQueryChange(newQuery: String) { query.value = newQuery }
+    fun setStatusFilter(status: String) { statusFilter.value = status }
+    fun setPriorityFilter(priority: String) { priorityFilter.value = priority }
+    fun setEmailFilter(mode: String) { emailFilter.value = mode }
+
     /**
      * Search results produced by evaluating the debounced query against all non-deleted chits.
      * Emits an empty list when the query is blank.
+     * Applies status, priority, and email filters after search.
      */
     val results: StateFlow<List<SearchResult>> = combine(
         query.debounce(300L),
-        chitRepository.getAllNonDeleted()
-    ) { queryText, allChits ->
-        performSearch(queryText, allChits)
+        chitRepository.getAllNonDeleted(),
+        statusFilter,
+        priorityFilter,
+        emailFilter
+    ) { queryText, allChits, status, priority, emailMode ->
+        val searchResults = performSearch(queryText, allChits)
+        // Apply post-search filters
+        searchResults.filter { result ->
+            val chit = result.chit
+            // Status filter
+            if (status.isNotBlank() && chit.status != status) return@filter false
+            // Priority filter
+            if (priority.isNotBlank() && chit.priority != priority) return@filter false
+            // Email filter
+            val isEmail = !chit.emailMessageId.isNullOrBlank() || !chit.emailStatus.isNullOrBlank()
+            when (emailMode) {
+                "no_email" -> if (isEmail) return@filter false
+                "only_email" -> if (!isEmail) return@filter false
+                // "all" — no filter
+            }
+            true
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000L),
         initialValue = emptyList()
     )
-
-    /**
-     * Updates the search query. The UI calls this on every text change.
-     */
-    fun onQueryChange(newQuery: String) {
-        query.value = newQuery
-    }
 
     /**
      * Performs the search logic:
@@ -200,6 +227,20 @@ class SearchViewModel @Inject constructor(
             "checklist" -> extractChecklistText(chit)
             "color" -> chit.color
             "location" -> chit.location
+            // Email fields
+            "subject" -> chit.emailSubject
+            "sender", "from" -> chit.emailFrom
+            "to" -> chit.emailTo
+            "cc" -> chit.emailCc
+            "bcc" -> chit.emailBcc
+            "body" -> chit.emailBodyText ?: chit.emailBodyHtml
+            // Date fields
+            "due" -> chit.dueDatetime
+            "start" -> chit.startDatetime
+            "end" -> chit.endDatetime
+            // Other
+            "assigned" -> chit.assignedTo
+            "child" -> chit.childChits?.joinToString(" ")
             else -> null
         }
     }
@@ -221,6 +262,11 @@ class SearchViewModel @Inject constructor(
         chit.location?.let { fields.add("location" to it) }
         // U3: Include checklist items in general search
         extractChecklistText(chit)?.let { fields.add("checklist" to it) }
+        // Email fields
+        chit.emailSubject?.let { fields.add("subject" to it) }
+        chit.emailFrom?.let { fields.add("from" to it) }
+        chit.emailTo?.let { fields.add("to" to it) }
+        chit.emailBodyText?.let { fields.add("body" to it) }
         return fields
     }
 

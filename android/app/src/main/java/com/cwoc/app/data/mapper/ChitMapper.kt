@@ -44,6 +44,7 @@ data class ChitFormState(
     val assignedTo: String? = null,
     val prerequisites: List<String>? = null,
     val stealth: Boolean? = null,
+    val shares: String? = null,  // JSON array of {user_id, role, display_name, rsvp_status}
     val autoCompleteChecklist: Boolean? = null,
     val checklistAutosave: String? = null,
     val healthData: String? = null,
@@ -71,6 +72,7 @@ data class ChitFormState(
     val ownerId: String? = null,
     val ownerDisplayName: String? = null,
     val ownerUsername: String? = null,
+    val notification: Boolean? = null,
     val isNew: Boolean = false
 )
 
@@ -115,6 +117,7 @@ fun ChitEntity.toFormState(): ChitFormState {
         assignedTo = assignedTo,
         prerequisites = prerequisites,
         stealth = stealth,
+        shares = shares,
         autoCompleteChecklist = autoCompleteChecklist,
         checklistAutosave = checklistAutosave,
         healthData = healthData,
@@ -140,6 +143,7 @@ fun ChitEntity.toFormState(): ChitFormState {
         ownerId = ownerId,
         ownerDisplayName = ownerDisplayName,
         ownerUsername = ownerUsername,
+        notification = notification,
         isNew = false
     )
 }
@@ -172,7 +176,7 @@ fun ChitFormState.toEntity(
         severity = severity,
         checklist = checklist,
         alarm = originalEntity?.alarm,
-        notification = originalEntity?.notification,
+        notification = notification,
         recurrence = recurrence,
         recurrenceId = originalEntity?.recurrenceId,
         recurrenceRule = recurrenceRule,
@@ -202,7 +206,7 @@ fun ChitFormState.toEntity(
         habitLastActionDate = habitLastActionDate,
         habitHideOverall = habitHideOverall,
         perpetual = perpetual,
-        shares = originalEntity?.shares,
+        shares = shares ?: originalEntity?.shares,
         stealth = stealth,
         assignedTo = assignedTo,
         ownerId = ownerId,
@@ -377,6 +381,7 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
             if (form.assignedTo != null) add("assigned_to")
             if (!form.prerequisites.isNullOrEmpty()) add("prerequisites")
             if (form.stealth != null) add("stealth")
+            if (form.shares != null) add("shares")
             if (form.autoCompleteChecklist != null) add("auto_complete_checklist")
             if (form.checklistAutosave != null) add("checklist_autosave")
             if (form.healthData != null) add("health_data")
@@ -431,6 +436,7 @@ fun detectChangedFields(original: ChitEntity?, form: ChitFormState): Set<String>
         if (form.assignedTo != original.assignedTo) add("assigned_to")
         if (form.prerequisites != original.prerequisites) add("prerequisites")
         if (form.stealth != original.stealth) add("stealth")
+        if (form.shares != original.shares) add("shares")
         if (form.autoCompleteChecklist != original.autoCompleteChecklist) add("auto_complete_checklist")
         if (form.checklistAutosave != original.checklistAutosave) add("checklist_autosave")
         if (form.healthData != original.healthData) add("health_data")

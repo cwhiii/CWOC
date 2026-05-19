@@ -1,11 +1,11 @@
 package com.cwoc.app.ui.navigation
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Notes
@@ -22,7 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.R
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 import org.json.JSONArray
 
@@ -30,17 +32,19 @@ import org.json.JSONArray
  * The C CAPTN view tabs: Calendar, Checklists, Alarms, Projects, Tasks, Notes, Indicators.
  * Each tab maps to an existing Screen route string.
  * Icons match the web's tab strip (fa-calendar, fa-list-check, fa-bell, fa-folder, fa-tasks, fa-sticky-note, fa-chart-line).
+ * Omni uses the CWOC logo drawable instead of a Material icon.
  */
-enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector) {
+enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector?) {
     Calendar("Calendar", "calendar", Icons.Default.CalendarMonth),
     Checklists("Checklists", "checklists", Icons.Default.Checklist),
     Alarms("Alerts", "alarms", Icons.Default.Alarm),
     Projects("Projects", "projects", Icons.Default.Folder),
     Tasks("Tasks", "tasks", Icons.Default.Task),
     Notes("Notes", "notes", Icons.Default.Notes),
+    Notebook("Notebook", "notebook", Icons.Default.Notes),
     Indicators("Indicators", "indicators", Icons.Default.ShowChart),
     Email("Email", "email", Icons.Default.Email),
-    Omni("Omni", "omni", Icons.Default.Dashboard)
+    Omni("Omni", "omni", null)
 }
 
 /**
@@ -99,13 +103,21 @@ fun CCaptnTabRow(
                     )
                 },
                 icon = {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.label,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (isSelected) CwocZoneHeaderBrown
-                               else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (tab == CCaptnTab.Omni) {
+                        Image(
+                            painter = painterResource(id = R.drawable.cwoc_logo),
+                            contentDescription = tab.label,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = tab.icon!!,
+                            contentDescription = tab.label,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (isSelected) CwocZoneHeaderBrown
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             )
         }
