@@ -548,9 +548,10 @@ interface CwocApiService {
 
     /**
      * List all email bundles for the authenticated user.
+     * Server returns { "bundles_multi_placement": bool, "bundles": [...] }
      */
     @GET("/api/bundles")
-    suspend fun getBundles(): Response<List<BundleDto>>
+    suspend fun getBundles(): Response<BundlesResponse>
 
     /**
      * Disable an auto-bundle (set display_order to -1, strip tags from emails).
@@ -914,6 +915,15 @@ data class ImportDataResponse(
     val imported: Int? = null,
     val skipped: Int? = null,
     val errors: List<String>? = null
+)
+
+/**
+ * Response wrapper from GET /api/bundles.
+ * Server returns { "bundles_multi_placement": bool, "bundles": [...] }
+ */
+data class BundlesResponse(
+    @com.google.gson.annotations.SerializedName("bundles_multi_placement") val bundlesMultiPlacement: Boolean = false,
+    val bundles: List<BundleDto> = emptyList()
 )
 
 /**

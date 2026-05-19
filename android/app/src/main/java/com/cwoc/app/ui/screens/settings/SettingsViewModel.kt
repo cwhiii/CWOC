@@ -317,7 +317,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 val response = apiService.getBundles()
                 if (response.isSuccessful) {
-                    val allBundles = response.body() ?: emptyList()
+                    val allBundles = response.body()?.bundles ?: emptyList()
                     // Exclude "Everything Else" bundle
                     _bundles.value = allBundles.filter {
                         it.name?.lowercase() != "everything else"

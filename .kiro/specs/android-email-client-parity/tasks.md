@@ -124,8 +124,8 @@ This plan implements full email client feature parity between the CWOC Android a
 - [x] 4. Checkpoint — Data layer complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 5. ViewModel Layer — Extend and Create ViewModels
-  - [-] 5.1 Extend EmailViewModel with multi-select, sorting, pagination, undo, and sync state
+- [x] 5. ViewModel Layer — Extend and Create ViewModels
+  - [x] 5.1 Extend EmailViewModel with multi-select, sorting, pagination, undo, and sync state
     - Add multi-select state: isMultiSelectMode, selectedIds, enterMultiSelect(), toggleSelection(), exitMultiSelect()
     - Add sorting logic: pinned-first (Property 7), unread-at-top toggle (Property 8), date grouping
     - Add pagination state: currentPage, totalThreadCount, loadMore()
@@ -145,7 +145,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - **Property 17: Pagination Invariant**
     - **Validates: Requirements 2.5, 3.4, 5.1, 5.2, 15.1, 15.2, 18.5, 27.2-27.4, 33.3, 33.4, 34.2**
 
-  - [-] 5.3 Create BundleViewModel.kt
+  - [x] 5.3 Create BundleViewModel.kt
     - Create `ui/screens/email/BundleViewModel.kt` with Hilt injection
     - Implement: fetchBundles, selectBundle, createBundle, updateBundle, deleteBundle, disableBundle, reorderBundles
     - Expose bundle count formatting (Property 15) based on bundles_show_count setting
@@ -156,7 +156,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - **Property 15: Bundle Count Badge Formatting**
     - **Validates: Requirements 20.1, 20.2, 20.3, 20.4**
 
-  - [~] 5.5 Create EmailComposeViewModel.kt
+  - [x] 5.5 Create EmailComposeViewModel.kt
     - Create `ui/screens/email/EmailComposeViewModel.kt` with Hilt injection
     - Implement autocomplete state: query, results, addRecipient, removeRecipient, chipify
     - Implement PGP state: pgpEnabled, togglePgp, validateRecipientKeys, encrypt/decrypt flows
@@ -177,7 +177,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - **Property 18: PGP Key Validation**
     - **Validates: Requirements 48.2, 48.3**
 
-  - [-] 5.8 Create EmailSettingsViewModel.kt
+  - [x] 5.8 Create EmailSettingsViewModel.kt
     - Create `ui/screens/email/EmailSettingsViewModel.kt` with Hilt injection
     - Manage settings state: accounts list, privacy settings, display settings, bundle settings
     - Implement: loadSettings, saveSettings, testConnection, backfillEstimate, triggerBackfill
@@ -185,44 +185,44 @@ This plan implements full email client feature parity between the CWOC Android a
     - Implement account CRUD: addAccount, editAccount, deleteAccount
     - _Requirements: 59.1-59.8, 60.1-60.4, 61.1-61.7, 62.1-62.5, 63.1-63.3, 64.1-64.5, 65.1-65.6_
 
-- [~] 6. Checkpoint — ViewModel layer complete
+- [x] 6. Checkpoint — ViewModel layer complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. UI Layer — Email List View Composables
-  - [~] 7.1 Implement EmailCardEnhanced.kt
+- [x] 7. UI Layer — Email List View Composables
+  - [x] 7.1 Implement EmailCardEnhanced.kt
     - Create `ui/screens/email/EmailCardEnhanced.kt` composable
     - Display: circular contact avatar (image or initial), pin bookmark button, status badges (Draft/Sent), reply indicator, body preview (via BodyPreviewStripper), tag chips with colors (via ContrastColor), attachment thumbnails, smart link badges, custom chit color background, thread ribbon bar and count badge
     - Handle multi-select mode: replace avatar with checkbox on long-press
     - Handle date formatting via EmailDateFormatter
     - _Requirements: 1.1-1.4, 2.1-2.4, 3.1-3.3, 4.1-4.4, 5.1-5.2, 6.1-6.8, 7.1-7.4, 10.1-10.5, 11.1-11.4, 12.1-12.3, 17.1-17.4_
 
-  - [~] 7.2 Implement SmartLinkBadges.kt
+  - [x] 7.2 Implement SmartLinkBadges.kt
     - Create `ui/screens/email/SmartLinkBadges.kt` composable
     - Display badge chips with carrier/service logo and label
     - Handle tap to open tracking URL in device browser
     - _Requirements: 8.1-8.5_
 
-  - [~] 7.3 Implement EmailContextMenu.kt
+  - [x] 7.3 Implement EmailContextMenu.kt
     - Create `ui/screens/email/EmailContextMenu.kt` composable
     - Display context menu on long-press (when not in multi-select mode): Archive, Delete, Mark Unread/Read
     - Each action triggers undo toast flow
     - _Requirements: 9.1-9.4_
 
-  - [~] 7.4 Implement BundleToolbar.kt (two-row sticky toolbar)
+  - [x] 7.4 Implement BundleToolbar.kt (two-row sticky toolbar)
     - Create `ui/screens/email/BundleToolbar.kt` composable
     - Row 1: Bulk actions bar (delegated to BulkActionsBar)
     - Row 2: Bundle tabs from API with colors, count badges, priority arrows, dimmed state when not inbox
     - Handle bundle tab selection, drag-to-reorder, long-press context menu
     - _Requirements: 19.1-19.5, 20.1-20.5, 21.1-21.2, 23.1-23.4, 26.1-26.2_
 
-  - [~] 7.5 Implement BulkActionsBar.kt
+  - [x] 7.5 Implement BulkActionsBar.kt
     - Create `ui/screens/email/BulkActionsBar.kt` composable
     - Display: Select All checkbox (with indeterminate state), Archive button, Tag button, Read/Unread button, Delete button (danger styling)
     - Enable/disable buttons based on selection state
     - Display "N selected" count
     - _Requirements: 2.5, 27.1-27.4, 28.1-28.5, 29.1-29.5, 30.1-30.5, 31.1-31.6_
 
-  - [~] 7.6 Implement AccountFilterPills.kt
+  - [x] 7.6 Implement AccountFilterPills.kt
     - Create `ui/screens/email/AccountFilterPills.kt` composable
     - Display one pill per configured account with nickname
     - Handle toggle active/inactive, sync spinner, error state (red + warning icon), success indicator (green)
@@ -230,25 +230,25 @@ This plan implements full email client feature parity between the CWOC Android a
     - Tap error-state pill shows detailed error toast with "Email Settings", "Copy Error", "Dismiss" options
     - _Requirements: 33.1-33.8_
 
-  - [~] 7.7 Implement BundleContextMenu.kt
+  - [x] 7.7 Implement BundleContextMenu.kt
     - Create `ui/screens/email/BundleContextMenu.kt` composable
     - Display on long-press (500ms): Edit, Disable (auto-bundles), Delete (user-created, not "Everything Else")
     - _Requirements: 22.1-22.7_
 
-  - [~] 7.8 Implement BundleModals.kt (Create and Edit Bundle)
+  - [x] 7.8 Implement BundleModals.kt (Create and Edit Bundle)
     - Create `ui/screens/email/BundleModals.kt` composable
     - Create Bundle modal: Name field, Description textarea, Tab Color picker, Show in Omni View checkbox, Cancel/Define Rule buttons
     - Edit Bundle modal: pre-populated fields, Change Rules button, Delete button with confirmation, Cancel/Save buttons
     - _Requirements: 24.1-24.7, 25.1-25.6_
 
-  - [~] 7.9 Implement TagPickerModal.kt
+  - [x] 7.9 Implement TagPickerModal.kt
     - Create `ui/screens/email/TagPickerModal.kt` composable
     - Full-screen modal with header "Tag N email(s)"
     - Display shared tag tree view with search functionality
     - Apply/Cancel actions
     - _Requirements: 29.2-29.5_
 
-  - [~] 7.10 Implement EmailThreadView.kt (nested chits in threads)
+  - [x] 7.10 Implement EmailThreadView.kt (nested chits in threads)
     - Create `ui/screens/email/EmailThreadView.kt` composable
     - Display nested chit cards inline within expanded threads: nest icon, title, content preview, due date
     - Sort nested chits by due_date ascending, then start_datetime ascending
@@ -256,7 +256,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - Tap navigates to chit editor
     - _Requirements: 18.1-18.6_
 
-  - [~] 7.11 Update EmailScreen.kt to integrate all new list view components
+  - [x] 7.11 Update EmailScreen.kt to integrate all new list view components
     - Replace existing EmailThreadCard with EmailCardEnhanced
     - Add BundleToolbar (with BulkActionsBar) as sticky header
     - Add AccountFilterPills row
@@ -269,11 +269,11 @@ This plan implements full email client feature parity between the CWOC Android a
     - Wire undo toast for archive/delete actions
     - _Requirements: 13.1-13.6, 14.1-14.6, 15.1-15.3, 16.1-16.3, 32.1-32.6, 34.1-34.3, 35.1-35.4_
 
-- [~] 8. Checkpoint — Email list view UI complete
+- [x] 8. Checkpoint — Email list view UI complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 9. UI Layer — Compose/Editor Composables
-  - [~] 9.1 Implement RecipientChipField.kt
+- [x] 9. UI Layer — Compose/Editor Composables
+  - [x] 9.1 Implement RecipientChipField.kt
     - Create `ui/screens/email/RecipientChipField.kt` composable
     - Display To/CC/BCC fields with styled recipient chips (contact image, color, remove button)
     - Implement autocomplete dropdown (max 5 results, favorites first, star indicator, name + email)
@@ -281,14 +281,14 @@ This plan implements full email client feature parity between the CWOC Android a
     - Compute contrast-safe text color for chip backgrounds
     - _Requirements: 36.1-36.8, 37.1-37.6_
 
-  - [~] 9.2 Implement FormattingToolbar.kt
+  - [x] 9.2 Implement FormattingToolbar.kt
     - Create `ui/screens/email/FormattingToolbar.kt` composable
     - Display buttons: Bold, Italic, Strikethrough, Link, Heading (H1/H2/H3 dropdown), Bullet List, Numbered List, Blockquote, Inline Code, Horizontal Rule
     - Each button delegates to MarkdownFormatter via EmailComposeViewModel
     - Wire keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+K, Ctrl+E, Ctrl+Shift+X, Ctrl+Shift+8, Ctrl+Shift+7, Ctrl+Shift+.)
     - _Requirements: 38.1-38.12, 39.1-39.8_
 
-  - [~] 9.3 Implement HtmlEmailRenderer.kt
+  - [x] 9.3 Implement HtmlEmailRenderer.kt
     - Create `ui/screens/email/HtmlEmailRenderer.kt` composable
     - Render HTML email in sandboxed WebView (JavaScript disabled)
     - Sanitize HTML: remove script, iframe, object, embed, form, input, button, select, textarea tags
@@ -307,21 +307,21 @@ This plan implements full email client feature parity between the CWOC Android a
     - **Property 20: External Content Blocking**
     - **Validates: Requirements 51.1, 51.4, 51.5**
 
-  - [~] 9.6 Implement SendLaterModal.kt
+  - [x] 9.6 Implement SendLaterModal.kt
     - Create `ui/screens/email/SendLaterModal.kt` composable
     - Date picker (min: today) and time picker (default: now + 1 hour)
     - Schedule/Cancel buttons
     - On schedule: save chit + call schedule API, navigate to Scheduled folder
     - _Requirements: 46.1-46.6_
 
-  - [~] 9.7 Implement AttachmentBar.kt
+  - [x] 9.7 Implement AttachmentBar.kt
     - Create `ui/screens/email/AttachmentBar.kt` composable
     - Display attachment chips: icon/thumbnail, filename, file size
     - Image attachments show actual thumbnails; non-image show file type icon
     - Tap opens preview modal; long-press shows View/Download context menu
     - _Requirements: 56.1-56.6_
 
-  - [~] 9.8 Implement EmailThreadViewInEditor.kt (thread section in editor)
+  - [x] 9.8 Implement EmailThreadViewInEditor.kt (thread section in editor)
     - Create `ui/screens/email/EmailThreadViewInEditor.kt` composable
     - Display "Thread (N messages)" section below email body
     - Simple list for ≤3 messages (sender, date, 100-char preview)
@@ -331,7 +331,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - Display nested chits interspersed with messages
     - _Requirements: 55.1-55.7_
 
-  - [~] 9.9 Update EmailComposeZone.kt to integrate all compose features
+  - [x] 9.9 Update EmailComposeZone.kt to integrate all compose features
     - Add RecipientChipField for To/CC/BCC
     - Add FormattingToolbar above/below body textarea
     - Add live markdown preview with 500ms debounce and Render toggle
@@ -349,11 +349,11 @@ This plan implements full email client feature parity between the CWOC Android a
     - Add EmailThreadViewInEditor section
     - _Requirements: 40.1-40.3, 41.1-41.3, 42.1-42.3, 43.1-43.3, 44.1-44.6, 45.1-45.3, 47.1-47.3, 48.1-48.7, 49.1-49.7, 50.5-50.6, 52.1-52.3, 53.1-53.3, 54.1-54.3, 57.1-57.5_
 
-- [~] 10. Checkpoint — Compose/editor UI complete
+- [x] 10. Checkpoint — Compose/editor UI complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. UI Layer — Email Settings Screen
-  - [~] 11.1 Implement EmailSettingsScreen.kt
+- [x] 11. UI Layer — Email Settings Screen
+  - [x] 11.1 Implement EmailSettingsScreen.kt
     - Create `ui/screens/email/EmailSettingsScreen.kt` composable
     - Accounts section: account pill chips summary, "Manage Accounts" button
     - Privacy section: Block Tracking Pixels checkbox, External Content selector (Allow/Block/Known Senders), Read Receipts selector (Never/Always/Ask/Contacts Only), Undo Send Delay number input
@@ -363,7 +363,7 @@ This plan implements full email client feature parity between the CWOC Android a
     - Backfill section: Backfill button with estimate display and confirmation
     - _Requirements: 59.1-59.2, 62.1-62.5, 63.1-63.3, 64.1-64.5, 65.1-65.6_
 
-  - [~] 11.2 Implement AccountsModal.kt
+  - [x] 11.2 Implement AccountsModal.kt
     - Create `ui/screens/email/AccountsModal.kt` composable
     - List view: all accounts (icon, nickname/email, server info), Add Account button
     - Edit view: Nickname, Email, Display Name, Username, Password (visibility toggle), IMAP Host/Port/Security, SMTP Host/Port/Security
@@ -371,14 +371,14 @@ This plan implements full email client feature parity between the CWOC Android a
     - Back button, Delete button with confirmation
     - _Requirements: 59.3-59.8, 60.1-60.4_
 
-  - [~] 11.3 Implement SignatureEditorModal.kt
+  - [x] 11.3 Implement SignatureEditorModal.kt
     - Create `ui/screens/email/SignatureEditorModal.kt` composable
     - Markdown textarea (top half) with keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+K)
     - Live-rendered markdown preview (bottom half) with 500ms debounce
     - Done/Cancel buttons
     - _Requirements: 61.1-61.7_
 
-- [~] 12. Final Checkpoint — All features complete
+- [x] 12. Final Checkpoint — All features complete
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

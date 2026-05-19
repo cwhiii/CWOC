@@ -1,6 +1,7 @@
 package com.cwoc.app.data.repository
 
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.data.remote.BundlesResponse
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.remote.dto.CreateBundleRequest
 import com.cwoc.app.data.remote.dto.ReorderBundlesRequest
@@ -68,15 +69,21 @@ class BundleRepositoryImpl @Inject constructor(
 
     override suspend fun fetchBundles(): Result<List<BundleDto>> {
         return try {
+            android.util.Log.d("CWOC_BUNDLES", "fetchBundles: calling GET /api/bundles")
             val response = apiService.get().getBundles()
+            android.util.Log.d("CWOC_BUNDLES", "fetchBundles: response code=${response.code()}")
             if (response.isSuccessful) {
-                val list = response.body() ?: emptyList()
+                val body = response.body()
+                val list = body?.bundles ?: emptyList()
+                android.util.Log.d("CWOC_BUNDLES", "fetchBundles: success, ${list.size} bundles")
                 _bundles.value = list
                 Result.success(list)
             } else {
+                android.util.Log.e("CWOC_BUNDLES", "fetchBundles: failed ${response.code()} ${response.message()}")
                 Result.failure(Exception("Failed to fetch bundles: ${response.code()} ${response.message()}"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("CWOC_BUNDLES", "fetchBundles: exception ${e.javaClass.simpleName}: ${e.message}")
             Result.failure(e)
         }
     }
