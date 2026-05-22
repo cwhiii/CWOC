@@ -43,7 +43,7 @@ import javax.inject.Inject
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
 private val ParchmentBrown = Color(0xFF6B4E31)
-private val ParchmentText = Color(0xFF4A3520)
+private val ParchmentText = Color(0xFF2B1E0F) // Matches web's contrastColorForBg dark output
 private val ParchmentBg = Color(0xFFFFFAF0)
 private val TodayHighlight = Color(0xFFD4AF37)
 
@@ -429,7 +429,7 @@ private fun DayGroup(
 @Composable
 private fun EventRow(chit: KioskChit, onClick: () -> Unit) {
     val bgColor = parseChitColor(chit.color)
-    val textColor = if (isLightColor(bgColor)) ParchmentText else Color.White
+    val textColor = if (isLightColor(bgColor)) ParchmentText else Color(0xFFFDF5E6)
 
     Row(
         modifier = Modifier
@@ -471,7 +471,7 @@ private fun EventRow(chit: KioskChit, onClick: () -> Unit) {
 @Composable
 private fun TaskRow(chit: KioskChit, onClick: () -> Unit) {
     val bgColor = parseChitColor(chit.color)
-    val textColor = if (isLightColor(bgColor)) ParchmentText else Color.White
+    val textColor = if (isLightColor(bgColor)) ParchmentText else Color(0xFFFDF5E6)
 
     Row(
         modifier = Modifier
@@ -636,7 +636,5 @@ private fun parseChitColor(color: String?): Color {
     } catch (e: Exception) { Color(0xFFFFF8E1) }
 }
 
-private fun isLightColor(color: Color): Boolean {
-    val luminance = 0.299f * color.red + 0.587f * color.green + 0.114f * color.blue
-    return luminance > 0.6f
-}
+private fun isLightColor(color: Color): Boolean =
+    com.cwoc.app.ui.components.CwocChitCardStyle.isLightBackground(color)

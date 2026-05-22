@@ -147,9 +147,18 @@ class WeatherWidgetConfigActivity : BaseWidgetConfigActivity() {
                 val address = obj.optString("address", "").ifBlank { label }
                 if (label.isBlank() && address.isBlank()) continue
 
-                // Some locations may have lat/lon stored directly
-                val lat = if (obj.has("lat")) obj.optDouble("lat", Double.NaN) else Double.NaN
-                val lon = if (obj.has("lon")) obj.optDouble("lon", Double.NaN) else Double.NaN
+                // Parse lat/lon — check multiple field name variants (matching MapViewModel)
+                val lat = when {
+                    obj.has("lat") -> obj.optDouble("lat", Double.NaN)
+                    obj.has("latitude") -> obj.optDouble("latitude", Double.NaN)
+                    else -> Double.NaN
+                }
+                val lon = when {
+                    obj.has("lon") -> obj.optDouble("lon", Double.NaN)
+                    obj.has("lng") -> obj.optDouble("lng", Double.NaN)
+                    obj.has("longitude") -> obj.optDouble("longitude", Double.NaN)
+                    else -> Double.NaN
+                }
 
                 result.add(
                     SavedLocation(
@@ -278,28 +287,36 @@ class WeatherWidgetConfigActivity : BaseWidgetConfigActivity() {
     }
 
     /**
-     * Perform geocoding via Nominatim API.
+     * Perform geocoding via the server's /api/geocode endpoint.
+     * This uses the same progressive fallback (zoom-out) as the desktop weather.
      * Returns (lat, lon) pair on success, null on failure.
      */
     private fun performGeocode(query: String): Pair<Double, Double>? {
         return try {
+            // Get server URL from SharedPreferences
+            val appPrefs = getSharedPreferences("cwoc_prefs", MODE_PRIVATE)
+            val serverUrl = appPrefs.getString("server_url", null)?.trimEnd('/') ?: return null
+            val authToken = appPrefs.getString("auth_token", null) ?: return null
+
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val urlStr = "https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1"
+            val urlStr = "$serverUrl/api/geocode?q=$encodedQuery"
             val url = URL(urlStr)
             val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
             connection.requestMethod = "GET"
             connection.setRequestProperty("User-Agent", "CWOC-Android-Widget/1.0")
+            connection.setRequestProperty("Authorization", "Bearer $authToken")
 
             val responseCode = connection.responseCode
             if (responseCode != 200) return null
 
             val responseBody = connection.inputStream.bufferedReader().readText()
-            val array = JSONArray(responseBody)
-            if (array.length() == 0) return null
+            val json = org.json.JSONObject(responseBody)
+            val results = json.optJSONArray("results")
+            if (results == null || results.length() == 0) return null
 
-            val firstResult = array.getJSONObject(0)
+            val firstResult = results.getJSONObject(0)
             val lat = firstResult.getDouble("lat")
             val lon = firstResult.getDouble("lon")
 

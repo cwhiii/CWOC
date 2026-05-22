@@ -61,8 +61,8 @@ fun ClockModal(
         }
     }
     val formatter = remember(timeFormat) {
-        if (timeFormat == "24hour") DateTimeFormatter.ofPattern("HH:mm:ss")
-        else DateTimeFormatter.ofPattern("h:mm:ss a")
+        if (timeFormat == "24hour") DateTimeFormatter.ofPattern("HH:mm")
+        else DateTimeFormatter.ofPattern("h:mm a")
     }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
 

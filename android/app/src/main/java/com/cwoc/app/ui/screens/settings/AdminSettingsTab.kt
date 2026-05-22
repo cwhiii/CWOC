@@ -363,7 +363,7 @@ private fun AdministrationSection(
         "24 hours" to "24",
         "1 week" to "168",
         "1 month" to "720",
-        "Never" to "never"
+        "Never" to "0"
     )
 
     // Find the display label for the current stored value

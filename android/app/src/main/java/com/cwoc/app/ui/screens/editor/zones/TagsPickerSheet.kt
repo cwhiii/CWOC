@@ -558,10 +558,7 @@ private fun parseTagColor(hex: String): Color {
 }
 
 /**
- * Returns white or dark text color based on the luminance of the background color.
- * Used for chip label text to ensure readability.
+ * Delegate to the single source of truth for contrast color.
  */
-private fun contrastTextColor(background: Color): Color {
-    val luminance = 0.299f * background.red + 0.587f * background.green + 0.114f * background.blue
-    return if (luminance > 0.5f) Color(0xFF1A1208) else Color.White
-}
+private fun contrastTextColor(background: Color): Color =
+    com.cwoc.app.ui.components.CwocChitCardStyle.contrastTextColor(background)

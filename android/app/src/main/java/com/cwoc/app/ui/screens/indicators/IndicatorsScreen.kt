@@ -22,8 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,11 +71,11 @@ fun IndicatorsScreen(
     val selectedRange by viewModel.selectedRange.collectAsState()
     val healthEntries by viewModel.healthEntries.collectAsState()
 
-    // Mode state: charts, calendar, log
-    var selectedMode by remember { mutableStateOf("charts") }
+    // Mode driven by sidebar state
+    val sidebarState = sidebarStateViewModel?.state?.collectAsState()?.value
+    val selectedMode = sidebarState?.indicatorsMode ?: "charts"
 
     // Sync sidebar indicatorsRange → ViewModel time range
-    val sidebarState = sidebarStateViewModel?.state?.collectAsState()?.value
     LaunchedEffect(sidebarState?.indicatorsRange) {
         if (sidebarState != null) {
             val range = when (sidebarState.indicatorsRange) {
@@ -99,54 +97,15 @@ fun IndicatorsScreen(
             .fillMaxSize()
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        // Mode toggle row (Calendar | Log | Charts)
-        IndicatorsModeToggle(
-            selectedMode = selectedMode,
-            onModeSelected = { selectedMode = it }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         when (selectedMode) {
             "charts" -> {
                 if (charts.isEmpty()) {
                     EmptyIndicatorsState()
                 } else {
-                    // Graph filter: show/hide individual indicator types
-                    val allTypes = remember(charts) { charts.map { it.type } }
-                    var hiddenTypes by remember { mutableStateOf(setOf<String>()) }
-                    val visibleCharts = charts.filter { it.type !in hiddenTypes }
-
-                    Column {
-                        // Filter chip row (scrollable)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            allTypes.forEach { type ->
-                                FilterChip(
-                                    selected = type !in hiddenTypes,
-                                    onClick = {
-                                        hiddenTypes = if (type in hiddenTypes) hiddenTypes - type
-                                            else hiddenTypes + type
-                                    },
-                                    label = { Text(type.replaceFirstChar { it.uppercase() }, fontSize = 11.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = indicatorTypeColor(type),
-                                        selectedLabelColor = Color.White
-                                    )
-                                )
-                            }
-                        }
-
-                        LazyColumn {
-                            items(visibleCharts, key = { it.type }) { chart ->
-                                IndicatorChartCard(chart = chart)
-                                Spacer(modifier = Modifier.height(12.dp))
-                            }
+                    LazyColumn {
+                        items(charts, key = { it.type }) { chart ->
+                            IndicatorChartCard(chart = chart)
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
                 }
@@ -157,41 +116,6 @@ fun IndicatorsScreen(
             "log" -> {
                 IndicatorsLogView(healthEntries = healthEntries)
             }
-        }
-    }
-}
-
-/**
- * Mode toggle row: Calendar | Log | Charts (matching web's 3-value pill toggle).
- */
-@Composable
-private fun IndicatorsModeToggle(
-    selectedMode: String,
-    onModeSelected: (String) -> Unit
-) {
-    val modes = listOf(
-        "charts" to "📊 Charts",
-        "calendar" to "📅 Calendar",
-        "log" to "📋 Log"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        modes.forEach { (modeValue, label) ->
-            FilterChip(
-                selected = selectedMode == modeValue,
-                onClick = { onModeSelected(modeValue) },
-                label = { Text(label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF6B4E31),
-                    selectedLabelColor = Color.White
-                )
-            )
         }
     }
 }

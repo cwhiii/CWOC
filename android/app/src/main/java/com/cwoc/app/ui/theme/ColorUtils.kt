@@ -8,11 +8,11 @@ import androidx.compose.ui.graphics.Color
  */
 object ColorUtils {
 
-    /** Dark text color for light backgrounds */
-    private val DarkText = Color(0xFF1A1208)
+    /** Dark text color for light backgrounds — matches web's #2b1e0f */
+    private val DarkText = Color(0xFF2B1E0F)
 
-    /** Light text color for dark backgrounds */
-    private val LightText = Color(0xFFFFFAF0)
+    /** Light text color for dark backgrounds — matches web's #fdf5e6 */
+    private val LightText = Color(0xFFFDF5E6)
 
     /** The 20-color palette matching the web contact editor */
     val ContactColorPalette = listOf(
@@ -44,14 +44,10 @@ object ColorUtils {
 
     /**
      * Compute the auto-contrast text color for a given background color.
-     * Uses the W3C relative luminance formula to determine if text should be dark or light.
+     * Delegates to CwocChitCardStyle.contrastTextColor — the single source of truth.
      */
-    fun computeAutoContrast(backgroundColor: Color): Color {
-        val luminance = 0.299 * backgroundColor.red +
-                0.587 * backgroundColor.green +
-                0.114 * backgroundColor.blue
-        return if (luminance > 0.5) DarkText else LightText
-    }
+    fun computeAutoContrast(backgroundColor: Color): Color =
+        com.cwoc.app.ui.components.CwocChitCardStyle.contrastTextColor(backgroundColor)
 
     /**
      * Given a contact's color hex string, return a pair of (background, text) colors

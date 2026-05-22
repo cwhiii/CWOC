@@ -36,7 +36,7 @@ data class SettingsFormState(
     // --- General Section ---
     val timeFormat: String = "12hour",
     val sex: String = "Man",
-    val snoozeLength: String = "5",
+    val snoozeLength: String = "5 minutes",
     val calendarSnapInterval: String = "15",
     val defaultTimezone: String = "America/New_York",
     val unitSystem: String = "imperial",
@@ -44,7 +44,7 @@ data class SettingsFormState(
 
     // --- Clocks Section ---
     val timeFormatDisplay: String = "12hour",
-    val clockOrientation: String = "horizontal",
+    val clockOrientation: String = "Horizontal",
     val activeClocks: String = "[\"12 Hour\"]",
     val timezoneOverride: String = "",
 
@@ -85,7 +85,7 @@ data class SettingsFormState(
     val workHoursEnabled: String = "0",
     val workStartHour: String = "9",
     val workEndHour: String = "17",
-    val workDays: String = "mon,tue,wed,thu,fri",
+    val workDays: String = "1,2,3,4,5",
 
     // --- Habits Section ---
     val habitsSuccessWindow: String = "30",
@@ -123,7 +123,7 @@ data class SettingsFormState(
     val emailBackfill: String = "false",
 
     // --- Privacy & Sending ---
-    val emailBlockTracking: String = "true",
+    val emailBlockTracking: String = "1",
     val emailExternalContent: String = "allow",
     val emailReadReceipts: String = "never",
     val emailUndoSendDelay: String = "10",
@@ -132,12 +132,12 @@ data class SettingsFormState(
     // --- Display ---
     val emailMaxAttachmentSize: String = "25",
     val emailGroupBy: String = "date",
-    val emailPaginate: String = "true",
+    val emailPaginate: String = "1",
     val emailPageSize: String = "50",
 
     // --- Bundles ---
-    val emailBundlesEnabled: String = "true",
-    val emailMultiPlacement: String = "false",
+    val emailBundlesEnabled: String = "1",
+    val emailMultiPlacement: String = "0",
     val bundlesShowCount: String = "both",
     val emailAutoBundles: String = "[]",
 
@@ -1645,7 +1645,7 @@ class SettingsViewModel @Inject constructor(
             // --- General Tab: General Section ---
             timeFormat = entity.timeFormat ?: "12hour",
             sex = entity.sex ?: "man",
-            snoozeLength = entity.snoozeLength ?: "5",
+            snoozeLength = entity.snoozeLength ?: "5 minutes",
             calendarSnapInterval = entity.calendarSnap ?: "15",
             defaultTimezone = entity.defaultTimezone ?: "America/New_York",
             unitSystem = entity.unitSystem ?: "imperial",
@@ -1653,7 +1653,7 @@ class SettingsViewModel @Inject constructor(
 
             // --- General Tab: Clocks Section ---
             timeFormatDisplay = entity.timeFormat ?: "12hour",
-            clockOrientation = entity.clockOrientation ?: entity.alarmOrientation ?: "horizontal",
+            clockOrientation = (entity.clockOrientation ?: entity.alarmOrientation ?: "Horizontal").replaceFirstChar { it.uppercase() },
             activeClocks = entity.activeClocks ?: "[\"12 Hour\"]",
             timezoneOverride = entity.timezoneOverride ?: "",
 
@@ -1690,7 +1690,7 @@ class SettingsViewModel @Inject constructor(
             workHoursEnabled = if (entity.workStartHour != null && entity.workEndHour != null) "1" else "0",
             workStartHour = entity.workStartHour ?: "9",
             workEndHour = entity.workEndHour ?: "17",
-            workDays = entity.workDays ?: "mon,tue,wed,thu,fri",
+            workDays = entity.workDays ?: "1,2,3,4,5",
 
             // --- Views Tab: Habits ---
             habitsSuccessWindow = entity.habitsSuccessWindow ?: "30",
@@ -1722,7 +1722,7 @@ class SettingsViewModel @Inject constructor(
             emailBackfill = "false",
 
             // --- Email Tab: Privacy & Sending ---
-            emailBlockTracking = entity.emailBlockTrackingPixels ?: "true",
+            emailBlockTracking = SettingsPayloadMapper.normalizeBoolPublic(entity.emailBlockTrackingPixels, "1"),
             emailExternalContent = entity.emailExternalContent ?: "allow",
             emailReadReceipts = entity.emailReadReceipts ?: "never",
             emailUndoSendDelay = entity.emailUndoSendDelay ?: "10",
@@ -1731,12 +1731,12 @@ class SettingsViewModel @Inject constructor(
             // --- Email Tab: Display ---
             emailMaxAttachmentSize = entity.attachmentMaxSizeMb ?: "25",
             emailGroupBy = entity.emailGroupBy ?: "date",
-            emailPaginate = entity.paginateEmail ?: "true",
+            emailPaginate = SettingsPayloadMapper.normalizeBoolPublic(entity.paginateEmail, "1"),
             emailPageSize = "50",
 
             // --- Email Tab: Bundles ---
-            emailBundlesEnabled = if (entity.bundlesEnabled == true) "true" else "false",
-            emailMultiPlacement = if (entity.bundlesMultiPlacement == true) "true" else "false",
+            emailBundlesEnabled = if (entity.bundlesEnabled == true) "1" else "0",
+            emailMultiPlacement = if (entity.bundlesMultiPlacement == true) "1" else "0",
             bundlesShowCount = entity.bundlesShowCount ?: entity.emailBundlesCountDisplay ?: "both",
             emailAutoBundles = "[]",
 
@@ -1891,8 +1891,8 @@ class SettingsViewModel @Inject constructor(
             emailSignature = formState.emailSignature,
             emailGroupBy = formState.emailGroupBy,
             paginateEmail = formState.emailPaginate,
-            bundlesEnabled = formState.emailBundlesEnabled == "true",
-            bundlesMultiPlacement = formState.emailMultiPlacement == "true",
+            bundlesEnabled = formState.emailBundlesEnabled == "1",
+            bundlesMultiPlacement = formState.emailMultiPlacement == "1",
             bundlesShowCount = formState.bundlesShowCount,
             emailBundlesCountDisplay = formState.bundlesShowCount,
             attachmentMaxSizeMb = formState.attachmentMaxSizeMb,

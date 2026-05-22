@@ -1937,20 +1937,10 @@ private fun buildTagTree(tags: List<TagItem>): List<TagTreeNode> {
 
 /**
  * Check if a hex color is "light" (for border visibility on light swatches).
+ * Delegates to CwocChitCardStyle.isLightBackground — the single source of truth.
  */
-private fun isLightColor(hex: String): Boolean {
-    return try {
-        val clean = hex.removePrefix("#")
-        if (clean.length < 6) return false
-        val r = clean.substring(0, 2).toInt(16)
-        val g = clean.substring(2, 4).toInt(16)
-        val b = clean.substring(4, 6).toInt(16)
-        // Perceived brightness formula
-        (r * 299 + g * 587 + b * 114) / 1000 > 180
-    } catch (e: Exception) {
-        false
-    }
-}
+private fun isLightColor(hex: String): Boolean =
+    com.cwoc.app.ui.components.CwocChitCardStyle.isLightBackground(hex)
 
 // ============================================================
 // JSON Parsing & Serialization

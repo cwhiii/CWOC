@@ -124,8 +124,7 @@ private fun TagChip(tagName: String, configuredColor: String? = null) {
     }
     // B1 sub-item 5: font color contrast logic — use dark text on light chips, light on dark
     val textColor = remember(chipColor) {
-        val luminance = (0.299f * chipColor.red + 0.587f * chipColor.green + 0.114f * chipColor.blue)
-        if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFFFFFF)
+        CwocChitCardStyle.contrastTextColor(chipColor)
     }
 
     Surface(

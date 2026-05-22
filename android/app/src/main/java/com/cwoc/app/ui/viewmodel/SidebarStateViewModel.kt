@@ -37,10 +37,8 @@ data class SidebarState(
     val habitsIncludeRules: Boolean = false,
 
     // Indicators controls
-    val indicatorsRange: String = "day", // day|week|month|year|all
-    val indicatorsCustomStart: String? = null,
-    val indicatorsCustomEnd: String? = null,
-    val indicatorsVisibleGraphs: Set<String> = emptySet(),
+    val indicatorsRange: String = "month", // day|week|month|year|all
+    val indicatorsMode: String = "charts", // charts|calendar|log
 
     // Search
     val searchText: String = "",
@@ -188,12 +186,9 @@ class SidebarStateViewModel @Inject constructor(
         _state.update { it.copy(indicatorsRange = range) }
     }
 
-    fun setIndicatorsCustomRange(start: String?, end: String?) {
-        _state.update { it.copy(indicatorsCustomStart = start, indicatorsCustomEnd = end) }
-    }
-
-    fun setIndicatorsVisibleGraphs(graphs: Set<String>) {
-        _state.update { it.copy(indicatorsVisibleGraphs = graphs) }
+    fun setIndicatorsMode(mode: String) {
+        _state.update { it.copy(indicatorsMode = mode) }
+        prefs.edit().putString("sidebar_indicators_mode", mode).apply()
     }
 
     // ── Search ───────────────────────────────────────────────────────────
@@ -233,6 +228,7 @@ class SidebarStateViewModel @Inject constructor(
         val monthMode = prefs.getString("sidebar_month_mode", "compress") ?: "compress"
         val habitsWindow = prefs.getInt("sidebar_habits_window", 30)
         val habitsRules = prefs.getBoolean("sidebar_habits_rules", false)
+        val indicatorsMode = prefs.getString("sidebar_indicators_mode", "charts") ?: "charts"
         val savedSearchesJson = prefs.getString("sidebar_saved_searches", "[]") ?: "[]"
 
         val savedSearches = try {
@@ -249,6 +245,7 @@ class SidebarStateViewModel @Inject constructor(
                 monthMode = monthMode,
                 habitsSuccessWindow = habitsWindow,
                 habitsIncludeRules = habitsRules,
+                indicatorsMode = indicatorsMode,
                 savedSearches = savedSearches
             )
         }

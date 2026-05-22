@@ -6,21 +6,45 @@
     android:background="#f5e6cc"
     android:padding="8dp">
 
-    <TextView
-        android:id="@+id/widget_title"
+    <!-- Title row with Add button -->
+    <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#4a2c2a"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:paddingBottom="4dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#4a2c2a"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Add item button — opens the chit editor to add items -->
+        <TextView
+            android:id="@+id/widget_add_button"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#fffaf0"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:background="#6b4e31" />
+
+    </LinearLayout>
 
     <ListView
         android:id="@+id/checklist_list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
     <TextView
         android:id="@+id/widget_empty"

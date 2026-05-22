@@ -68,14 +68,41 @@ object CwocChitCardStyle {
 
     /**
      * Compute the contrast text color for a given background.
-     * Matches web's contrastColorForBg(hex) function:
-     * - luminance > 150 → dark text (#2b1e0f)
-     * - luminance <= 150 → light text (#fdf5e6)
+     * Matches web's contrastColorForBg(hex) function EXACTLY:
+     *   lum = (r*299 + g*587 + b*114) / 1000  (on 0-255 scale)
+     *   return dark '#2b1e0f' if lum > 150, else light '#fdf5e6'
+     *
+     * THIS IS THE SINGLE SOURCE OF TRUTH for contrast color in the entire app.
+     * Do NOT create local/private versions of this function elsewhere.
      */
     fun contrastTextColor(bgColor: Color): Color {
-        val luminance = (bgColor.red * 299f + bgColor.green * 587f + bgColor.blue * 114f) / 1000f
-        // Web threshold is 150/255 ≈ 0.588
-        return if (luminance > 0.588f) Color(0xFF2B1E0F) else Color(0xFFFDF5E6)
+        val r = (bgColor.red * 255).toInt()
+        val g = (bgColor.green * 255).toInt()
+        val b = (bgColor.blue * 255).toInt()
+        val lum = (r * 299 + g * 587 + b * 114) / 1000
+        return if (lum > 150) Color(0xFF2B1E0F) else Color(0xFFFDF5E6)
+    }
+
+    /**
+     * Returns true if the background is "light" (dark text should be used).
+     * Same threshold as contrastTextColor — just returns a boolean.
+     */
+    fun isLightBackground(bgColor: Color): Boolean {
+        val r = (bgColor.red * 255).toInt()
+        val g = (bgColor.green * 255).toInt()
+        val b = (bgColor.blue * 255).toInt()
+        val lum = (r * 299 + g * 587 + b * 114) / 1000
+        return lum > 150
+    }
+
+    /**
+     * Overload: check if a hex color string is "light".
+     * Returns true for null/blank/transparent (parchment default is light).
+     */
+    fun isLightBackground(hex: String?): Boolean {
+        if (hex.isNullOrBlank() || hex == "transparent") return true
+        val bg = parseHexColor(hex) ?: return true
+        return isLightBackground(bg)
     }
 
     /**

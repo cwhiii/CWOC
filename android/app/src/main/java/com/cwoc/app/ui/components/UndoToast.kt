@@ -64,7 +64,8 @@ fun UndoToast(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 96.dp, top = 24.dp),
             shape = RoundedCornerShape(12.dp),
             tonalElevation = 6.dp,
             shadowElevation = 4.dp,

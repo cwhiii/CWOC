@@ -50,12 +50,12 @@ fun SettingsEntity.toPushDto(): SettingsPushDto {
         put("view_order", viewOrder?.let { gson.fromJson(it, Any::class.java) })
         // Audit settings
         put("audit_log_max_days", auditLogMaxDays)
-        put("audit_log_max_mb", auditLogMaxMb)
+        put("audit_log_max_mb", auditLogMaxMb?.toInt())
         // Notification defaults
         put("default_notifications", defaultNotifications?.let { gson.fromJson(it, Any::class.java) })
         // Shared/kiosk
         put("shared_tags", sharedTags?.let { gson.fromJson(it, Any::class.java) })
-        put("kiosk_users", kioskUsers?.let { gson.fromJson(it, Any::class.java) })
+        put("kiosk_users", kioskSelectedTags?.let { gson.fromJson(it, Any::class.java) } ?: kioskUsers?.let { gson.fromJson(it, Any::class.java) })
         // Map settings
         put("map_default_lat", mapDefaultLat)
         put("map_default_lon", mapDefaultLon)
@@ -78,8 +78,8 @@ fun SettingsEntity.toPushDto(): SettingsPushDto {
         // Email pagination
         put("paginate_email", paginateEmail)
         // Bundles
-        put("bundles_multi_placement", bundlesMultiPlacement)
-        put("bundles_enabled", bundlesEnabled)
+        put("bundles_multi_placement", if (bundlesMultiPlacement == true) "1" else "0")
+        put("bundles_enabled", if (bundlesEnabled == true) "1" else "0")
         put("bundles_show_count", bundlesShowCount)
         // Map thumbnails
         put("show_map_thumbnails", showMapThumbnails)

@@ -50,18 +50,9 @@ import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
-import com.cwoc.app.ui.components.HealthIndicatorBadges
-import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.components.QuickEditSheet
 import com.cwoc.app.ui.components.SnoozePickerDialog
-import com.cwoc.app.ui.components.SwipeableChitCard
 import com.cwoc.app.ui.components.UndoToast
-import com.cwoc.app.ui.components.TagChipsRow
-import com.cwoc.app.ui.components.PeopleChipsRow
-import com.cwoc.app.ui.components.SharingIndicators
-import com.cwoc.app.ui.components.RsvpIndicators
-import com.cwoc.app.ui.components.ArchiveSnoozeIndicators
-import com.cwoc.app.ui.components.WeatherIndicator
 import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.sortPinnedFirst
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
@@ -70,10 +61,9 @@ import java.time.Instant
 
 /**
  * Notes screen displaying note chits with title and markdown preview.
- * Uses ChitListScaffold for FAB + sync indicator, SwipeableChitCard for swipe-to-delete,
+ * Uses ChitListScaffold for FAB + sync indicator,
  * and click-to-edit navigation.
  * Applies FilterEngine and SortEngine from FilterSortViewModel before rendering.
- * Shows UndoToast on swipe-to-delete with 5-second countdown before syncing.
  * Long-press on a card shows ChitActionMenu for pin/archive/snooze actions.
  *
  * Validates: Requirements 2.1, 4.1, 4.2, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 9.8, 10.4, 12.1, 13.1, 13.3, 13.4
@@ -439,55 +429,11 @@ private fun NoteCard(
                 }
             }
 
-            // B6: Weather indicator (for notes with location + weather data)
-            WeatherIndicator(
-                weatherDataJson = note.weatherData,
-                modifier = Modifier.padding(top = 4.dp),
-                textColor = cardTextColor.copy(alpha = 0.7f)
-            )
-
-            // B7: Location indicator
-            LocationIndicator(
-                location = note.location,
-                modifier = Modifier.padding(top = 4.dp),
-                textColor = cardTextColor.copy(alpha = 0.7f)
-            )
-
-            // B1: Tag chips
-            TagChipsRow(
-                tags = note.tags,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B4: People chips
-            PeopleChipsRow(
-                people = note.people,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B8: Sharing/stealth indicators
-            SharingIndicators(
-                chit = note,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B15: RSVP indicators
-            RsvpIndicators(
-                sharesJson = note.shares,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B9: Archive/snooze indicators
-            ArchiveSnoozeIndicators(
-                chit = note,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B10: Health indicator badges
-            HealthIndicatorBadges(
-                healthDataJson = note.healthData,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            // Tag chips — web shows these in _buildChitHeader on other views but
+            // Notes view on web does NOT show tags, people, health badges, weather text,
+            // location text, sharing, RSVP, or archive/snooze as separate sections.
+            // The emoji indicators in the title row (weather icon, map icon, alerts, etc.)
+            // are the only metadata shown on web note cards.
         }
     }
 }

@@ -28,7 +28,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
-import com.cwoc.app.data.mapper.SettingsPayloadMapper.normalizeWeekStartDay
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -187,36 +186,6 @@ fun GeneralSettingsTab(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Week Start Day Dropdown ---
-        Text(
-            text = "Week Start Day",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        run {
-            val dayOptions = listOf(
-                "0" to "Sun",
-                "1" to "Mon",
-                "2" to "Tue",
-                "3" to "Wed",
-                "4" to "Thu",
-                "5" to "Fri",
-                "6" to "Sat"
-            )
-            val currentValue = normalizeWeekStartDay(formState.weekStartDay)
-            val displayLabel = dayOptions.firstOrNull { it.first == currentValue }?.second ?: "Sun"
-            SettingsDropdown(
-                selectedValue = displayLabel,
-                options = dayOptions.map { it.second },
-                onOptionSelected = { label ->
-                    val numericValue = dayOptions.firstOrNull { it.second == label }?.first ?: "0"
-                    onUpdateSetting("week_start_day", numericValue)
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
         // --- Calendar Snap Interval Dropdown ---
         Text(
             text = "Calendar Snap Interval",
@@ -256,26 +225,47 @@ fun GeneralSettingsTab(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        val snoozeValidOptions = listOf("1", "3", "5", "10")
-        // Apply nearest-valid-option fallback if stored value isn't in the valid set
-        val effectiveSnooze = if (formState.snoozeLength in snoozeValidOptions) {
-            formState.snoozeLength
-        } else {
-            nearestValidOption(formState.snoozeLength, snoozeValidOptions)
+        // Web format: "1 minute", "3 minutes", "5 minutes", "10 minutes"
+        val snoozeValidOptions = listOf("1 minute", "3 minutes", "5 minutes", "10 minutes")
+        val snoozeDisplayMap = mapOf(
+            "1 minute" to "1 min",
+            "3 minutes" to "3 min",
+            "5 minutes" to "5 min",
+            "10 minutes" to "10 min"
+        )
+        // Normalize stored value (might be just "5" from old app version)
+        val normalizedSnooze = run {
+            if (formState.snoozeLength in snoozeValidOptions) formState.snoozeLength
+            else {
+                // Try to match by extracting number
+                val num = formState.snoozeLength.trim().split(" ").firstOrNull()?.toIntOrNull()
+                when (num) {
+                    1 -> "1 minute"
+                    3 -> "3 minutes"
+                    5 -> "5 minutes"
+                    10 -> "10 minutes"
+                    else -> "5 minutes"
+                }
+            }
         }
-        // If stored value doesn't match a valid option, update form state to nearest valid
+        // If stored value doesn't match a valid option, update form state
         LaunchedEffect(formState.snoozeLength) {
             if (formState.snoozeLength !in snoozeValidOptions) {
-                val resolved = nearestValidOption(formState.snoozeLength, snoozeValidOptions)
-                onUpdateSetting("snooze_length", resolved)
+                onUpdateSetting("snooze_length", normalizedSnooze)
             }
         }
         SettingsDropdown(
-            selectedValue = "$effectiveSnooze min",
+            selectedValue = snoozeDisplayMap[normalizedSnooze] ?: "5 min",
             options = listOf("1 min", "3 min", "5 min", "10 min"),
             onOptionSelected = { selected ->
-                val minutes = selected.replace(" min", "")
-                onUpdateSetting("snooze_length", minutes)
+                val webValue = when (selected) {
+                    "1 min" -> "1 minute"
+                    "3 min" -> "3 minutes"
+                    "5 min" -> "5 minutes"
+                    "10 min" -> "10 minutes"
+                    else -> "5 minutes"
+                }
+                onUpdateSetting("snooze_length", webValue)
             }
         )
 
@@ -470,38 +460,6 @@ fun GeneralSettingsTab(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- W1: Saved Locations Section ---
-        CwocSectionHeading(text = "Saved Locations")
-        Text(
-            text = "Manage saved locations for quick access in the Location zone.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        // TODO: Add/edit/delete saved locations list
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- W1: Tags Management Section ---
-        CwocSectionHeading(text = "Tags")
-        Text(
-            text = "Create, edit, and organize tags. Set colors and favorites.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        // TODO: Tag tree management UI
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- W1: Habits Configuration ---
-        CwocSectionHeading(text = "Habits")
-        Text(
-            text = "Default goal, frequency, and success window for habit tracking.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
         // --- Visual Indicators Configuration ---
         CollapsibleSection(
             title = "Visual Indicators",
@@ -645,7 +603,7 @@ fun GeneralSettingsTab(
             Spacer(modifier = Modifier.weight(1f))
             OutlinedButton(
                 onClick = {
-                    val newOrientation = if (formState.clockOrientation == "horizontal") "vertical" else "horizontal"
+                    val newOrientation = if (formState.clockOrientation.lowercase() == "horizontal") "Vertical" else "Horizontal"
                     onUpdateSetting("clock_orientation", newOrientation)
                 },
                 colors = CwocButtonDefaults.outsetColors(),
@@ -653,7 +611,7 @@ fun GeneralSettingsTab(
                 shape = CwocButtonDefaults.outsetShape
             ) {
                 Text(
-                    text = if (formState.clockOrientation == "horizontal") "Horizontal" else "Vertical"
+                    text = if (formState.clockOrientation.lowercase() == "horizontal") "Horizontal" else "Vertical"
                 )
             }
         }
@@ -685,7 +643,7 @@ fun GeneralSettingsTab(
         }
 
         // Determine orientation for DragGrid
-        val gridOrientation = if (formState.clockOrientation == "vertical") {
+        val gridOrientation = if (formState.clockOrientation.lowercase() == "vertical") {
             DragGridOrientation.VERTICAL
         } else {
             DragGridOrientation.HORIZONTAL

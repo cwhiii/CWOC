@@ -75,6 +75,7 @@
         <!-- Today Calendar Widget -->
         <receiver
             android:name=".widget.calendar.TodayCalendarWidgetProvider"
+            android:label="Today's Calendar"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -87,6 +88,7 @@
         <!-- Upcoming Tasks Widget -->
         <receiver
             android:name=".widget.tasks.UpcomingTasksWidgetProvider"
+            android:label="Upcoming Tasks"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -99,6 +101,7 @@
         <!-- Omni View Widget -->
         <receiver
             android:name=".widget.omniview.OmniViewWidgetProvider"
+            android:label="Omni View"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -111,6 +114,7 @@
         <!-- Quick Capture Widget -->
         <receiver
             android:name=".widget.quickcapture.QuickCaptureWidgetProvider"
+            android:label="New Chit"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -123,6 +127,7 @@
         <!-- Checklist Widget -->
         <receiver
             android:name=".widget.checklist.ChecklistWidgetProvider"
+            android:label="Checklist"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -135,6 +140,7 @@
         <!-- Upcoming Alarms Widget -->
         <receiver
             android:name=".widget.alarms.UpcomingAlarmsWidgetProvider"
+            android:label="Upcoming Alarms"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -147,6 +153,7 @@
         <!-- Project Progress Widget -->
         <receiver
             android:name=".widget.progress.ProjectProgressWidgetProvider"
+            android:label="Project Progress"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -159,6 +166,7 @@
         <!-- Weather Widget -->
         <receiver
             android:name=".widget.weather.WeatherWidgetProvider"
+            android:label="Weather"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -171,6 +179,7 @@
         <!-- Weekly Overview Widget -->
         <receiver
             android:name=".widget.weekly.WeeklyOverviewWidgetProvider"
+            android:label="Weekly Overview"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -183,6 +192,7 @@
         <!-- HST Time Bar Widget -->
         <receiver
             android:name=".widget.hstbar.HstTimeBarWidgetProvider"
+            android:label="HST Time"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

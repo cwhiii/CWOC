@@ -1,3 +1,8 @@
+- Added New Chit Zone Prefill (auto-opens relevant zones based on C CAPTN view)
+- Fixed editor zone color background on Android
+- Fixed recurring Settings save/logout bug
+- Fixed week_start_day cross-platform format mismatch
+
 ## s20260521.2104 / m20260521.2104
 
 Fixed recurring Settings "Save & Exit" logout bug: the sync push was blocking the save flow, so a transient server DB lock (returning 401 instead of 503) would trigger the TokenAuthenticator and log the user out. Fix: (1) push is now fire-and-forget so save completes immediately, (2) server returns 503 on DB errors instead of false 401, (3) TokenAuthenticator verifies token still exists before triggering logout.

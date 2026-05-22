@@ -177,6 +177,7 @@ object WidgetDataProvider {
     /**
      * Parses checklist JSON for a specific chit, returns WidgetChecklistItem list
      * with depth calculation. Supports nested items up to depth 2.
+     * Only returns incomplete (unchecked) items for the widget display.
      */
     suspend fun getChecklistItems(context: Context, chitId: String): List<WidgetChecklistItem> {
         val db = getDatabase(context)
@@ -184,7 +185,7 @@ object WidgetDataProvider {
             val chit = db.chitDao().getById(chitId) ?: return emptyList()
             val checklistJson = chit.checklist
             if (checklistJson.isNullOrBlank() || checklistJson == "[]") return emptyList()
-            parseChecklistJson(checklistJson)
+            parseChecklistJson(checklistJson).filter { !it.checked }
         } catch (_: Exception) {
             emptyList()
         } finally {

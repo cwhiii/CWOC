@@ -89,8 +89,7 @@ fun SidebarContent(
     onHabitsWindowChange: (Int) -> Unit = {},
     onHabitsIncludeRulesChange: (Boolean) -> Unit = {},
     onIndicatorsRangeChange: (String) -> Unit = {},
-    onIndicatorsCustomRange: (String?, String?) -> Unit = { _, _ -> },
-    onIndicatorsVisibleGraphsChange: (Set<String>) -> Unit = {},
+    onIndicatorsModeChange: (String) -> Unit = {},
     filterContent: @Composable () -> Unit = {},
     filterActiveCount: Int = 0,
     onClearFilters: () -> Unit = {},
@@ -305,35 +304,17 @@ fun SidebarContent(
             if (selectedTab == CCaptnTab.Indicators) {
                 HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
+                Text(text = "View Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ViewModeButton(text = "📊 Charts", isActive = sidebarState.indicatorsMode == "charts", onClick = { onIndicatorsModeChange("charts") }, modifier = Modifier.weight(1f))
+                    ViewModeButton(text = "📅 Calendar", isActive = sidebarState.indicatorsMode == "calendar", onClick = { onIndicatorsModeChange("calendar") }, modifier = Modifier.weight(1f))
+                    ViewModeButton(text = "📋 Log", isActive = sidebarState.indicatorsMode == "log", onClick = { onIndicatorsModeChange("log") }, modifier = Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "Time Range", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     listOf("day" to "Day", "week" to "Week", "month" to "Month", "year" to "Year", "all" to "All").forEach { (value, label) ->
                         ViewModeButton(text = label, isActive = sidebarState.indicatorsRange == value, onClick = { onIndicatorsRangeChange(value) }, modifier = Modifier.weight(1f))
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Custom Range", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
-                var customStart by remember { mutableStateOf(sidebarState.indicatorsCustomStart ?: "") }
-                var customEnd by remember { mutableStateOf(sidebarState.indicatorsCustomEnd ?: "") }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextField(value = customStart, onValueChange = { customStart = it }, placeholder = { Text("Start", fontSize = 11.sp) }, singleLine = true, modifier = Modifier.weight(1f))
-                    TextField(value = customEnd, onValueChange = { customEnd = it }, placeholder = { Text("End", fontSize = 11.sp) }, singleLine = true, modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { onIndicatorsCustomRange(customStart.ifBlank { null }, customEnd.ifBlank { null }) }, border = BorderStroke(1.dp, BorderBrown), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp), shape = RoundedCornerShape(4.dp)) {
-                        Text("Go", fontSize = 12.sp, color = HeaderBrown)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                CollapsibleSection(title = "Show Graphs", initiallyExpanded = true) {
-                    val graphOptions = listOf("mood" to "Mood", "energy" to "Energy", "sleep" to "Sleep", "exercise" to "Exercise", "productivity" to "Productivity")
-                    graphOptions.forEach { (value, label) ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Checkbox(checked = value in sidebarState.indicatorsVisibleGraphs, onCheckedChange = { checked ->
-                                val newSet = if (checked) sidebarState.indicatorsVisibleGraphs + value else sidebarState.indicatorsVisibleGraphs - value
-                                onIndicatorsVisibleGraphsChange(newSet)
-                            })
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = label, fontSize = 13.sp, color = HeaderBrown)
-                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))

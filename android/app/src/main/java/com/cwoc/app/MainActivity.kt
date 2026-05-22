@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -117,6 +118,7 @@ class MainActivity : ComponentActivity() {
     private val sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
@@ -242,6 +244,34 @@ private fun CwocApp(
         }
     }
 
+    // Handle navigate_to intent extra from widgets and notifications
+    val activity = context as? ComponentActivity
+    LaunchedEffect(Unit) {
+        val navigateTo = activity?.intent?.getStringExtra("navigate_to")
+        if (navigateTo != null && authRepository.isAuthenticated()) {
+            // Clear the extra so it doesn't re-trigger on config changes
+            activity.intent.removeExtra("navigate_to")
+            when {
+                navigateTo.startsWith("editor/") -> {
+                    navController.navigate(navigateTo)
+                }
+                navigateTo == "alerts" -> {
+                    navController.navigate(Screen.Alarms.route)
+                }
+                navigateTo == "weather" -> {
+                    navController.navigate(Screen.Weather.route)
+                }
+                navigateTo.startsWith("calendar/") -> {
+                    navController.navigate(Screen.Calendar.route)
+                }
+                navigateTo.startsWith("project/") -> {
+                    val projectId = navigateTo.removePrefix("project/")
+                    navController.navigate(Screen.Editor.createRoute(projectId))
+                }
+            }
+        }
+    }
+
     // Enqueue SyncWorker periodic sync when navigating away from login
     LaunchedEffect(currentRoute) {
         if (currentRoute != null && currentRoute != Screen.Login.route) {
@@ -318,8 +348,7 @@ private fun CwocApp(
                         onHabitsWindowChange = { sidebarStateViewModel.setHabitsSuccessWindow(it) },
                         onHabitsIncludeRulesChange = { sidebarStateViewModel.setHabitsIncludeRules(it) },
                         onIndicatorsRangeChange = { sidebarStateViewModel.setIndicatorsRange(it) },
-                        onIndicatorsCustomRange = { s, e -> sidebarStateViewModel.setIndicatorsCustomRange(s, e) },
-                        onIndicatorsVisibleGraphsChange = { sidebarStateViewModel.setIndicatorsVisibleGraphs(it) },
+                        onIndicatorsModeChange = { sidebarStateViewModel.setIndicatorsMode(it) },
                         onClockClick = { showClockDialog = true },
                         onWeatherLongPress = { showWeatherDialog = true },
                         onCalculatorClick = { showCalculatorSheet = true },

@@ -238,5 +238,18 @@ class ChecklistWidgetProvider : AppWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
         views.setPendingIntentTemplate(R.id.checklist_list, templatePendingIntent)
+
+        // Add button — opens the chit editor so user can add items
+        val addIntent = Intent(context, MainActivity::class.java).apply {
+            putExtra("navigate_to", "editor/$chitId")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val addPendingIntent = PendingIntent.getActivity(
+            context,
+            "checklist_add_$widgetId".hashCode(),
+            addIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widget_add_button, addPendingIntent)
     }
 }

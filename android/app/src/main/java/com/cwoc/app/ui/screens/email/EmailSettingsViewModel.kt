@@ -163,14 +163,14 @@ class EmailSettingsViewModel @Inject constructor(
                 settingsRepository.settings.collect { settings ->
                     val accounts = parseAccountsJson(settings.emailAccounts)
                     val privacy = EmailPrivacySettings(
-                        blockTrackingPixels = settings.emailBlockTrackingPixels != "false",
+                        blockTrackingPixels = settings.emailBlockTrackingPixels != "0" && settings.emailBlockTrackingPixels != "false",
                         externalContent = settings.emailExternalContent ?: "block",
                         readReceipts = settings.emailReadReceipts ?: "never",
                         undoSendDelay = settings.emailUndoSendDelay?.toIntOrNull() ?: 5
                     )
                     val display = EmailDisplaySettings(
                         groupBy = settings.emailGroupBy ?: "date",
-                        paginateEmail = settings.paginateEmail == "true"
+                        paginateEmail = settings.paginateEmail == "1" || settings.paginateEmail == "true"
                     )
                     val bundle = EmailBundleSettings(
                         bundlesEnabled = settings.bundlesEnabled != false,
@@ -230,12 +230,12 @@ class EmailSettingsViewModel @Inject constructor(
                 val state = _uiState.value
                 val updatedSettings = currentSettings.copy(
                     emailAccounts = serializeAccountsJson(state.accounts),
-                    emailBlockTrackingPixels = if (state.privacySettings.blockTrackingPixels) "true" else "false",
+                    emailBlockTrackingPixels = if (state.privacySettings.blockTrackingPixels) "1" else "0",
                     emailExternalContent = state.privacySettings.externalContent,
                     emailReadReceipts = state.privacySettings.readReceipts,
                     emailUndoSendDelay = state.privacySettings.undoSendDelay.toString(),
                     emailGroupBy = state.displaySettings.groupBy,
-                    paginateEmail = if (state.displaySettings.paginateEmail) "true" else "false",
+                    paginateEmail = if (state.displaySettings.paginateEmail) "1" else "0",
                     bundlesEnabled = state.bundleSettings.bundlesEnabled,
                     bundlesMultiPlacement = state.bundleSettings.multiPlacement,
                     bundlesShowCount = state.bundleSettings.showCount,

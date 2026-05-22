@@ -62,7 +62,7 @@ import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.SnoozePickerDialog
-import com.cwoc.app.ui.components.SwipeableChitCard
+
 import com.cwoc.app.ui.components.UndoToast
 import com.cwoc.app.ui.components.TagChipsRow
 import com.cwoc.app.ui.components.ChecklistProgressBadge
@@ -399,7 +399,31 @@ private fun TasksFlatList(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             contentPadding = PaddingValues(top = 4.dp, bottom = 80.dp)
         ) { task, isDragging ->
-            SwipeableChitCard(onDelete = { onDeleteTask(task.id) }) {
+            TaskCard(
+                task = task,
+                sortState = sortState,
+                onClick = { onClickTask(task.id) },
+                onLongClick = { onLongPressTask(task) },
+                onStatusChange = onStatusChange,
+                onChecklistToggle = onChecklistToggle,
+                showMapThumbnails = showMapThumbnails,
+                isSubChit = task.id in subChitIds,
+                onRsvpAction = onRsvpAction,
+                currentUserId = currentUserId,
+                contactImages = contactImages,
+                serverUrl = serverUrl,
+                authToken = authToken
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            item { Spacer(modifier = Modifier.height(4.dp)) }
+            items(tasks, key = { it.id }) { task ->
                 TaskCard(
                     task = task,
                     sortState = sortState,
@@ -415,34 +439,6 @@ private fun TasksFlatList(
                     serverUrl = serverUrl,
                     authToken = authToken
                 )
-            }
-        }
-    } else {
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            item { Spacer(modifier = Modifier.height(4.dp)) }
-            items(tasks, key = { it.id }) { task ->
-                SwipeableChitCard(onDelete = { onDeleteTask(task.id) }) {
-                    TaskCard(
-                        task = task,
-                        sortState = sortState,
-                        onClick = { onClickTask(task.id) },
-                        onLongClick = { onLongPressTask(task) },
-                        onStatusChange = onStatusChange,
-                        onChecklistToggle = onChecklistToggle,
-                        showMapThumbnails = showMapThumbnails,
-                        isSubChit = task.id in subChitIds,
-                        onRsvpAction = onRsvpAction,
-                        currentUserId = currentUserId,
-                        contactImages = contactImages,
-                        serverUrl = serverUrl,
-                        authToken = authToken
-                    )
-                }
             }
             item { Spacer(modifier = Modifier.height(80.dp)) } // FAB clearance
         }
@@ -836,10 +832,13 @@ private fun NotePreview(note: String, expanded: Boolean, onToggle: () -> Unit, t
     val maxLines = if (expanded) Int.MAX_VALUE else 3
 
     Column(modifier = Modifier.animateContentSize()) {
-        // Render markdown (matching web's marked.js rendering in note preview)
-        com.cwoc.app.ui.components.MarkdownRenderer(
-            markdown = previewText,
-            modifier = Modifier.fillMaxWidth()
+        // Render markdown with contrast-aware text color (matching NotesScreen pattern)
+        Text(
+            text = com.cwoc.app.ui.util.MarkdownRenderer.renderToAnnotatedString(previewText),
+            style = MaterialTheme.typography.bodyMedium,
+            color = textColor.copy(alpha = 0.8f),
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis
         )
         // Toggle button
         Text(

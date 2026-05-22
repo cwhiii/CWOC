@@ -50,6 +50,105 @@ object SettingsPayloadMapper {
     }
 
     /**
+     * Day name to numeric mapping (0=Sun, 1=Mon, ..., 6=Sat).
+     * Used for work_days conversion to match web format.
+     */
+    private val DAY_NAME_TO_NUMERIC = mapOf(
+        "sun" to "0", "sunday" to "0",
+        "mon" to "1", "monday" to "1",
+        "tue" to "2", "tuesday" to "2",
+        "wed" to "3", "wednesday" to "3",
+        "thu" to "4", "thursday" to "4",
+        "fri" to "5", "friday" to "5",
+        "sat" to "6", "saturday" to "6"
+    )
+
+    /**
+     * Numeric to day name mapping for loading work_days from server.
+     */
+    private val NUMERIC_TO_DAY_NAME = mapOf(
+        "0" to "sun", "1" to "mon", "2" to "tue", "3" to "wed",
+        "4" to "thu", "5" to "fri", "6" to "sat"
+    )
+
+    /**
+     * Converts work_days from app format ("mon,tue,wed") to web format ("1,2,3").
+     * If already numeric, returns as-is.
+     */
+    private fun workDaysToNumeric(workDays: String): String {
+        if (workDays.isBlank()) return "1,2,3,4,5"
+        val parts = workDays.split(",").map { it.trim().lowercase() }
+        // Check if already numeric
+        if (parts.all { it.toIntOrNull() != null }) return workDays
+        // Convert names to numbers
+        return parts.mapNotNull { DAY_NAME_TO_NUMERIC[it] }.joinToString(",")
+    }
+
+    /**
+     * Converts work_days from web/server format ("1,2,3") to app format ("mon,tue,wed").
+     * If already name-based, returns as-is.
+     */
+    fun workDaysToNames(workDays: String?): String {
+        if (workDays.isNullOrBlank()) return "mon,tue,wed,thu,fri"
+        val parts = workDays.split(",").map { it.trim() }
+        // Check if already name-based
+        if (parts.all { it.lowercase() in DAY_NAME_TO_NUMERIC }) return workDays.lowercase()
+        // Convert numbers to names
+        return parts.mapNotNull { NUMERIC_TO_DAY_NAME[it] }.joinToString(",")
+    }
+
+    /**
+     * Converts snooze_length from app format ("5") to web format ("5 minutes").
+     * If already in full text format, returns as-is.
+     */
+    private fun snoozeLengthToWebFormat(snoozeLength: String): String {
+        // Already in web format?
+        if (snoozeLength.contains(" ")) return snoozeLength
+        val num = snoozeLength.trim().toIntOrNull() ?: return "5 minutes"
+        return if (num == 1) "1 minute" else "$num minutes"
+    }
+
+    /**
+     * Converts snooze_length from web format ("5 minutes") to app format ("5").
+     * If already numeric, returns as-is.
+     */
+    fun snoozeLengthToAppFormat(snoozeLength: String?): String {
+        if (snoozeLength.isNullOrBlank()) return "5"
+        // Already just a number?
+        if (snoozeLength.trim().toIntOrNull() != null) return snoozeLength.trim()
+        // Extract number from "X minutes" or "X minute"
+        val num = snoozeLength.trim().split(" ").firstOrNull()?.toIntOrNull()
+        return num?.toString() ?: "5"
+    }
+
+    /**
+     * Capitalizes orientation value to match web format ("Vertical"/"Horizontal").
+     */
+    private fun orientationToWebFormat(orientation: String): String {
+        return orientation.replaceFirstChar { it.uppercase() }
+    }
+
+    /**
+     * Normalizes a boolean-like value from the server to "1"/"0" format.
+     * Handles: "1", "0", "true", "false", null.
+     */
+    private fun normalizeBool(value: String?, defaultVal: String): String {
+        if (value == null) return defaultVal
+        return when (value.lowercase().trim()) {
+            "1", "true" -> "1"
+            "0", "false" -> "0"
+            else -> defaultVal
+        }
+    }
+
+    /**
+     * Public version of normalizeBool for use by SettingsViewModel.
+     */
+    fun normalizeBoolPublic(value: String?, defaultVal: String): String {
+        return normalizeBool(value, defaultVal)
+    }
+
+    /**
      * The set of JSON keys that the Android client actively manages.
      * Any key NOT in this set is considered "unsupported" and will be preserved
      * verbatim from the raw server response on save.
@@ -225,9 +324,11 @@ object SettingsPayloadMapper {
             put("welcome_message", formState.welcomeMessage)
             put("session_lifetime", formState.sessionLifetime)
             put("kiosk_selected_tags", parseJsonOrRaw(formState.kioskSelectedTags))
+            put("kiosk_users", parseJsonOrRaw(formState.kioskSelectedTags))
             put("audit_log_pruning_enabled", formState.auditLogPruningEnabled)
-            put("audit_log_max_days", formState.auditLogMaxDays)
-            put("audit_log_max_mb", formState.auditLogMaxMb)
+            // Match web: send integer or null (null when pruning disabled)
+            put("audit_log_max_days", if (formState.auditLogPruningEnabled == "1") formState.auditLogMaxDays.toIntOrNull() else null)
+            put("audit_log_max_mb", if (formState.auditLogPruningEnabled == "1") formState.auditLogMaxMb.toIntOrNull() else null)
             put("attachment_max_size_mb", formState.attachmentMaxSizeMb)
             put("attachment_max_storage_mb", formState.attachmentMaxStorageMb)
             put("overdue_border_color", formState.overdueBorderColor.ifEmpty { null })
@@ -259,7 +360,7 @@ object SettingsPayloadMapper {
         return SettingsFormState(
             timeFormat = payload.getString("time_format") ?: "12hour",
             sex = payload.getString("sex") ?: "Man",
-            snoozeLength = payload.getString("snooze_length") ?: "5",
+            snoozeLength = payload.getString("snooze_length") ?: "5 minutes",
             calendarSnapInterval = payload.getString("calendar_snap") ?: "15",
             defaultTimezone = payload.getString("default_timezone") ?: "America/New_York",
             timezoneOverride = payload.getString("timezone_override") ?: "",
@@ -299,7 +400,7 @@ object SettingsPayloadMapper {
             customDaysCount = payload.getString("custom_days_count") ?: "7",
             workStartHour = payload.getString("work_start_hour") ?: "9",
             workEndHour = payload.getString("work_end_hour") ?: "17",
-            workDays = payload.getString("work_days") ?: "mon,tue,wed,thu,fri",
+            workDays = payload.getString("work_days") ?: "1,2,3,4,5",
             habitsSuccessWindow = payload.getString("habits_success_window") ?: "30",
             defaultShowHabitsOnCalendar = payload.getString("default_show_habits_on_calendar") ?: "1",
             projectsShowChildCount = payload.getString("projects_show_child_count") ?: "0",
@@ -342,18 +443,18 @@ object SettingsPayloadMapper {
             combineAlerts = payload.getString("combine_alerts") ?: "0",
             omniBundleToggles = payload.toJsonString("omni_bundle_toggles") ?: "{}",
             // Dependent apps
-            clockOrientation = payload.getString("clock_orientation") ?: payload.getString("alarm_orientation") ?: "horizontal",
+            clockOrientation = (payload.getString("clock_orientation") ?: payload.getString("alarm_orientation") ?: "Horizontal").replaceFirstChar { it.uppercase() },
             ntfyEnabled = payload.getString("ntfy_enabled") ?: "0",
             haEnabled = payload.getString("ha_enabled") ?: "0",
             haPollInterval = payload.getString("ha_poll_interval") ?: "30",
             tailscaleEnabled = payload.getString("tailscale_enabled") ?: "0",
             tailscaleAuthKey = payload.getString("tailscale_auth_key") ?: "",
             // Email fields
-            emailBlockTracking = payload.getString("email_block_tracking_pixels") ?: "true",
+            emailBlockTracking = normalizeBool(payload.getString("email_block_tracking_pixels"), "1"),
             emailUndoSendDelay = payload.getString("email_undo_send_delay") ?: "10",
-            emailPaginate = payload.getString("paginate_email") ?: "true",
-            emailBundlesEnabled = payload.getString("bundles_enabled") ?: "true",
-            emailMultiPlacement = payload.getString("bundles_multi_placement") ?: "false",
+            emailPaginate = normalizeBool(payload.getString("paginate_email"), "1"),
+            emailBundlesEnabled = normalizeBool(payload.getString("bundles_enabled"), "1"),
+            emailMultiPlacement = normalizeBool(payload.getString("bundles_multi_placement"), "0"),
             emailAccounts = payload.toJsonString("email_accounts") ?: "[]"
         )
     }

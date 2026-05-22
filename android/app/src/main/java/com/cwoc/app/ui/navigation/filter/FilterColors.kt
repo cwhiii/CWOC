@@ -31,13 +31,10 @@ fun generatePastelColor(name: String): Color {
 
 /**
  * Determine if a color is "light" based on luminance.
- * Used to pick dark or light text color for contrast.
- * Matches the web's isLightColor() function.
+ * Delegates to CwocChitCardStyle.isLightBackground — the single source of truth.
  */
-fun isLightColor(color: Color): Boolean {
-    val luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
-    return luminance > 0.5
-}
+fun isLightColor(color: Color): Boolean =
+    com.cwoc.app.ui.components.CwocChitCardStyle.isLightBackground(color)
 
 /**
  * Parse a hex color string (e.g., "#6B4E31" or "6B4E31") to a Compose Color.

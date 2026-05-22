@@ -359,8 +359,7 @@ private fun BundleTabChip(
     val textColor = when {
         color != null -> {
             // Compute contrast-safe text color for custom background
-            val luminance = (0.299 * color.red + 0.587 * color.green + 0.114 * color.blue)
-            if (luminance > 0.5) Color.Black else Color.White
+            com.cwoc.app.ui.components.CwocChitCardStyle.contrastTextColor(color)
         }
         isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant

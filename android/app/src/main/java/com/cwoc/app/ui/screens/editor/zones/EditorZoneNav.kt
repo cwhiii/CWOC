@@ -562,10 +562,7 @@ fun OverviewZoneContent(
 // ─── Utility ─────────────────────────────────────────────────────────────────────
 
 /**
- * Compute contrast color (dark or light) for a given background.
- * Matches the web's contrastColorForBg().
+ * Delegate to the single source of truth for contrast color.
+ * @see com.cwoc.app.ui.components.CwocChitCardStyle.contrastTextColor
  */
-fun contrastColor(bg: Color): Color {
-    val luminance = 0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue
-    return if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFFF8E1)
-}
+fun contrastColor(bg: Color): Color = com.cwoc.app.ui.components.CwocChitCardStyle.contrastTextColor(bg)

@@ -365,8 +365,7 @@ private fun ProjectCard(
     }
     // Contrast text color for the project header
     val projectTextColor = remember(projectBgColor) {
-        val luminance = (0.299f * projectBgColor.red + 0.587f * projectBgColor.green + 0.114f * projectBgColor.blue)
-        if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFDF5E6)
+        CwocChitCardStyle.contrastTextColor(projectBgColor)
     }
 
     // State for the "Create New Child Chit" dialog
@@ -578,8 +577,7 @@ private fun KanbanColumnView(
                 }
             }
             val cardTextColor = remember(cardBgColor) {
-                val luminance = (0.299f * cardBgColor.red + 0.587f * cardBgColor.green + 0.114f * cardBgColor.blue)
-                if (luminance > 0.5f) Color(0xFF1A1208) else Color(0xFFFDF5E6)
+                CwocChitCardStyle.contrastTextColor(cardBgColor)
             }
 
             var showStatusMenu by remember { mutableStateOf(false) }

@@ -26,7 +26,7 @@ class QuickCaptureWidgetProvider : AppWidgetProvider() {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_quick_capture)
 
-            // Tap anywhere on the widget → open editor in create mode (new blank chit)
+            // Tap anywhere on the widget → create a new blank chit
             val intent = Intent(context, MainActivity::class.java).apply {
                 putExtra("navigate_to", "editor/new")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

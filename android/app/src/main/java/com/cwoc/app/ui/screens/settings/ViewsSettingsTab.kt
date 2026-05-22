@@ -601,7 +601,7 @@ private fun DefaultViewDropdown(
     selectedView: String,
     onViewSelected: (String) -> Unit
 ) {
-    val viewOptions = listOf("Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes")
+    val viewOptions = listOf("Omni", "Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes", "Email", "Indicators")
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -993,7 +993,7 @@ private fun ViewHoursSection(
     onStartHourChanged: (String) -> Unit,
     onEndHourChanged: (String) -> Unit
 ) {
-    val hourOptions = (0..23).map { it.toString() to String.format("%02d:00", it) }
+    val hourOptions = (0..24).map { it.toString() to String.format("%02d:00", it) }
 
     Column {
         Text(
@@ -1017,7 +1017,7 @@ private fun ViewHoursSection(
             // Start hour dropdown
             HourDropdown(
                 selectedHour = startHour,
-                hourOptions = hourOptions,
+                hourOptions = (0..23).map { it.toString() to String.format("%02d:00", it) },
                 onHourSelected = onStartHourChanged,
                 modifier = Modifier.weight(1f),
                 isError = hasError
@@ -1028,7 +1028,7 @@ private fun ViewHoursSection(
                 style = MaterialTheme.typography.bodyMedium
             )
 
-            // End hour dropdown
+            // End hour dropdown (0–24, matching web)
             HourDropdown(
                 selectedHour = endHour,
                 hourOptions = hourOptions,
@@ -1264,17 +1264,18 @@ private fun WorkDaysCheckboxes(
     workDays: String,
     onWorkDaysChanged: (String) -> Unit
 ) {
+    // Use numeric values matching web format: 0=Sun, 1=Mon, ..., 6=Sat
     val allDays = listOf(
-        "sun" to "Sun",
-        "mon" to "Mon",
-        "tue" to "Tue",
-        "wed" to "Wed",
-        "thu" to "Thu",
-        "fri" to "Fri",
-        "sat" to "Sat"
+        "0" to "Sun",
+        "1" to "Mon",
+        "2" to "Tue",
+        "3" to "Wed",
+        "4" to "Thu",
+        "5" to "Fri",
+        "6" to "Sat"
     )
     val enabledDays = remember(workDays) {
-        workDays.split(",").map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        workDays.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
     }
 
     Column {

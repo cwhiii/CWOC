@@ -164,7 +164,7 @@ class EmailViewModel @Inject constructor(
             settingsRepository.settings.collect { settings ->
                 val use24Hour = settings.timeFormat == "24hour"
                 val checkInterval = settings.emailCheckInterval ?: "manual"
-                val paginateEnabled = settings.paginateEmail == "true"
+                val paginateEnabled = settings.paginateEmail == "1" || settings.paginateEmail == "true"
                 val groupByDate = settings.emailGroupBy != "none"
                 val accounts = parseAccountsFromSettings(settings.emailAccounts)
 

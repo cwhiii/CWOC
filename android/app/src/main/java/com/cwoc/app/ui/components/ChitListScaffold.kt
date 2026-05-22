@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.components
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -19,6 +20,9 @@ import com.cwoc.app.data.sync.SyncState
  *   - Long-press opens the Quick Alert sheet for rapid reminder/alarm/timer creation
  * - A content area for the screen's list content
  *
+ * Uses contentWindowInsets = WindowInsets(0) to avoid double-consuming system bar
+ * insets (the outer Scaffold in MainActivity already handles them).
+ *
  * Validates: Requirements 2.1, 11.1
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +37,7 @@ fun ChitListScaffold(
 ) {
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(text = title) },

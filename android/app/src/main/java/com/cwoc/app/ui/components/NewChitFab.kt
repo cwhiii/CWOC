@@ -2,6 +2,7 @@ package com.cwoc.app.ui.components
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -65,7 +66,8 @@ fun NewChitFab(
 ) {
     Surface(
         modifier = Modifier
-            .size(56.dp)
+            .padding(bottom = 16.dp)
+            .size(64.dp)
             .pointerInput(onTap, onLongPress) {
                 detectTapGestures(
                     onTap = { onTap() },
@@ -81,7 +83,8 @@ fun NewChitFab(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "Create new chit",
-                tint = MaterialTheme.colorScheme.onPrimary
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(28.dp)
             )
         }
     }

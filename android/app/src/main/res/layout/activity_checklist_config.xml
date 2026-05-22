@@ -14,7 +14,22 @@
         android:textColor="#4a2c2a"
         android:textSize="18sp"
         android:textStyle="bold"
-        android:paddingBottom="12dp" />
+        android:paddingBottom="8dp" />
+
+    <!-- Search/filter field -->
+    <EditText
+        android:id="@+id/checklist_search"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Search checklists…"
+        android:textColor="#4a2c2a"
+        android:textColorHint="#8b7355"
+        android:textSize="14sp"
+        android:background="#f5e6cc"
+        android:padding="10dp"
+        android:inputType="text"
+        android:singleLine="true"
+        android:layout_marginBottom="8dp" />
 
     <ListView
         android:id="@+id/checklist_selection_list"
