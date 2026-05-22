@@ -20,6 +20,36 @@ object SettingsPayloadMapper {
     private val gson = Gson()
 
     /**
+     * Normalizes a week_start_day value from any format to the canonical numeric format
+     * used by the web frontend ("0" = Sun, "1" = Mon, ..., "6" = Sat).
+     *
+     * Handles:
+     * - Numeric strings: "0"–"6" (already canonical)
+     * - Abbreviated lowercase: "sun", "mon", "tue", "wed", "thu", "fri", "sat"
+     * - Full lowercase: "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+     * - Any casing variant of the above
+     *
+     * Returns "0" (Sunday) as default if the value is unrecognized.
+     */
+    fun normalizeWeekStartDay(value: String?): String {
+        if (value.isNullOrBlank()) return "0"
+        // Already numeric?
+        val numeric = value.toIntOrNull()
+        if (numeric != null && numeric in 0..6) return numeric.toString()
+        // Try matching by name
+        return when (value.lowercase().trim()) {
+            "sun", "sunday" -> "0"
+            "mon", "monday" -> "1"
+            "tue", "tuesday" -> "2"
+            "wed", "wednesday" -> "3"
+            "thu", "thursday" -> "4"
+            "fri", "friday" -> "5"
+            "sat", "saturday" -> "6"
+            else -> "0"
+        }
+    }
+
+    /**
      * The set of JSON keys that the Android client actively manages.
      * Any key NOT in this set is considered "unsupported" and will be preserved
      * verbatim from the raw server response on save.
@@ -262,7 +292,7 @@ object SettingsPayloadMapper {
             visualIndicators = payload.toJsonString("visual_indicators")
                 ?: "{\"alarm\":\"always\",\"notification\":\"always\",\"timer\":\"always\",\"stopwatch\":\"always\",\"combined_alert\":\"always\",\"weather\":\"always\",\"people\":\"always\",\"indicators\":\"always\",\"custom_data\":\"always\",\"combine_alerts\":false}",
             customViewFilters = payload.toJsonString("custom_view_filters") ?: "{}",
-            weekStartDay = payload.getString("week_start_day") ?: "sun",
+            weekStartDay = normalizeWeekStartDay(payload.getString("week_start_day")),
             allViewStartHour = payload.getString("all_view_start_hour") ?: "0",
             allViewEndHour = payload.getString("all_view_end_hour") ?: "23",
             dayScrollToHour = payload.getString("day_scroll_to_hour") ?: "8",

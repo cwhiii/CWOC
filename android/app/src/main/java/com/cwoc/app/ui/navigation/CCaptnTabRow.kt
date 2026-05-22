@@ -1,7 +1,16 @@
 package com.cwoc.app.ui.navigation
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -9,23 +18,24 @@ import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Task
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.cwoc.app.R
-import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
+import com.cwoc.app.ui.theme.CwocIvory
+import com.cwoc.app.ui.theme.CwocPrimary
 import org.json.JSONArray
 
 /**
@@ -44,12 +54,14 @@ enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector
     Notebook("Notebook", "notebook", Icons.Default.Notes),
     Indicators("Indicators", "indicators", Icons.Default.ShowChart),
     Email("Email", "email", Icons.Default.Email),
-    Omni("Omni", "omni", null)
+    Omni("Omni", "omni", null),
+    Search("Search", "search", Icons.Default.Search)
 }
 
 /**
- * A scrollable tab row displaying the C CAPTN view tabs with icons and underline.
- * Matches the web's tab strip style: brown active color, underline indicator, icons + labels.
+ * A horizontally scrollable row of filled button tabs for the C CAPTN views.
+ * Matches the web's tab strip style: brown filled buttons with ivory active state.
+ * Icons are placed inline to the left of labels (18dp).
  * Shows item counts next to each tab label when provided (B11).
  * Respects the view_order setting to reorder and hide tabs (Task 37).
  *
@@ -70,56 +82,54 @@ fun CCaptnTabRow(
         getOrderedVisibleTabs(viewOrder)
     }
 
-    val selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0)
+    val scrollState = rememberScrollState()
 
-    ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = CwocZoneHeaderBrown,
-        edgePadding = 8.dp,
-        indicator = { tabPositions ->
-            if (selectedIndex < tabPositions.size) {
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
-                    color = CwocZoneHeaderBrown
-                )
-            }
-        }
+    Row(
+        modifier = modifier
+            .horizontalScroll(scrollState)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         tabs.forEach { tab ->
             val isSelected = tab == selectedTab
             val count = tabCounts?.get(tab)
             val labelText = if (count != null && count > 0) "${tab.label} ($count)" else tab.label
-            Tab(
-                selected = isSelected,
+
+            val containerColor = if (isSelected) CwocIvory else CwocPrimary
+            val contentColor = if (isSelected) Color(0xFF3B1F0A) else CwocIvory
+            val border = BorderStroke(1.dp, Color(0xFF5A3F2A))
+
+            Button(
                 onClick = { onTabSelected(tab) },
-                text = {
-                    Text(
-                        text = labelText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isSelected) CwocZoneHeaderBrown
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = containerColor,
+                    contentColor = contentColor
+                ),
+                border = border,
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = ButtonDefaults.ContentPadding
+            ) {
+                // Icon to the left of label (inline layout)
+                if (tab == CCaptnTab.Omni) {
+                    Image(
+                        painter = painterResource(id = R.drawable.cwoc_logo),
+                        contentDescription = tab.label,
+                        modifier = Modifier.size(18.dp)
                     )
-                },
-                icon = {
-                    if (tab == CCaptnTab.Omni) {
-                        Image(
-                            painter = painterResource(id = R.drawable.cwoc_logo),
-                            contentDescription = tab.label,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = tab.icon!!,
-                            contentDescription = tab.label,
-                            modifier = Modifier.size(18.dp),
-                            tint = if (isSelected) CwocZoneHeaderBrown
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                } else {
+                    Icon(
+                        imageVector = tab.icon!!,
+                        contentDescription = tab.label,
+                        modifier = Modifier.size(18.dp),
+                        tint = contentColor
+                    )
                 }
-            )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = labelText,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }
@@ -128,43 +138,77 @@ fun CCaptnTabRow(
  * Parses the view_order setting and returns an ordered list of visible CCaptnTab entries.
  * Supports both comma-separated format and JSON array format.
  * Falls back to all tabs in default order if parsing fails.
+ *
+ * Rules enforced:
+ * - Omni is always first (fixed, locked)
+ * - Notes and Notebook are mutually exclusive (if both present, Notes wins)
+ * - Search is NOT included here (it's pinned at the bottom of the ViewsPanel separately)
  */
 fun getOrderedVisibleTabs(viewOrder: String?): List<CCaptnTab> {
-    if (viewOrder.isNullOrBlank()) {
-        return CCaptnTab.entries.toList()
-    }
-
-    // Try JSON array format: [{"id":"Calendar","visible":true,"position":0}, ...]
-    if (viewOrder.trimStart().startsWith("[")) {
-        return try {
+    val rawResult = if (viewOrder.isNullOrBlank()) {
+        // Default order when no setting exists
+        listOf(
+            CCaptnTab.Calendar, CCaptnTab.Checklists, CCaptnTab.Alarms,
+            CCaptnTab.Projects, CCaptnTab.Tasks, CCaptnTab.Notes,
+            CCaptnTab.Email, CCaptnTab.Indicators
+        )
+    } else if (viewOrder.trimStart().startsWith("[")) {
+        // Try JSON array format: [{"id":"Calendar","visible":true,"position":0}, ...]
+        // Also supports simple string array: ["Calendar","Checklists",...]
+        try {
             val jsonArray = JSONArray(viewOrder)
             val result = mutableListOf<CCaptnTab>()
             for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val id = obj.getString("id")
-                val visible = obj.optBoolean("visible", true)
-                if (visible) {
+                // Try as object first, then as plain string
+                val id = try {
+                    val obj = jsonArray.getJSONObject(i)
+                    val visible = obj.optBoolean("visible", true)
+                    if (!visible) null else obj.getString("id")
+                } catch (_: Exception) {
+                    jsonArray.optString(i, null)
+                }
+                if (id != null) {
                     val tab = CCaptnTab.entries.find { it.name == id }
                     if (tab != null) {
                         result.add(tab)
                     }
                 }
             }
-            // If result is empty (all hidden), fall back to default
             result.ifEmpty { CCaptnTab.entries.toList() }
         } catch (_: Exception) {
             CCaptnTab.entries.toList()
         }
+    } else {
+        // Comma-separated format: "Calendar,Checklists,Alarms,Projects,Tasks,Notes"
+        val ids = viewOrder.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val result = mutableListOf<CCaptnTab>()
+        for (id in ids) {
+            val tab = CCaptnTab.entries.find { it.name == id }
+            if (tab != null) {
+                result.add(tab)
+            }
+        }
+        result.ifEmpty { CCaptnTab.entries.toList() }
     }
 
-    // Comma-separated format: "Calendar,Checklists,Alarms,Projects,Tasks,Notes"
-    val ids = viewOrder.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-    val result = mutableListOf<CCaptnTab>()
-    for (id in ids) {
-        val tab = CCaptnTab.entries.find { it.name == id }
-        if (tab != null) {
-            result.add(tab)
-        }
+    // Enforce rules:
+    // 1. Omni always first
+    val withoutOmni = rawResult.filter { it != CCaptnTab.Omni && it != CCaptnTab.Search }
+    val finalList = mutableListOf(CCaptnTab.Omni)
+
+    // 2. Notes/Notebook mutual exclusion — if both present, Notes wins (Notebook hidden)
+    val hasNotes = withoutOmni.any { it == CCaptnTab.Notes }
+    val hasNotebook = withoutOmni.any { it == CCaptnTab.Notebook }
+    val filtered = if (hasNotes && hasNotebook) {
+        withoutOmni.filter { it != CCaptnTab.Notebook }
+    } else {
+        withoutOmni
     }
-    return result.ifEmpty { CCaptnTab.entries.toList() }
+
+    finalList.addAll(filtered)
+
+    // 3. Search always last
+    finalList.add(CCaptnTab.Search)
+
+    return finalList
 }

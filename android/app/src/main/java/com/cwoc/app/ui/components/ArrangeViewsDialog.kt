@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -43,6 +44,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
@@ -50,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.R
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocPrimary
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -124,7 +128,8 @@ fun ArrangeViewsDialog(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier
@@ -165,7 +170,8 @@ fun ArrangeViewsDialog(
                     OmniFixedRow()
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 48.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                        color = Color(0xFF8B5A2B),
+                        thickness = 1.dp
                     )
                 }
 
@@ -195,7 +201,8 @@ fun ArrangeViewsDialog(
                     if (index < visibleEntries.size - 1) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 48.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
+                            color = Color(0xFF8B5A2B),
+                            thickness = 1.dp
                         )
                     }
                 }
@@ -251,7 +258,8 @@ fun ArrangeViewsDialog(
                             if (index < hiddenEntries.size - 1) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = 48.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant
+                                    color = Color(0xFF8B5A2B),
+                                    thickness = 1.dp
                                 )
                             }
                         }

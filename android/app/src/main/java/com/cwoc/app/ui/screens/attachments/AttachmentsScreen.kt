@@ -3,6 +3,8 @@ package com.cwoc.app.ui.screens.attachments
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,6 +76,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -116,7 +121,7 @@ fun AttachmentsScreen(
         topBar = {
             if (isMultiSelectMode) {
                 TopAppBar(
-                    title = { Text("${selectedIds.size} selected") },
+                    title = { Text("${selectedIds.size} selected", style = CwocDialogDefaults.titleStyle) },
                     navigationIcon = {
                         IconButton(onClick = { viewModel.exitMultiSelectMode() }) {
                             Icon(Icons.Default.Close, contentDescription = "Cancel selection")
@@ -140,7 +145,7 @@ fun AttachmentsScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("Attachments") },
+                    title = { Text("Attachments", style = CwocDialogDefaults.titleStyle) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
                             Icon(
@@ -148,6 +153,9 @@ fun AttachmentsScreen(
                                 contentDescription = "Back"
                             )
                         }
+                    },
+                    actions = {
+                        com.cwoc.app.ui.components.TopBarProfileAvatar()
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
@@ -233,7 +241,9 @@ fun AttachmentsScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Attachments", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Attachments", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text("Are you sure you want to delete ${selectedIds.size} attachment(s)? This cannot be undone.")
             },
@@ -243,7 +253,7 @@ fun AttachmentsScreen(
                         viewModel.bulkDelete()
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Delete")
                 }
@@ -291,7 +301,8 @@ private fun FilterBar(
                 }
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -316,7 +327,10 @@ private fun FilterBar(
                 }
                 DropdownMenu(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     AttachmentTypeFilter.entries.forEach { filter ->
                         DropdownMenuItem(
@@ -345,7 +359,10 @@ private fun FilterBar(
                 }
                 DropdownMenu(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     AttachmentSort.entries.forEach { sort ->
                         DropdownMenuItem(
@@ -376,7 +393,8 @@ private fun FilterBar(
                 placeholder = { Text("Min MB") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
-                textStyle = MaterialTheme.typography.bodySmall
+                textStyle = MaterialTheme.typography.bodySmall,
+                colors = CwocInputDefaults.outlinedColors()
             )
             Text("—", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(
@@ -387,7 +405,8 @@ private fun FilterBar(
                 placeholder = { Text("Max MB") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
-                textStyle = MaterialTheme.typography.bodySmall
+                textStyle = MaterialTheme.typography.bodySmall,
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }
@@ -515,12 +534,14 @@ private fun PreviewDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Text(
                 text = attachment.filename,
-                color = ParchmentText,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {

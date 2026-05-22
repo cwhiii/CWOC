@@ -13,8 +13,8 @@ android {
         applicationId = "com.cwoc.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "m20260519.0831"
+        versionCode = 2
+        versionName = "m20260521.2119"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -131,6 +131,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Core AndroidX
+    implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 

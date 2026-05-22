@@ -51,15 +51,14 @@ class NotificationChannelManager @Inject constructor(
             setSound(defaultAlarmSound, alarmAudioAttributes)
         }
 
-        // Reminders channel — default importance, no sound
+        // Reminders channel — default importance, default notification sound
         val remindersChannel = NotificationChannel(
             CHANNEL_ID_REMINDERS,
             "Reminders",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Reminder notifications without sound"
-            enableVibration(false)
-            setSound(null, null)
+            description = "Reminder notifications"
+            enableVibration(true)
         }
 
         // Timers channel — high importance, sound + vibration

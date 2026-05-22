@@ -11,16 +11,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,6 +32,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 /**
  * A dialog that lets the user pick a snooze time from presets or a custom date/time.
@@ -59,26 +57,28 @@ import java.time.temporal.TemporalAdjusters
 @Composable
 fun SnoozePickerDialog(
     onSnoozeSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    is24Hour: Boolean = true,
+    calendarSnap: Int = 5
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
+    var selectedHour by remember { mutableIntStateOf(9) }
+    var selectedMinute by remember { mutableIntStateOf(0) }
 
     val datePickerState = rememberDatePickerState()
-    val timePickerState = rememberTimePickerState(
-        initialHour = 9,
-        initialMinute = 0
-    )
 
     // Main snooze preset dialog
     if (!showDatePicker && !showTimePicker) {
         AlertDialog(
             onDismissRequest = onDismiss,
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
             title = {
                 Text(
                     text = "Snooze Until",
-                    style = MaterialTheme.typography.titleLarge
+                    style = CwocDialogDefaults.titleStyle,
                 )
             },
             text = {
@@ -199,52 +199,20 @@ fun SnoozePickerDialog(
         }
     }
 
-    // Custom time picker
+    // Custom time picker (DrumRollerTimePicker)
     if (showTimePicker) {
-        AlertDialog(
-            onDismissRequest = {
+        DrumRollerTimePicker(
+            initialHour = selectedHour,
+            initialMinute = selectedMinute,
+            is24Hour = is24Hour,
+            minuteStep = calendarSnap,
+            onDismiss = { showTimePicker = false },
+            onTimeSelected = { hour, minute ->
+                val snoozeTime = buildCustomSnoozeTime(selectedDateMillis, hour, minute)
+                if (snoozeTime != null) {
+                    onSnoozeSelected(formatInstantToIso(snoozeTime))
+                }
                 showTimePicker = false
-            },
-            title = {
-                Text(
-                    text = "Select Time",
-                    style = MaterialTheme.typography.titleLarge
-                )
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
-                ) {
-                    TimePicker(state = timePickerState)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val snoozeTime = buildCustomSnoozeTime(
-                            selectedDateMillis,
-                            timePickerState
-                        )
-                        if (snoozeTime != null) {
-                            onSnoozeSelected(formatInstantToIso(snoozeTime))
-                        }
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Confirm")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Cancel")
-                }
             }
         )
     }
@@ -270,18 +238,18 @@ private fun calculateNextMonday9am(): Instant {
 }
 
 /**
- * Builds an Instant from the selected date millis and time picker state.
+ * Builds an Instant from the selected date millis and hour/minute.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 private fun buildCustomSnoozeTime(
     dateMillis: Long?,
-    timePickerState: TimePickerState
+    hour: Int,
+    minute: Int
 ): Instant? {
     if (dateMillis == null) return null
     val selectedDate = Instant.ofEpochMilli(dateMillis)
         .atZone(ZoneOffset.UTC)
         .toLocalDate()
-    val selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
+    val selectedTime = LocalTime.of(hour, minute)
     val dateTime = LocalDateTime.of(selectedDate, selectedTime)
     return dateTime.atZone(ZoneId.systemDefault()).toInstant()
 }

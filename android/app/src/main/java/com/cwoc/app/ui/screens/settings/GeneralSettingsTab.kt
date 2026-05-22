@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import com.cwoc.app.data.mapper.SettingsPayloadMapper.normalizeWeekStartDay
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -52,10 +54,13 @@ import com.cwoc.app.ui.screens.settings.components.DragZone
 import com.cwoc.app.ui.screens.settings.components.ProjectItem
 import com.cwoc.app.ui.screens.settings.components.TagItem
 import com.cwoc.app.ui.components.ArrangeViewsDialog
+import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.components.CwocZoneButton
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.TimeZone
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Common IANA timezones for the searchable timezone dropdown.
@@ -188,11 +193,27 @@ fun GeneralSettingsTab(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        SettingsDropdown(
-            selectedValue = formState.weekStartDay.replaceFirstChar { it.uppercase() },
-            options = listOf("Sunday", "Monday", "Saturday"),
-            onOptionSelected = { onUpdateSetting("week_start_day", it.lowercase()) }
-        )
+        run {
+            val dayOptions = listOf(
+                "0" to "Sun",
+                "1" to "Mon",
+                "2" to "Tue",
+                "3" to "Wed",
+                "4" to "Thu",
+                "5" to "Fri",
+                "6" to "Sat"
+            )
+            val currentValue = normalizeWeekStartDay(formState.weekStartDay)
+            val displayLabel = dayOptions.firstOrNull { it.first == currentValue }?.second ?: "Sun"
+            SettingsDropdown(
+                selectedValue = displayLabel,
+                options = dayOptions.map { it.second },
+                onOptionSelected = { label ->
+                    val numericValue = dayOptions.firstOrNull { it.second == label }?.first ?: "0"
+                    onUpdateSetting("week_start_day", numericValue)
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -395,9 +416,9 @@ fun GeneralSettingsTab(
 
             Button(
                 onClick = { showResetSortDialog = true },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                ),
+                colors = CwocButtonDefaults.dangerColors(),
+                border = CwocButtonDefaults.dangerBorder,
+                shape = CwocButtonDefaults.outsetShape,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Reset All Sort Orders")
@@ -413,10 +434,13 @@ fun GeneralSettingsTab(
             if (showResetSortDialog) {
                 AlertDialog(
                     onDismissRequest = { showResetSortDialog = false },
+                    modifier = CwocDialogDefaults.borderModifier,
+                    containerColor = CwocDialogDefaults.containerColor,
                     title = {
                         Text(
                             text = "Reset All Sort Orders",
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            style = CwocDialogDefaults.titleStyle,
                         )
                     },
                     text = {
@@ -428,9 +452,9 @@ fun GeneralSettingsTab(
                                 showResetSortDialog = false
                                 onResetSortOrders()
                             },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            )
+                            colors = CwocButtonDefaults.dangerColors(),
+                            border = CwocButtonDefaults.dangerBorder,
+                            shape = CwocButtonDefaults.outsetShape
                         ) {
                             Text("Reset", color = Color.White)
                         }
@@ -447,11 +471,7 @@ fun GeneralSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- W1: Saved Locations Section ---
-        Text(
-            text = "Saved Locations",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        CwocSectionHeading(text = "Saved Locations")
         Text(
             text = "Manage saved locations for quick access in the Location zone.",
             style = MaterialTheme.typography.bodySmall,
@@ -462,11 +482,7 @@ fun GeneralSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- W1: Tags Management Section ---
-        Text(
-            text = "Tags",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        CwocSectionHeading(text = "Tags")
         Text(
             text = "Create, edit, and organize tags. Set colors and favorites.",
             style = MaterialTheme.typography.bodySmall,
@@ -477,11 +493,7 @@ fun GeneralSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- W1: Habits Configuration ---
-        Text(
-            text = "Habits",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        CwocSectionHeading(text = "Habits")
         Text(
             text = "Default goal, frequency, and success window for habit tracking.",
             style = MaterialTheme.typography.bodySmall,
@@ -617,11 +629,7 @@ fun GeneralSettingsTab(
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- W1: Clocks / World Clocks ---
-        Text(
-            text = "Clocks",
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        CwocSectionHeading(text = "Clocks")
 
         // --- Orientation Toggle ---
         Row(
@@ -639,7 +647,10 @@ fun GeneralSettingsTab(
                 onClick = {
                     val newOrientation = if (formState.clockOrientation == "horizontal") "vertical" else "horizontal"
                     onUpdateSetting("clock_orientation", newOrientation)
-                }
+                },
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text(
                     text = if (formState.clockOrientation == "horizontal") "Horizontal" else "Vertical"
@@ -694,7 +705,10 @@ fun GeneralSettingsTab(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 12.dp),
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Add Clock")
             }
@@ -972,7 +986,10 @@ private fun CustomFiltersSection(
 
                     // Configure button
                     OutlinedButton(
-                        onClick = { activeModalView = viewName }
+                        onClick = { activeModalView = viewName },
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("Configure")
                     }
@@ -1089,7 +1106,8 @@ private fun SettingsDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor()
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -1149,7 +1167,8 @@ private fun TimezoneSearchField(
             singleLine = true,
             modifier = Modifier
                 .menuAnchor()
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         if (filteredTimezones.isNotEmpty()) {
             ExposedDropdownMenu(
@@ -1229,7 +1248,8 @@ private fun TimezoneOverrideField(
                 isError = isInvalidTimezone,
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             if (filteredTimezones.isNotEmpty() && searchText.isNotBlank()) {
                 ExposedDropdownMenu(

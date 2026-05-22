@@ -66,6 +66,9 @@ fun NotificationsScreen(
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 }
             )
         }

@@ -32,6 +32,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -54,6 +55,8 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +66,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.domain.checklist.ChecklistItemV2
 import com.cwoc.app.domain.checklist.ChecklistOperationsV2
+import com.cwoc.app.ui.util.InlineMarkdownRenderer
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -97,7 +103,8 @@ fun ChecklistZoneV2(
     autoCompleteEnabled: Boolean = false,
     currentStatus: String? = null,
     availableChits: List<Pair<String, String>> = emptyList(),
-    onSendItemsToChit: ((targetChitId: String, items: List<ChecklistItemV2>) -> Unit)? = null
+    onSendItemsToChit: ((targetChitId: String, items: List<ChecklistItemV2>) -> Unit)? = null,
+    externalFocusRequester: FocusRequester? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -158,7 +165,8 @@ fun ChecklistZoneV2(
             onAddItem = {
                 viewModel.addItem(viewModel.addItemInputText.trim())
                 viewModel.addItemInputText = ""
-            }
+            },
+            externalFocusRequester = externalFocusRequester
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -432,7 +440,8 @@ private fun ChecklistZoneHeader(
 private fun ChecklistAddItemInput(
     text: String,
     onTextChange: (String) -> Unit,
-    onAddItem: () -> Unit
+    onAddItem: () -> Unit,
+    externalFocusRequester: FocusRequester? = null
 ) {
     var showFlashArrow by remember { mutableStateOf(false) }
     val flashAlpha by animateFloatAsState(
@@ -462,6 +471,7 @@ private fun ChecklistAddItemInput(
             onValueChange = onTextChange,
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (externalFocusRequester != null) Modifier.focusRequester(externalFocusRequester) else Modifier)
                 .border(1.dp, borderColor, RoundedCornerShape(4.dp))
                 .background(ParchmentLight, RoundedCornerShape(4.dp))
                 .padding(8.dp),
@@ -716,7 +726,7 @@ private fun ChecklistItemRowV2(
                     else -> TextColor
                 }
                 Text(
-                    text = item.text,
+                    text = InlineMarkdownRenderer.render(item.text, linkTextColor = textColor),
                     fontSize = 15.sp,
                     color = textColor,
                     textDecoration = textDecoration,
@@ -791,7 +801,7 @@ private fun ChecklistCompletedSectionV2(
     Column(modifier = Modifier.fillMaxWidth()) {
         // Border top
         HorizontalDivider(
-            color = AgedBrownLight,
+            color = Color(0xFF8B5A2B),
             thickness = 1.dp,
             modifier = Modifier.padding(top = 6.dp)
         )
@@ -950,7 +960,8 @@ private fun ChecklistDataMenuSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
-        containerColor = ParchmentLight
+        containerColor = CwocDialogDefaults.containerColor,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier

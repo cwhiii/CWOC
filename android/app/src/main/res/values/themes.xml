@@ -5,4 +5,21 @@
         <item name="android:navigationBarColor">#FDF5E6</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+
+    <!-- Transparent overlay theme for QuickCaptureMenuActivity (plain Activity, not AppCompat) -->
+    <style name="Theme.CWOC.Transparent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+
+    <!-- AppCompat theme for widget config activities (extend AppCompatActivity) -->
+    <style name="Theme.CWOC.WidgetConfig" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:statusBarColor">#E0D4B5</item>
+        <item name="android:navigationBarColor">#FDF5E6</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">#f5e6cc</item>
+    </style>
 </resources>

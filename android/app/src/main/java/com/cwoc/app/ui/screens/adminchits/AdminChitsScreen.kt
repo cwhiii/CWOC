@@ -60,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -124,6 +126,9 @@ fun AdminChitsScreen(
                             contentDescription = if (uiState.isSelectionMode) "Cancel selection" else "Back"
                         )
                     }
+                },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -254,7 +259,8 @@ private fun FilterBar(
                 }
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Trigger search on done (simple approach: search on every change with debounce-like behavior)
@@ -632,7 +638,9 @@ private fun BulkActionBar(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Chits", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Chits", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to delete the selected chits? This action cannot be undone.") },
             confirmButton = {
                 Button(
@@ -640,7 +648,7 @@ private fun BulkActionBar(
                         onDelete()
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Delete")
                 }

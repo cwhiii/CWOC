@@ -52,3 +52,12 @@ val CwocHeaderBg = Color(0xFFE0D4B5)         // --header-bg: #e0d4b5
 val CwocAgedBrownDark = Color(0xFF4A2C2A)    // --aged-brown-dark: #4a2c2a
 val CwocAgedBrownMedium = Color(0xFF8B4513)  // --aged-brown-medium: #8b4513
 val CwocAgedBrownLight = Color(0xFFA0522D)   // --aged-brown-light: #a0522d
+
+// Visual parity colors (Task 3)
+val CwocZoneHeaderTan = Color(0xFFD2B48C)    // Warm tan for zone headers
+val CwocOutsetBorder = Color(0xFF8B4513)     // Outset button border
+val CwocTealAccent = Color(0xFF008080)       // Teal accent for focused inputs
+val CwocIvory = Color(0xFFFFFFF0)            // Ivory for active tab backgrounds
+val CwocDialogBg = Color(0xFFFFFAF0)         // Dialog/sheet background (floral white)
+val CwocButtonTan = Color(0xFFD2B48C)        // Tan for button backgrounds
+val CwocInputBg = Color(0xFFFDF5E6)          // Input field background

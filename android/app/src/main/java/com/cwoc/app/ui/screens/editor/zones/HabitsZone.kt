@@ -1,5 +1,7 @@
 package com.cwoc.app.ui.screens.editor.zones
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,9 +36,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * HabitsZone composable for the chit editor.
@@ -133,7 +139,8 @@ fun HabitsZone(
                     label = { Text("Goal") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Success Count with +/- buttons
@@ -287,7 +294,8 @@ private fun ResetPeriodDropdown(
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(60.dp)
+                modifier = Modifier.width(60.dp),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // Unit dropdown
@@ -303,11 +311,15 @@ private fun ResetPeriodDropdown(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor()
+                        .menuAnchor(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     periods.forEach { period ->
                         DropdownMenuItem(
@@ -363,11 +375,15 @@ private fun FrequencyDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor()
+                .menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             frequencies.forEach { freq ->
                 DropdownMenuItem(

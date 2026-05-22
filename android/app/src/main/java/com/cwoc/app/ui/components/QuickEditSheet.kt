@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocPrimary
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * D3: Quick-edit bottom sheet for notes.
@@ -50,7 +54,8 @@ fun QuickEditSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier
@@ -65,7 +70,7 @@ fun QuickEditSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                colors = cwocTextFieldColors()
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -79,7 +84,7 @@ fun QuickEditSheet(
                     .fillMaxWidth()
                     .heightIn(min = 150.dp, max = 400.dp),
                 textStyle = MaterialTheme.typography.bodyMedium,
-                colors = cwocTextFieldColors()
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             Spacer(modifier = Modifier.height(12.dp))

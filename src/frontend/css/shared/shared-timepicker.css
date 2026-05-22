@@ -294,3 +294,13 @@
     line-height: 180px;
   }
 }
+
+/* ── Snap/All toggle row ──────────────────────────────────────────────────── */
+.cwoc-tp-toggle-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 8px 0;
+}
+.cwoc-tp-snap-toggle {
+  font-size: 0.85em;
+}

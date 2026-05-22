@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,7 +52,6 @@ import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.HealthIndicatorBadges
 import com.cwoc.app.ui.components.LocationIndicator
-import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.components.QuickEditSheet
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.SwipeableChitCard
@@ -82,7 +84,8 @@ fun NotesScreen(
     onNavigateToEditor: (String) -> Unit,
     viewModel: NotesViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    onQuickAlert: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -90,6 +93,10 @@ fun NotesScreen(
     // Undo toast state
     val pendingDeleteChitId by viewModel.pendingDeleteChitId.collectAsState()
     val pendingDeleteTitle by viewModel.pendingDeleteTitle.collectAsState()
+
+    // Settings for SnoozePickerDialog
+    val timeFormat by viewModel.timeFormat.collectAsState()
+    val calendarSnap by viewModel.calendarSnap.collectAsState()
 
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
@@ -116,7 +123,8 @@ fun NotesScreen(
         ChitListScaffold(
             title = "Notes",
             syncState = syncState,
-            onFabClick = { onNavigateToEditor("new") }
+            onFabClick = { onNavigateToEditor("new") },
+            onFabLongPress = onQuickAlert
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
             when {
@@ -196,6 +204,8 @@ fun NotesScreen(
         // Snooze picker dialog
         if (showSnoozeDialog && currentMenuChit != null) {
             SnoozePickerDialog(
+                is24Hour = (timeFormat == "24hour"),
+                calendarSnap = calendarSnap,
                 onSnoozeSelected = { isoString ->
                     chitRepository?.let { repo ->
                         coroutineScope.launch {
@@ -266,23 +276,32 @@ private fun NotesList(
     modifier: Modifier = Modifier
 ) {
     // D1: Masonry layout using LazyVerticalStaggeredGrid
-    // 2 columns on phone, responsive to screen width
-    androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid(
-        columns = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells.Adaptive(160.dp),
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 8.dp),
-        verticalItemSpacing = 8.dp,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(notes.size, key = { notes[it].id }) { index ->
-            val note = notes[index]
-            NoteCard(
-                note = note,
-                onClick = { onNoteClick(note.id) },
-                onLongClick = { onNoteLongPress(note) },
-                currentUserId = currentUserId
-            )
+    // Single column on phone (≤600dp), responsive multi-column on tablet
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isPhone = maxWidth <= 600.dp
+        val columns = if (isPhone) {
+            androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells.Fixed(1)
+        } else {
+            androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells.Adaptive(160.dp)
+        }
+
+        androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid(
+            columns = columns,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            verticalItemSpacing = 8.dp,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(notes.size, key = { notes[it].id }) { index ->
+                val note = notes[index]
+                NoteCard(
+                    note = note,
+                    onClick = { onNoteClick(note.id) },
+                    onLongClick = { onNoteLongPress(note) },
+                    currentUserId = currentUserId
+                )
+            }
         }
     }
 }
@@ -295,8 +314,9 @@ private fun NoteCard(
     onLongClick: () -> Unit,
     currentUserId: String
 ) {
-    // D7: Expandable card — tap to expand/collapse preview
+    // Show more/less toggle state for content preview
     var isExpanded by remember { mutableStateOf(false) }
+    var hasOverflow by remember { mutableStateOf(false) }
 
     // Full background color matching web's applyChitColors(el, chitColor(chit))
     val cardBgColor = remember(note.color) { CwocChitCardStyle.resolveChitBgColor(note.color) }
@@ -312,13 +332,7 @@ private fun NoteCard(
             .alpha(cardAlpha)
             .animateContentSize()
             .combinedClickable(
-                onClick = {
-                    if (isExpanded) {
-                        onClick()
-                    } else {
-                        isExpanded = true
-                    }
-                },
+                onClick = { onClick() },
                 onLongClick = onLongClick
             ),
         border = CwocChitCardStyle.cardBorder,
@@ -396,31 +410,31 @@ private fun NoteCard(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // Note content — full markdown rendering via composable MarkdownRenderer
+            // Note content — truncated preview with "Show more" / "Show less" toggle
             if (!note.note.isNullOrBlank()) {
-                if (isExpanded) {
-                    // Full markdown rendering when expanded
-                    MarkdownRenderer(
-                        markdown = note.note,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    // Collapse button
+                Text(
+                    text = com.cwoc.app.ui.util.MarkdownRenderer.renderToAnnotatedString(note.note.take(300)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cardTextColor.copy(alpha = 0.8f),
+                    maxLines = if (isExpanded) Int.MAX_VALUE else 4,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { textLayoutResult ->
+                        if (!isExpanded) {
+                            hasOverflow = textLayoutResult.hasVisualOverflow
+                        }
+                    }
+                )
+
+                // "Show more" / "Show less" toggle — tap does NOT propagate to card onClick
+                if (hasOverflow || isExpanded) {
                     Text(
-                        text = "▲ Collapse",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = cardTextColor.copy(alpha = 0.7f),
+                        text = if (isExpanded) "Show less" else "Show more",
+                        fontSize = 12.sp,
+                        color = Color(0xFF8B5A2B),
+                        fontStyle = FontStyle.Italic,
                         modifier = Modifier
                             .padding(top = 4.dp)
-                            .clickable { isExpanded = false }
-                    )
-                } else {
-                    // Truncated preview (plain text AnnotatedString for compact display)
-                    Text(
-                        text = com.cwoc.app.ui.util.MarkdownRenderer.renderToAnnotatedString(note.note.take(300)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = cardTextColor.copy(alpha = 0.8f),
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis
+                            .clickable { isExpanded = !isExpanded }
                     )
                 }
             }

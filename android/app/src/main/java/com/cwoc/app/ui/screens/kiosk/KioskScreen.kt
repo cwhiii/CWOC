@@ -166,6 +166,9 @@ fun KioskScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -232,7 +235,7 @@ fun KioskScreen(
                     color = ParchmentText,
                     letterSpacing = 1.5.sp
                 )
-                HorizontalDivider(color = ParchmentBrown.copy(alpha = 0.4f), thickness = 2.dp)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             }
 
             val range = getPeriodRange(period, anchor)
@@ -274,7 +277,7 @@ fun KioskScreen(
                     color = ParchmentText,
                     letterSpacing = 1.5.sp
                 )
-                HorizontalDivider(color = ParchmentBrown.copy(alpha = 0.4f), thickness = 2.dp)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             }
 
             val tasks = chits.filter { isActiveTask(it) }

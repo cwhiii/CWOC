@@ -34,6 +34,8 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.cos
 import kotlin.math.sin
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * BB4: Multi-timezone clock modal.
@@ -59,14 +61,15 @@ fun ClockModal(
         }
     }
     val formatter = remember(timeFormat) {
-        if (timeFormat == "24h") DateTimeFormatter.ofPattern("HH:mm:ss")
+        if (timeFormat == "24hour") DateTimeFormatter.ofPattern("HH:mm:ss")
         else DateTimeFormatter.ofPattern("h:mm:ss a")
     }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("EEE, MMM d") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("World Clocks", fontWeight = FontWeight.Bold) },
+        modifier = CwocDialogDefaults.borderModifier,
+        title = { Text("World Clocks", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -117,7 +120,7 @@ fun ClockModal(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
-                            HorizontalDivider()
+                            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                         }
                     }
                 }
@@ -128,7 +131,7 @@ fun ClockModal(
                 Text("Close")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }
 

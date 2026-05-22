@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Color Palette ──────────────────────────────────────────────────────────────
 
@@ -96,10 +98,11 @@ fun CreateBundleModal(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
         title = {
             Text(
                 text = "Create Bundle",
-                fontWeight = FontWeight.Bold
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {
@@ -116,7 +119,8 @@ fun CreateBundleModal(
                     label = { Text("Name *") },
                     placeholder = { Text("Bundle name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Description field (optional, multiline)
@@ -127,7 +131,8 @@ fun CreateBundleModal(
                     placeholder = { Text("Optional description") },
                     minLines = 2,
                     maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Tab Color picker
@@ -171,8 +176,7 @@ fun CreateBundleModal(
                         showInOmniView
                     )
                 },
-                enabled = name.isNotBlank()
-            ) {
+                enabled = name.isNotBlank(), colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Define Rule")
             }
         },
@@ -181,7 +185,7 @@ fun CreateBundleModal(
                 Text("Cancel")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }
 
@@ -226,11 +230,12 @@ fun EditBundleModal(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            modifier = CwocDialogDefaults.borderModifier,
             title = {
                 Text(
                     text = "Delete Bundle",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    style = CwocDialogDefaults.titleStyle,
                 )
             },
             text = {
@@ -244,8 +249,7 @@ fun EditBundleModal(
                     },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
+                    )) {
                     Text("Delete")
                 }
             },
@@ -254,17 +258,18 @@ fun EditBundleModal(
                     Text("Cancel")
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = CwocDialogDefaults.containerColor
         )
         return
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
         title = {
             Text(
                 text = "Edit Bundle",
-                fontWeight = FontWeight.Bold
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {
@@ -281,7 +286,8 @@ fun EditBundleModal(
                     label = { Text("Name *") },
                     placeholder = { Text("Bundle name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Description field (optional, multiline)
@@ -292,7 +298,8 @@ fun EditBundleModal(
                     placeholder = { Text("Optional description") },
                     minLines = 2,
                     maxLines = 4,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Tab Color picker
@@ -366,8 +373,7 @@ fun EditBundleModal(
                         showInOmniView
                     )
                 },
-                enabled = name.isNotBlank()
-            ) {
+                enabled = name.isNotBlank(), colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Save")
             }
         },
@@ -376,7 +382,7 @@ fun EditBundleModal(
                 Text("Cancel")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }
 

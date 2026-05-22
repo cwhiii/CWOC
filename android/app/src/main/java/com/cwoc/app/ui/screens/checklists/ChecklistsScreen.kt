@@ -2,6 +2,7 @@ package com.cwoc.app.ui.screens.checklists
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -77,13 +79,18 @@ fun ChecklistsScreen(
     modifier: Modifier = Modifier,
     viewModel: ChecklistsViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    onQuickAlert: (() -> Unit)? = null
 ) {
     val chits by viewModel.checklistChits.collectAsState()
 
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
+
+    // Settings for SnoozePickerDialog
+    val timeFormat by viewModel.timeFormat.collectAsState()
+    val calendarSnap by viewModel.calendarSnap.collectAsState()
 
     // Determine if manual sort is active (enables drag-to-reorder)
     val isManualSort = sortState.field == SortField.MANUAL
@@ -176,6 +183,8 @@ fun ChecklistsScreen(
         // Snooze picker dialog
         if (showSnoozeDialog && currentMenuChit != null) {
             SnoozePickerDialog(
+                is24Hour = (timeFormat == "24hour"),
+                calendarSnap = calendarSnap,
                 onSnoozeSelected = { isoString ->
                     chitRepository?.let { repo ->
                         coroutineScope.launch {
@@ -252,7 +261,7 @@ private fun ChecklistChitCard(
         elevation = CwocChitCardStyle.cardElevation()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Chit title + indicator icons + checklist progress
+            // Chit title + indicator icons + checklist progress (header row)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -292,49 +301,58 @@ private fun ChecklistChitCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            // Content zone recess (Task 24) — wraps everything below header row
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0x0A000000), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Column {
+                    // B8: Sharing/stealth indicators
+                    SharingIndicators(chit = chit)
 
-            // B8: Sharing/stealth indicators
-            SharingIndicators(chit = chit)
+                    // B15: RSVP indicators
+                    RsvpIndicators(sharesJson = chit.shares)
 
-            // B15: RSVP indicators
-            RsvpIndicators(sharesJson = chit.shares)
+                    // B9: Archive/snooze indicators
+                    ArchiveSnoozeIndicators(chit = chit)
 
-            // B9: Archive/snooze indicators
-            ArchiveSnoozeIndicators(chit = chit)
+                    // Checklist items — only show unchecked items (checked are counted in progress badge)
+                    items.forEachIndexed { index, item ->
+                        if (!item.checked) {
+                            ChecklistItemRow(
+                                item = item,
+                                textColor = cardTextColor,
+                                onToggle = { onToggleItem(index) }
+                            )
+                        }
+                    }
 
-            // Checklist items — only show unchecked items (checked are counted in progress badge)
-            items.forEachIndexed { index, item ->
-                if (!item.checked) {
-                    ChecklistItemRow(
-                        item = item,
-                        textColor = cardTextColor,
-                        onToggle = { onToggleItem(index) }
+                    // Tags at the bottom (system tags filtered by TagChipsRow)
+                    TagChipsRow(
+                        tags = chit.tags,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
+
+                    // B4: People chips
+                    if (!chit.people.isNullOrEmpty()) {
+                        PeopleChipsRow(
+                            people = chit.people,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
+                    // Location indicator
+                    if (!chit.location.isNullOrBlank()) {
+                        com.cwoc.app.ui.components.LocationIndicator(
+                            location = chit.location,
+                            modifier = Modifier.padding(top = 4.dp),
+                            textColor = cardTextColor.copy(alpha = 0.7f)
+                        )
+                    }
                 }
-            }
-
-            // Tags at the bottom (system tags filtered by TagChipsRow)
-            TagChipsRow(
-                tags = chit.tags,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // B4: People chips
-            if (!chit.people.isNullOrEmpty()) {
-                PeopleChipsRow(
-                    people = chit.people,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            // Location indicator
-            if (!chit.location.isNullOrBlank()) {
-                com.cwoc.app.ui.components.LocationIndicator(
-                    location = chit.location,
-                    modifier = Modifier.padding(top = 4.dp),
-                    textColor = cardTextColor.copy(alpha = 0.7f)
-                )
             }
         }
     }

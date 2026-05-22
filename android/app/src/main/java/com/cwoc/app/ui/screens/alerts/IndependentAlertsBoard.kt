@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.StandaloneAlertEntity
+import com.cwoc.app.ui.components.CwocSectionHeading
 
 /**
  * Independent Alerts Board — displays three vertically stacked sections:
@@ -139,11 +140,9 @@ private fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        CwocSectionHeading(
             text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF6B4E31)
+            modifier = Modifier.weight(1f)
         )
         IconButton(
             onClick = onAddClick,

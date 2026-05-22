@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -318,9 +319,9 @@ fun UpgradeModal(
                         Button(
                             onClick = { startUpgrade() },
                             enabled = !isUpgrading,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF6B4E31)
-                            )
+                            colors = CwocButtonDefaults.outsetColors(),
+                            border = CwocButtonDefaults.outsetBorder,
+                            shape = CwocButtonDefaults.outsetShape
                         ) {
                             if (isUpgrading) {
                                 CircularProgressIndicator(
@@ -360,7 +361,10 @@ fun UpgradeModal(
                     // Close button
                     OutlinedButton(
                         onClick = onDismiss,
-                        enabled = !isUpgrading
+                        enabled = !isUpgrading,
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("Close")
                     }

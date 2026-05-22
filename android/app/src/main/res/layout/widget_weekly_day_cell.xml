@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/day_cell_root"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="2dp">
+
+    <!-- Day abbreviation (e.g., "Mon") -->
+    <TextView
+        android:id="@+id/day_abbrev"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="#6b4e31"
+        android:gravity="center"
+        android:fontFamily="serif" />
+
+    <!-- Date number (e.g., "12") -->
+    <TextView
+        android:id="@+id/day_number"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textColor="#4a2c2a"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:fontFamily="serif" />
+
+    <!-- Chit count badge -->
+    <TextView
+        android:id="@+id/day_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="11sp"
+        android:textColor="#6b4e31"
+        android:gravity="center"
+        android:fontFamily="serif" />
+
+</LinearLayout>

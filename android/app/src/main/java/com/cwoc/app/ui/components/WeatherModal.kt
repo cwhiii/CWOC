@@ -40,6 +40,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Weather modal — quick peek at current weather conditions for a saved location.
@@ -108,7 +111,9 @@ fun WeatherModal(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("🌤️ Weather", fontWeight = FontWeight.Bold) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("🌤️ Weather", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -127,7 +132,8 @@ fun WeatherModal(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                             modifier = Modifier.menuAnchor().fillMaxWidth(),
                             singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         ExposedDropdownMenu(
                             expanded = expanded,
@@ -226,7 +232,7 @@ fun WeatherModal(
             TextButton(onClick = {
                 onDismiss()
                 onFullForecast()
-            }) {
+            }, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("📊 Full Forecast", color = Color(0xFF6B4E31))
             }
         },

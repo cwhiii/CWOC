@@ -63,6 +63,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -100,7 +102,7 @@ fun UserAdminScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("User Admin") },
+                title = { Text("User Admin", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -108,6 +110,9 @@ fun UserAdminScreen(
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -377,7 +382,9 @@ private fun CreateUserDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New User", color = ParchmentText) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("New User", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -388,21 +395,24 @@ private fun CreateUserDialog(
                     onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it },
                     label = { Text("Display Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Email") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = password,
@@ -410,7 +420,8 @@ private fun CreateUserDialog(
                     label = { Text("Password") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -433,7 +444,7 @@ private fun CreateUserDialog(
             Button(
                 onClick = { onCreate(username, displayName, password, email, isAdmin) },
                 enabled = username.isNotBlank() && password.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                colors = CwocDialogDefaults.confirmButtonColors()
             ) {
                 Text("Create")
             }
@@ -471,7 +482,9 @@ private fun EditUserDialog(
     if (showResetPassword) {
         AlertDialog(
             onDismissRequest = { showResetPassword = false },
-            title = { Text("Reset Password", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Reset Password", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Column {
                     Text(
@@ -485,7 +498,8 @@ private fun EditUserDialog(
                         label = { Text("New Password") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                 }
             },
@@ -496,7 +510,7 @@ private fun EditUserDialog(
                         showResetPassword = false
                     },
                     enabled = newPassword.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                    colors = CwocDialogDefaults.confirmButtonColors()
                 ) {
                     Text("Reset")
                 }
@@ -513,7 +527,9 @@ private fun EditUserDialog(
     if (showDeactivateConfirm) {
         AlertDialog(
             onDismissRequest = { showDeactivateConfirm = false },
-            title = { Text("Deactivate User", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Deactivate User", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text("Are you sure you want to deactivate ${user.username}? They will no longer be able to log in.")
             },
@@ -523,7 +539,7 @@ private fun EditUserDialog(
                         onDeactivate()
                         showDeactivateConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Deactivate")
                 }
@@ -539,7 +555,9 @@ private fun EditUserDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit User", color = ParchmentText) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Edit User", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -550,21 +568,24 @@ private fun EditUserDialog(
                     onValueChange = { username = it },
                     label = { Text("Username") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it },
                     label = { Text("Display Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Email") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -636,7 +657,7 @@ private fun EditUserDialog(
             Button(
                 onClick = { onSave(username, displayName, email, isAdmin) },
                 enabled = username.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                colors = CwocDialogDefaults.confirmButtonColors()
             ) {
                 Text("Save")
             }
@@ -676,7 +697,7 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                colors = CwocDialogDefaults.confirmButtonColors()
             ) {
                 Text("Retry")
             }

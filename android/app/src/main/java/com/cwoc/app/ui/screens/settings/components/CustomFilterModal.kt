@@ -42,7 +42,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,6 +64,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.cwoc.app.ui.theme.CwocPrimary
 import com.cwoc.app.ui.theme.CwocSurface
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ============================================================
 // Data Classes
@@ -254,10 +254,7 @@ fun CustomFilterModal(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("Search text...") },
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CwocPrimary,
-                            unfocusedBorderColor = Color(0xFFC9B896)
-                        )
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                 }
 
@@ -466,10 +463,7 @@ private fun SortFieldDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = CwocPrimary,
-                unfocusedBorderColor = Color(0xFFC9B896)
-            )
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -635,10 +629,7 @@ private fun ProjectSingleSelect(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = CwocPrimary,
-                unfocusedBorderColor = Color(0xFFC9B896)
-            )
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,

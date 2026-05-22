@@ -53,6 +53,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Security Options ───────────────────────────────────────────────────────────
 
@@ -368,11 +370,12 @@ private fun AccountEditView(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
+            modifier = CwocDialogDefaults.borderModifier,
             title = {
                 Text(
                     text = "Delete Account",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error,
+                    style = CwocDialogDefaults.titleStyle,
                 )
             },
             text = {
@@ -387,9 +390,7 @@ private fun AccountEditView(
                         showDeleteConfirm = false
                         onDelete()
                     },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Delete")
                 }
@@ -399,7 +400,7 @@ private fun AccountEditView(
                     Text("Cancel")
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = CwocDialogDefaults.containerColor
         )
     }
 
@@ -423,7 +424,8 @@ private fun AccountEditView(
             label = { Text("Nickname") },
             placeholder = { Text("e.g., Personal, Work") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         OutlinedTextField(
@@ -432,7 +434,8 @@ private fun AccountEditView(
             label = { Text("Email Address") },
             placeholder = { Text("user@example.com") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         OutlinedTextField(
@@ -441,7 +444,8 @@ private fun AccountEditView(
             label = { Text("Display Name") },
             placeholder = { Text("Your Name") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         OutlinedTextField(
@@ -450,7 +454,8 @@ private fun AccountEditView(
             label = { Text("Username") },
             placeholder = { Text("Usually your email address") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Password with visibility toggle
@@ -471,7 +476,8 @@ private fun AccountEditView(
                     )
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -490,7 +496,8 @@ private fun AccountEditView(
             label = { Text("IMAP Host") },
             placeholder = { Text("imap.example.com") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Row(
@@ -503,7 +510,8 @@ private fun AccountEditView(
                 label = { Text("Port") },
                 placeholder = { Text("993") },
                 singleLine = true,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             SecuritySelector(
@@ -529,7 +537,8 @@ private fun AccountEditView(
             label = { Text("SMTP Host") },
             placeholder = { Text("smtp.example.com") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Row(
@@ -542,7 +551,8 @@ private fun AccountEditView(
                 label = { Text("Port") },
                 placeholder = { Text("587") },
                 singleLine = true,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             SecuritySelector(

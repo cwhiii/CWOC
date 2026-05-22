@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview image for HST Time Bar widget in the widget picker -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Parchment background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#f5e6cc" />
+            <stroke android:width="1dp" android:color="#8b4513" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <!-- Progress bar track -->
+    <item android:top="14dp" android:left="8dp" android:right="8dp" android:bottom="14dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#e8d5b7" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <!-- Progress bar fill (about 60%) - use clip drawable for percentage -->
+    <item android:top="14dp" android:left="8dp" android:right="8dp" android:bottom="14dp">
+        <clip
+            android:clipOrientation="horizontal"
+            android:gravity="left">
+            <shape android:shape="rectangle">
+                <gradient
+                    android:startColor="#d4af37"
+                    android:centerColor="#c8965a"
+                    android:endColor="#8b4513"
+                    android:angle="0" />
+                <corners android:radius="4dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

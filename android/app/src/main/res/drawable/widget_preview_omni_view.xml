@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview image for Omni View widget in the widget picker -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Parchment background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#f5e6cc" />
+            <stroke android:width="1dp" android:color="#8b4513" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <!-- Row 1: chit card with colored left border -->
+    <item android:top="8dp" android:left="8dp" android:right="8dp" android:bottom="56dp">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#fffaf0" />
+                    <corners android:radius="4dp" />
+                </shape>
+            </item>
+            <item android:right="88dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#6b4e31" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Row 2: chit card with colored left border -->
+    <item android:top="32dp" android:left="8dp" android:right="8dp" android:bottom="32dp">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#fffaf0" />
+                    <corners android:radius="4dp" />
+                </shape>
+            </item>
+            <item android:right="88dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#8b4513" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Row 3: chit card with colored left border -->
+    <item android:top="56dp" android:left="8dp" android:right="8dp" android:bottom="8dp">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#fffaf0" />
+                    <corners android:radius="4dp" />
+                </shape>
+            </item>
+            <item android:right="88dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#d4af37" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</layer-list>

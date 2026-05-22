@@ -1,6 +1,8 @@
 package com.cwoc.app.ui.screens.auditlog
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -65,6 +68,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.cwoc.app.ui.components.CwocPagePanel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -153,7 +159,7 @@ fun AuditLogScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Audit Log") },
+                title = { Text("Audit Log", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -190,6 +196,7 @@ fun AuditLogScreen(
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -197,10 +204,14 @@ fun AuditLogScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        CwocPagePanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(8.dp)
+        ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
             // Filter chips row
             EntityTypeFilterRow(
@@ -268,6 +279,7 @@ fun AuditLogScreen(
                 }
             }
         }
+        }
     }
 
     // Date picker dialogs
@@ -308,13 +320,15 @@ fun AuditLogScreen(
     showRevertConfirm?.let { entryId ->
         AlertDialog(
             onDismissRequest = { showRevertConfirm = null },
-            title = { Text("⏪ Revert Chit?") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("⏪ Revert Chit?", style = CwocDialogDefaults.titleStyle) },
             text = { Text("This will undo the changes from this edit and create a new audit entry.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.revertEntry(entryId)
                     showRevertConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Revert", color = Color(0xFF0C5460))
                 }
             },
@@ -410,7 +424,10 @@ private fun ActorFilterDropdown(
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text(
                 text = if (selectedActor.isBlank()) "Actor" else selectedActor,
@@ -422,7 +439,10 @@ private fun ActorFilterDropdown(
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             DropdownMenuItem(
                 text = { Text("All Actors") },
@@ -458,7 +478,10 @@ private fun SortDropdown(
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text(
                 text = currentLabel,
@@ -470,7 +493,10 @@ private fun SortDropdown(
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             sortOptions.forEach { option ->
                 DropdownMenuItem(
@@ -496,7 +522,10 @@ private fun PageSizeDropdown(
     Box(modifier = modifier) {
         OutlinedButton(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text(
                 text = "$pageSize",
@@ -507,7 +536,10 @@ private fun PageSizeDropdown(
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             pageSizeOptions.forEach { size ->
                 DropdownMenuItem(
@@ -541,7 +573,10 @@ private fun DateRangeRow(
     ) {
         OutlinedButton(
             onClick = onSinceClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Icon(
                 imageVector = Icons.Default.DateRange,
@@ -558,7 +593,10 @@ private fun DateRangeRow(
 
         OutlinedButton(
             onClick = onUntilClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Icon(
                 imageVector = Icons.Default.DateRange,
@@ -784,9 +822,9 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ParchmentBrown
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Retry")
             }
@@ -973,7 +1011,9 @@ private fun PruneAuditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("🗑️ Delete Audit Logs") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("🗑️ Delete Audit Logs", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Select entries to delete:", style = MaterialTheme.typography.bodyMedium)
@@ -1003,8 +1043,7 @@ private fun PruneAuditDialog(
         confirmButton = {
             TextButton(
                 onClick = { selectedDays?.let { onConfirm(it) } },
-                enabled = selectedDays != null
-            ) {
+                enabled = selectedDays != null, colors = CwocDialogDefaults.dangerButtonColors()) {
                 Text("☢️ Delete", color = MaterialTheme.colorScheme.error)
             }
         },

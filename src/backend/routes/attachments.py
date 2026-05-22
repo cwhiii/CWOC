@@ -321,12 +321,18 @@ def list_all_attachments(request: Request):
             for att in atts:
                 if not isinstance(att, dict):
                     continue
+                att_id = att.get("id")
+                mime = att.get("mime_type", "application/octet-stream")
+                uploaded = att.get("uploaded_at")
                 results.append({
-                    "id": att.get("id"),
+                    "id": att_id,
+                    "attachment_id": att_id,
                     "filename": att.get("filename"),
                     "size": att.get("size", 0),
-                    "mime_type": att.get("mime_type", "application/octet-stream"),
-                    "uploaded_at": att.get("uploaded_at"),
+                    "mime_type": mime,
+                    "content_type": mime,
+                    "uploaded_at": uploaded,
+                    "created_datetime": uploaded,
                     "chit_id": row["id"],
                     "chit_title": row["title"] or "(Untitled)",
                 })

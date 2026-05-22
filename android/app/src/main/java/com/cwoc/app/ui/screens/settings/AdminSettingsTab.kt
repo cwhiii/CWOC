@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,6 +60,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.platform.LocalContext
 import com.cwoc.app.ui.components.MarkdownRenderer
+import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.screens.settings.components.CollapsibleSection
 import com.cwoc.app.ui.screens.settings.components.UpgradeModal
 import com.cwoc.app.ui.screens.settings.components.UpgradeModalMode
@@ -73,7 +75,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import org.json.JSONArray
-
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Admin settings tab containing Administration, Diagnostics, Data Management, Calendar Export,
@@ -119,7 +122,7 @@ fun AdminSettingsTab(
             onNavigateToUserAdmin = onNavigateToUserAdmin
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // ============================================================
         // Section: Kiosk (Task 30.1)
@@ -131,27 +134,23 @@ fun AdminSettingsTab(
             onNavigateToKiosk = onNavigateToKiosk
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section header
-        Text(
-            text = "Diagnostics",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Diagnostics")
 
         // Chit Manager button
         Button(
             onClick = onNavigateToAdminChits,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF6B4E31)
-            )
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text("📋 Chit Manager")
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Sync controls
         DiagnosticsCard(title = "Sync Controls") {
@@ -162,7 +161,10 @@ fun AdminSettingsTab(
                 Button(
                     onClick = { debugViewModel.syncNow() },
                     enabled = !uiState.isSyncing,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     if (uiState.isSyncing) {
                         CircularProgressIndicator(
@@ -177,7 +179,10 @@ fun AdminSettingsTab(
                 OutlinedButton(
                     onClick = { debugViewModel.fullResync() },
                     enabled = !uiState.isSyncing,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("Full Resync")
                 }
@@ -212,7 +217,10 @@ fun AdminSettingsTab(
                 }
                 clipboardManager.setText(AnnotatedString(text))
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text("Copy All to Clipboard")
         }
@@ -245,7 +253,7 @@ fun AdminSettingsTab(
             CircularProgressIndicator()
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section: Data Management
         DataManagementSection(
@@ -256,7 +264,7 @@ fun AdminSettingsTab(
             onNavigateToCustomObjects = onNavigateToCustomObjects
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section: Calendar Export
         CalendarExportSection(
@@ -264,7 +272,7 @@ fun AdminSettingsTab(
             clipboardManager = clipboardManager
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section: Dependent Apps
         DependentAppsSection(
@@ -273,7 +281,7 @@ fun AdminSettingsTab(
             settingsViewModel = settingsViewModel
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section: Version & Updates
         // Validates: Requirements 28.1, 28.2, 28.3, 28.4, 28.5, 28.6, 28.7, 28.8
@@ -371,9 +379,9 @@ private fun AdministrationSection(
             Button(
                 onClick = onNavigateToUserAdmin,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6B4E31)
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("👥 Manage Users")
             }
@@ -399,7 +407,8 @@ private fun AdministrationSection(
                 modifier = Modifier.fillMaxWidth(),
                 supportingText = {
                     Text("${settingsState.instanceName.length} / 100")
-                }
+                },
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -425,7 +434,8 @@ private fun AdministrationSection(
                 maxLines = 10,
                 supportingText = {
                     Text("${settingsState.welcomeMessage.length} / 5000 • Markdown supported")
-                }
+                },
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // Rendered markdown preview — Validates: Requirement 22.4
@@ -476,7 +486,8 @@ private fun AdministrationSection(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sessionDropdownExpanded) },
                     modifier = Modifier
                         .menuAnchor()
-                        .fillMaxWidth()
+                        .fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 ExposedDropdownMenu(
                     expanded = sessionDropdownExpanded,
@@ -614,9 +625,9 @@ private fun KioskSection(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6B4E31)
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("🖥️ Open Kiosk")
             }
@@ -769,11 +780,7 @@ private fun DataManagementSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // ── Export / Import: Chit Data (Req 24.1) ──
-                Text(
-                    text = "Chit Data",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Chit Data")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -781,9 +788,9 @@ private fun DataManagementSection(
                     Button(
                         onClick = { /* TODO: GET /api/export/chits → share sheet / file-save picker */ },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6B4E31)
-                        )
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("📤 Export")
                     }
@@ -792,18 +799,17 @@ private fun DataManagementSection(
                             importModeTarget = "chit"
                             showImportModeDialog = true
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("📥 Import")
                     }
                 }
 
                 // ── Export / Import: User Data (Req 24.2) ──
-                Text(
-                    text = "User Data",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "User Data")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -811,9 +817,9 @@ private fun DataManagementSection(
                     Button(
                         onClick = { /* TODO: GET /api/export/users → share sheet / file-save picker */ },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6B4E31)
-                        )
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("📤 Export")
                     }
@@ -822,7 +828,10 @@ private fun DataManagementSection(
                             importModeTarget = "user"
                             showImportModeDialog = true
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("📥 Import")
                     }
@@ -831,11 +840,7 @@ private fun DataManagementSection(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // ── Calendar Import (.ics) with user selection (Req 24.3) ──
-                Text(
-                    text = "Calendar Import (.ics)",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Calendar Import (.ics)")
                 // User selection dropdown for calendar import
                 SettingsDropdown(
                     label = "Import as user",
@@ -848,7 +853,10 @@ private fun DataManagementSection(
                         importModeTarget = "calendar"
                         showImportModeDialog = true
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("📅 Import Calendar (.ics)")
                 }
@@ -861,7 +869,10 @@ private fun DataManagementSection(
                         importModeTarget = "google_tasks"
                         showImportModeDialog = true
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("📋 Import Google Tasks (.json)")
                 }
@@ -872,49 +883,57 @@ private fun DataManagementSection(
                         importModeTarget = "google_keep"
                         showImportModeDialog = true
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("📝 Import Google Keep (.json)")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // ── Import Batches (Req 24.6) ──
                 ImportBatchesSubsection()
 
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // ── Navigation Buttons (Req 24.7, 24.8, 24.9) ──
-                Text(
-                    text = "Navigation",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Navigation")
                 OutlinedButton(
                     onClick = onNavigateToAuditLog,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("📜 Audit Log")
                 }
                 OutlinedButton(
                     onClick = onNavigateToTrash,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("🗑️ Trash")
                 }
                 OutlinedButton(
                     onClick = onNavigateToCustomObjects,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("🧩 Custom Objects")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // ── Audit Log Limits (Req 24.10) ──
@@ -924,7 +943,7 @@ private fun DataManagementSection(
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // ── Attachment Limits (Req 24.11) ──
@@ -934,16 +953,16 @@ private fun DataManagementSection(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ── Purge All Data (Req 24.16) ──
                 Button(
                     onClick = { showPurgeConfirm1 = true },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = CwocButtonDefaults.dangerColors(),
+                    border = CwocButtonDefaults.dangerBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("🚨 Purge All Data")
                 }
@@ -967,7 +986,9 @@ private fun DataManagementSection(
                 showImportModeDialog = false
                 importModeTarget = ""
             },
-            title = { Text("Import Mode") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Import Mode", style = CwocDialogDefaults.titleStyle) },
             text = { Text("How would you like to import this data?") },
             confirmButton = {
                 TextButton(onClick = {
@@ -975,14 +996,14 @@ private fun DataManagementSection(
                     // "Add to existing" mode — proceed to file selection
                     // TODO: Open file picker with importModeTarget type, mode = "add"
                     importModeTarget = ""
-                }) { Text("Add to existing") }
+                }, colors = CwocDialogDefaults.confirmButtonColors()) { Text("Add to existing") }
             },
             dismissButton = {
                 Column {
                     TextButton(onClick = {
                         showImportModeDialog = false
                         showReplaceConfirm = true
-                    }) { Text("Replace all data", color = MaterialTheme.colorScheme.error) }
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) { Text("Replace all data", color = MaterialTheme.colorScheme.error) }
                     TextButton(onClick = {
                         showImportModeDialog = false
                         importModeTarget = ""
@@ -996,14 +1017,16 @@ private fun DataManagementSection(
     if (showReplaceConfirm) {
         AlertDialog(
             onDismissRequest = { showReplaceConfirm = false },
-            title = { Text("⚠️ Replace All Data") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("⚠️ Replace All Data", style = CwocDialogDefaults.titleStyle) },
             text = { Text("This will REPLACE all existing data with the imported data. This action cannot be undone. Are you sure you want to proceed?") },
             confirmButton = {
                 TextButton(onClick = {
                     showReplaceConfirm = false
                     // TODO: Open file picker with importModeTarget type, mode = "replace"
                     importModeTarget = ""
-                }) { Text("Replace", color = MaterialTheme.colorScheme.error) }
+                }, colors = CwocDialogDefaults.confirmButtonColors()) { Text("Replace", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -1018,7 +1041,9 @@ private fun DataManagementSection(
     if (showPurgeConfirm1) {
         AlertDialog(
             onDismissRequest = { showPurgeConfirm1 = false },
-            title = { Text("⚠️ Purge All Data") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("⚠️ Purge All Data", style = CwocDialogDefaults.titleStyle) },
             text = { Text("This will PERMANENTLY DELETE all data including chits, contacts, settings, and history. This cannot be undone. Are you absolutely sure?") },
             confirmButton = {
                 TextButton(onClick = {
@@ -1036,7 +1061,9 @@ private fun DataManagementSection(
     if (showPurgeConfirm2) {
         AlertDialog(
             onDismissRequest = { showPurgeConfirm2 = false },
-            title = { Text("🚨 Final Confirmation") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("🚨 Final Confirmation", style = CwocDialogDefaults.titleStyle) },
             text = { Text("LAST CHANCE: All chits, settings, contacts, and history will be permanently erased. This is irreversible.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -1063,11 +1090,7 @@ private fun ImportBatchesSubsection() {
     var isLoading by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = "Import Batches",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Import Batches")
 
         if (isLoading) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
@@ -1127,11 +1150,7 @@ private fun AuditLogLimitsSubsection(
     onUpdateSetting: (key: String, value: String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Audit Log Limits",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Audit Log Limits")
 
         // Enable Pruning checkbox
         Row(
@@ -1173,7 +1192,8 @@ private fun AuditLogLimitsSubsection(
             enabled = pruningEnabled,
             modifier = Modifier.fillMaxWidth(),
             isError = pruningEnabled && settingsState.auditLogMaxDays.isNotEmpty() &&
-                    (settingsState.auditLogMaxDays.toIntOrNull()?.let { it < 1 || it > 9999 } ?: true)
+                    (settingsState.auditLogMaxDays.toIntOrNull()?.let { it < 1 || it > 9999 } ?: true),
+            colors = CwocInputDefaults.outlinedColors()
         )
         if (pruningEnabled && settingsState.auditLogMaxDays.isNotEmpty() &&
             (settingsState.auditLogMaxDays.toIntOrNull()?.let { it < 1 || it > 9999 } ?: true)) {
@@ -1198,7 +1218,8 @@ private fun AuditLogLimitsSubsection(
             enabled = pruningEnabled,
             modifier = Modifier.fillMaxWidth(),
             isError = pruningEnabled && settingsState.auditLogMaxMb.isNotEmpty() &&
-                    (settingsState.auditLogMaxMb.toIntOrNull()?.let { it < 1 || it > 99999 } ?: true)
+                    (settingsState.auditLogMaxMb.toIntOrNull()?.let { it < 1 || it > 99999 } ?: true),
+            colors = CwocInputDefaults.outlinedColors()
         )
         if (pruningEnabled && settingsState.auditLogMaxMb.isNotEmpty() &&
             (settingsState.auditLogMaxMb.toIntOrNull()?.let { it < 1 || it > 99999 } ?: true)) {
@@ -1222,11 +1243,7 @@ private fun AttachmentLimitsSubsection(
     onUpdateSetting: (key: String, value: String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Attachment Limits",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Attachment Limits")
 
         // Max File Size dropdown
         SettingsDropdown(
@@ -1374,7 +1391,8 @@ private fun DependentAppsSection(
                             onValueChange = { onUpdateSetting("ha_url", it) },
                             label = { Text("Home Assistant URL") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
@@ -1382,7 +1400,8 @@ private fun DependentAppsSection(
                             onValueChange = { onUpdateSetting("ha_token", it) },
                             label = { Text("Long-Lived Access Token") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(
@@ -1476,9 +1495,9 @@ private fun NtfySection(
         ) {
             Button(
                 onClick = { sectionExpanded = !sectionExpanded },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6B4E31)
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Ntfy  $statusIcon")
             }
@@ -1900,9 +1919,9 @@ private fun HomeAssistantSection(
                         settingsViewModel.loadHaConfig()
                     }
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6B4E31)
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 // Colored circle indicator
                 Canvas(
@@ -1987,7 +2006,8 @@ private fun HomeAssistantSection(
                     label = { Text("HA Base URL") },
                     placeholder = { Text("http://192.168.1.100:8123") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Access Token — Validates: Req 27.4
@@ -2006,7 +2026,8 @@ private fun HomeAssistantSection(
                             VisualTransformation.None
                         else
                             PasswordVisualTransformation(),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     // Show/hide toggle
                     IconButton(
@@ -2034,7 +2055,8 @@ private fun HomeAssistantSection(
                     modifier = Modifier.fillMaxWidth(),
                     supportingText = {
                         Text("Min: 5, Max: 3600, Default: 30")
-                    }
+                    },
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Test Connection button — Validates: Req 27.6
@@ -2082,10 +2104,9 @@ private fun HomeAssistantSection(
                     },
                     enabled = !haState.isSaving,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6B4E31),
-                        disabledContainerColor = Color(0xFF6B4E31).copy(alpha = 0.5f)
-                    )
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     if (haState.isSaving) {
                         CircularProgressIndicator(
@@ -2130,7 +2151,7 @@ private fun HomeAssistantSection(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // Webhook URL — Validates: Req 27.8
                 Text(
@@ -2151,7 +2172,8 @@ private fun HomeAssistantSection(
                         textStyle = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace
                         ),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     // Copy button
                     IconButton(
@@ -2214,7 +2236,9 @@ private fun HomeAssistantSection(
         if (showRegenerateConfirm) {
             AlertDialog(
                 onDismissRequest = { showRegenerateConfirm = false },
-                title = { Text("Regenerate Webhook Secret?") },
+                modifier = CwocDialogDefaults.borderModifier,
+                containerColor = CwocDialogDefaults.containerColor,
+                title = { Text("Regenerate Webhook Secret?", style = CwocDialogDefaults.titleStyle) },
                 text = {
                     Text(
                         "This will generate a new webhook URL. Any existing Home Assistant " +
@@ -2458,9 +2482,9 @@ private fun VersionUpdatesSection(
                         showUpgradeModal = true
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6B4E31)
-                    )
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("⬆️ Upgrade")
                 }
@@ -2471,7 +2495,10 @@ private fun VersionUpdatesSection(
                         upgradeModalMode = UpgradeModalMode.VIEW_LOG
                         showUpgradeModal = true
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("📄 Show Log")
                 }
@@ -2482,9 +2509,9 @@ private fun VersionUpdatesSection(
                         onClick = { showRestartConfirm = true },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isRestarting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
+                        colors = CwocButtonDefaults.dangerColors(),
+                        border = CwocButtonDefaults.dangerBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         if (isRestarting) {
                             CircularProgressIndicator(
@@ -2533,7 +2560,9 @@ private fun VersionUpdatesSection(
     if (showRestartConfirm) {
         AlertDialog(
             onDismissRequest = { showRestartConfirm = false },
-            title = { Text("⚠️ Restart CWOC") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("⚠️ Restart CWOC", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text("The CWOC service will be briefly unavailable during restart. All connected clients will be temporarily disconnected. Are you sure you want to restart?")
             },
@@ -2558,8 +2587,7 @@ private fun VersionUpdatesSection(
                                 isRestarting = false
                             }
                         }
-                    }
-                ) {
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Restart", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -2631,9 +2659,9 @@ private fun TailscaleSection(
                 onClick = {
                     sectionExpanded = !sectionExpanded
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF6B4E31)
-                )
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Tailscale  $statusIcon")
             }
@@ -2799,7 +2827,8 @@ private fun TailscaleSection(
                             androidx.compose.ui.text.input.VisualTransformation.None
                         else
                             androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     // Show/hide toggle
                     IconButton(
@@ -2838,10 +2867,9 @@ private fun TailscaleSection(
                     },
                     enabled = saveConfigDirty && !tailscaleState.isLoading,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6B4E31),
-                        disabledContainerColor = Color(0xFF6B4E31).copy(alpha = 0.5f)
-                    )
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("💾 Save Config")
                 }
@@ -2863,10 +2891,9 @@ private fun TailscaleSection(
                         onClick = { settingsViewModel.connectTailscale() },
                         enabled = canConnect && !tailscaleState.isLoading,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2D5A1E),
-                            disabledContainerColor = Color(0xFF2D5A1E).copy(alpha = 0.4f)
-                        )
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("▶️ Connect")
                     }
@@ -2874,7 +2901,10 @@ private fun TailscaleSection(
                     OutlinedButton(
                         onClick = { settingsViewModel.disconnectTailscale() },
                         enabled = canDisconnect && !tailscaleState.isLoading,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Text("⏹️ Disconnect")
                     }
@@ -3061,7 +3091,8 @@ private fun SettingsDropdown(
                 modifier = Modifier
                     .menuAnchor()
                     .fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,

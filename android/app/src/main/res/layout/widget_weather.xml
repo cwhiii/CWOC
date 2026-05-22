@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_weather_background"
+    android:padding="8dp">
+
+    <!-- Normal weather content -->
+    <LinearLayout
+        android:id="@+id/weather_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:visibility="visible">
+
+        <!-- Weather icon -->
+        <ImageView
+            android:id="@+id/weather_icon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center_horizontal"
+            android:src="@drawable/ic_weather_clear"
+            android:contentDescription="Weather condition icon" />
+
+        <!-- Temperature text -->
+        <TextView
+            android:id="@+id/weather_temperature"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--°"
+            android:textColor="#4a2c2a"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:fontFamily="serif"
+            android:layout_marginTop="4dp" />
+
+        <!-- Condition text -->
+        <TextView
+            android:id="@+id/weather_condition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:textColor="#6b4e31"
+            android:textSize="12sp"
+            android:fontFamily="serif"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:layout_marginTop="2dp" />
+
+        <!-- Stale indicator (timestamp) — visible only when data is stale -->
+        <TextView
+            android:id="@+id/weather_stale_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Updated: --:--"
+            android:textColor="#8b7355"
+            android:textSize="10sp"
+            android:fontFamily="serif"
+            android:layout_marginTop="4dp"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Unavailable state text — shown when no weather data exists -->
+    <TextView
+        android:id="@+id/weather_unavailable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Weather unavailable"
+        android:textColor="#8b7355"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+    <!-- Auth guard — shown when user is not logged in -->
+    <TextView
+        android:id="@+id/weather_auth_guard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Please log in"
+        android:textColor="#8b7355"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+</FrameLayout>

@@ -25,7 +25,7 @@ data class SidebarState(
     val yearDisplay: String = "",
 
     // View modes (tab-specific)
-    val projectsViewMode: String = "list", // list|kanban
+    val projectsViewMode: String = "kanban", // kanban only (list mode hidden)
     val alarmsViewMode: String = "list", // list|independent|notifications|reminders
     val tasksViewMode: String = "tasks", // tasks|habits|assigned
 
@@ -227,7 +227,7 @@ class SidebarStateViewModel @Inject constructor(
 
     private fun restoreFromPrefs() {
         val period = prefs.getString("sidebar_period", "Week") ?: "Week"
-        val projectsMode = prefs.getString("sidebar_projects_mode", "list") ?: "list"
+        val projectsMode = "kanban" // kanban is the only mode now
         val alarmsMode = prefs.getString("sidebar_alarms_mode", "list") ?: "list"
         val tasksMode = prefs.getString("sidebar_tasks_mode", "tasks") ?: "tasks"
         val monthMode = prefs.getString("sidebar_month_mode", "compress") ?: "compress"

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ fun RulesManagerScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Rules Manager") },
+                title = { Text("Rules Manager", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -93,6 +94,9 @@ fun RulesManagerScreen(
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -172,13 +176,15 @@ fun RulesManagerScreen(
     showDeleteConfirm?.let { rule ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Rule") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Rule", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Delete rule \"${rule.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteRule(rule.id)
                     showDeleteConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -349,7 +355,7 @@ private fun ConfirmationCard(
                 }
                 Button(
                     onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("❌ Dismiss")
                 }

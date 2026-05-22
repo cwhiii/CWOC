@@ -43,7 +43,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +73,10 @@ import com.cwoc.app.ui.components.ContactQrCodeDialog
 import com.cwoc.app.ui.components.firstMultiValue
 import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.components.CwocPagePanel
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * People Page — Contact Rolodex list with toolbar, search, grouped/ungrouped modes,
@@ -151,6 +154,10 @@ fun ContactListScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
+        CwocPagePanel(
+            modifier = Modifier.fillMaxSize().padding(8.dp)
+        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
         // ─── Toolbar ────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -211,10 +218,7 @@ fun ContactListScreen(
             placeholder = { Text("🔍 Search contacts...") },
             leadingIcon = { Icon(Icons.Default.Search, null) },
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF008080),
-                unfocusedContainerColor = Color(0xFFF5E6CC)
-            )
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -275,6 +279,8 @@ fun ContactListScreen(
                 }
             }
         }
+        }
+        }
     }
 
     // QR code dialog
@@ -289,7 +295,9 @@ fun ContactListScreen(
     uiState.importResult?.let { result ->
         AlertDialog(
             onDismissRequest = { viewModel.clearImportResult() },
-            title = { Text("📋 Import Results") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("📋 Import Results", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Column {
                     Text("✅ ${result.imported} imported", color = Color(0xFF2E7D32))

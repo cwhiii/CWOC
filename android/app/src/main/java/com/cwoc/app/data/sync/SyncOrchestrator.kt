@@ -3,6 +3,8 @@ package com.cwoc.app.data.sync
 import android.content.Context
 import android.util.Log
 import com.cwoc.app.data.local.dao.SyncMetadataDao
+import com.cwoc.app.data.repository.SyncResult
+import com.cwoc.app.widget.refresh.WidgetUpdateWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -105,7 +107,11 @@ class SyncOrchestrator @Inject constructor(
                 Log.d(TAG, "Change notification — triggering incremental pull")
                 val metadata = syncMetadataDao.getMetadata()
                 val since = metadata?.highWaterMark ?: 0
-                syncEngine.performSync(since)
+                val result = syncEngine.performSync(since)
+                if (result is SyncResult.Success) {
+                    Log.d(TAG, "Sync pull complete — refreshing widgets")
+                    WidgetUpdateWorker.refreshNow(context)
+                }
             }
             else -> {
                 Log.d(TAG, "Ignoring WebSocket message of type: ${message.type}")

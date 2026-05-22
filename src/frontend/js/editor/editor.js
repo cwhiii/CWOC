@@ -111,7 +111,11 @@ function _checklistAutosave() {
 
   if (_checklistAutosaveTimer) clearTimeout(_checklistAutosaveTimer);
   _showChecklistPending();
+  // Show debounce-pending class on the checklist input during the timer
+  var clInput = window.checklist && window.checklist.input;
+  if (clInput) clInput.classList.add('debounce-pending');
   _checklistAutosaveTimer = setTimeout(function() {
+    if (clInput) clInput.classList.remove('debounce-pending');
     _doChecklistAutosave();
   }, 2000);
 }
@@ -121,6 +125,9 @@ function _checklistAutosave() {
  */
 async function _doChecklistAutosave() {
   if (!window.currentChitId || window.isNewChit) return;
+  // Remove debounce-pending class (covers force-flush cases where timer didn't fire)
+  var clInput = window.checklist && window.checklist.input;
+  if (clInput) clInput.classList.remove('debounce-pending');
   var checklistData = window.checklist ? window.checklist.getChecklistData() : [];
   try {
     var resp = await fetch('/api/chits/' + window.currentChitId + '/checklist', {
@@ -215,14 +222,16 @@ async function _loadChecklistAutosaveSetting() {
 
 /**
  * Toggle the per-chit checklist autosave override.
- * Cycles: null (use global) → true (force on) → false (force off) → null
+ * Cycles: null (global default) → true (force on) → false (force off) → null (global default)
  */
 function _toggleChecklistAutosaveChit(e) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
   if (_checklistAutosaveChitOverride === null) {
-    _checklistAutosaveChitOverride = !_checklistAutosaveEnabled; // flip from global
+    _checklistAutosaveChitOverride = true; // force on
+  } else if (_checklistAutosaveChitOverride === true) {
+    _checklistAutosaveChitOverride = false; // force off
   } else {
-    _checklistAutosaveChitOverride = null; // back to global
+    _checklistAutosaveChitOverride = null; // back to global default
   }
   _updateChecklistAutosaveToggle();
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();

@@ -64,6 +64,14 @@ class TasksViewModel @Inject constructor(
     private val _currentUsername = MutableStateFlow<String?>(null)
     val currentUsername: StateFlow<String?> = _currentUsername.asStateFlow()
 
+    /** Time format from settings ("12hour" or "24hour"). */
+    private val _timeFormat = MutableStateFlow("12hour")
+    val timeFormat: StateFlow<String> = _timeFormat.asStateFlow()
+
+    /** Calendar snap interval from settings. */
+    private val _calendarSnap = MutableStateFlow(5)
+    val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
+
     /** Whether to show map thumbnails on cards (from chit_options.show_map_thumbnails). */
     private val _showMapThumbnails = MutableStateFlow(false)
     val showMapThumbnails: StateFlow<Boolean> = _showMapThumbnails.asStateFlow()
@@ -135,6 +143,8 @@ class TasksViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _currentUsername.value = settings.username
+                _timeFormat.value = settings.timeFormat ?: "12hour"
+                _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
                 // Parse show_map_thumbnails from chitOptions JSON
                 _showMapThumbnails.value = try {
                     val json = org.json.JSONObject(settings.chitOptions ?: "{}")

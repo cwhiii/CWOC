@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_project_progress_background"
+    android:padding="10dp">
+
+    <!-- Normal state container -->
+    <LinearLayout
+        android:id="@+id/project_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <!-- Project title -->
+        <TextView
+            android:id="@+id/project_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Project"
+            android:textColor="#4a2c2a"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:fontFamily="serif"
+            android:paddingBottom="6dp" />
+
+        <!-- Progress bar (horizontal FrameLayout with background track and colored fill) -->
+        <FrameLayout
+            android:id="@+id/progress_bar_container"
+            android:layout_width="match_parent"
+            android:layout_height="10dp"
+            android:background="@drawable/widget_progress_track">
+
+            <!-- Colored fill view (width set programmatically) -->
+            <View
+                android:id="@+id/progress_bar_fill"
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="start|center_vertical"
+                android:background="@drawable/widget_progress_fill" />
+
+        </FrameLayout>
+
+        <!-- Count text "X of Y" -->
+        <TextView
+            android:id="@+id/progress_count_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="0 of 0"
+            android:textColor="#6b4e31"
+            android:textSize="12sp"
+            android:fontFamily="serif"
+            android:paddingTop="4dp" />
+
+    </LinearLayout>
+
+    <!-- Unavailable state -->
+    <TextView
+        android:id="@+id/project_unavailable"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Project unavailable"
+        android:textColor="#6b4e31"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+    <!-- Auth guard state -->
+    <TextView
+        android:id="@+id/project_auth_guard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Please log in"
+        android:textColor="#6b4e31"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+</LinearLayout>

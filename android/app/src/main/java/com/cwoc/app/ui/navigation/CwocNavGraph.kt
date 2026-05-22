@@ -46,7 +46,8 @@ fun CwocNavGraph(
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
     sidebarStateViewModel: SidebarStateViewModel? = null,
-    settingsRepository: SettingsRepository? = null
+    settingsRepository: SettingsRepository? = null,
+    onQuickAlert: (() -> Unit)? = null
 ) {
     val startDestination = if (isAuthenticated) Screen.Tasks.route else Screen.Login.route
 
@@ -72,7 +73,8 @@ fun CwocNavGraph(
                 },
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                onQuickAlert = onQuickAlert
             )
         }
 
@@ -82,7 +84,8 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                onQuickAlert = onQuickAlert
             )
         }
 
@@ -92,7 +95,8 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                onQuickAlert = onQuickAlert
             )
         }
 
@@ -114,7 +118,8 @@ fun CwocNavGraph(
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
-                chitRepository = chitRepository
+                chitRepository = chitRepository,
+                onQuickAlert = onQuickAlert
             )
         }
 
@@ -125,7 +130,8 @@ fun CwocNavGraph(
                 },
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
-                settingsRepository = settingsRepository
+                settingsRepository = settingsRepository,
+                sidebarStateViewModel = sidebarStateViewModel
             )
         }
 
@@ -393,12 +399,19 @@ fun CwocNavGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument("sourceTab") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
             val chitId = backStackEntry.arguments?.getString("chitId") ?: return@composable
+            val sourceTab = backStackEntry.arguments?.getString("sourceTab")
             ChitEditorScreen(
                 chitId = chitId,
+                sourceTab = sourceTab,
                 onNavigateBack = { navController.popBackStack() },
                 chitRepository = chitRepository
             )

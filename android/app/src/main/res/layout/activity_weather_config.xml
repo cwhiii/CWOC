@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#f5e6cc"
+    android:fitsSystemWindows="true"
+    android:padding="16dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Weather Location"
+        android:textColor="#4a2c2a"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:fontFamily="serif"
+        android:paddingBottom="12dp" />
+
+    <!-- Saved locations section label -->
+    <TextView
+        android:id="@+id/saved_locations_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Saved Locations"
+        android:textColor="#6b4e31"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:fontFamily="serif"
+        android:paddingBottom="4dp" />
+
+    <!-- List of saved locations -->
+    <ListView
+        android:id="@+id/saved_locations_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="#d4c4a8"
+        android:dividerHeight="1dp" />
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#8b4513"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Custom location entry section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Or enter a custom location:"
+        android:textColor="#6b4e31"
+        android:textSize="14sp"
+        android:fontFamily="serif"
+        android:paddingBottom="8dp" />
+
+    <!-- Custom location input row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/custom_location_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Enter address or place name"
+            android:textColor="#4a2c2a"
+            android:textColorHint="#8b7355"
+            android:textSize="14sp"
+            android:fontFamily="serif"
+            android:background="#fffaf0"
+            android:padding="8dp"
+            android:inputType="text"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/geocode_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Geocode"
+            android:textColor="#fffaf0"
+            android:textSize="13sp"
+            android:backgroundTint="#6b4e31"
+            android:layout_marginStart="8dp" />
+
+    </LinearLayout>
+
+    <!-- Error message area for geocode failures -->
+    <TextView
+        android:id="@+id/geocode_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Location could not be found"
+        android:textColor="#b22222"
+        android:textSize="12sp"
+        android:fontFamily="serif"
+        android:paddingTop="4dp"
+        android:visibility="gone" />
+
+    <!-- Confirm/Cancel buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="16dp">
+
+        <Button
+            android:id="@+id/cancel_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            android:textColor="#6b4e31"
+            android:textSize="14sp"
+            android:backgroundTint="#d4c4a8" />
+
+        <Button
+            android:id="@+id/confirm_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Confirm"
+            android:textColor="#fffaf0"
+            android:textSize="14sp"
+            android:backgroundTint="#6b4e31"
+            android:layout_marginStart="8dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

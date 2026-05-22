@@ -39,6 +39,7 @@ def get_settings(user_id: str, request: Request):
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM settings WHERE user_id = ?", (authenticated_user_id,))
         row = cursor.fetchone()
@@ -90,6 +91,8 @@ def get_settings(user_id: str, request: Request):
         settings["custom_view_filters"] = deserialize_json_field(settings.get("custom_view_filters"))
         settings["hidden_views"] = deserialize_json_field(settings.get("hidden_views"))
         settings["kiosk_selected_tags"] = deserialize_json_field(settings.get("kiosk_selected_tags"))
+        settings["omni_layout"] = deserialize_json_field(settings.get("omni_layout"))
+        settings["omni_locked_filters"] = deserialize_json_field(settings.get("omni_locked_filters"))
 
         # ── Include bundles data (piggyback on settings to avoid separate API call) ──
         try:
@@ -194,6 +197,7 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         "tags", "default_filters", "custom_colors", "visual_indicators",
         "chit_options", "default_notifications", "kiosk_users", "shared_tags",
         "recent_tags", "custom_view_filters", "hidden_views", "kiosk_selected_tags",
+        "omni_layout", "omni_locked_filters",
     }
 
     # All valid settings columns (excluding user_id which is the key)

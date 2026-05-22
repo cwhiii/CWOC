@@ -10,6 +10,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Options for editing a recurring event.
@@ -39,7 +41,8 @@ fun RecurringEditDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Recurring Event") },
+        modifier = CwocDialogDefaults.borderModifier,
+        title = { Text("Edit Recurring Event", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier
@@ -57,20 +60,17 @@ fun RecurringEditDialog(
             Column {
                 TextButton(
                     onClick = { onOptionSelected(RecurringEditOption.THIS_INSTANCE_ONLY) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                    modifier = Modifier.fillMaxWidth(), colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("This instance only")
                 }
                 TextButton(
                     onClick = { onOptionSelected(RecurringEditOption.ALL_EVENTS) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                    modifier = Modifier.fillMaxWidth(), colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("All events")
                 }
                 TextButton(
                     onClick = { onOptionSelected(RecurringEditOption.THIS_AND_FOLLOWING) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                    modifier = Modifier.fillMaxWidth(), colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("This and all following")
                 }
             }
@@ -83,6 +83,6 @@ fun RecurringEditDialog(
                 Text("Cancel")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }

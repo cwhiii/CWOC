@@ -35,6 +35,7 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 /**
  * Dialog that displays a QR code containing a contact's vCard data.
@@ -52,7 +53,9 @@ fun ContactQrCodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Share: $displayName") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Share: $displayName", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -161,7 +164,9 @@ fun ChitQrCodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(currentTitle) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(currentTitle, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -275,7 +280,9 @@ fun ContactFormQrCodeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Share: $name") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Share: $name", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),

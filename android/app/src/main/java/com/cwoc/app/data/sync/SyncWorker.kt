@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.repository.SyncResult
+import com.cwoc.app.widget.refresh.WidgetUpdateWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
@@ -33,7 +34,10 @@ class SyncWorker @AssistedInject constructor(
         val since = metadata?.highWaterMark ?: 0
 
         return when (val result = syncEngine.performSync(since)) {
-            is SyncResult.Success -> Result.success()
+            is SyncResult.Success -> {
+                WidgetUpdateWorker.refreshNow(applicationContext)
+                Result.success()
+            }
             is SyncResult.Error -> {
                 if (result.code == 401) {
                     // 401 triggers token revocation flow via failure

@@ -37,7 +37,9 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.ui.components.MarkdownRenderer
-import com.cwoc.app.ui.components.cwocTextFieldColors
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Modal dialog for editing the email signature with markdown support.
@@ -62,7 +64,8 @@ fun SignatureEditorModal(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Signature") },
+        modifier = CwocDialogDefaults.borderModifier,
+        title = { Text("Edit Signature", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -127,7 +130,7 @@ fun SignatureEditorModal(
                         .fillMaxWidth()
                         .heightIn(min = 120.dp, max = 200.dp),
                     placeholder = { Text("Enter your email signature (markdown supported)") },
-                    colors = cwocTextFieldColors(),
+                    colors = CwocInputDefaults.outlinedColors(),
                     textStyle = MaterialTheme.typography.bodyMedium,
                     shape = RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp)
                 )
@@ -172,7 +175,7 @@ fun SignatureEditorModal(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(textFieldValue.text) }) {
+            TextButton(onClick = { onConfirm(textFieldValue.text) }, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Confirm")
             }
         },
@@ -181,7 +184,7 @@ fun SignatureEditorModal(
                 Text("Cancel")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }
 

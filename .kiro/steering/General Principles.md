@@ -1,6 +1,16 @@
 ---
 inclusion: always
 ---
+
+# SPEC TASK LISTS — ALWAYS IDENTIFY THE SPEC
+When starting work on a spec task list, **always state the full name of the spec at the top** of your response before doing any work. This makes it immediately clear which spec is being worked on in the conversation.
+
+# TERMINOLOGY: "app" = Android App ONLY
+When the user says "app," "the app," or "in the app," they ALWAYS mean the **Android mobile app** (Kotlin code under `android/`). Never the web version. Never the whole application. "App" is exclusively the Android app. If the user means the web version, they will say "web," "browser," "frontend," or "site."
+
+# TERMINOLOGY: "mobile" = Mobile Web Browser ONLY
+When the user says "mobile," "on mobile," or "the mobile version," they ALWAYS mean the **mobile web browser** (the same frontend code rendered on a phone/tablet browser). Never the Android app. "Mobile" refers to responsive/mobile-browser behavior of the web frontend. If the user means the Android app, they will say "app," "the app," or "Android."
+
 # ABSOLUTE RULE: COMPLETE IMPLEMENTATION — NO PARTIAL FEATURES
 **This is the single most important rule in this project. It overrides all other considerations.**
 
@@ -24,6 +34,18 @@ inclusion: always
 
 no installs, no pip, no npm.
 DO NOT INSTALL THINGS!
+
+# NO EXTERNAL DEPENDENCIES WITHOUT EXPLICIT PERMISSION
+- **NEVER add, reference, or load any external dependency** — no CDN links, no Font Awesome mid-load, no jsdelivr, no unpkg, no Google Fonts, no external scripts or stylesheets of any kind — without **explicit user permission first**.
+- This applies to ALL platforms: web frontend, backend Python, Android Kotlin. No new libraries, packages, CDN resources, or remote assets unless the user says yes.
+- If you think a dependency would be useful, **ASK FIRST**. Describe what it is, why you want it, and wait for approval. Do not add it speculatively.
+- Existing dependencies already in the project (listed in the tech stack steering doc) are fine to use. This rule is about adding NEW ones.
+- "Just a CDN link" is still an external dependency. "Just a small library" is still an external dependency. There are no exceptions without explicit permission.
+
+# AMBIGUOUS CONTEXT — ASK, DON'T ASSUME
+- If a conversation starts and the user appears to be in the middle of something, but you don't have context about what it is — **ASK FOR CLARIFICATION**. Do not guess. Do not go off and start doing work based on assumptions.
+- If the user's intent is unclear, incomplete, or references prior context you don't have, **STOP AND ASK** what they need before taking any action.
+- Never interpret an ambiguous message as permission to start implementing, refactoring, or modifying code. A wrong guess wastes time and creates mess to clean up.
 
 # General Principles
 
@@ -294,3 +316,4 @@ Once Phase 7 of the mobile app project is complete, **every change must be avail
 - Filtering, sorting, search capabilities
 - Data display and formatting changes
 - New settings or preferences
+

@@ -155,14 +155,8 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* 3b. Kanban toggle (only visible on Projects tab) */
-  html += '<div class="sidebar-section" id="section-kanban" style="display:none;">';
-  html += '  <label class="sidebar-section-label">View Mode</label>';
-  html += '  <div style="display:flex;gap:4px;">';
-  html += '    <button class="action-button" id="projects-mode-list" onclick="_setProjectsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📋 List</button>';
-  html += '    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode(\'kanban\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📊 Kanban</button>';
-  html += '  </div>';
-  html += '</div>';
+  /* 3b. Kanban toggle — hidden (Kanban is the only Projects mode now) */
+  html += '<div class="sidebar-section" id="section-kanban" style="display:none;"></div>';
 
   /* 3c. Alarms view mode toggle (only visible on Alarms tab) */
   html += '<div class="sidebar-section" id="section-alarms-mode" style="display:none;">';

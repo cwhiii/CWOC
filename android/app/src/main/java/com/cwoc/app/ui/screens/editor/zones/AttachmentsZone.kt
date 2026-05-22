@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +67,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 /**
  * Functional Attachments Zone for the chit editor.
@@ -192,7 +194,9 @@ fun AttachmentsZone(
     deleteConfirmAttachment?.let { att ->
         AlertDialog(
             onDismissRequest = { deleteConfirmAttachment = null },
-            title = { Text("Delete Attachment") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Attachment", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Delete attachment \"${att.filename}\"?") },
             confirmButton = {
                 Button(
@@ -226,9 +230,9 @@ fun AttachmentsZone(
                         )
                         Toast.makeText(context, "Attachment removed", Toast.LENGTH_SHORT).show()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = CwocButtonDefaults.dangerColors(),
+                    border = CwocButtonDefaults.dangerBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("🗑️ Delete")
                 }
@@ -309,7 +313,10 @@ fun AttachmentsZone(
                     }
                 },
                 enabled = !isUploading,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))

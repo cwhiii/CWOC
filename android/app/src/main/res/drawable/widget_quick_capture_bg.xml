@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hexagonal background for Quick Capture widget matching the NewChitFab shape.
+     Regular hexagon with points at top and bottom (flat sides left/right).
+     Brown fill (#6b4e31) matching the app's primary/accent color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="56dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+    <!-- Regular hexagon: center (28,28), radius 28, points at top/bottom -->
+    <!-- Vertices at angles -90, -30, 30, 90, 150, 210 degrees from center -->
+    <!-- Top: (28, 0), TR: (52.25, 14), BR: (52.25, 42), Bottom: (28, 56), BL: (3.75, 42), TL: (3.75, 14) -->
+    <path
+        android:fillColor="#6b4e31"
+        android:pathData="M28,0 L52.25,14 L52.25,42 L28,56 L3.75,42 L3.75,14 Z" />
+</vector>

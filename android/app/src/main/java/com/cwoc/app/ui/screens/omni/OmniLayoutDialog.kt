@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -29,8 +30,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocPrimary
 
 /**
  * Bottom sheet dialog for configuring the Omni View layout.
@@ -55,7 +59,9 @@ fun OmniLayoutDialog(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = CwocDialogDefaults.containerColor,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier
@@ -112,7 +118,7 @@ fun OmniLayoutDialog(
                         }
                     )
                     if (index < editableSections.size - 1) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                     }
                 }
             }

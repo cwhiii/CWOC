@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Guards:
  * - Only triggers if the request actually had an Authorization header (token was sent)
  * - Uses AtomicBoolean to prevent multiple simultaneous logout triggers
+ * - Verifies the token still exists in prefs before clearing (avoids double-logout)
  */
 class TokenAuthenticator(
     private val prefs: SharedPreferences,
@@ -34,6 +35,14 @@ class TokenAuthenticator(
 
         if (!hadAuthHeader) {
             android.util.Log.w("CWOC_AUTH", "TokenAuthenticator: Ignoring 401 — no auth header was sent")
+            return null
+        }
+
+        // Check if the token is still in prefs — if it's already gone, another
+        // thread already handled the logout. Don't trigger again.
+        val currentToken = prefs.getString("device_token", null)
+        if (currentToken == null) {
+            android.util.Log.w("CWOC_AUTH", "TokenAuthenticator: Token already cleared from prefs, skipping")
             return null
         }
 

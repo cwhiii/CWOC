@@ -1,5 +1,7 @@
 package com.cwoc.app.ui.screens.email
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -17,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +49,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.components.CwocSectionHeading
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -140,18 +148,13 @@ fun EmailSettingsScreen(
 @Composable
 private fun SectionDivider() {
     Spacer(modifier = Modifier.height(8.dp))
-    HorizontalDivider(color = ParchmentBrown.copy(alpha = 0.2f))
+    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
     Spacer(modifier = Modifier.height(8.dp))
 }
 
 @Composable
 private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        color = ParchmentBrown
-    )
+    CwocSectionHeading(text = title)
     Spacer(modifier = Modifier.height(8.dp))
 }
 
@@ -203,7 +206,9 @@ private fun AccountsSection(
 
     OutlinedButton(
         onClick = onManageAccounts,
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = ParchmentBrown)
+        colors = CwocButtonDefaults.outsetColors(),
+        border = CwocButtonDefaults.outsetBorder,
+        shape = CwocButtonDefaults.outsetShape
     ) {
         Text("Manage Accounts")
     }
@@ -280,7 +285,8 @@ private fun PrivacySection(
             },
             modifier = Modifier.width(80.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true
+            singleLine = true,
+            colors = CwocInputDefaults.outlinedColors()
         )
     }
 }
@@ -477,7 +483,9 @@ private fun SignatureSection(
 
     OutlinedButton(
         onClick = onEditSignature,
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = ParchmentBrown)
+        colors = CwocButtonDefaults.outsetColors(),
+        border = CwocButtonDefaults.outsetBorder,
+        shape = CwocButtonDefaults.outsetShape
     ) {
         Text("Edit Signature")
     }
@@ -553,13 +561,17 @@ private fun BackfillSection(
             // Estimate is showing — offer confirm/cancel
             Button(
                 onClick = { showConfirmDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Start Backfill")
             }
             OutlinedButton(
                 onClick = onClearBackfill,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ParchmentBrown)
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Cancel")
             }
@@ -567,14 +579,18 @@ private fun BackfillSection(
             // Initial state or after result — show Backfill button
             Button(
                 onClick = onBackfillEstimate,
-                colors = ButtonDefaults.buttonColors(containerColor = ParchmentBrown)
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Backfill")
             }
             if (backfillState.resultMessage != null) {
                 OutlinedButton(
                     onClick = onClearBackfill,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ParchmentBrown)
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("Dismiss")
                 }
@@ -586,7 +602,9 @@ private fun BackfillSection(
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Confirm Backfill") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Confirm Backfill", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text(
                     "This will import all historical emails (${backfillState.estimateMessage}). " +
@@ -597,7 +615,7 @@ private fun BackfillSection(
                 TextButton(onClick = {
                     showConfirmDialog = false
                     onTriggerBackfill()
-                }) {
+                }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Proceed")
                 }
             },
@@ -674,11 +692,15 @@ private fun DropdownSelector(
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor(),
-                singleLine = true
+                singleLine = true,
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = { expanded = false },
+                modifier = Modifier
+                    .background(CwocDialogDefaults.containerColor)
+                    .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
             ) {
                 options.forEach { (key, displayLabel) ->
                     DropdownMenuItem(

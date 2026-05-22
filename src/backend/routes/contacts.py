@@ -340,6 +340,7 @@ def get_contact_birthdays(request: Request):
     try:
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
         cursor.execute(
             """SELECT id, given_name, surname, display_name, dates, color, image_url

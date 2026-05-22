@@ -1,5 +1,6 @@
 # Chit Editor
 
+- [Zone Prefill](#zone-prefill)
 - [Timezone Picker](#timezone-picker)
 - [Alerts Zone](#alerts-zone)
 - [Independent Alerts Board](#independent-alerts-board)
@@ -11,7 +12,31 @@
 
 Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see [Habits](/frontend/html/help.html#habits)). An "📜 [Audit Log](/frontend/html/audit-log.html)" button at the bottom links to the filtered [audit log](/frontend/html/audit-log.html) for the current chit. 📱 QR button generates data or link QR codes.
 
-When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the [Notes view](/frontend/html/help.html#notes)). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits. Creating from the [Indicators view](/frontend/html/help.html#indicators) auto-sets Point in Time to the current date/time and marks the chit Complete.
+When creating a new chit, the [editor](/editor) pre-opens zones based on which view you came from — see [Zone Prefill](#zone-prefill) below for the full mapping. If you have a default saved location, it's auto-applied to new chits. Creating from the [Indicators view](/frontend/html/help.html#indicators) auto-sets Point in Time to the current date/time and marks the chit Complete.
+
+## Zone Prefill
+
+When you tap the FAB to create a new chit from a C CAPTN view, the [editor](/editor) automatically pre-opens the most relevant zones and places focus where you're most likely to start typing. This eliminates the extra step of manually expanding zones.
+
+**Zone prefill only applies to new chits.** Editing an existing chit always opens with its saved zone state — no prefill behavior occurs.
+
+| Source View | Zones Pre-Opened | Auto-Focus / Highlight |
+|---|---|---|
+| [Calendar](/frontend/html/help.html#calendar) | Dates | Title field |
+| Checklists | Checklist | First checklist input (keyboard opens on mobile) |
+| [Notes](/frontend/html/help.html#notes) | Notes | Notes textarea (keyboard opens on mobile) |
+| Tasks | Task + Dates | Due date field highlighted |
+| Projects | Projects + Checklist | Title field |
+| Alerts | Alerts | Title field |
+| [Indicators](/frontend/html/help.html#indicators) | Indicators | Title field |
+
+**Key behaviors:**
+
+- Non-mapped zones remain collapsed but can be expanded manually by tapping their header
+- From the **Tasks** view, the date mode is automatically set to "Due" and the due date field receives a pulsing highlight. The highlight clears on first interaction (tap or focus)
+- From **Notes** and **Checklists**, the on-screen keyboard opens automatically on mobile and Android so you can start typing immediately
+- If you come from a non-C CAPTN view (Settings, People, Maps, etc.), the Calendar mapping is used as the default
+- This behavior is consistent across web desktop, mobile web, and the Android app
 
 ## Timezone Picker
 

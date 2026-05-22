@@ -449,46 +449,35 @@ class OmniViewViewModel @Inject constructor(
     }
 
     /**
-     * Reminders: chits with alerts in the next 24 hours.
+     * Reminders: chits with notification=true that are for today or pinned.
+     * Matches web logic: notification=true, status != Complete, not archived,
+     * and either point_in_time is today OR pinned=true.
      */
     private fun filterReminders(
         chits: List<ChitEntity>,
         now: Instant
     ): List<ChitEntity> {
-        val next24h = now.plus(24, ChronoUnit.HOURS)
+        val today = LocalDate.now()
+        val zone = ZoneId.systemDefault()
 
         return chits.filter { chit ->
-            val alertsJson = chit.alerts ?: return@filter false
-            if (alertsJson.isBlank() || alertsJson == "[]" || alertsJson == "null") return@filter false
+            // Must have notification flag set
+            if (chit.notification != true) return@filter false
+            // Must not be complete
+            if (chit.status == "Complete") return@filter false
 
-            try {
-                val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
-                val alerts: List<Map<String, Any?>> = gson.fromJson(alertsJson, type)
-                    ?: return@filter false
+            // Show if pinned (regardless of date)
+            if (chit.pinned) return@filter true
 
-                alerts.any { alert ->
-                    val absoluteTime = alert["absoluteTime"] as? String
-                    val offsetMinutes = (alert["offsetMinutes"] as? Number)?.toInt()
-
-                    when {
-                        absoluteTime != null && absoluteTime.isNotBlank() -> {
-                            val alertInstant = parseToInstant(absoluteTime)
-                            alertInstant != null && alertInstant.isAfter(now) && alertInstant.isBefore(next24h)
-                        }
-                        offsetMinutes != null && chit.startDatetime != null -> {
-                            val startInstant = parseToInstant(chit.startDatetime)
-                            if (startInstant != null) {
-                                val alertInstant = startInstant.minus(offsetMinutes.toLong(), ChronoUnit.MINUTES)
-                                alertInstant.isAfter(now) && alertInstant.isBefore(next24h)
-                            } else false
-                        }
-                        else -> false
-                    }
-                }
-            } catch (_: Exception) {
-                false
+            // Show if point_in_time is today
+            val pit = chit.pointInTime
+            if (!pit.isNullOrBlank()) {
+                val pitDate = parseToLocalDate(pit, zone)
+                if (pitDate != null && pitDate == today) return@filter true
             }
-        }.sortedBy { it.startDatetime ?: it.dueDatetime }
+
+            false
+        }.sortedBy { it.pointInTime ?: it.startDatetime ?: it.dueDatetime }
     }
 
     /**

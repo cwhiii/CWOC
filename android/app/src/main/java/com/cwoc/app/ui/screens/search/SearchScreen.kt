@@ -1,5 +1,7 @@
 package com.cwoc.app.ui.screens.search
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -30,6 +33,8 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.cwoc.app.ui.theme.CwocTealAccent
+import com.cwoc.app.ui.theme.CwocOutsetBorder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 /** System tags that should not be displayed in search result cards. */
 private val SEARCH_SYSTEM_TAGS = setOf(
@@ -101,8 +108,8 @@ fun SearchScreen(
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
+                            focusedIndicatorColor = CwocTealAccent,
+                            unfocusedIndicatorColor = CwocOutsetBorder
                         ),
                         textStyle = MaterialTheme.typography.bodyLarge
                     )
@@ -205,7 +212,7 @@ fun SearchScreen(
                                 onClick = { showStatusMenu = true },
                                 label = { Text(if (statusFilter.isBlank()) "Status" else statusFilter, fontSize = 12.sp) }
                             )
-                            DropdownMenu(expanded = showStatusMenu, onDismissRequest = { showStatusMenu = false }) {
+                            DropdownMenu(expanded = showStatusMenu, onDismissRequest = { showStatusMenu = false }, modifier = Modifier.background(CwocDialogDefaults.containerColor).border(1.dp, CwocOutline, RoundedCornerShape(4.dp))) {
                                 DropdownMenuItem(text = { Text("Any") }, onClick = { viewModel.setStatusFilter(""); showStatusMenu = false })
                                 listOf("ToDo", "In Progress", "Blocked", "Complete").forEach { s ->
                                     DropdownMenuItem(text = { Text(s) }, onClick = { viewModel.setStatusFilter(s); showStatusMenu = false })
@@ -221,7 +228,7 @@ fun SearchScreen(
                                 onClick = { showPriorityMenu = true },
                                 label = { Text(if (priorityFilter.isBlank()) "Priority" else priorityFilter, fontSize = 12.sp) }
                             )
-                            DropdownMenu(expanded = showPriorityMenu, onDismissRequest = { showPriorityMenu = false }) {
+                            DropdownMenu(expanded = showPriorityMenu, onDismissRequest = { showPriorityMenu = false }, modifier = Modifier.background(CwocDialogDefaults.containerColor).border(1.dp, CwocOutline, RoundedCornerShape(4.dp))) {
                                 DropdownMenuItem(text = { Text("Any") }, onClick = { viewModel.setPriorityFilter(""); showPriorityMenu = false })
                                 listOf("Critical", "High", "Medium", "Low").forEach { p ->
                                     DropdownMenuItem(text = { Text(p) }, onClick = { viewModel.setPriorityFilter(p); showPriorityMenu = false })
@@ -237,7 +244,7 @@ fun SearchScreen(
                                 onClick = { showEmailMenu = true },
                                 label = { Text(when (emailFilter) { "all" -> "All"; "only_email" -> "Emails Only"; else -> "No Email" }, fontSize = 12.sp) }
                             )
-                            DropdownMenu(expanded = showEmailMenu, onDismissRequest = { showEmailMenu = false }) {
+                            DropdownMenu(expanded = showEmailMenu, onDismissRequest = { showEmailMenu = false }, modifier = Modifier.background(CwocDialogDefaults.containerColor).border(1.dp, CwocOutline, RoundedCornerShape(4.dp))) {
                                 DropdownMenuItem(text = { Text("Exclude Emails") }, onClick = { viewModel.setEmailFilter("no_email"); showEmailMenu = false })
                                 DropdownMenuItem(text = { Text("All") }, onClick = { viewModel.setEmailFilter("all"); showEmailMenu = false })
                                 DropdownMenuItem(text = { Text("Only Emails") }, onClick = { viewModel.setEmailFilter("only_email"); showEmailMenu = false })

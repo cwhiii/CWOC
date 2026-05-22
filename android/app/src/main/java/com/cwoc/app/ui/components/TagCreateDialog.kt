@@ -38,6 +38,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.tags.TagNode
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Data class for passing existing tag data to the edit dialog.
@@ -121,13 +124,15 @@ fun TagCreateDialog(
     if (showDeleteConfirm && editingTag != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Tag") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Tag", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Delete \"${editingTag.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     onDelete?.invoke(editingTag.name)
-                }) { Text("Delete", color = androidx.compose.ui.graphics.Color.Red) }
+                }, colors = CwocDialogDefaults.dangerButtonColors()) { Text("Delete") }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
@@ -138,7 +143,8 @@ fun TagCreateDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isEditMode) "Edit Tag" else "Create Tag") },
+        modifier = CwocDialogDefaults.borderModifier,
+        title = { Text(if (isEditMode) "Edit Tag" else "Create Tag", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -166,7 +172,8 @@ fun TagCreateDialog(
                         label = { Text("Tag Name") },
                         placeholder = { Text("Enter tag name") },
                         singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                 }
 
@@ -262,7 +269,8 @@ fun TagCreateDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .menuAnchor(),
-                            singleLine = true
+                            singleLine = true,
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         ExposedDropdownMenu(
                             expanded = parentExpanded,
@@ -294,16 +302,14 @@ fun TagCreateDialog(
             androidx.compose.foundation.layout.Column {
                 TextButton(
                     onClick = { onConfirm(tagName.trim(), selectedColor, selectedFontColor, selectedParent, isFavorite) },
-                    enabled = tagName.isNotBlank()
-                ) {
+                    enabled = tagName.isNotBlank(), colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text(if (isEditMode) "Save" else "Create")
                 }
                 // Delete button (edit mode only)
                 if (isEditMode && onDelete != null) {
                     TextButton(
-                        onClick = { showDeleteConfirm = true }
-                    ) {
-                        Text("🗑️ Delete", color = androidx.compose.ui.graphics.Color.Red)
+                        onClick = { showDeleteConfirm = true }, colors = CwocDialogDefaults.dangerButtonColors()) {
+                        Text("🗑️ Delete")
                     }
                 }
             }
@@ -313,7 +319,7 @@ fun TagCreateDialog(
                 Text("Cancel")
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }
 

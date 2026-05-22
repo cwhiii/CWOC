@@ -80,13 +80,19 @@ fun IndependentAlarmCard(
         }
     }
 
-    // Extract fields from parsed data
-    val time = (alarmData["time"] as? String) ?: "00:00"
-    val days = remember(alarmData) {
+    // Extract fields from parsed data — handle both flat format (correct)
+    // and legacy nested format where fields are inside alarmData["data"]
+    val effectiveData = remember(alarmData) {
         @Suppress("UNCHECKED_CAST")
-        (alarmData["days"] as? List<String>) ?: emptyList()
+        val nested = alarmData["data"] as? Map<String, Any>
+        if (nested != null && alarmData["time"] == null) nested else alarmData
     }
-    val enabled = (alarmData["enabled"] as? Boolean) ?: true
+    val time = (effectiveData["time"] as? String) ?: "00:00"
+    val days = remember(effectiveData) {
+        @Suppress("UNCHECKED_CAST")
+        (effectiveData["days"] as? List<String>) ?: emptyList()
+    }
+    val enabled = (effectiveData["enabled"] as? Boolean) ?: true
 
     // Settings from ViewModel
     val timeFormat by viewModel.timeFormat.collectAsState()
@@ -217,7 +223,7 @@ fun IndependentAlarmCard(
                             },
                             hour,
                             minute,
-                            timeFormat == "24" // Use 24h view if setting is "24"
+                            timeFormat == "24hour" // Use 24h view if setting is "24hour"
                         ).show()
                     }
             )
@@ -311,14 +317,14 @@ fun IndependentAlarmCard(
 
 /**
  * Formats "HH:MM" time string according to the time format setting.
- * "12" → "h:MM AM/PM", "24" → "HH:MM"
+ * "24hour" → "HH:MM", anything else → "h:MM AM/PM"
  */
 private fun formatAlarmTime(time: String, timeFormat: String): String {
     val parts = time.split(":")
     val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
     val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
 
-    return if (timeFormat == "24") {
+    return if (timeFormat == "24hour") {
         "%02d:%02d".format(hour, minute)
     } else {
         val period = if (hour < 12) "AM" else "PM"
@@ -345,12 +351,11 @@ private fun saveAlarm(
     enabled: Boolean
 ) {
     val body = mapOf<String, Any?>(
+        "_type" to "alarm",
         "name" to name,
-        "data" to mapOf(
-            "time" to time,
-            "days" to days,
-            "enabled" to enabled
-        )
+        "time" to time,
+        "days" to days,
+        "enabled" to enabled
     )
     viewModel.updateStandaloneAlert(alertId, body)
 }

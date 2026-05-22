@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -82,11 +85,14 @@ fun CustomObjectsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Custom Objects") },
+                title = { Text("Custom Objects", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -210,7 +216,9 @@ fun CustomObjectsScreen(
     if (deleteTarget != null) {
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete Object") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Object", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to remove \"${deleteTarget!!.name}\"?") },
             confirmButton = {
                 Button(
@@ -243,7 +251,9 @@ fun CustomObjectsScreen(
     if (deleteZoneTarget != null) {
         AlertDialog(
             onDismissRequest = { deleteZoneTarget = null },
-            title = { Text("Delete Zone") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Zone", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text("Are you sure you want to delete the zone \"${deleteZoneTarget!!.name}\"?\n\nAll object assignments for this zone will be removed.")
             },
@@ -298,10 +308,7 @@ private fun FilterToolbar(
                 }
             },
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = TealAccent,
-                unfocusedBorderColor = ParchmentBrown
-            )
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Type filter dropdown
@@ -313,10 +320,7 @@ private fun FilterToolbar(
                 readOnly = true,
                 modifier = Modifier.fillMaxWidth().menuAnchor(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = TealAccent,
-                    unfocusedBorderColor = ParchmentBrown
-                )
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 DropdownMenuItem(
@@ -406,7 +410,7 @@ private fun TypeGroupSection(
                         onToggleActive = { active -> onToggleActive(obj, active) },
                         onRestore = { onRestore(obj) }
                     )
-                    HorizontalDivider(color = ParchmentDivider, thickness = 0.5.dp)
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 }
             }
         }
@@ -571,7 +575,7 @@ private fun CustomZonesSection(
                             Icon(Icons.Default.Delete, "Delete", tint = DangerRed, modifier = Modifier.size(16.dp))
                         }
                     }
-                    HorizontalDivider(color = ParchmentDivider, thickness = 0.5.dp)
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 }
             }
         }
@@ -634,7 +638,7 @@ private fun IndicatorsZoneSection(indicators: List<ZoneObject>) {
                         }
                     }
                 }
-                HorizontalDivider(color = ParchmentDivider, thickness = 0.5.dp)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             }
         }
     }
@@ -691,7 +695,7 @@ private fun EditObjectDialog(
                     fontSize = 18.sp,
                     color = ParchmentText
                 )
-                HorizontalDivider(color = ParchmentDivider)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 // Name
                 OutlinedTextField(
@@ -700,10 +704,7 @@ private fun EditObjectDialog(
                     label = { Text("Name *") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TealAccent,
-                        unfocusedBorderColor = ParchmentBrown
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Type (with suggestions)
@@ -713,10 +714,7 @@ private fun EditObjectDialog(
                     label = { Text("Type *") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TealAccent,
-                        unfocusedBorderColor = ParchmentBrown
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 if (typeSuggestions.isNotEmpty() && type.isNotBlank()) {
                     val filtered = typeSuggestions.filter { it.lowercase().contains(type.lowercase()) && it != type }
@@ -739,10 +737,7 @@ private fun EditObjectDialog(
                     label = { Text("Category / Sub-type") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TealAccent,
-                        unfocusedBorderColor = ParchmentBrown
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Value Type dropdown
@@ -755,10 +750,7 @@ private fun EditObjectDialog(
                         label = { Text("Value Type") },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(vtExpanded) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TealAccent,
-                            unfocusedBorderColor = ParchmentBrown
-                        )
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     ExposedDropdownMenu(expanded = vtExpanded, onDismissRequest = { vtExpanded = false }) {
                         valueTypeOptions.forEach { option ->
@@ -778,10 +770,7 @@ private fun EditObjectDialog(
                         label = { Text("Units (imperial)") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TealAccent,
-                            unfocusedBorderColor = ParchmentBrown
-                        )
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     OutlinedTextField(
                         value = metricUnits,
@@ -789,10 +778,7 @@ private fun EditObjectDialog(
                         label = { Text("Units (metric)") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TealAccent,
-                            unfocusedBorderColor = ParchmentBrown
-                        )
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
@@ -802,10 +788,7 @@ private fun EditObjectDialog(
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = TealAccent,
-                                unfocusedBorderColor = ParchmentBrown
-                            )
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         OutlinedTextField(
                             value = rangeMax,
@@ -814,16 +797,13 @@ private fun EditObjectDialog(
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = TealAccent,
-                                unfocusedBorderColor = ParchmentBrown
-                            )
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                     }
                 }
 
                 // Buttons
-                HorizontalDivider(color = ParchmentDivider)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -871,14 +851,17 @@ private fun CreateZoneDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Zone") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Create Zone", style = CwocDialogDefaults.titleStyle) },
         text = {
             OutlinedTextField(
                 value = zoneName,
                 onValueChange = { zoneName = it },
                 label = { Text("Zone Name") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                colors = CwocInputDefaults.outlinedColors()
             )
         },
         confirmButton = {
@@ -948,12 +931,7 @@ private fun ZoneEditorDialog(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp
                         ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TealAccent,
-                            unfocusedBorderColor = ParchmentBrown,
-                            focusedContainerColor = ParchmentBg,
-                            unfocusedContainerColor = ParchmentBg
-                        )
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     IconButton(onClick = {
                         if (zoneName.isNotBlank() && zoneName != zone.name) {
@@ -1136,10 +1114,7 @@ private fun AddObjectsPickerDialog(
                     placeholder = { Text("Search by name, type, or category...") },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = ParchmentBrown) },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TealAccent,
-                        unfocusedBorderColor = ParchmentBrown
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(Modifier.height(8.dp))
 

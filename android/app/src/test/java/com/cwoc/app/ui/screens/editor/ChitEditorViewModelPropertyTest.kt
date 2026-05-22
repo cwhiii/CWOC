@@ -22,6 +22,7 @@ import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.PushResult
 import com.cwoc.app.data.sync.SyncPushEngine
+import com.cwoc.app.notification.NotificationScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -58,22 +59,26 @@ import kotlin.random.Random
 class ChitEditorViewModelPropertyTest {
 
     private lateinit var fakeChitDao: FakeEditorChitDao
+    private lateinit var fakeContactDao: FakeEditorContactDao
     private lateinit var fakeDirtyTracker: FakeEditorDirtyTracker
     private lateinit var fakeSyncPushEngine: FakeEditorSyncPushEngine
     private lateinit var fakeConnectivityMonitor: FakeEditorConnectivityMonitor
     private lateinit var fakeApiService: FakeEditorApiService
     private lateinit var fakeSettingsRepository: FakeEditorSettingsRepository
+    private lateinit var fakeNotificationScheduler: FakeEditorNotificationScheduler
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         fakeChitDao = FakeEditorChitDao()
+        fakeContactDao = FakeEditorContactDao()
         fakeDirtyTracker = FakeEditorDirtyTracker()
         fakeSyncPushEngine = FakeEditorSyncPushEngine()
         fakeConnectivityMonitor = FakeEditorConnectivityMonitor()
         fakeApiService = FakeEditorApiService()
         fakeSettingsRepository = FakeEditorSettingsRepository()
+        fakeNotificationScheduler = FakeEditorNotificationScheduler()
     }
 
     @After
@@ -416,11 +421,13 @@ class ChitEditorViewModelPropertyTest {
         val savedStateHandle = SavedStateHandle(mapOf("chitId" to ChitEditorViewModel.NEW_CHIT_ID))
         return ChitEditorViewModel(
             chitDao = fakeChitDao,
+            contactDao = fakeContactDao,
             dirtyTracker = fakeDirtyTracker,
             syncPushEngine = fakeSyncPushEngine,
             connectivityMonitor = fakeConnectivityMonitor,
             apiService = fakeApiService,
             settingsRepository = fakeSettingsRepository,
+            notificationScheduler = fakeNotificationScheduler,
             savedStateHandle = savedStateHandle
         )
     }
@@ -539,6 +546,7 @@ class FakeEditorChitDao : ChitDao {
     override suspend fun getChitsForDaySuspend(dayStart: String, dayEnd: String): List<ChitEntity> = emptyList()
     override suspend fun getUpcomingTasksSuspend(): List<ChitEntity> = emptyList()
     override suspend fun getChitsWithAlerts(): List<ChitEntity> = emptyList()
+    override suspend fun getChitsWithAlertsLight(): List<com.cwoc.app.data.local.entity.ChitAlertProjection> = emptyList()
     override suspend fun getChitsWithTag(tag: String): List<ChitEntity> = emptyList()
     override suspend fun upsertWithoutDirty(chit: ChitEntity) {
         entities[chit.id] = chit
@@ -735,4 +743,44 @@ class FakeEditorSettingsRepository : SettingsRepository {
     override suspend fun update(settings: SettingsEntity) {}
     override suspend fun replaceWithServerVersion(settings: SettingsEntity) {}
     override suspend fun clearDirty() {}
+}
+
+/**
+ * Fake NotificationScheduler for editor ViewModel tests.
+ * No-ops all scheduling operations.
+ */
+class FakeEditorNotificationScheduler : NotificationScheduler {
+    override suspend fun scheduleAlarms(chit: ChitEntity) {}
+    override suspend fun cancelAlarms(chitId: String) {}
+    override suspend fun rescheduleAll() {}
+    override suspend fun rescheduleAllWithReport(): String = "fake"
+    override fun hasExactAlarmPermission(): Boolean = true
+}
+
+/**
+ * Fake ContactDao for editor ViewModel tests.
+ * Returns empty results for all queries.
+ */
+class FakeEditorContactDao : com.cwoc.app.data.local.dao.ContactDao {
+    override fun getAllActive(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override fun searchAll(query: String): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override fun search(query: String): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override suspend fun getById(id: String): com.cwoc.app.data.local.entity.ContactEntity? = null
+    override suspend fun findByEmail(email: String): com.cwoc.app.data.local.entity.ContactEntity? = null
+    override suspend fun getDirtyContacts(): List<com.cwoc.app.data.local.entity.ContactEntity> = emptyList()
+    override suspend fun upsert(contact: com.cwoc.app.data.local.entity.ContactEntity) {}
+    override suspend fun upsertAll(contacts: List<com.cwoc.app.data.local.entity.ContactEntity>) {}
+    override suspend fun markDeleted(id: String, now: String) {}
+    override suspend fun updateDirtyState(id: String, isDirty: Boolean, dirtyFields: String) {}
+    override suspend fun updateSyncVersion(id: String, version: Int) {}
+    override suspend fun setConflictState(id: String, fields: String) {}
+    override fun getFavorites(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override fun getNonFavoriteOwned(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override fun getVaultContacts(currentUserId: String): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override fun getDeletedContacts(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
+    override suspend fun restoreFromTrash(id: String, now: String) {}
+    override suspend fun purge(id: String) {}
+    override suspend fun toggleFavorite(id: String, now: String) {}
+    override suspend fun getFavoriteState(id: String): Boolean? = null
+    override fun getAllContacts(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
 }

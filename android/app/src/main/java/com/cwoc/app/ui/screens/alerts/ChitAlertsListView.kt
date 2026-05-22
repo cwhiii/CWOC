@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.alerts
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +67,10 @@ fun ChitAlertsListView(
 ) {
     val alertChits by viewModel.alertChits.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+
+    // Settings for SnoozePickerDialog
+    val timeFormat by viewModel.timeFormat.collectAsState()
+    val calendarSnap by viewModel.calendarSnap.collectAsState()
 
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
@@ -150,6 +157,8 @@ fun ChitAlertsListView(
         // Snooze picker dialog
         if (showSnoozeDialog && currentMenuChit != null) {
             SnoozePickerDialog(
+                is24Hour = (timeFormat == "24hour"),
+                calendarSnap = calendarSnap,
                 onSnoozeSelected = { isoString ->
                     chitRepository?.let { repo ->
                         coroutineScope.launch {
@@ -209,7 +218,7 @@ private fun ChitAlertCard(
         Column(
             modifier = Modifier.padding(12.dp)
         ) {
-            // Title row
+            // Title row (header)
             Text(
                 text = chit.title ?: "Untitled",
                 style = MaterialTheme.typography.bodyLarge,
@@ -219,32 +228,44 @@ private fun ChitAlertCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Alert summary row — only show non-zero counts
+            // Content zone recess (Task 24) — wraps everything below header row
             val summaryParts = buildAlertSummaryParts(alertCounts)
-            if (summaryParts.isNotEmpty()) {
+            if (summaryParts.isNotEmpty() || chit.pinned) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0x0A000000), RoundedCornerShape(3.dp))
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
-                    summaryParts.forEach { part ->
-                        Text(
-                            text = part,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cardTextColor.copy(alpha = 0.85f)
-                        )
+                    Column {
+                        // Alert summary row — only show non-zero counts
+                        if (summaryParts.isNotEmpty()) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                summaryParts.forEach { part ->
+                                    Text(
+                                        text = part,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cardTextColor.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Pin indicator
+                        if (chit.pinned) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "📌 Pinned",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
-            }
-
-            // Pin indicator
-            if (chit.pinned) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "📌 Pinned",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cardTextColor.copy(alpha = 0.7f)
-                )
             }
         }
     }

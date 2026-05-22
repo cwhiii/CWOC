@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="4dp">
+
+    <!-- Alarm title (left-aligned, ellipsize end) -->
+    <TextView
+        android:id="@+id/alarm_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="#1a1208"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <!-- Countdown badge (right-aligned, brown accent background) -->
+    <TextView
+        android:id="@+id/alarm_countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/widget_countdown_badge_bg"
+        android:textColor="#fffaf0"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

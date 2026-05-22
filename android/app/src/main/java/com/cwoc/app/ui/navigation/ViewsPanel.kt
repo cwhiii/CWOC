@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -100,6 +101,7 @@ fun ViewsPanel(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .statusBarsPadding()
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 16.dp)
                 ) {
@@ -114,12 +116,12 @@ fun ViewsPanel(
 
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF8B5A2B).copy(alpha = 0.3f)
+                        color = Color(0xFF8B5A2B), thickness = 1.dp
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // C CAPTN views (in settings-determined order)
+                    // C CAPTN views (in settings-determined order, with Search always last)
                     orderedMainTabs.forEach { tab ->
                         val isSelected = tab.route == currentRoute
                         ViewsPanelItem(
@@ -139,7 +141,7 @@ fun ViewsPanel(
                     // Close button at bottom
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF8B5A2B).copy(alpha = 0.3f)
+                        color = Color(0xFF8B5A2B), thickness = 1.dp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(

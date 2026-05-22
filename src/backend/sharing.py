@@ -151,6 +151,7 @@ def get_shared_chits_for_user(user_id):
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 

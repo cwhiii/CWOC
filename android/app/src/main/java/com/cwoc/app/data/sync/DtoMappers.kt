@@ -3,6 +3,7 @@ package com.cwoc.app.data.sync
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.local.entity.SettingsEntity
+import com.cwoc.app.data.mapper.SettingsPayloadMapper
 import com.cwoc.app.data.remote.dto.ChitDto
 import com.cwoc.app.data.remote.dto.ContactDto
 import com.cwoc.app.data.remote.dto.SettingsDto
@@ -178,7 +179,7 @@ fun SettingsDto.toEntity(syncedAt: String, gson: Gson): SettingsEntity {
         visualIndicators = visual_indicators.toJsonString(gson),
         chitOptions = chit_options.toJsonString(gson),
         calendarSnap = calendar_snap,
-        weekStartDay = week_start_day,
+        weekStartDay = SettingsPayloadMapper.normalizeWeekStartDay(week_start_day),
         workStartHour = work_start_hour,
         workEndHour = work_end_hour,
         workDays = work_days,

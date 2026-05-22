@@ -785,3 +785,39 @@ button.delete:hover {
     margin-top: 6px;
     min-height: 1.2em;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FAB — Floating Action Button (New Chit)
+   Fixed bottom-right, click = create chit, right-click = Quick Alert
+   ═══════════════════════════════════════════════════════════════════════════ */
+.cwoc-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: #8b5a2b;
+    color: #fffff0;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: none; /* Hidden on desktop — shown via media query on mobile/tablet */
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    padding: 0;
+}
+
+.cwoc-fab:hover {
+    background-color: #6b4e31;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.05);
+}
+
+.cwoc-fab:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

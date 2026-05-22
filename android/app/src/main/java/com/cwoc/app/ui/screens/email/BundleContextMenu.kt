@@ -1,5 +1,8 @@
 package com.cwoc.app.ui.screens.email
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -10,7 +13,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 /**
  * Context menu displayed on long-press (500ms) of a bundle tab.
@@ -51,6 +57,8 @@ fun BundleContextMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         modifier = modifier
+            .background(CwocDialogDefaults.containerColor)
+            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
     ) {
         // Edit — always shown (Req 22.2)
         DropdownMenuItem(

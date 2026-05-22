@@ -57,6 +57,8 @@ import com.cwoc.app.ui.components.ZoneButton
 import com.cwoc.app.ui.components.formatYMDDate
 import com.cwoc.app.ui.components.parseYMDDate
 import com.cwoc.app.ui.theme.LoraFontFamily
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 import com.google.gson.Gson
 import java.time.Instant
 import java.time.LocalDate
@@ -136,12 +138,13 @@ fun DateZone(
     habitResetPeriod: String? = null,
     onHabitResetPeriodChange: ((String?) -> Unit)? = null,
     isNewChit: Boolean = false,
-    timeFormat: String = "24h",
+    timeFormat: String = "12hour",
     calendarSnap: Int = 5,
     defaultTimezone: String = "America/New_York",
     defaultNotifications: String? = null,
     alertsJson: String? = null,
-    onAlertsChanged: ((String?) -> Unit)? = null
+    onAlertsChanged: ((String?) -> Unit)? = null,
+    highlightDueDate: Boolean = false
 ) {
     // ─── State ───────────────────────────────────────────────────────────────
     var showTimePicker by remember { mutableStateOf(false) }
@@ -156,10 +159,16 @@ fun DateZone(
     // 11.11: Track which modes have already had default notifications applied
     var defaultNotifsApplied by remember { mutableStateOf(setOf<DateMode>()) }
 
-    // Derive current date mode
-    val currentMode = remember(startDatetime, endDatetime, dueDatetime, pointInTime, perpetual) {
+    // Task 14: Due date highlight state — forces DUE mode and highlights the due date field
+    // until the user interacts with it (taps, types, or selects a date)
+    var forcedDueMode by remember { mutableStateOf(highlightDueDate) }
+    var showDueDateHighlight by remember { mutableStateOf(highlightDueDate) }
+
+    // Derive current date mode (with override for forced DUE mode from Tasks prefill)
+    val derivedMode = remember(startDatetime, endDatetime, dueDatetime, pointInTime, perpetual) {
         deriveDateMode(startDatetime, endDatetime, dueDatetime, pointInTime, perpetual)
     }
+    val currentMode = if (forcedDueMode && derivedMode == DateMode.NONE) DateMode.DUE else derivedMode
 
     // Compute timezone abbreviation
     val tzIanaId = timezone ?: defaultTimezone
@@ -359,8 +368,14 @@ fun DateZone(
                                     onClick = {
                                         applyDateMode(
                                             mode, onStartDatetimeChange, onEndDatetimeChange,
-                                            onDueDatetimeChange, onPointInTimeChange, onPerpetualChange
+                                            onDueDatetimeChange, onPointInTimeChange, onPerpetualChange,
+                                            currentStartDatetime = startDatetime,
+                                            currentDueDatetime = dueDatetime,
+                                            currentPointInTime = pointInTime
                                         )
+                                        // Task 14: Clear forced DUE mode and highlight on any mode change
+                                        forcedDueMode = false
+                                        showDueDateHighlight = false
                                         // 11.6: Auto-default all-day on first activation of Start/End, Due, or Perpetual
                                         // Only when not suppressed during load
                                         if (!suppressUnsaved && mode != DateMode.NONE && mode != DateMode.POINT_IN_TIME && !allDay) {
@@ -464,12 +479,27 @@ fun DateZone(
                                         ParchmentDateField(
                                             value = formatDateForDisplay(dueDatetime),
                                             placeholder = "Due Date",
-                                            onClick = { datePickerTarget = "due"; showDatePicker = true }
+                                            onClick = {
+                                                // Task 14: Clear highlight on interaction
+                                                showDueDateHighlight = false
+                                                forcedDueMode = false
+                                                datePickerTarget = "due"; showDatePicker = true
+                                            },
+                                            modifier = if (showDueDateHighlight) {
+                                                Modifier.border(2.dp, Color(0xFF8B5A2B), RoundedCornerShape(3.dp))
+                                            } else {
+                                                Modifier
+                                            }
                                         )
                                         if (showTime) {
                                             ParchmentTimeButton(
                                                 value = formatTimeForDisplay(dueDatetime, timeFormat),
-                                                onClick = { timePickerTarget = "due"; showTimePicker = true }
+                                                onClick = {
+                                                    // Task 14: Clear highlight on interaction
+                                                    showDueDateHighlight = false
+                                                    forcedDueMode = false
+                                                    timePickerTarget = "due"; showTimePicker = true
+                                                }
                                             )
                                         }
                                         // Complete checkbox (conditional — shown only when status is set)
@@ -628,7 +658,7 @@ fun DateZone(
         DrumRollerTimePicker(
             initialHour = currentTime.hour,
             initialMinute = currentTime.minute,
-            is24Hour = (timeFormat == "24h"),
+            is24Hour = (timeFormat == "24hour"),
             minuteStep = calendarSnap,
             onDismiss = { showTimePicker = false },
             onTimeSelected = { hour, minute ->
@@ -1130,7 +1160,10 @@ private fun InlineRecurrenceRow(
                     }
                     androidx.compose.material3.DropdownMenu(
                         expanded = frequencyExpanded,
-                        onDismissRequest = { frequencyExpanded = false }
+                        onDismissRequest = { frequencyExpanded = false },
+                        modifier = Modifier
+                            .background(CwocDialogDefaults.containerColor)
+                            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                     ) {
                         freqOptions.forEach { (label, freq) ->
                             DropdownMenuItem(
@@ -1316,7 +1349,10 @@ private fun InlineRecurrenceRow(
                             }
                             androidx.compose.material3.DropdownMenu(
                                 expanded = customUnitExpanded,
-                                onDismissRequest = { customUnitExpanded = false }
+                                onDismissRequest = { customUnitExpanded = false },
+                                modifier = Modifier
+                                    .background(CwocDialogDefaults.containerColor)
+                                    .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                             ) {
                                 CustomRecurrenceUnit.entries.forEach { unit ->
                                     DropdownMenuItem(
@@ -1481,19 +1517,31 @@ private fun applyDateMode(
     onEndDatetimeChange: (String?) -> Unit,
     onDueDatetimeChange: (String?) -> Unit,
     onPointInTimeChange: (String?) -> Unit,
-    onPerpetualChange: (Boolean) -> Unit
+    onPerpetualChange: (Boolean) -> Unit,
+    currentStartDatetime: String? = null,
+    currentDueDatetime: String? = null,
+    currentPointInTime: String? = null
 ) {
+    val today = LocalDate.now().atStartOfDay().format(ISO_LOCAL_DATETIME_FORMATTER)
     when (mode) {
         DateMode.START_END -> {
             onDueDatetimeChange(null)
             onPointInTimeChange(null)
             onPerpetualChange(false)
+            // Ensure start date is set so deriveDateMode detects START_END
+            if (currentStartDatetime.isNullOrBlank()) {
+                onStartDatetimeChange(today)
+            }
         }
         DateMode.DUE -> {
             onStartDatetimeChange(null)
             onEndDatetimeChange(null)
             onPointInTimeChange(null)
             onPerpetualChange(false)
+            // Ensure due date is set so deriveDateMode detects DUE
+            if (currentDueDatetime.isNullOrBlank()) {
+                onDueDatetimeChange(today)
+            }
         }
         DateMode.PERPETUAL -> {
             onEndDatetimeChange(null)
@@ -1506,6 +1554,11 @@ private fun applyDateMode(
             onEndDatetimeChange(null)
             onDueDatetimeChange(null)
             onPerpetualChange(false)
+            // Set point in time so deriveDateMode detects it immediately
+            if (currentPointInTime.isNullOrBlank()) {
+                val now = LocalDateTime.now().format(ISO_LOCAL_DATETIME_FORMATTER)
+                onPointInTimeChange(now)
+            }
         }
         DateMode.NONE -> {
             onStartDatetimeChange(null)
@@ -1555,7 +1608,7 @@ private fun formatTimeForDisplay(value: String?, timeFormat: String): String {
     // Don't show time if it's midnight (likely all-day with no time set)
     if (hour == 0 && minute == 0) return ""
 
-    return if (timeFormat == "24h") {
+    return if (timeFormat == "24hour") {
         String.format("%02d:%02d", hour, minute)
     } else {
         val h12 = when {
@@ -1613,7 +1666,7 @@ internal fun formatDatetimeForDisplay(value: String?, allDay: Boolean, timeForma
     if (allDay) return dateStr
     val hour = dt.hour
     val minute = dt.minute
-    val timeStr = if (timeFormat == "24h") {
+    val timeStr = if (timeFormat == "24hour") {
         String.format("%02d:%02d", hour, minute)
     } else {
         val h12 = when {

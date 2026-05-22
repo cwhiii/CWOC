@@ -3,6 +3,8 @@ package com.cwoc.app.ui.screens.editor.zones
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -46,10 +49,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.ui.components.MarkdownRenderer
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 /**
  * Full Email Compose Zone for the chit editor.
@@ -166,11 +174,15 @@ private fun DraftComposeContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .menuAnchor(),
-                singleLine = true
+                singleLine = true,
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = fromExpanded,
-                onDismissRequest = { fromExpanded = false }
+                onDismissRequest = { fromExpanded = false },
+                modifier = Modifier
+                    .background(CwocDialogDefaults.containerColor)
+                    .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
             ) {
                 emailAccounts.forEach { account ->
                     DropdownMenuItem(
@@ -277,7 +289,8 @@ private fun DraftComposeContent(
             },
             label = { Text("Subject") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Body field (multi-line markdown area)
@@ -289,11 +302,12 @@ private fun DraftComposeContent(
             label = { Text("Body") },
             minLines = 8,
             maxLines = 20,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(4.dp))
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
         Spacer(modifier = Modifier.height(4.dp))
 
         // Action buttons
@@ -306,7 +320,10 @@ private fun DraftComposeContent(
             Button(
                 onClick = onSend,
                 enabled = !formState.emailTo.isNullOrBlank(),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
@@ -316,7 +333,10 @@ private fun DraftComposeContent(
             // Send Later
             OutlinedButton(
                 onClick = onSendLater,
-                enabled = !formState.emailTo.isNullOrBlank()
+                enabled = !formState.emailTo.isNullOrBlank(),
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Icon(Icons.Default.Schedule, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
@@ -332,7 +352,10 @@ private fun DraftComposeContent(
             // Send & Archive
             OutlinedButton(
                 onClick = onSendAndArchive,
-                enabled = !formState.emailTo.isNullOrBlank()
+                enabled = !formState.emailTo.isNullOrBlank(),
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
@@ -343,7 +366,10 @@ private fun DraftComposeContent(
 
             // Discard Draft
             OutlinedButton(
-                onClick = onDiscard
+                onClick = onDiscard,
+                colors = CwocButtonDefaults.dangerColors(),
+                border = CwocButtonDefaults.dangerBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Icon(
                     Icons.Default.Delete, null,
@@ -415,24 +441,24 @@ private fun ReceivedEmailContent(
             )
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Action buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Button(onClick = onReply) {
+            Button(onClick = onReply, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Icon(Icons.Default.Reply, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Reply")
             }
-            OutlinedButton(onClick = onForward) {
+            OutlinedButton(onClick = onForward, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Icon(Icons.Default.Forward, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Forward")
             }
-            OutlinedButton(onClick = onArchive) {
+            OutlinedButton(onClick = onArchive, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Archive")
@@ -469,14 +495,14 @@ private fun SentEmailContent(
                 .padding(8.dp)
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Action buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(onClick = onForward) {
+            OutlinedButton(onClick = onForward, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Icon(Icons.Default.Forward, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Forward")
@@ -547,7 +573,8 @@ private fun RecipientChipField(
                         onAddRecipient(inputValue.trim())
                     }
                 }
-            )
+            ),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Autocomplete suggestions

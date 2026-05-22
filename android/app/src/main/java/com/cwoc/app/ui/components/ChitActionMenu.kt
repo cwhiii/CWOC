@@ -1,5 +1,8 @@
 package com.cwoc.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -15,7 +18,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 /**
  * Long-press context menu for chit actions.
@@ -49,6 +55,8 @@ fun ChitActionMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         modifier = modifier
+            .background(CwocDialogDefaults.containerColor)
+            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
     ) {
         // Create Child Chit (only for project masters — Task 35.2)
         if (chit.isProjectMaster && onCreateChildChit != null) {

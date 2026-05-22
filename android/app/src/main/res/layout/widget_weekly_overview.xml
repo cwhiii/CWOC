@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_parchment_background"
+    android:padding="4dp">
+
+    <!-- 7-day horizontal strip with unique IDs per cell -->
+    <LinearLayout
+        android:id="@+id/weekly_days_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <!-- Day 0 -->
+        <LinearLayout
+            android:id="@+id/day_cell_0"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_0_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_0_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_0_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 1 -->
+        <LinearLayout
+            android:id="@+id/day_cell_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_1_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_1_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_1_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 2 -->
+        <LinearLayout
+            android:id="@+id/day_cell_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_2_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_2_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_2_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 3 -->
+        <LinearLayout
+            android:id="@+id/day_cell_3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_3_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_3_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_3_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 4 -->
+        <LinearLayout
+            android:id="@+id/day_cell_4"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_4_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_4_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_4_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 5 -->
+        <LinearLayout
+            android:id="@+id/day_cell_5"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_5_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_5_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_5_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+        <!-- Day 6 -->
+        <LinearLayout
+            android:id="@+id/day_cell_6"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="2dp">
+
+            <TextView
+                android:id="@+id/day_6_abbrev"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_6_number"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#4a2c2a"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="serif" />
+
+            <TextView
+                android:id="@+id/day_6_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#6b4e31"
+                android:gravity="center"
+                android:fontFamily="serif" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Auth guard: not logged in -->
+    <TextView
+        android:id="@+id/widget_auth_guard"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Please log in"
+        android:textColor="#8b7355"
+        android:textSize="13sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+</LinearLayout>

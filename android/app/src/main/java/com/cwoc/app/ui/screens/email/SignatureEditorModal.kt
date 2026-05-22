@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -164,14 +165,15 @@ fun SignatureEditorModal(
                     placeholder = { Text("Enter your email signature...") },
                     minLines = 8,
                     maxLines = Int.MAX_VALUE,
-                    textStyle = MaterialTheme.typography.bodyMedium
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // ─── Divider ────────────────────────────────────────────────────
 
-                HorizontalDivider(color = ParchmentBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 Spacer(modifier = Modifier.height(8.dp))
 

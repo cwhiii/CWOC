@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#f5e6cc"
+    android:fitsSystemWindows="true"
+    android:padding="16dp">
+
+    <!-- Header -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Project"
+        android:textColor="#4a2c2a"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:fontFamily="serif"
+        android:paddingBottom="12dp" />
+
+    <!-- Project list -->
+    <ListView
+        android:id="@+id/project_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:divider="#d4c4a8"
+        android:dividerHeight="1dp" />
+
+    <!-- Empty state -->
+    <TextView
+        android:id="@+id/project_list_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="No projects available"
+        android:textColor="#6b4e31"
+        android:textSize="14sp"
+        android:fontFamily="serif"
+        android:visibility="gone" />
+
+</LinearLayout>

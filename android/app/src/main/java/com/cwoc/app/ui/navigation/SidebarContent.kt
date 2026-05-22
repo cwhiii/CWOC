@@ -1,6 +1,8 @@
 package com.cwoc.app.ui.navigation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -43,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.ui.components.CollapsibleSection
 import com.cwoc.app.ui.components.SidebarCompactButton
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 import com.cwoc.app.ui.viewmodel.SidebarState
 
 // Colors matching the web sidebar theme
@@ -147,7 +151,7 @@ fun SidebarContent(
 
             // ─── 3. Email Controls (conditional) ─────────────────────────
             if (selectedTab == CCaptnTab.Email) {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
@@ -184,7 +188,7 @@ fun SidebarContent(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -225,14 +229,14 @@ fun SidebarContent(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
 
             // ─── 5. Order (Sort) ─────────────────────────────────────────
             sortContent()
 
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
 
             // ─── 6. Time Period Dropdown ─────────────────────────────────
@@ -242,7 +246,7 @@ fun SidebarContent(
 
             // ─── 7. Calendar Options (Calendar tab + Month period) ────────
             if (selectedTab == CCaptnTab.Calendar && sidebarState.currentPeriod == "Month") {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 CollapsibleSection(title = "Options", initiallyExpanded = true) {
                     Text(text = "Month Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
@@ -254,21 +258,11 @@ fun SidebarContent(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // ─── 8. Projects View Mode (Projects tab) ────────────────────
-            if (selectedTab == CCaptnTab.Projects) {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "View Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ViewModeButton(text = "📋 List", isActive = sidebarState.projectsViewMode == "list", onClick = { onProjectsViewModeChange("list") }, modifier = Modifier.weight(1f))
-                    ViewModeButton(text = "📊 Kanban", isActive = sidebarState.projectsViewMode == "kanban", onClick = { onProjectsViewModeChange("kanban") }, modifier = Modifier.weight(1f))
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            // ─── 8. Projects View Mode — hidden (Kanban is the only mode now) ────
 
             // ─── 9. Alarms View Mode (Alarms tab) ────────────────────────
             if (selectedTab == CCaptnTab.Alarms) {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "View Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -286,7 +280,7 @@ fun SidebarContent(
 
             // ─── 10. Tasks View Mode (Tasks tab) ──────────────────────────
             if (selectedTab == CCaptnTab.Tasks) {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "View Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -309,7 +303,7 @@ fun SidebarContent(
 
             // ─── 11. Indicators Controls (Indicators tab) ─────────────────
             if (selectedTab == CCaptnTab.Indicators) {
-                HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "Time Range", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -346,7 +340,7 @@ fun SidebarContent(
             }
 
             // ─── 12. Filters ──────────────────────────────────────────────
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
             CollapsibleSection(
                 title = "🔍 Filters",
@@ -365,7 +359,7 @@ fun SidebarContent(
                 filterContent()
             }
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
 
             // ─── 13. Quick Access Buttons ─────────────────────────────────
@@ -397,7 +391,7 @@ fun SidebarContent(
                 SidebarCompactButton(text = "🤖 Rules", onClick = { onNavigate(Screen.RulesManager); onClose() }, modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.3f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
 
             // ─── 14. Trash & Custom Objects ───────────────────────────────
@@ -416,7 +410,7 @@ fun SidebarContent(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            HorizontalDivider(color = BorderBrown.copy(alpha = 0.5f))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
 
             Button(
@@ -485,7 +479,7 @@ private fun TimePeriodDropdown(currentPeriod: String, onPeriodChange: (String) -
         Text(text = "Time Period", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             TextField(value = currentLabel, onValueChange = {}, readOnly = true, singleLine = true, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }, colors = ExposedDropdownMenuDefaults.textFieldColors(), modifier = Modifier.menuAnchor().fillMaxWidth())
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(CwocDialogDefaults.containerColor).border(1.dp, CwocOutline, RoundedCornerShape(4.dp))) {
                 periods.forEach { (value, label) ->
                     DropdownMenuItem(text = { Text(label) }, onClick = { onPeriodChange(value); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
                 }
@@ -505,7 +499,7 @@ private fun HabitsSuccessWindowDropdown(currentWindow: Int, onWindowChange: (Int
         Text(text = "Success Window", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             TextField(value = currentLabel, onValueChange = {}, readOnly = true, singleLine = true, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }, colors = ExposedDropdownMenuDefaults.textFieldColors(), modifier = Modifier.menuAnchor().fillMaxWidth())
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(CwocDialogDefaults.containerColor).border(1.dp, CwocOutline, RoundedCornerShape(4.dp))) {
                 options.forEach { (value, label) ->
                     DropdownMenuItem(text = { Text(label) }, onClick = { onWindowChange(value); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
                 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
@@ -34,6 +35,7 @@ class NotesViewModel @Inject constructor(
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
     private val syncStateManager: SyncStateManager,
+    private val settingsRepository: SettingsRepository,
     private val prefs: SharedPreferences
 ) : ViewModel() {
 
@@ -54,12 +56,26 @@ class NotesViewModel @Inject constructor(
     private val _pendingDeleteTitle = MutableStateFlow<String?>(null)
     val pendingDeleteTitle: StateFlow<String?> = _pendingDeleteTitle.asStateFlow()
 
+    /** Time format from settings ("12hour" or "24hour"). */
+    private val _timeFormat = MutableStateFlow("12hour")
+    val timeFormat: StateFlow<String> = _timeFormat.asStateFlow()
+
+    /** Calendar snap interval from settings. */
+    private val _calendarSnap = MutableStateFlow(5)
+    val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
+
     init {
         viewModelScope.launch {
             chitRepository.getNoteChits().collect { notes ->
                 _uiState.update {
                     it.copy(isLoading = false, notes = notes)
                 }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _timeFormat.value = settings.timeFormat ?: "12hour"
+                _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
             }
         }
     }

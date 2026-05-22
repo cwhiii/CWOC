@@ -28,7 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -48,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.cwoc.app.domain.tags.TagNode
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Full-screen modal for bulk tagging emails.
@@ -152,10 +152,7 @@ fun TagPickerModal(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Search tags…") },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))

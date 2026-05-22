@@ -87,9 +87,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import androidx.compose.foundation.background
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.runtime.LaunchedEffect
 import com.cwoc.app.data.remote.dto.RuleHabitDto
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 /**
  * Tasks screen — flat list of task chits with inline status dropdown, note preview,
@@ -112,7 +116,8 @@ fun TasksScreen(
     viewModel: TasksViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
-    sidebarStateViewModel: SidebarStateViewModel? = null
+    sidebarStateViewModel: SidebarStateViewModel? = null,
+    onQuickAlert: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -122,6 +127,10 @@ fun TasksScreen(
 
     val showMapThumbnails by viewModel.showMapThumbnails.collectAsState()
     val subChitIds by viewModel.subChitIds.collectAsState()
+
+    // Settings for SnoozePickerDialog
+    val timeFormat by viewModel.timeFormat.collectAsState()
+    val calendarSnap by viewModel.calendarSnap.collectAsState()
 
     val contactImages by viewModel.contactImages.collectAsState()
     val serverUrl = viewModel.serverUrl
@@ -169,7 +178,8 @@ fun TasksScreen(
         ChitListScaffold(
             title = "Tasks",
             syncState = syncState,
-            onFabClick = { onNavigateToEditor(Screen.Editor.NEW_CHIT_ID) }
+            onFabClick = { onNavigateToEditor(Screen.Editor.NEW_CHIT_ID) },
+            onFabLongPress = onQuickAlert
         ) { paddingValues ->
             when {
                 uiState.isLoading -> TasksLoadingSkeleton()
@@ -193,6 +203,11 @@ fun TasksScreen(
                                 onStatusChange = { chitId, newStatus ->
                                     chitRepository?.let { repo ->
                                         coroutineScope.launch { repo.updateStatus(chitId, newStatus) }
+                                    }
+                                },
+                                onChecklistToggle = { chitId, newJson ->
+                                    chitRepository?.let { repo ->
+                                        coroutineScope.launch { repo.updateChecklist(chitId, newJson) }
                                     }
                                 },
                                 showMapThumbnails = showMapThumbnails,
@@ -267,6 +282,11 @@ fun TasksScreen(
                                             coroutineScope.launch { repo.updateStatus(chitId, newStatus) }
                                         }
                                     },
+                                    onChecklistToggle = { chitId, newJson ->
+                                        chitRepository?.let { repo ->
+                                            coroutineScope.launch { repo.updateChecklist(chitId, newJson) }
+                                        }
+                                    },
                                     showMapThumbnails = showMapThumbnails,
                                     subChitIds = subChitIds,
                                     onRsvpAction = { chitId, status -> viewModel.updateRsvp(chitId, status) },
@@ -331,6 +351,8 @@ fun TasksScreen(
 
         if (showSnoozeDialog && currentMenuChit != null) {
             SnoozePickerDialog(
+                is24Hour = (timeFormat == "24hour"),
+                calendarSnap = calendarSnap,
                 onSnoozeSelected = { isoString ->
                     chitRepository?.let { repo ->
                         coroutineScope.launch { repo.snooze(currentMenuChit.id, isoString) }
@@ -355,6 +377,7 @@ private fun TasksFlatList(
     onClickTask: (String) -> Unit,
     onLongPressTask: (ChitEntity) -> Unit,
     onStatusChange: (String, String) -> Unit,
+    onChecklistToggle: (String, String) -> Unit = { _, _ -> },
     showMapThumbnails: Boolean = false,
     subChitIds: Set<String> = emptySet(),
     onRsvpAction: ((String, String) -> Unit)? = null,
@@ -383,6 +406,7 @@ private fun TasksFlatList(
                     onClick = { onClickTask(task.id) },
                     onLongClick = { onLongPressTask(task) },
                     onStatusChange = onStatusChange,
+                    onChecklistToggle = onChecklistToggle,
                     showMapThumbnails = showMapThumbnails,
                     isSubChit = task.id in subChitIds,
                     onRsvpAction = onRsvpAction,
@@ -409,6 +433,7 @@ private fun TasksFlatList(
                         onClick = { onClickTask(task.id) },
                         onLongClick = { onLongPressTask(task) },
                         onStatusChange = onStatusChange,
+                        onChecklistToggle = onChecklistToggle,
                         showMapThumbnails = showMapThumbnails,
                         isSubChit = task.id in subChitIds,
                         onRsvpAction = onRsvpAction,
@@ -434,6 +459,7 @@ private fun TaskCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onStatusChange: (String, String) -> Unit,
+    onChecklistToggle: (String, String) -> Unit = { _, _ -> },
     showMapThumbnails: Boolean = false,
     isSubChit: Boolean = false,
     onRsvpAction: ((String, String) -> Unit)? = null,
@@ -492,74 +518,93 @@ private fun TaskCard(
                 )
             }
 
-            // ── Phase 1.4: Meta values row ──
-            MetaValuesRow(task = task, sortState = sortState, textColor = cardTextColor)
-
-            // ── Phase 2: Inline status dropdown ──
+            // ── Content zone recess (Task 24) — wraps everything below header row ──
             Spacer(modifier = Modifier.height(6.dp))
-            StatusDropdownRow(
-                task = task,
-                showDropdown = showStatusDropdown,
-                onToggleDropdown = { showStatusDropdown = it },
-                onStatusChange = onStatusChange,
-                textColor = cardTextColor,
-                currentUserId = currentUserId
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0x0A000000), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Column {
+                    // ── Phase 1.4: Meta values row ──
+                    MetaValuesRow(task = task, sortState = sortState, textColor = cardTextColor)
 
-            // ── Phase 3: Note preview ──
-            if (!task.note.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                NotePreview(
-                    note = task.note,
-                    expanded = noteExpanded,
-                    onToggle = { noteExpanded = !noteExpanded },
-                    textColor = cardTextColor
-                )
-            }
+                    // ── Inline Checklist Items (Task 18) ──
+                    InlineChecklistSection(
+                        chitId = task.id,
+                        checklistJson = task.checklist,
+                        textColor = cardTextColor,
+                        onChecklistToggle = onChecklistToggle
+                    )
 
-            // ── Phase 4: Location indicator ──
-            if (!task.location.isNullOrBlank()) {
-                LocationIndicator(location = task.location, modifier = Modifier.padding(top = 4.dp), showMapThumbnail = showMapThumbnails, textColor = cardTextColor.copy(alpha = 0.7f))
-            }
+                    // ── Phase 2: Inline status dropdown ──
+                    Spacer(modifier = Modifier.height(6.dp))
+                    StatusDropdownRow(
+                        task = task,
+                        showDropdown = showStatusDropdown,
+                        onToggleDropdown = { showStatusDropdown = it },
+                        onStatusChange = onStatusChange,
+                        textColor = cardTextColor,
+                        currentUserId = currentUserId
+                    )
 
-            // Existing shared components
-            TagChipsRow(tags = task.tags, modifier = Modifier.padding(top = 4.dp))
-            ChecklistProgressBadge(checklistJson = task.checklist, modifier = Modifier.padding(top = 4.dp), textColor = cardTextColor)
-            PeopleChipsRow(
-                people = task.people,
-                modifier = Modifier.padding(top = 4.dp),
-                contactImages = contactImages,
-                serverUrl = serverUrl,
-                authToken = authToken
-            )
-            SharingIndicators(chit = task, modifier = Modifier.padding(top = 4.dp))
-            RsvpIndicators(
-                sharesJson = task.shares,
-                modifier = Modifier.padding(top = 4.dp),
-                chitId = task.id,
-                onRsvpAction = onRsvpAction
-            )
-            // Assignee badge (matching web's cwoc-assignee-badge)
-            if (!task.assignedTo.isNullOrBlank()) {
-                Text(
-                    text = "📌 ${task.assignedTo}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cardTextColor.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            HealthIndicatorBadges(healthDataJson = task.healthData, modifier = Modifier.padding(top = 4.dp))
+                    // ── Phase 3: Note preview ──
+                    if (!task.note.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        NotePreview(
+                            note = task.note,
+                            expanded = noteExpanded,
+                            onToggle = { noteExpanded = !noteExpanded },
+                            textColor = cardTextColor
+                        )
+                    }
 
-            // Habit indicators
-            if (task.habit) {
-                Spacer(modifier = Modifier.height(6.dp))
-                HabitIndicatorRow(
-                    habitGoal = task.habitGoal,
-                    habitSuccess = task.habitSuccess,
-                    habitResetPeriod = task.habitResetPeriod,
-                    habitLastActionDate = task.habitLastActionDate,
-                    textColor = cardTextColor
-                )
+                    // ── Phase 4: Location indicator ──
+                    if (!task.location.isNullOrBlank()) {
+                        LocationIndicator(location = task.location, modifier = Modifier.padding(top = 4.dp), showMapThumbnail = showMapThumbnails, textColor = cardTextColor.copy(alpha = 0.7f))
+                    }
+
+                    // Existing shared components
+                    TagChipsRow(tags = task.tags, modifier = Modifier.padding(top = 4.dp))
+                    ChecklistProgressBadge(checklistJson = task.checklist, modifier = Modifier.padding(top = 4.dp), textColor = cardTextColor)
+                    PeopleChipsRow(
+                        people = task.people,
+                        modifier = Modifier.padding(top = 4.dp),
+                        contactImages = contactImages,
+                        serverUrl = serverUrl,
+                        authToken = authToken
+                    )
+                    SharingIndicators(chit = task, modifier = Modifier.padding(top = 4.dp))
+                    RsvpIndicators(
+                        sharesJson = task.shares,
+                        modifier = Modifier.padding(top = 4.dp),
+                        chitId = task.id,
+                        onRsvpAction = onRsvpAction
+                    )
+                    // Assignee badge (matching web's cwoc-assignee-badge)
+                    if (!task.assignedTo.isNullOrBlank()) {
+                        Text(
+                            text = "📌 ${task.assignedTo}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    HealthIndicatorBadges(healthDataJson = task.healthData, modifier = Modifier.padding(top = 4.dp))
+
+                    // Habit indicators
+                    if (task.habit) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HabitIndicatorRow(
+                            habitGoal = task.habitGoal,
+                            habitSuccess = task.habitSuccess,
+                            habitResetPeriod = task.habitResetPeriod,
+                            habitLastActionDate = task.habitLastActionDate,
+                            textColor = cardTextColor
+                        )
+                    }
+                }
             }
         }
     }
@@ -807,6 +852,120 @@ private fun NotePreview(note: String, expanded: Boolean, onToggle: () -> Unit, t
                 .clickable(onClick = onToggle)
                 .padding(top = 2.dp)
         )
+    }
+}
+
+// ─── Inline Checklist Section (Task 18) ─────────────────────────────────────────
+
+/**
+ * Renders the first 5 checklist items inline on the task card with checkboxes.
+ * If more than 5 items exist, shows "+N more" text.
+ * Wraps in a content zone recess background.
+ */
+@Composable
+private fun InlineChecklistSection(
+    chitId: String,
+    checklistJson: String?,
+    textColor: Color,
+    onChecklistToggle: (String, String) -> Unit
+) {
+    if (checklistJson.isNullOrBlank()) return
+
+    // Parse checklist items (flatten top-level only for inline display)
+    val items = remember(checklistJson) { parseChecklistItems(checklistJson) }
+    if (items.isEmpty()) return
+
+    val displayItems = items.take(5)
+    val remaining = items.size - 5
+
+    Spacer(modifier = Modifier.height(6.dp))
+    // Wrap in content zone recess background (Task 18.6)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0x0A000000), RoundedCornerShape(3.dp))
+            .padding(4.dp)
+    ) {
+        Column {
+            displayItems.forEachIndexed { index, item ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = item.checked,
+                        onCheckedChange = { newChecked ->
+                            val updatedJson = toggleChecklistItem(checklistJson, index, newChecked)
+                            onChecklistToggle(chitId, updatedJson)
+                        },
+                        modifier = Modifier.size(24.dp),
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = Color(0xFF5A8A5B),
+                            uncheckedColor = textColor.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = item.text,
+                        fontSize = 12.sp,
+                        color = if (item.checked) textColor.copy(alpha = 0.5f) else textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            // "+N more" indicator (Task 18.3)
+            if (remaining > 0) {
+                Text(
+                    text = "+$remaining more",
+                    fontSize = 11.sp,
+                    color = Color(0xFF8B7355),
+                    modifier = Modifier.padding(start = 28.dp, top = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Simple data class for a flattened checklist item. */
+private data class ChecklistItem(val text: String, val checked: Boolean)
+
+/**
+ * Parse checklist JSON into a flat list of top-level items.
+ * Format: [{"text": "...", "checked": true/false, "children": [...]}]
+ */
+private fun parseChecklistItems(json: String): List<ChecklistItem> {
+    return try {
+        val gson = Gson()
+        val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+        val items: List<Map<String, Any>> = gson.fromJson(json, type)
+        items.map { item ->
+            ChecklistItem(
+                text = (item["text"] as? String) ?: "",
+                checked = item["checked"] == true
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+/**
+ * Toggle a checklist item's checked state at the given index and return the updated JSON string.
+ * Preserves all other fields (children, etc.) in the original JSON.
+ */
+private fun toggleChecklistItem(json: String, index: Int, newChecked: Boolean): String {
+    return try {
+        val gson = Gson()
+        val type = object : TypeToken<List<MutableMap<String, Any>>>() {}.type
+        val items: MutableList<MutableMap<String, Any>> = gson.fromJson(json, type)
+        if (index in items.indices) {
+            items[index]["checked"] = newChecked
+        }
+        gson.toJson(items)
+    } catch (_: Exception) {
+        json // Return original on error
     }
 }
 

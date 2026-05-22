@@ -17,6 +17,7 @@ class Checklist {
     // Multi-select state
     this._selectedIds = new Set();
     this._multiSelectMode = false;
+    this._lastSelectedId = null;
 
     this.init();
     if (initialItems && Array.isArray(initialItems)) this.loadItems(initialItems);
@@ -144,6 +145,16 @@ class Checklist {
       if (typeof _openSendContentModal === 'function') _openSendContentModal(e, 'checklist');
     });
 
+    var menuAutoComplete = document.createElement("button");
+    menuAutoComplete.id = 'checklistAutoCompleteBtn';
+    menuAutoComplete.innerHTML = '<i class="fas fa-flag-checkered"></i> Auto-Complete';
+    menuAutoComplete.title = 'Auto-complete chit when all items checked';
+    menuAutoComplete.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      _toggleChecklistAutoComplete(e);
+    });
+
     var menuAutosave = document.createElement("button");
     menuAutosave.id = 'checklistAutosaveBtn';
     menuAutosave.innerHTML = '<i class="fas fa-bolt"></i> Auto-save: On';
@@ -185,6 +196,7 @@ class Checklist {
     this._moreMenu.appendChild(menuToNote);
     this._moreMenu.appendChild(menuSend);
     this._moreMenu.appendChild(menuPrint);
+    this._moreMenu.appendChild(menuAutoComplete);
     this._moreMenu.appendChild(menuAutosave);
     this._moreWrapper.appendChild(this._moreBtn);
     this._moreWrapper.appendChild(this._moreMenu);
@@ -420,7 +432,6 @@ class Checklist {
     }
     if (!confirmed) return;
     this._pushUndoState();
-    var removed = this.items.filter(i => i.checked);
     this.items = this.items.filter(i => !i.checked);
     this.render();
     this._notifyChange();
@@ -492,40 +503,46 @@ class Checklist {
     span.className = "checklist-text";
     span.style.whiteSpace = "pre-wrap";
     renderChecklistItemMarkdown(span, item.text);
-    span.addEventListener("click", (e) => { e.stopPropagation(); this.startEditing(item, span, e); });
+    if (!isGhost) {
+      span.addEventListener("click", (e) => { e.stopPropagation(); this.startEditing(item, span, e); });
+    }
     tw.appendChild(span);
 
-    // Click anywhere on the text-wrapper (including empty space) to edit
-    tw.addEventListener("click", (e) => {
-      if (e.target === tw) {
-        e.stopPropagation();
-        // If already editing this item, focus the textarea and put cursor at end
-        var existingTa = tw.querySelector("textarea.checklist-edit-input");
-        if (existingTa) {
-          existingTa.focus();
-          existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
-        } else {
-          this.startEditing(item, span, e);
+    // Click anywhere on the text-wrapper (including empty space) to edit (not for ghost items)
+    if (!isGhost) {
+      tw.addEventListener("click", (e) => {
+        if (e.target === tw) {
+          e.stopPropagation();
+          // If already editing this item, focus the textarea and put cursor at end
+          var existingTa = tw.querySelector("textarea.checklist-edit-input");
+          if (existingTa) {
+            existingTa.focus();
+            existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
+          } else {
+            this.startEditing(item, span, e);
+          }
         }
-      }
-    });
+      });
+    }
 
     left.appendChild(tw);
     el.appendChild(left);
 
-    // Click on empty space in the left-container (between checkbox and text) to edit
-    left.addEventListener("click", (e) => {
-      if (e.target === left) {
-        e.stopPropagation();
-        var existingTa = tw.querySelector("textarea.checklist-edit-input");
-        if (existingTa) {
-          existingTa.focus();
-          existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
-        } else {
-          this.startEditing(item, span, e);
+    // Click on empty space in the left-container (between checkbox and text) to edit (not for ghost items)
+    if (!isGhost) {
+      left.addEventListener("click", (e) => {
+        if (e.target === left) {
+          e.stopPropagation();
+          var existingTa = tw.querySelector("textarea.checklist-edit-input");
+          if (existingTa) {
+            existingTa.focus();
+            existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
+          } else {
+            this.startEditing(item, span, e);
+          }
         }
-      }
-    });
+      });
+    }
 
     // Send-to-chit icon (appears on hover)
     var sendIcon = document.createElement("span");
@@ -949,6 +966,8 @@ class Checklist {
         var subtree = self.getSubtree(item);
         if (isUnindent) {
           if (item.level > 0) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             var oldParentId = item.parent;
             subtree.forEach(function(si) { si.level = Math.max(0, si.level - 1); });
             item.parent = null;
@@ -961,6 +980,8 @@ class Checklist {
         } else {
           var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
           if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             subtree.forEach(function(si) { si.level = Math.min(si.level + 1, MAX_INDENT_LEVEL); });
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
@@ -975,6 +996,8 @@ class Checklist {
         var idx = self.items.indexOf(item);
         if (e.key === "[") {
           if (item.level > 0) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             var oldParentId = item.parent;
             item.level = Math.max(0, item.level - 1);
             item.parent = null;
@@ -986,6 +1009,8 @@ class Checklist {
         } else {
           var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
           if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
@@ -998,6 +1023,8 @@ class Checklist {
         var idx = self.items.indexOf(item);
         if (e.shiftKey) {
           if (item.level > 0) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             var oldParentId = item.parent;
             item.level = Math.max(0, item.level - 1);
             item.parent = null;
@@ -1009,6 +1036,8 @@ class Checklist {
         } else {
           var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
           if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+            item.text = ta.value.trim();
+            self._pushUndoState();
             item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
@@ -1465,7 +1494,7 @@ class Checklist {
 
     var indentBtn = document.createElement('button');
     indentBtn.className = 'zone-button';
-    indentBtn.innerHTML = '<i class="fas fa-indent"></i>';
+    indentBtn.innerHTML = '<i class="fas fa-indent"></i> Indent';
     indentBtn.title = 'Indent selected';
     indentBtn.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -1490,7 +1519,7 @@ class Checklist {
 
     var outdentBtn = document.createElement('button');
     outdentBtn.className = 'zone-button';
-    outdentBtn.innerHTML = '<i class="fas fa-outdent"></i>';
+    outdentBtn.innerHTML = '<i class="fas fa-outdent"></i> Outdent';
     outdentBtn.title = 'Outdent selected';
     outdentBtn.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -1628,6 +1657,7 @@ function _copyNoteToChecklist(checklist) {
       }
     }
   }
+  checklist._pushUndoState();
   checklist.items = checklist.items.concat(newItems);
   checklist.render();
   checklist._notifyChange();
@@ -1686,6 +1716,7 @@ function _copyChecklistToNote(checklist) {
     noteEl.value = text;
   }
   // Clear the checklist (move, not copy)
+  checklist._pushUndoState();
   checklist.items = [];
   checklist.render();
   checklist._notifyChange();
@@ -1793,6 +1824,7 @@ async function _pasteClipboardAsChecklistItems(checklist) {
   // Snapshot for undo
   var prevItems = JSON.parse(JSON.stringify(checklist.items));
 
+  checklist._pushUndoState();
   checklist.items = checklist.items.concat(newItems);
   checklist.render();
   checklist._notifyChange();
@@ -1852,14 +1884,14 @@ function _toggleChecklistAutoComplete(e) {
   if (!_checklistAutoComplete) {
     _checklistAutoComplete = true;
     _checklistAutoArchive = false;
-    if (btn) { btn.textContent = '🏁 Auto-Complete ✓'; btn.title = 'Click again to also auto-archive'; }
+    if (btn) { btn.innerHTML = '<i class="fas fa-flag-checkered"></i> Auto-Complete ✓'; btn.title = 'Click again to also auto-archive'; }
   } else if (!_checklistAutoArchive) {
     _checklistAutoArchive = true;
-    if (btn) { btn.textContent = '🏁 Auto-Complete + Archive ✓'; btn.title = 'Click again to disable'; }
+    if (btn) { btn.innerHTML = '<i class="fas fa-flag-checkered"></i> Auto-Complete + Archive ✓'; btn.title = 'Click again to disable'; }
   } else {
     _checklistAutoComplete = false;
     _checklistAutoArchive = false;
-    if (btn) { btn.textContent = '🏁 Auto-Complete'; btn.title = 'Auto-complete chit when all items checked'; }
+    if (btn) { btn.innerHTML = '<i class="fas fa-flag-checkered"></i> Auto-Complete'; btn.title = 'Auto-complete chit when all items checked'; }
   }
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
@@ -1867,12 +1899,20 @@ function _toggleChecklistAutoComplete(e) {
 /**
  * Check if all checklist items are checked and auto-complete is enabled.
  * If so, set status to Complete and optionally archive.
+ * Uses _autoCompleteChecklistEnabled (from editor.js, reads chit's auto_complete_checklist field, default true)
+ * and _checklistAutoArchive for the archive-on-complete behavior.
  */
 function _checkAutoCompleteChecklist(checklist) {
-  if (!_checklistAutoComplete) return;
+  // Check the chit's auto_complete_checklist field (default true) — Requirement 28.1
+  var enabled = (typeof _autoCompleteChecklistEnabled !== 'undefined') ? _autoCompleteChecklistEnabled : _checklistAutoComplete;
+  if (!enabled) return;
   if (!checklist || !checklist.items || checklist.items.length === 0) return;
 
-  var allChecked = checklist.items.every(function(item) { return item.checked; });
+  // Only consider non-empty items (items with non-whitespace text) — Requirement 28.2
+  var nonEmptyItems = checklist.items.filter(function(item) { return item.text && item.text.trim() !== ''; });
+  if (nonEmptyItems.length === 0) return;
+
+  var allChecked = nonEmptyItems.every(function(item) { return item.checked; });
   if (!allChecked) return;
 
   // Set status to Complete

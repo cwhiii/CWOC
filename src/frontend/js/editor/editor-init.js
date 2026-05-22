@@ -249,11 +249,11 @@ function _collapseAllZonesForNewChit() {
     'Calendar':   [['datesSection', 'datesContent']],
     'Checklists': [['checklistSection', 'checklistContent']],
     'Alarms':     [['alertsSection', 'alertsContent']],
-    'Projects':   [['checklistSection', 'checklistContent']],
-    'Tasks':      [['taskSection', 'taskContent']],
+    'Projects':   [['projectsSection', 'projectsContent'], ['checklistSection', 'checklistContent']],
+    'Tasks':      [['taskSection', 'taskContent'], ['datesSection', 'datesContent']],
     'Notes':      [['notesSection', 'notesContent']],
     'Email':      [['emailSection', 'emailContent']],
-    'Indicators': [['healthIndicatorsSection', 'healthIndicatorsContent'], ['datesSection', 'datesContent']],
+    'Indicators': [['healthIndicatorsSection', 'healthIndicatorsContent']],
   };
 
   const params = new URLSearchParams(window.location.search);
@@ -282,6 +282,29 @@ function _collapseAllZonesForNewChit() {
       }, 150);
     }
   }
+
+  // After expanding zones, apply auto-focus based on source tab
+  setTimeout(function() {
+    if (sourceTab === 'Notes') {
+      var noteEl = document.getElementById('note');
+      if (noteEl) { noteEl.focus(); }
+    } else if (sourceTab === 'Checklists') {
+      var clInput = document.querySelector('#checklistContent .checklist-new-item input, #checklistContent .cl-add-input');
+      if (clInput) { clInput.focus(); }
+    } else if (sourceTab === 'Tasks') {
+      _dateModeSuppressUnsaved = true;
+      _setDateMode('due');
+      _dateModeSuppressUnsaved = false;
+      var dueField = document.getElementById('due_datetime');
+      if (dueField) {
+        dueField.classList.add('cwoc-prefill-highlight');
+        dueField.addEventListener('focus', function _removePrefill() {
+          dueField.classList.remove('cwoc-prefill-highlight');
+          dueField.removeEventListener('focus', _removePrefill);
+        }, { once: true });
+      }
+    }
+  }, 200);
 }
 
 function setSelectValue(selectElement, value) {
@@ -1037,6 +1060,79 @@ function applyZoneStates(chit) {
   }
 }
 
+/* ── Toolbar Overflow Detection ────────────────────────────────────────────── */
+
+/**
+ * Checks a single scrollable element and toggles .has-overflow based on
+ * whether it's scrolled to the end or still has content to the right.
+ */
+function _updateOverflowClass(el) {
+  var hasOverflow = el.scrollWidth > el.clientWidth + 2;
+  var scrolledToEnd = (el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+  if (hasOverflow && !scrolledToEnd) {
+    el.classList.add('has-overflow');
+  } else {
+    el.classList.remove('has-overflow');
+  }
+}
+
+/**
+ * Checks all scrollable toolbar containers for overflow and toggles .has-overflow.
+ */
+function _checkToolbarOverflow() {
+  // Notes format toolbars (inline + modal)
+  var scrollContainers = document.querySelectorAll('.notes-toolbar-scroll');
+  scrollContainers.forEach(_updateOverflowClass);
+
+  // Zone header action bars
+  if (window._mobileZoneModeActive) {
+    var zoneActions = document.querySelectorAll('.zone-container .zone-header .zone-actions');
+    zoneActions.forEach(_updateOverflowClass);
+  }
+}
+
+/**
+ * Initialize overflow detection with resize observer and scroll listeners.
+ */
+function _initToolbarOverflowDetection() {
+  // Initial check after a short delay (DOM needs to settle)
+  setTimeout(_checkToolbarOverflow, 200);
+
+  // Re-check on resize
+  window.addEventListener('resize', function() {
+    setTimeout(_checkToolbarOverflow, 100);
+  });
+
+  // Attach scroll listeners to detect when user scrolls to end
+  function _attachScrollListeners() {
+    document.querySelectorAll('.notes-toolbar-scroll').forEach(function(el) {
+      if (!el._overflowListenerAttached) {
+        el.addEventListener('scroll', function() { _updateOverflowClass(el); }, { passive: true });
+        el._overflowListenerAttached = true;
+      }
+    });
+    document.querySelectorAll('.zone-container .zone-header .zone-actions').forEach(function(el) {
+      if (!el._overflowListenerAttached) {
+        el.addEventListener('scroll', function() { _updateOverflowClass(el); }, { passive: true });
+        el._overflowListenerAttached = true;
+      }
+    });
+  }
+  _attachScrollListeners();
+
+  // Re-check when zones change (hook into mobile zone navigation)
+  var origShowZone = window._mobileShowZone;
+  if (origShowZone) {
+    window._mobileShowZone = function(idx) {
+      origShowZone(idx);
+      setTimeout(function() {
+        _checkToolbarOverflow();
+        _attachScrollListeners();
+      }, 50);
+    };
+  }
+}
+
 // ── DOMContentLoaded — main editor initialization ────────────────────────────
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -1046,6 +1142,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Initialize mobile zone navigation (swipe between zones on mobile)
   if (typeof initMobileZoneNav === 'function') initMobileZoneNav();
+
+  // ── Toolbar overflow detection (adds .has-overflow for fade mask) ──
+  _initToolbarOverflowDetection();
 
   // Tag search filter-as-you-type
   var labelsInput = document.getElementById('labels');

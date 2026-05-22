@@ -103,7 +103,7 @@ def _set_session_cookie(response: JSONResponse, token: str, lifetime_hours: int 
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=False,
         path="/",
         samesite="lax",
         max_age=max_age,
@@ -116,7 +116,7 @@ def _clear_session_cookie(response: JSONResponse) -> JSONResponse:
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         path="/",
-        secure=True,
+        secure=False,
     )
     return response
 
@@ -126,14 +126,18 @@ def _clear_session_cookie(response: JSONResponse) -> JSONResponse:
 @auth_router.post("/login")
 def login(body: LoginRequest):
     """Validate credentials, enforce rate limit, create session, set cookie."""
+    logger.info("[LOGIN] === Login attempt started ===")
     username = body.username
     password = body.password
+    logger.info(f"[LOGIN] Username: {username}")
 
     # Normalize username for case-insensitive comparison
     username_lower = username.strip().lower()
+    logger.info(f"[LOGIN] Normalized username: {username_lower}")
 
     # Check rate limit before anything else
     if _check_rate_limit(username_lower):
+        logger.warning(f"[LOGIN] Rate limited for user: {username_lower}")
         raise HTTPException(
             status_code=429,
             detail="Too many login attempts. Please wait before retrying.",
@@ -149,20 +153,27 @@ def login(body: LoginRequest):
             (username_lower,),
         ).fetchone()
 
+        logger.info(f"[LOGIN] User found in DB: {row is not None}")
+
         # Generic error for both bad username and bad password
         if row is None or not verify_password(password, row["password_hash"]):
+            logger.warning(f"[LOGIN] Invalid credentials for: {username_lower}")
             _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Check if account is active
         if not row["is_active"]:
+            logger.warning(f"[LOGIN] Account inactive: {username_lower}")
             _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Success — clear rate limit and create session
+        logger.info(f"[LOGIN] Credentials valid for user_id={row['id']}")
         _clear_attempts(username_lower)
         lifetime_hours = _get_session_lifetime_hours(conn, row["id"])
+        logger.info(f"[LOGIN] Session lifetime: {lifetime_hours} hours")
         token = _create_session(conn, row["id"])
+        logger.info(f"[LOGIN] Session token created: {token[:8]}...")
 
         data = {
             "user_id": row["id"],
@@ -170,14 +181,17 @@ def login(body: LoginRequest):
             "display_name": row["display_name"],
             "is_admin": bool(row["is_admin"]),
         }
+        logger.info(f"[LOGIN] Response data: {data}")
         response = JSONResponse(content=data)
         _set_session_cookie(response, token, lifetime_hours)
+        logger.info(f"[LOGIN] Cookie set on response. secure=False, samesite=lax, path=/")
+        logger.info(f"[LOGIN] Response headers: {dict(response.headers)}")
         return response
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error: {e}")
+        logger.error(f"[LOGIN] Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:

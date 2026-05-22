@@ -63,9 +63,9 @@ class AlertsViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val PREF_KEY_MODE = "alerts_view_mode"
+        private const val PREF_KEY_MODE = "sidebar_alarms_mode"
         private val VALID_MODES = setOf("list", "independent", "notifications", "reminders")
-        private const val DEFAULT_MODE = "independent"
+        private const val DEFAULT_MODE = "list"
     }
 
     // --- Mode state ---
@@ -136,7 +136,8 @@ class AlertsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _snoozeLength.value = settings.snoozeLength ?: "5"
-                _timeFormat.value = settings.timeFormat ?: "12"
+                _timeFormat.value = settings.timeFormat ?: "12hour"
+                _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
                 _weekStartDay.value = settings.weekStartDay?.toIntOrNull() ?: 0
             }
         }
@@ -710,8 +711,12 @@ class AlertsViewModel @Inject constructor(
 
     // --- Settings accessors for time format and week start day ---
 
-    private val _timeFormat = MutableStateFlow("12")
+    private val _timeFormat = MutableStateFlow("12hour")
     val timeFormat: StateFlow<String> = _timeFormat.asStateFlow()
+
+    /** Calendar snap interval from settings. */
+    private val _calendarSnap = MutableStateFlow(5)
+    val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
 
     private val _weekStartDay = MutableStateFlow(0) // 0=Sunday
     val weekStartDay: StateFlow<Int> = _weekStartDay.asStateFlow()

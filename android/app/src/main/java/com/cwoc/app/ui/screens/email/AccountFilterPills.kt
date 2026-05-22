@@ -42,6 +42,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -247,6 +249,8 @@ private fun ErrorDetailDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -258,7 +262,7 @@ private fun ErrorDetailDialog(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Sync Error: $accountNickname",
-                    style = MaterialTheme.typography.titleMedium
+                    style = CwocDialogDefaults.titleStyle,
                 )
             }
         },
@@ -269,13 +273,13 @@ private fun ErrorDetailDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = onNavigateToSettings) {
+            TextButton(onClick = onNavigateToSettings, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Email Settings")
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onCopyError) {
+                TextButton(onClick = onCopyError, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Copy Error")
                 }
                 TextButton(onClick = onDismiss) {

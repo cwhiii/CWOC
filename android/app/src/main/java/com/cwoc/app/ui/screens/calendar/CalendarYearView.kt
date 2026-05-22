@@ -295,11 +295,26 @@ private fun getStartOffset(firstDayOfMonth: DayOfWeek, firstDayOfWeek: DayOfWeek
 }
 
 /**
- * Parses the weekStartDay setting string into a DayOfWeek.
- * Supports values like "sunday", "monday", "saturday", etc.
+ * Parses the week_start_day setting into a DayOfWeek.
+ * Handles both numeric ("0"–"6", where 0=Sunday) and name-based formats.
  * Defaults to Sunday if unrecognized.
  */
 private fun parseWeekStartDay(weekStartDay: String): DayOfWeek {
+    // Try numeric first (canonical format: "0"=Sun, "1"=Mon, ..., "6"=Sat)
+    val numeric = weekStartDay.trim().toIntOrNull()
+    if (numeric != null && numeric in 0..6) {
+        return when (numeric) {
+            0 -> DayOfWeek.SUNDAY
+            1 -> DayOfWeek.MONDAY
+            2 -> DayOfWeek.TUESDAY
+            3 -> DayOfWeek.WEDNESDAY
+            4 -> DayOfWeek.THURSDAY
+            5 -> DayOfWeek.FRIDAY
+            6 -> DayOfWeek.SATURDAY
+            else -> DayOfWeek.SUNDAY
+        }
+    }
+    // Fallback: name-based format (legacy)
     return when (weekStartDay.lowercase().trim()) {
         "monday", "mon" -> DayOfWeek.MONDAY
         "tuesday", "tue" -> DayOfWeek.TUESDAY

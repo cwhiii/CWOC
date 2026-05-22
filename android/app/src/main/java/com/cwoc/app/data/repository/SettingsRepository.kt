@@ -1,13 +1,18 @@
 package com.cwoc.app.data.repository
 
+import android.util.Log
 import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.entity.SettingsEntity
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
 import dagger.Lazy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,6 +64,17 @@ class SettingsRepositoryImpl @Inject constructor(
     private val connectivityMonitor: ConnectivityMonitor
 ) : SettingsRepository {
 
+    companion object {
+        private const val TAG = "CWOC_SETTINGS_REPO"
+    }
+
+    /**
+     * Dedicated scope for fire-and-forget push operations.
+     * Uses SupervisorJob so push failures don't cancel the scope or propagate to callers.
+     * Uses IO dispatcher since push involves network I/O.
+     */
+    private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override val settings: Flow<SettingsEntity> =
         settingsDao.getSettings().filterNotNull()
 
@@ -74,9 +90,18 @@ class SettingsRepositoryImpl @Inject constructor(
         settingsDao.upsert(dirtySettings)
         dirtyTracker.markSettingsDirty()
 
-        // Trigger push immediately if online
+        // Trigger push in background — fire-and-forget.
+        // The local save is already committed; push is best-effort.
+        // If push fails (network error, 401, etc.), the dirty tracker ensures
+        // it will be retried by PushSyncWorker on next connectivity event.
         if (connectivityMonitor.isOnline.value) {
-            syncPushEngine.get().pushAll()
+            pushScope.launch {
+                try {
+                    syncPushEngine.get().pushAll()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Background push failed (settings will retry later): ${e.message}")
+                }
+            }
         }
     }
 

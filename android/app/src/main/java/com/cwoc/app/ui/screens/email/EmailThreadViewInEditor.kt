@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,7 +98,7 @@ fun EmailThreadViewInEditor(
             .fillMaxWidth()
             .padding(vertical = 8.dp)
     ) {
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(bottom = 8.dp))
 
         // Section header: "Thread (N messages)" with expand/collapse
         Row(

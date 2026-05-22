@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_quick_capture_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="2dp">
+
+    <!-- Hexagonal background matching the app's NewChitFab -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:src="@drawable/widget_quick_capture_bg"
+        android:scaleType="fitCenter"
+        android:contentDescription="@null" />
+
+    <!-- White "+" icon centered on the hexagon -->
+    <ImageView
+        android:id="@+id/widget_quick_capture_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_widget_plus_white"
+        android:contentDescription="Quick Capture" />
+
+</FrameLayout>

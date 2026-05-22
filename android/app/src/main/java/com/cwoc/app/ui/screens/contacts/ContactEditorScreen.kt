@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,6 +83,9 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import com.google.gson.reflect.TypeToken
+import com.cwoc.app.ui.components.CwocPagePanel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Full-screen editor for creating and editing contacts.
@@ -154,13 +158,15 @@ fun ContactEditorScreen(
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
-            title = { Text("Unsaved Changes") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Unsaved Changes", style = CwocDialogDefaults.titleStyle) },
             text = { Text("You have unsaved changes. What would you like to do?") },
             confirmButton = {
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     viewModel.save()
-                }) {
+                }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Save")
                 }
             },
@@ -171,7 +177,7 @@ fun ContactEditorScreen(
                 TextButton(onClick = {
                     showUnsavedDialog = false
                     viewModel.discard()
-                }) {
+                }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Discard")
                 }
             }
@@ -182,13 +188,15 @@ fun ContactEditorScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Contact") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Contact", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to delete this contact? This action cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     viewModel.delete()
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -307,6 +315,7 @@ fun ContactEditorScreen(
                             )
                         }
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 }
             )
         }
@@ -321,10 +330,15 @@ fun ContactEditorScreen(
                 CircularProgressIndicator(modifier = Modifier.size(48.dp))
             }
         } else {
-            Column(
+            CwocPagePanel(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .padding(8.dp)
+            ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -365,27 +379,27 @@ fun ContactEditorScreen(
                     readOnly = isReadOnly
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Contact Info Zone (collapsible) ────────────────────────────
                 ContactInfoZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Details Zone (collapsible) ─────────────────────────────────
                 DetailsZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Social & Web Zone (collapsible) ────────────────────────────
                 SocialWebZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Security Zone (collapsible) ────────────────────────────────
                 SecurityZone(formState = formState, onUpdate = { viewModel.updateForm(it) })
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Tags Zone (collapsible) ────────────────────────────────────
                 ContactTagsZone(
@@ -393,7 +407,7 @@ fun ContactEditorScreen(
                     onTagsChange = { viewModel.updateField { state -> state.copy(tags = it) } }
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Color Zone (collapsible) ───────────────────────────────────
                 ColorZone(
@@ -404,7 +418,7 @@ fun ContactEditorScreen(
                     }
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Notes Zone (collapsible) ───────────────────────────────────
                 ContactNotesZone(
@@ -412,7 +426,7 @@ fun ContactEditorScreen(
                     onNotesChange = { viewModel.updateField { state -> state.copy(notes = it) } }
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Dates Zone (collapsible) ───────────────────────────────────
                 ContactDatesZone(
@@ -420,12 +434,12 @@ fun ContactEditorScreen(
                     onDatesChange = { viewModel.updateField { state -> state.copy(dates = it) } }
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
                 // ─── Profile-Only: Password Change Zone ─────────────────────────
                 if (isProfileMode && !isReadOnly) {
                     PasswordChangeZone()
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 }
 
                 // ─── Delete Button ──────────────────────────────────────────────
@@ -434,10 +448,9 @@ fun ContactEditorScreen(
                     Button(
                         onClick = { showDeleteDialog = true },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        colors = CwocButtonDefaults.dangerColors(),
+                        border = CwocButtonDefaults.dangerBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
@@ -451,6 +464,7 @@ fun ContactEditorScreen(
 
                 // Bottom spacing
                 Spacer(modifier = Modifier.height(24.dp))
+            }
             }
         }
     }
@@ -483,7 +497,8 @@ private fun NameSection(
                 label = { Text("Given Name") },
                 singleLine = true,
                 enabled = !readOnly,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = formState.surname,
@@ -491,7 +506,8 @@ private fun NameSection(
                 label = { Text("Family Name") },
                 singleLine = true,
                 enabled = !readOnly,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
 
@@ -502,7 +518,8 @@ private fun NameSection(
             label = { Text("Middle Names") },
             singleLine = true,
             enabled = !readOnly,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Prefix and suffix side by side — using dropdown with predefined options + custom
@@ -663,20 +680,22 @@ private fun ContactProfileImageSection(
     if (showImageOptions) {
         AlertDialog(
             onDismissRequest = { showImageOptions = false },
-            title = { Text("Profile Photo") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Profile Photo", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Choose an option for the profile photo.") },
             confirmButton = {
                 Column {
                     TextButton(onClick = {
                         showImageOptions = false
                         cameraLauncher.launch(null)
-                    }) {
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("📷 Take Photo")
                     }
                     TextButton(onClick = {
                         showImageOptions = false
                         galleryLauncher.launch("image/*")
-                    }) {
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("🖼️ Choose from Gallery")
                     }
                     if (!isNew) {
@@ -686,7 +705,7 @@ private fun ContactProfileImageSection(
                                 deleteContactImage(contactId, serverUrl, authToken)
                                 imageRefreshKey = System.currentTimeMillis()
                             }
-                        }) {
+                        }, colors = CwocDialogDefaults.dangerButtonColors()) {
                             Text("🗑️ Remove Photo", color = MaterialTheme.colorScheme.error)
                         }
                     }
@@ -960,14 +979,16 @@ private fun DetailsZone(
                 onValueChange = { onUpdate(formState.copy(organization = it)) },
                 label = { Text("Organization") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = formState.nickname,
                 onValueChange = { onUpdate(formState.copy(nickname = it)) },
                 label = { Text("Nickname") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = formState.socialContext,
@@ -975,7 +996,8 @@ private fun DetailsZone(
                 label = { Text("Social Context") },
                 placeholder = { Text("How you know them") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             // Display Name field
             OutlinedTextField(
@@ -983,7 +1005,8 @@ private fun DetailsZone(
                 onValueChange = { onUpdate(formState.copy(displayName = it)) },
                 label = { Text("Display Name") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }
@@ -1112,7 +1135,8 @@ private fun SecurityZone(
                     label = { Text("Signal Username") },
                     placeholder = { Text("Signal username or phone") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 // Signal message button (shown when username is not blank)
                 if (formState.signalUsername.isNotBlank()) {
@@ -1132,7 +1156,8 @@ private fun SecurityZone(
                 placeholder = { Text("Paste PGP public key here...") },
                 minLines = 2,
                 maxLines = 5,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             // PGP Validation button + result
             if (formState.pgpKey.isNotBlank()) {
@@ -1244,7 +1269,8 @@ private fun ContactTagsZone(
                 },
                 label = { Text("Add tag (comma-separated)") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }
@@ -1282,7 +1308,8 @@ private fun ContactNotesZone(
             label = { Text("Notes") },
             minLines = 3,
             maxLines = 12,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
     }
 }
@@ -1334,7 +1361,8 @@ private fun ContactDatesZone(
                         label = { Text("Label") },
                         placeholder = { Text("Birthday") },
                         singleLine = true,
-                        modifier = Modifier.weight(0.3f)
+                        modifier = Modifier.weight(0.3f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     // Date value input (YYYY-MM-DD format)
                     OutlinedTextField(
@@ -1347,7 +1375,8 @@ private fun ContactDatesZone(
                         label = { Text("Date") },
                         placeholder = { Text("YYYY-MM-DD") },
                         singleLine = true,
-                        modifier = Modifier.weight(0.4f)
+                        modifier = Modifier.weight(0.4f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     // Show on calendar toggle
                     androidx.compose.material3.Checkbox(
@@ -1440,7 +1469,8 @@ private fun MultiValueField(
                     label = { Text("Label") },
                     placeholder = { Text(defaultLabel) },
                     singleLine = true,
-                    modifier = Modifier.weight(0.35f)
+                    modifier = Modifier.weight(0.35f),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 // Value input (e.g., phone number, email address)
                 OutlinedTextField(
@@ -1453,7 +1483,8 @@ private fun MultiValueField(
                     label = { Text(itemLabel) },
                     placeholder = { Text(valuePlaceholder) },
                     singleLine = true,
-                    modifier = Modifier.weight(0.55f)
+                    modifier = Modifier.weight(0.55f),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 // Open in Maps button (for addresses)
                 if (showMapButton && entry.value.isNotBlank() && mapContext != null) {
@@ -1637,7 +1668,8 @@ private fun PasswordChangeZone() {
                 label = { Text("Current Password") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = newPassword,
@@ -1645,7 +1677,8 @@ private fun PasswordChangeZone() {
                 label = { Text("New Password") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = confirmPassword,
@@ -1653,7 +1686,8 @@ private fun PasswordChangeZone() {
                 label = { Text("Confirm New Password") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             message?.let { msg ->

@@ -2278,6 +2278,7 @@ async def _rules_scheduled_loop():
             conn = None
             try:
                 conn = sqlite3.connect(DB_PATH)
+                conn.execute("PRAGMA busy_timeout=5000")
                 cursor = conn.cursor()
 
                 # ── 1. Load all enabled scheduled rules ──────────
@@ -2561,6 +2562,10 @@ async def _rules_scheduled_loop():
                         "Scheduled rule '%s' complete: %s", rule_name, result_summary
                     )
 
+                    # Commit after each rule to avoid holding write locks for too long
+                    conn.commit()
+
+                # Final commit for any remaining changes
                 conn.commit()
 
             except Exception as db_err:
@@ -2707,6 +2712,7 @@ async def _habit_due_loop():
 
             try:
                 conn = sqlite3.connect(DB_PATH)
+                conn.execute("PRAGMA busy_timeout=5000")
                 cursor = conn.cursor()
 
                 # Load all enabled rules with habit_due trigger type

@@ -1,9 +1,14 @@
 package com.cwoc.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -52,6 +57,7 @@ import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.sync.SyncEngine
 import com.cwoc.app.data.sync.SyncWorker
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.ui.components.NewChitFab
 import com.cwoc.app.ui.components.ProfileMenu
 import com.cwoc.app.ui.components.ClockModal
 import com.cwoc.app.ui.components.CalculatorSheet
@@ -78,6 +84,10 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private const val REQUEST_CODE_NOTIFICATIONS = 1001
+    }
+
     @Inject
     lateinit var authRepository: AuthRepository
 
@@ -96,6 +106,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var contactRepository: com.cwoc.app.data.repository.ContactRepository
 
+    @Inject
+    lateinit var standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository
+
     private val filterSortViewModel: FilterSortViewModel by viewModels()
     private val notificationBadgeViewModel: NotificationBadgeViewModel by viewModels()
     private val emailBadgeViewModel: EmailBadgeViewModel by viewModels()
@@ -105,6 +118,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
+        // Without this, notifications are denied by default and will never appear.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    REQUEST_CODE_NOTIFICATIONS
+                )
+            }
+        }
+
         setContent {
             CwocApp(
                 authRepository = authRepository,
@@ -117,7 +146,8 @@ class MainActivity : ComponentActivity() {
                 sidebarStateViewModel = sidebarStateViewModel,
                 syncEngine = syncEngine,
                 syncMetadataDao = syncMetadataDao,
-                contactRepository = contactRepository
+                contactRepository = contactRepository,
+                standaloneAlertRepository = standaloneAlertRepository
             )
         }
     }
@@ -136,7 +166,8 @@ private fun CwocApp(
     sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel,
     syncEngine: SyncEngine,
     syncMetadataDao: SyncMetadataDao,
-    contactRepository: com.cwoc.app.data.repository.ContactRepository
+    contactRepository: com.cwoc.app.data.repository.ContactRepository,
+    standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -185,6 +216,7 @@ private fun CwocApp(
     var showWeatherDialog by remember { mutableStateOf(false) }
     var showCalculatorSheet by remember { mutableStateOf(false) }
     var showReferenceDialog by remember { mutableStateOf(false) }
+    var showQuickAlertSheet by remember { mutableStateOf(false) }
 
     // Determine initial auth state
     val isAuthenticated = authRepository.isAuthenticated()
@@ -238,6 +270,8 @@ private fun CwocApp(
         Screen.Indicators.route,
         Screen.Email.route,
         Screen.OmniView.route,
+        Screen.Notebook.route,
+        Screen.Search.route,
         Screen.Contacts.route
     )
     val showNavChrome = currentRoute != null && currentRoute in cCaptnRoutes
@@ -372,6 +406,12 @@ private fun CwocApp(
                 Scaffold(
                     containerColor = Color.Transparent,
                     snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                    floatingActionButton = {
+                        NewChitFab(
+                            onTap = { navController.navigate(Screen.Editor.createRoute(Screen.Editor.NEW_CHIT_ID, sourceTab = selectedTab.label)) },
+                            onLongPress = { showQuickAlertSheet = true }
+                        )
+                    },
                     topBar = {
                         TopAppBar(
                             modifier = Modifier
@@ -445,9 +485,13 @@ private fun CwocApp(
                             },
                             actions = {
                                 // Profile menu (avatar + dropdown with logout/switch user/view profile/notifications)
+                                val profilePrefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
                                 ProfileMenu(
                                     username = currentUsername,
                                     displayName = userDisplayName,
+                                    profileImageUrl = currentUserId?.let { "/api/contacts/$it/image" },
+                                    serverUrl = profilePrefs.getString("server_url", "")?.trimEnd('/') ?: "",
+                                    authToken = profilePrefs.getString("auth_token", "") ?: "",
                                     onLogout = {
                                         authRepository.clearToken()
                                         navController.navigate(Screen.Login.route) {
@@ -539,7 +583,8 @@ private fun CwocApp(
                                     filterSortViewModel = filterSortViewModel,
                                     chitRepository = chitRepository,
                                     sidebarStateViewModel = sidebarStateViewModel,
-                                    settingsRepository = settingsRepository
+                                    settingsRepository = settingsRepository,
+                                    onQuickAlert = { showQuickAlertSheet = true }
                                 )
                             }
 
@@ -580,7 +625,8 @@ private fun CwocApp(
                     filterSortViewModel = filterSortViewModel,
                     chitRepository = chitRepository,
                     sidebarStateViewModel = sidebarStateViewModel,
-                    settingsRepository = settingsRepository
+                    settingsRepository = settingsRepository,
+                    onQuickAlert = { showQuickAlertSheet = true }
                 )
             }
         }
@@ -627,6 +673,143 @@ private fun CwocApp(
         if (showReferenceDialog) {
             com.cwoc.app.ui.components.ReferenceDialog(
                 onDismiss = { showReferenceDialog = false }
+            )
+        }
+
+        // ── Quick Alert Sheet (FAB long-press) ───────────────────────────
+        if (showQuickAlertSheet) {
+            com.cwoc.app.ui.components.QuickAlertSheet(
+                onDismiss = { showQuickAlertSheet = false },
+                is24Hour = (currentSettings?.timeFormat == "24hour"),
+                calendarSnap = currentSettings?.calendarSnap?.toIntOrNull() ?: 5,
+                onSaveReminder = { reminderData ->
+                    scope.launch {
+                        val chitId = java.util.UUID.randomUUID().toString()
+                        val pointInTime = "${reminderData.date}T${reminderData.time}:00"
+                        val alertJson = com.google.gson.Gson().toJson(listOf(
+                            mapOf(
+                                "_type" to "notification",
+                                "value" to 0,
+                                "unit" to "minutes",
+                                "atTarget" to true,
+                                "afterTarget" to false,
+                                "targetType" to "point"
+                            )
+                        ))
+                        val now = java.time.Instant.now().toString()
+                        val entity = com.cwoc.app.data.local.entity.ChitEntity(
+                            id = chitId,
+                            title = reminderData.title,
+                            note = null,
+                            tags = null,
+                            startDatetime = null,
+                            endDatetime = null,
+                            dueDatetime = null,
+                            pointInTime = pointInTime,
+                            completedDatetime = null,
+                            status = null,
+                            priority = null,
+                            severity = null,
+                            checklist = null,
+                            alarm = null,
+                            notification = true,
+                            recurrence = null,
+                            recurrenceId = null,
+                            recurrenceRule = null,
+                            recurrenceExceptions = null,
+                            location = null,
+                            color = null,
+                            people = null,
+                            pinned = false,
+                            archived = false,
+                            deleted = false,
+                            createdDatetime = now,
+                            modifiedDatetime = now,
+                            isProjectMaster = false,
+                            childChits = null,
+                            allDay = false,
+                            timezone = null,
+                            alerts = alertJson,
+                            progressPercent = null,
+                            timeEstimate = null,
+                            weatherData = null,
+                            healthData = null,
+                            habit = false,
+                            habitGoal = null,
+                            habitSuccess = null,
+                            showOnCalendar = null,
+                            habitResetPeriod = null,
+                            habitLastActionDate = null,
+                            habitHideOverall = null,
+                            perpetual = false,
+                            shares = null,
+                            stealth = null,
+                            assignedTo = null,
+                            ownerId = null,
+                            hasUnviewedConflict = false,
+                            availability = null,
+                            snoozedUntil = null,
+                            prerequisites = null,
+                            syncVersion = 0,
+                            lastSyncedAt = null
+                        )
+                        chitRepository.upsertAndSync(entity, setOf(
+                            "title", "point_in_time", "notification", "alerts",
+                            "created_datetime", "modified_datetime"
+                        ))
+                    }
+                    showQuickAlertSheet = false
+                },
+                onSaveAlarm = { alarmData ->
+                    scope.launch {
+                        val data = mapOf<String, Any?>(
+                            "time" to alarmData.time,
+                            "days" to alarmData.days,
+                            "enabled" to true
+                        )
+                        standaloneAlertRepository.create(
+                            type = "alarm",
+                            name = alarmData.name.ifBlank { null },
+                            data = data
+                        )
+                    }
+                    showQuickAlertSheet = false
+                },
+                onSaveTimer = { timerData ->
+                    scope.launch {
+                        val totalSeconds = timerData.hours * 3600 + timerData.minutes * 60 + timerData.seconds
+                        val data = mapOf<String, Any?>(
+                            "totalSeconds" to totalSeconds,
+                            "loop" to timerData.loop
+                        )
+                        standaloneAlertRepository.create(
+                            type = "timer",
+                            name = timerData.name.ifBlank { null },
+                            data = data
+                        )
+                    }
+                    showQuickAlertSheet = false
+                },
+                onSaveStopwatch = { stopwatchData ->
+                    scope.launch {
+                        standaloneAlertRepository.create(
+                            type = "stopwatch",
+                            name = stopwatchData.name.ifBlank { null },
+                            data = emptyMap()
+                        )
+                    }
+                    showQuickAlertSheet = false
+                },
+                onCreateAndView = {
+                    showQuickAlertSheet = false
+                    navController.navigate(Screen.Alarms.route) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
             )
         }
     }

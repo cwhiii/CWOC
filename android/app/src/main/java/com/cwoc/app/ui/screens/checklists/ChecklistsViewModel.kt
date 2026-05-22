@@ -5,12 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.domain.checklist.ChecklistItem
 import com.cwoc.app.domain.checklist.ChecklistOperations
 import com.cwoc.app.domain.sort.ChitReorderHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -24,11 +27,29 @@ import javax.inject.Inject
 class ChecklistsViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
     private val chitDao: ChitDao,
-    private val chitReorderHelper: ChitReorderHelper
+    private val chitReorderHelper: ChitReorderHelper,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     val checklistChits: StateFlow<List<ChitEntity>> = chitRepository.getChecklistChits()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Time format from settings ("12hour" or "24hour"). */
+    private val _timeFormat = MutableStateFlow("12hour")
+    val timeFormat: StateFlow<String> = _timeFormat.asStateFlow()
+
+    /** Calendar snap interval from settings. */
+    private val _calendarSnap = MutableStateFlow(5)
+    val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _timeFormat.value = settings.timeFormat ?: "12hour"
+                _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
+            }
+        }
+    }
 
     /**
      * Toggle a checklist item's checked state and persist with dirty tracking.

@@ -49,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,6 +100,10 @@ fun ProjectsScreen(
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
+
+    // Settings for SnoozePickerDialog
+    val timeFormat by viewModel.timeFormat.collectAsState()
+    val calendarSnap by viewModel.calendarSnap.collectAsState()
 
     // Determine if manual sort is active (enables drag-to-reorder)
     val isManualSort = sortState.field == SortField.MANUAL
@@ -295,6 +300,8 @@ fun ProjectsScreen(
         // Snooze picker dialog
         if (showSnoozeDialog && currentMenuChit != null) {
             SnoozePickerDialog(
+                is24Hour = (timeFormat == "24hour"),
+                calendarSnap = calendarSnap,
                 onSnoozeSelected = { isoString ->
                     chitRepository?.let { repo ->
                         coroutineScope.launch {
@@ -345,6 +352,9 @@ private fun ProjectCard(
     onCreateChild: (String) -> Unit = {},
     onStatusChange: ((String, KanbanStatus) -> Unit)? = null
 ) {
+    // Phone-width detection for compact styling
+    val isPhone = LocalConfiguration.current.screenWidthDp <= 600
+
     // Determine project card background color from chit color
     val projectBgColor = remember(project.project.color) {
         if (!project.project.color.isNullOrBlank() && project.project.color != "transparent") {
@@ -388,7 +398,7 @@ private fun ProjectCard(
         colors = CardDefaults.cardColors(containerColor = projectBgColor),
         elevation = CwocChitCardStyle.cardElevation()
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(if (isPhone) 4.dp else 12.dp)) {
             // Project header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -399,6 +409,7 @@ private fun ProjectCard(
                     style = MaterialTheme.typography.titleSmall,
                     color = projectTextColor,
                     fontWeight = FontWeight.Bold,
+                    fontSize = if (isPhone) 14.sp else MaterialTheme.typography.titleSmall.fontSize,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -467,7 +478,8 @@ private fun ProjectCard(
                 KanbanBoard(
                     columns = project.children,
                     onChildTap = onChildTap,
-                    onStatusChange = onStatusChange
+                    onStatusChange = onStatusChange,
+                    isPhone = isPhone
                 )
             }
         }
@@ -478,7 +490,8 @@ private fun ProjectCard(
 private fun KanbanBoard(
     columns: Map<KanbanStatus, List<ChitEntity>>,
     onChildTap: (String) -> Unit,
-    onStatusChange: ((String, KanbanStatus) -> Unit)? = null
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
+    isPhone: Boolean = false
 ) {
     Row(
         modifier = Modifier
@@ -493,7 +506,8 @@ private fun KanbanBoard(
                 chits = chits,
                 onChildTap = onChildTap,
                 onStatusChange = onStatusChange,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                isPhone = isPhone
             )
         }
     }
@@ -507,6 +521,7 @@ private fun KanbanColumnView(
     onChildTap: (String) -> Unit,
     onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    isPhone: Boolean = false,
     // Q5: Add existing chit to this column
     onAddExisting: (() -> Unit)? = null,
     // Q6: Create new child in this column
@@ -519,13 +534,16 @@ private fun KanbanColumnView(
             .padding(4.dp)
     ) {
         // Column header with count badge
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(vertical = if (isPhone) 3.dp else 0.dp)
+        ) {
             Text(
                 text = status.displayName,
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF6B4E31),
                 fontWeight = FontWeight.Bold,
-                fontSize = 9.sp,
+                fontSize = if (isPhone) 11.sp else 9.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
@@ -570,7 +588,10 @@ private fun KanbanColumnView(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 2.dp)
+                    .padding(
+                        horizontal = if (isPhone) 4.dp else 0.dp,
+                        vertical = if (isPhone) 2.dp else 2.dp
+                    )
                     .combinedClickable(
                         onClick = { onChildTap(chit.id) },
                         onLongClick = { showStatusMenu = true }
@@ -599,8 +620,8 @@ private fun KanbanColumnView(
                         text = chit.title ?: "Untitled",
                         style = MaterialTheme.typography.bodySmall,
                         color = cardTextColor,
-                        fontSize = 10.sp,
-                        maxLines = 2,
+                        fontSize = if (isPhone) 12.sp else 10.sp,
+                        maxLines = if (isPhone) 1 else 2,
                         overflow = TextOverflow.Ellipsis,
                         textDecoration = if (status == KanbanStatus.COMPLETE || status == KanbanStatus.REJECTED)
                             TextDecoration.LineThrough else TextDecoration.None

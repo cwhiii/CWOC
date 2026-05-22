@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -189,7 +191,7 @@ fun RuleEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isNew) "New Rule" else "Edit Rule") },
+                title = { Text(if (isNew) "New Rule" else "Edit Rule", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -208,6 +210,7 @@ fun RuleEditorScreen(
                             )
                         }
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -249,7 +252,8 @@ fun RuleEditorScreen(
                     onValueChange = { viewModel.setName(it) },
                     label = { Text("Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Description field
@@ -258,7 +262,8 @@ fun RuleEditorScreen(
                     onValueChange = { viewModel.setDescription(it) },
                     label = { Text("Description") },
                     maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // ─── Trigger Section ────────────────────────────────────────
@@ -286,7 +291,8 @@ fun RuleEditorScreen(
                             label = { Text("Cron Expression") },
                             placeholder = { Text("0 9 * * *") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                     }
                     "event" -> {
@@ -337,7 +343,8 @@ fun RuleEditorScreen(
                     label = { Text("Action Config (JSON)") },
                     placeholder = { Text("{\"key\": \"value\"}") },
                     maxLines = 5,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // ─── Toggles ────────────────────────────────────────────────
@@ -418,7 +425,9 @@ fun RuleEditorScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Rule", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Rule", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to delete this rule? This cannot be undone.") },
             confirmButton = {
                 Button(
@@ -426,7 +435,7 @@ fun RuleEditorScreen(
                         viewModel.deleteRule(onSuccess = onNavigateBack)
                         showDeleteConfirm = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Delete")
                 }
@@ -464,7 +473,8 @@ private fun DropdownField(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor()
+                .menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,

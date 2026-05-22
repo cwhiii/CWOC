@@ -25,6 +25,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.CWOC">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -71,18 +72,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- Quick Add Widget -->
-        <receiver
-            android:name=".widget.quickadd.QuickAddWidgetProvider"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_quick_add_info" />
-        </receiver>
-
         <!-- Today Calendar Widget -->
         <receiver
             android:name=".widget.calendar.TodayCalendarWidgetProvider"
@@ -106,6 +95,151 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_upcoming_tasks_info" />
         </receiver>
+
+        <!-- Omni View Widget -->
+        <receiver
+            android:name=".widget.omniview.OmniViewWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_omni_view_info" />
+        </receiver>
+
+        <!-- Quick Capture Widget -->
+        <receiver
+            android:name=".widget.quickcapture.QuickCaptureWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_capture_info" />
+        </receiver>
+
+        <!-- Checklist Widget -->
+        <receiver
+            android:name=".widget.checklist.ChecklistWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_checklist_info" />
+        </receiver>
+
+        <!-- Upcoming Alarms Widget -->
+        <receiver
+            android:name=".widget.alarms.UpcomingAlarmsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_upcoming_alarms_info" />
+        </receiver>
+
+        <!-- Project Progress Widget -->
+        <receiver
+            android:name=".widget.progress.ProjectProgressWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_project_progress_info" />
+        </receiver>
+
+        <!-- Weather Widget -->
+        <receiver
+            android:name=".widget.weather.WeatherWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_weather_info" />
+        </receiver>
+
+        <!-- Weekly Overview Widget -->
+        <receiver
+            android:name=".widget.weekly.WeeklyOverviewWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_weekly_overview_info" />
+        </receiver>
+
+        <!-- HST Time Bar Widget -->
+        <receiver
+            android:name=".widget.hstbar.HstTimeBarWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hst_bar_info" />
+        </receiver>
+
+        <!-- Checklist Widget Config Activity -->
+        <activity
+            android:name=".widget.checklist.ChecklistWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CWOC.WidgetConfig">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Project Progress Widget Config Activity -->
+        <activity
+            android:name=".widget.progress.ProjectProgressConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CWOC.WidgetConfig">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Weather Widget Config Activity -->
+        <activity
+            android:name=".widget.weather.WeatherWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.CWOC.WidgetConfig">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Quick Capture Menu Activity (transparent overlay) -->
+        <activity
+            android:name=".widget.quickcapture.QuickCaptureMenuActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.CWOC.Transparent" />
+
+        <!-- Omni View RemoteViews Service -->
+        <service
+            android:name=".widget.omniview.OmniViewRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <!-- Checklist RemoteViews Service -->
+        <service
+            android:name=".widget.checklist.ChecklistRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
     </application>
 

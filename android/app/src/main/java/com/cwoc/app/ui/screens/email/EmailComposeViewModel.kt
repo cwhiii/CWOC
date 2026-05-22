@@ -175,6 +175,14 @@ class EmailComposeViewModel @Inject constructor(
     /** Undo send delay from settings (ms). */
     private var undoSendDelayMs: Long = 5000L
 
+    /** Time format from settings ("12hour" or "24hour"). */
+    private val _timeFormat = MutableStateFlow("12hour")
+    val timeFormat: StateFlow<String> = _timeFormat.asStateFlow()
+
+    /** Calendar snap interval from settings. */
+    private val _calendarSnap = MutableStateFlow(5)
+    val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
+
     init {
         // Observe contacts for autocomplete
         viewModelScope.launch {
@@ -192,6 +200,8 @@ class EmailComposeViewModel @Inject constructor(
                 } catch (_: Exception) {
                     5000L
                 }
+                _timeFormat.value = settings.timeFormat ?: "12hour"
+                _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
             }
         }
     }

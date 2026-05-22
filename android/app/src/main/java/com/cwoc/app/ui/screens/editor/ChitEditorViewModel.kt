@@ -16,6 +16,7 @@ import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.domain.tags.TagNode
 import com.cwoc.app.domain.tags.TagTreeParser
+import com.cwoc.app.notification.NotificationScheduler
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,6 +58,7 @@ class ChitEditorViewModel @Inject constructor(
     private val connectivityMonitor: ConnectivityMonitor,
     private val apiService: CwocApiService,
     private val settingsRepository: SettingsRepository,
+    private val notificationScheduler: NotificationScheduler,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -183,7 +185,7 @@ class ChitEditorViewModel @Inject constructor(
      * needed by the editor zone composables.
      */
     data class EditorSettings(
-        val timeFormat: String = "12h",
+        val timeFormat: String = "12hour",
         val calendarSnap: Int = 15,
         val defaultTimezone: String = "America/New_York",
         val customColors: List<String> = emptyList(),
@@ -321,7 +323,7 @@ class ChitEditorViewModel @Inject constructor(
                 }
 
                 _editorSettings.value = EditorSettings(
-                    timeFormat = settings.timeFormat ?: "12h",
+                    timeFormat = settings.timeFormat ?: "12hour",
                     calendarSnap = settings.calendarSnap?.toIntOrNull() ?: 15,
                     defaultTimezone = settings.defaultTimezone ?: "America/New_York",
                     customColors = customColorsList,
@@ -487,6 +489,47 @@ class ChitEditorViewModel @Inject constructor(
         }
     }
 
+    /** All non-deleted chits (id, title) for the send-to-chit picker, excluding current chit. */
+    private val _availableChitsForPicker = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val availableChitsForPicker: StateFlow<List<Pair<String, String>>> = _availableChitsForPicker.asStateFlow()
+
+    /** Load all chits for the picker (called lazily when Notes zone needs it). */
+    fun loadAvailableChitsForPicker() {
+        viewModelScope.launch {
+            val currentId = _formState.value.id
+            val allChits = chitDao.getAllNonDeletedSnapshot()
+            _availableChitsForPicker.value = allChits
+                .filter { it.id != currentId && !it.title.isNullOrBlank() }
+                .sortedBy { it.title?.lowercase() }
+                .map { it.id to (it.title ?: "") }
+        }
+    }
+
+    /**
+     * Send notes content to another chit (copy mode — appends to target's note field).
+     * Fetches the target chit, appends the current note, saves it, and marks it dirty for sync.
+     */
+    fun sendNoteToChit(targetChitId: String, mode: String) {
+        viewModelScope.launch {
+            val currentNote = _formState.value.note
+            if (currentNote.isBlank()) return@launch
+
+            val targetEntity = chitDao.getById(targetChitId) ?: return@launch
+            val existingNote = targetEntity.note ?: ""
+            val updatedNote = if (existingNote.isBlank()) currentNote
+                else "$existingNote\n\n$currentNote"
+
+            chitDao.upsert(targetEntity.copy(note = updatedNote, modifiedDatetime = Instant.now().toString()))
+            dirtyTracker.markDirty(targetChitId, setOf("note"))
+            syncPushEngine.pushSingle(targetChitId)
+
+            // If mode is "move", clear the source note
+            if (mode == "move") {
+                updateForm(_formState.value.copy(note = ""))
+            }
+        }
+    }
+
     /**
      * Searches chit titles for the [[link]] autocomplete in the Notes zone.
      * Returns up to 8 matching chits (excluding the current chit).
@@ -641,6 +684,9 @@ class ChitEditorViewModel @Inject constructor(
             // Persist to Room
             chitDao.upsert(entity)
 
+            // Schedule/reschedule local alarms for this chit
+            notificationScheduler.scheduleAlarms(entity)
+
             // Mark dirty with changed fields
             dirtyTracker.markDirty(entity.id, changedFields)
 
@@ -694,6 +740,7 @@ class ChitEditorViewModel @Inject constructor(
             )
 
             chitDao.upsert(entity)
+            notificationScheduler.scheduleAlarms(entity)
             dirtyTracker.markDirty(entity.id, changedFields)
 
             if (connectivityMonitor.isOnline.value) {
@@ -734,6 +781,7 @@ class ChitEditorViewModel @Inject constructor(
                 modifiedDatetime = Instant.now().toString()
             )
             chitDao.upsert(deletedEntity)
+            notificationScheduler.cancelAlarms(id)
             dirtyTracker.markDirty(id, setOf("deleted"))
             if (connectivityMonitor.isOnline.value) {
                 viewModelScope.launch {

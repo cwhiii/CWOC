@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.domain.chart.ChartDataTransformer
 import com.cwoc.app.domain.chart.MappedPoint
 import com.cwoc.app.domain.chart.TimeRange
+import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
 import java.time.LocalDate
 import java.time.YearMonth
@@ -391,12 +392,7 @@ private fun IndicatorsLogView(healthEntries: List<HealthEntry>) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text(
-                text = "Health Log",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF6B4E31)
-            )
+            CwocSectionHeading(text = "Health Log")
             Spacer(modifier = Modifier.height(8.dp))
         }
 

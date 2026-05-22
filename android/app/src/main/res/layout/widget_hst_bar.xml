@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hst_bar_background"
+    android:padding="6dp">
+
+    <!-- Progress bar track (full width, behind the fill) -->
+    <View
+        android:id="@+id/hst_progress_track"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_centerVertical="true"
+        android:background="#e8d5b7" />
+
+    <!-- Progress bar fill (width set programmatically via setViewLayoutWidth) -->
+    <View
+        android:id="@+id/hst_progress_bar"
+        android:layout_width="1dp"
+        android:layout_height="8dp"
+        android:layout_centerVertical="true"
+        android:layout_alignStart="@id/hst_progress_track"
+        android:background="@drawable/hst_bar_gradient" />
+
+    <!-- HST time text overlay -->
+    <TextView
+        android:id="@+id/hst_time_text"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:text="00.000 sd"
+        android:textColor="#4a2c2a"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:shadowColor="#FFFFFF"
+        android:shadowDx="1"
+        android:shadowDy="1"
+        android:shadowRadius="1"
+        android:fontFamily="serif" />
+
+</RelativeLayout>

@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Prefix options matching the web contact editor.
@@ -71,7 +72,8 @@ fun DropdownWithCustom(
                     .menuAnchor()
                     .fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             ExposedDropdownMenu(
@@ -122,7 +124,8 @@ fun DropdownWithCustom(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                textStyle = MaterialTheme.typography.bodyMedium
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }

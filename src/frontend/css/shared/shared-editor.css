@@ -234,6 +234,18 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     background-color: rgba(42, 93, 176, 0.08);
 }
 
+/* ── Prefill Highlight (pulsing outline for pre-filled fields) ──────────── */
+.cwoc-prefill-highlight {
+    outline: 2px solid #8b5a2b;
+    outline-offset: 2px;
+    border-radius: 4px;
+    animation: cwoc-prefill-pulse 1.5s ease-in-out 2;
+}
+@keyframes cwoc-prefill-pulse {
+    0%, 100% { outline-color: #8b5a2b; }
+    50% { outline-color: #d4a574; }
+}
+
 /* ── Zone Container Pattern (collapsible sections) ─────────────────────── */
 .zone-container {
     border: 1px solid var(--border-color);

@@ -1,5 +1,7 @@
 package com.cwoc.app.ui.screens.editor.zones
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
@@ -15,6 +18,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -25,8 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.google.gson.Gson
@@ -42,6 +45,10 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.components.DrumRollerTimePicker
 
 // ─── Data Model ─────────────────────────────────────────────────────────────────
 
@@ -116,7 +123,8 @@ data class AlertItem(
 fun AlertsZone(
     alertsJson: String?,
     onAlertsChanged: (String?) -> Unit,
-    timeFormat: String = "12h"
+    timeFormat: String = "12hour",
+    calendarSnap: Int = 5
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var showAddForm by remember { mutableStateOf(false) }
@@ -174,9 +182,10 @@ fun AlertsZone(
 
             // --- Add Alert button / form ---
             if (showAddForm) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 AddAlertForm(
                     timeFormat = timeFormat,
+                    calendarSnap = calendarSnap,
                     onAdd = { newAlert ->
                         val updated = alerts + newAlert
                         onAlertsChanged(serializeAlerts(updated))
@@ -188,7 +197,10 @@ fun AlertsZone(
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = { showAddForm = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("Add Alert")
                 }
@@ -272,6 +284,7 @@ private fun AlertRow(
 @Composable
 private fun AddAlertForm(
     timeFormat: String,
+    calendarSnap: Int = 5,
     onAdd: (AlertItem) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -349,11 +362,15 @@ private fun AddAlertForm(
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                         label = { Text("Weather Condition") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = condExpanded) },
-                        singleLine = true
+                        singleLine = true,
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     ExposedDropdownMenu(
                         expanded = condExpanded,
-                        onDismissRequest = { condExpanded = false }
+                        onDismissRequest = { condExpanded = false },
+                        modifier = Modifier
+                            .background(CwocDialogDefaults.containerColor)
+                            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                     ) {
                         WEATHER_CONDITIONS.forEach { (value, label2) ->
                             DropdownMenuItem(
@@ -379,7 +396,8 @@ private fun AddAlertForm(
                         placeholder = { Text(if (weatherCondition.contains("wind")) "km/h" else "°C") },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        )
+                        ),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                 }
             } else {
@@ -414,7 +432,8 @@ private fun AddAlertForm(
                             label = { Text("#") },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                                 keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                            )
+                            ),
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             listOf("minutes" to "Min", "hours" to "Hr", "days" to "Day", "weeks" to "Wk").forEach { (value, label2) ->
@@ -469,10 +488,11 @@ private fun AddAlertForm(
                     modifier = Modifier.weight(1f),
                     label = { Text("Time") },
                     placeholder = { Text("Tap to set time") },
-                    singleLine = true
+                    singleLine = true,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { showTimePicker = true }) {
+                Button(onClick = { showTimePicker = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Text("Pick")
                 }
             }
@@ -491,7 +511,8 @@ private fun AddAlertForm(
             onValueChange = { label = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Label (optional)") },
-            singleLine = true
+            singleLine = true,
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // L3: Days of week selection (shown for alarm type)
@@ -555,7 +576,8 @@ private fun AddAlertForm(
                     label = { Text("H") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Text(":")
                 OutlinedTextField(
@@ -564,7 +586,8 @@ private fun AddAlertForm(
                     label = { Text("M") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Text(":")
                 OutlinedTextField(
@@ -573,7 +596,8 @@ private fun AddAlertForm(
                     label = { Text("S") },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
             }
 
@@ -631,40 +655,30 @@ private fun AddAlertForm(
                     "alarm" -> absoluteTime != null
                     "timer" -> true
                     else -> true
-                }
+                },
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Add")
             }
         }
     }
 
-    // --- Time Picker Dialog ---
+    // --- Time Picker (DrumRollerTimePicker) ---
     if (showTimePicker) {
         val initialTime = absoluteTime?.let { parseTimeString(it) } ?: LocalTime.NOON
-        val timePickerState = rememberTimePickerState(
+        DrumRollerTimePicker(
             initialHour = initialTime.hour,
             initialMinute = initialTime.minute,
-            is24Hour = (timeFormat == "24h")
-        )
-
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val time = LocalTime.of(timePickerState.hour, timePickerState.minute)
-                    absoluteTime = time.format(DateTimeFormatter.ofPattern("HH:mm"))
-                    showTimePicker = false
-                }) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("Cancel")
-                }
-            },
-            title = { Text("Select Alert Time") },
-            text = { TimePicker(state = timePickerState) }
+            is24Hour = (timeFormat == "24hour"),
+            minuteStep = calendarSnap,
+            onDismiss = { showTimePicker = false },
+            onTimeSelected = { hour, minute ->
+                val time = LocalTime.of(hour, minute)
+                absoluteTime = time.format(DateTimeFormatter.ofPattern("HH:mm"))
+                showTimePicker = false
+            }
         )
     }
 }
@@ -695,11 +709,15 @@ private fun AlertTypeSelector(
                 .menuAnchor(),
             label = { Text("Type") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            singleLine = true
+            singleLine = true,
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             ALERT_TYPES.forEach { type ->
                 DropdownMenuItem(
@@ -751,11 +769,15 @@ private fun OffsetPicker(
                 .menuAnchor(),
             label = { Text("Offset before event") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            singleLine = true
+            singleLine = true,
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             OFFSET_OPTIONS.forEach { minutes ->
                 DropdownMenuItem(
@@ -916,7 +938,7 @@ internal fun formatOffsetMinutes(minutes: Int): String {
  */
 private fun formatTimeForDisplay(timeStr: String, timeFormat: String): String {
     val time = parseTimeString(timeStr) ?: return timeStr
-    val pattern = if (timeFormat == "24h") "HH:mm" else "h:mm a"
+    val pattern = if (timeFormat == "24hour") "HH:mm" else "h:mm a"
     return time.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
 }
 

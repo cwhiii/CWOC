@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,8 +50,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.ui.components.CwocPagePanel
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 import com.cwoc.app.ui.util.DateUtils
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Trash screen displaying all soft-deleted chits with restore and purge actions.
@@ -92,7 +96,7 @@ fun TrashScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(pageTitle) },
+                title = { Text(pageTitle, style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -112,6 +116,7 @@ fun TrashScreen(
                             Icon(Icons.Default.Delete, "Delete Selected", tint = MaterialTheme.colorScheme.error)
                         }
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -119,10 +124,14 @@ fun TrashScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        CwocPagePanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(8.dp)
+        ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
             // Filter chips row (Task 38.1)
             TrashFilterChips(
@@ -167,6 +176,7 @@ fun TrashScreen(
                 )
             }
         }
+        }
     }
 
     // Purge confirmation dialog
@@ -185,13 +195,15 @@ fun TrashScreen(
     if (showBulkPurgeConfirm) {
         AlertDialog(
             onDismissRequest = { showBulkPurgeConfirm = false },
-            title = { Text("Permanently Delete ${selectedIds.size} Chit(s)") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Permanently Delete ${selectedIds.size} Chit(s)", style = CwocDialogDefaults.titleStyle) },
             text = { Text("These chits will be permanently deleted. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.bulkPurge()
                     showBulkPurgeConfirm = false
-                }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
+                }, colors = CwocDialogDefaults.dangerButtonColors()) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkPurgeConfirm = false }) { Text("Cancel") }
@@ -389,7 +401,7 @@ private fun TrashChitCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    OutlinedButton(onClick = onRestore) {
+                    OutlinedButton(onClick = onRestore, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                         Icon(
                             imageVector = Icons.Default.RestoreFromTrash,
                             contentDescription = null,
@@ -398,7 +410,7 @@ private fun TrashChitCard(
                         Text("Restore")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(onClick = onPurge) {
+                    OutlinedButton(onClick = onPurge, colors = CwocButtonDefaults.dangerColors(), border = CwocButtonDefaults.dangerBorder, shape = CwocButtonDefaults.outsetShape) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = null,
@@ -420,12 +432,14 @@ private fun PurgeConfirmationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Permanently Delete?") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Permanently Delete?", style = CwocDialogDefaults.titleStyle) },
         text = {
             Text("\"$chitTitle\" will be permanently deleted. This cannot be undone.")
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = onConfirm, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text(
                     text = "Purge",
                     color = MaterialTheme.colorScheme.error

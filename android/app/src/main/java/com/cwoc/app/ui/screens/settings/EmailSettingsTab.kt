@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -47,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -56,10 +58,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Switch
 import com.cwoc.app.ui.components.MarkdownRenderer
+import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.screens.settings.components.CollapsibleSection
 import com.cwoc.app.ui.screens.settings.components.SignatureEditorModal
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Email Settings tab with 4 collapsible sections:
@@ -113,7 +118,7 @@ fun EmailSettingsTab(
             onTestConnection = onTestConnection
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 2: Privacy & Sending
         PrivacySendingSection(
@@ -126,7 +131,7 @@ fun EmailSettingsTab(
             onNavigateToAttachments = onNavigateToAttachments
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 3: Display & Bundles
         DisplayBundlesSection(
@@ -138,7 +143,7 @@ fun EmailSettingsTab(
             onToggleBundle = onToggleBundle
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 4: Badges (merged from separate tab per Requirement 29.1)
         BadgesSection(
@@ -209,7 +214,7 @@ private fun AccountsSyncingSection(
                     }
                 }
 
-                OutlinedButton(onClick = { showAddDialog = true }) {
+                OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Account")
@@ -218,11 +223,7 @@ private fun AccountsSyncingSection(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Sync settings
-                Text(
-                    text = "Sync Settings",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Sync Settings")
 
                 // Max Pull — free-form number input (1–1000)
                 var maxPullError by remember(maxPull) {
@@ -256,7 +257,8 @@ private fun AccountsSyncingSection(
                         { Text(maxPullError!!, color = MaterialTheme.colorScheme.error) }
                     } else null,
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Check Mail interval dropdown
@@ -281,7 +283,10 @@ private fun AccountsSyncingSection(
                 ) {
                     Button(
                         onClick = onBackfillTriggered,
-                        enabled = !isBackfillInProgress
+                        enabled = !isBackfillInProgress,
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
                     ) {
                         if (isBackfillInProgress) {
                             androidx.compose.material3.CircularProgressIndicator(
@@ -347,7 +352,9 @@ private fun AccountsSyncingSection(
         val account = accounts[index]
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Account") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Account", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Remove \"${account.nickname.ifEmpty { account.email }}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -355,7 +362,7 @@ private fun AccountsSyncingSection(
                     newAccounts.removeAt(index)
                     onAccountsChanged(serializeEmailAccountsJson(newAccounts))
                     showDeleteConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -420,7 +427,7 @@ private fun EmailAccountCard(
                     modifier = Modifier.padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    HorizontalDivider()
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("IMAP: ${account.imapHost}:${account.imapPort}", style = MaterialTheme.typography.bodySmall)
                     Text("SMTP: ${account.smtpHost}:${account.smtpPort}", style = MaterialTheme.typography.bodySmall)
@@ -463,29 +470,39 @@ private fun EmailAccountEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(value = nickname, onValueChange = { nickname = it },
-                    label = { Text("Nickname") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Nickname") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = email, onValueChange = { email = it },
-                    label = { Text("Email Address") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Email Address") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = imapHost, onValueChange = { imapHost = it },
-                    label = { Text("IMAP Host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("IMAP Host") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = imapPort, onValueChange = { imapPort = it },
-                    label = { Text("IMAP Port") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("IMAP Port") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = smtpHost, onValueChange = { smtpHost = it },
-                    label = { Text("SMTP Host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("SMTP Host") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = smtpPort, onValueChange = { smtpPort = it },
-                    label = { Text("SMTP Port") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("SMTP Port") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = username, onValueChange = { username = it },
-                    label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = password, onValueChange = { password = it },
                     label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = PasswordVisualTransformation())
+                    visualTransformation = PasswordVisualTransformation(),
+                    colors = CwocInputDefaults.outlinedColors())
 
                 // ─── Test Connection Button ─────────────────────────────────────
                 Spacer(modifier = Modifier.height(8.dp))
@@ -500,7 +517,10 @@ private fun EmailAccountEditDialog(
                         }
                     },
                     enabled = !testState.isTesting && email.isNotBlank() && imapHost.isNotBlank() && smtpHost.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text(if (testState.isTesting) "Testing..." else "Test Connection")
                 }
@@ -626,11 +646,7 @@ private fun PrivacySendingSection(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Signature section — Requirements 19.3, 19.4, 19.5, 19.6, 19.7
-                Text(
-                    text = "Signature",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Signature")
 
                 // Inline preview rendering stored markdown or placeholder
                 Box(
@@ -661,7 +677,7 @@ private fun PrivacySendingSection(
                 }
 
                 // "Edit Signature" button
-                OutlinedButton(onClick = { showSignatureEditor = true }) {
+                OutlinedButton(onClick = { showSignatureEditor = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Edit, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Edit Signature")
@@ -670,11 +686,7 @@ private fun PrivacySendingSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Attachments section — Requirements 19.8, 19.9
-                Text(
-                    text = "Attachments",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Attachments")
 
                 Text(
                     text = "Attachment limits are configured in Administration → Data Management",
@@ -682,7 +694,7 @@ private fun PrivacySendingSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                OutlinedButton(onClick = onNavigateToAttachments) {
+                OutlinedButton(onClick = onNavigateToAttachments, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Text("View All Attachments")
                 }
             }
@@ -769,11 +781,7 @@ private fun DisplayBundlesSection(
 
                 // Auto-Bundles section
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Auto-Bundles",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Auto-Bundles")
 
                 if (autoBundles.isEmpty()) {
                     // Placeholder when no auto-bundles exist
@@ -864,7 +872,8 @@ private fun EmailDropdown(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth()
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = dropdownExpanded,
@@ -1014,11 +1023,7 @@ private fun BadgesSection(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Built-in detectors section
-            Text(
-                text = "Built-in Detectors",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
+            CwocSectionHeading(text = "Built-in Detectors")
 
             BUILT_IN_BADGE_DETECTORS.forEach { builtIn ->
                 val isDisabled = config.disabled.contains(builtIn.id)
@@ -1063,11 +1068,7 @@ private fun BadgesSection(
 
             // Category toggles
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Category Toggles",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
+            CwocSectionHeading(text = "Category Toggles")
 
             BADGE_CATEGORIES.forEach { category ->
                 val isCatDisabled = config.disabledCategories.contains(category)
@@ -1098,11 +1099,7 @@ private fun BadgesSection(
 
             // Custom detectors section
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Custom Detectors",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
+            CwocSectionHeading(text = "Custom Detectors")
 
             if (customDetectors.isEmpty()) {
                 Text(
@@ -1151,7 +1148,7 @@ private fun BadgesSection(
                 }
             }
 
-            OutlinedButton(onClick = { showAddDialog = true }) {
+            OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Add Custom Detector")
@@ -1195,7 +1192,9 @@ private fun BadgesSection(
     showDeleteConfirm?.let { detector ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Detector") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Detector", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Remove \"${detector.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -1203,7 +1202,7 @@ private fun BadgesSection(
                     val newConfig = config.copy(customDetectors = newCustom)
                     onDetectorsChanged(serializeBadgeConfig(newConfig))
                     showDeleteConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -1245,7 +1244,9 @@ private fun CustomDetectorEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(
                 modifier = Modifier
@@ -1265,7 +1266,8 @@ private fun CustomDetectorEditDialog(
                     singleLine = true,
                     isError = nameError != null,
                     supportingText = nameError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Category dropdown (Req 21.2)
@@ -1279,7 +1281,8 @@ private fun CustomDetectorEditDialog(
                         readOnly = true,
                         label = { Text("Category") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     ExposedDropdownMenu(
                         expanded = categoryExpanded,
@@ -1304,7 +1307,8 @@ private fun CustomDetectorEditDialog(
                     label = { Text("Keywords") },
                     placeholder = { Text("e.g. shipped, tracking, delivery") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Text(
                     text = "Comma-separated. At least one must appear in email text. May be empty.",
@@ -1325,7 +1329,8 @@ private fun CustomDetectorEditDialog(
                     isError = regexError != null,
                     supportingText = regexError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Text(
                     text = "Must have one capture group for the code/value to extract.",
@@ -1346,7 +1351,8 @@ private fun CustomDetectorEditDialog(
                     isError = urlError != null,
                     supportingText = urlError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Text(
                     text = "Use {code} where the matched value should be inserted.",
@@ -1365,7 +1371,8 @@ private fun CustomDetectorEditDialog(
                         readOnly = true,
                         label = { Text("Button Label") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = labelExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     ExposedDropdownMenu(
                         expanded = labelExpanded,

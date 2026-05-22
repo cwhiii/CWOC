@@ -2335,7 +2335,7 @@ Omni View rendering, HST bar, section orchestration, email pagination, and filte
 | `displayChits()` | Main render dispatcher — filter (including hide-declined RSVP filter), sort, expand recurrence, and render the active view |
 | `_updateTabCounts(filteredChits)` | Update tab labels with counts of displayed chits per tab |
 | `_applyChitDisplayOptions()` | Apply visual options — fade past events and highlight overdue chits |
-| `DOMContentLoaded handler` | Main init — wires up sidebar, hotkeys, mobile UI, weather refresh, resize handler, notification inbox, and PWA install button (`#pwa-install-btn` → `handleInstallClick()` from `pwa-register.js`) |
+| `DOMContentLoaded handler` | Main init — wires up sidebar, hotkeys, mobile UI, weather refresh, resize handler, notification inbox, and PWA install button (`#pwa-install-btn` → `handleInstallClick()` from `pwa-register.js`). Includes mobile swipe on header bar to cycle C CAPTN tabs, and mobile swipe on `#chit-list` to navigate calendar periods (calls `previousPeriod()`/`nextPeriod()`) |
 
 #### main.js
 
@@ -2981,7 +2981,8 @@ Editor initialization, zone management, owner chip rendering, and DOMContentLoad
 | `toggleZone(event, sectionId, contentId)` | Toggle a zone section's expand/collapse state (delegates to `cwocToggleZone`) |
 | `_toggleSection(contentId, button)` | Toggle a section's visibility between hidden and visible |
 | `resetEditorForNewChit()` | Reset all editor fields, zones, alerts, tags, and weather for a blank new chit; calls `initPeopleSharingForNewChit()` and `_renderOwnerChipForCurrentUser()` |
-| `_collapseAllZonesForNewChit()` | Collapse all zones, then expand only the zone matching the source tab (no `sharingSection` entry) |
+| `_collapseAllZonesForNewChit()` | Collapse all zones, then expand only the zones matching the source tab per `tabZoneMap` (Tasks → task+dates, Projects → projects+checklist); applies auto-focus logic after 200ms: Notes → focus `#note`, Checklists → focus first checklist input, Tasks → set due date mode with `.cwoc-prefill-highlight` on `#due_datetime` |
+| `tabZoneMap` | (local const) Maps each C CAPTN tab name to an array of `[sectionId, contentId]` pairs to expand for new chits |
 | `setSelectValue(selectElement, value)` | Set a `<select>` element's value with case-insensitive matching |
 | `initializeFlatpickr(selector, options)` | Initialize a Flatpickr date picker on a selector with error handling |
 | `_renderOwnerChip(chit)` | Render the owner chip inside `#cwoc-owner-chip-container` for an existing chit; resolves profile image from `getCurrentUser()` or `_allUsersCache` |
@@ -3001,11 +3002,12 @@ Mobile swipe-based zone navigation for the chit editor. On mobile (≤768px), tr
 | `_mobileZoneOrder` | Ordered array of zone definitions for mobile navigation (Overview, Date, Task, Note, Checklist, Tags, People, Location, Alerts, Projects, Color, Health, Attachments, Email, Habits) |
 | `_mobileCurrentZoneIdx` | Current zone index in mobile view |
 | `_mobileZoneModeActive` | Whether mobile zone mode is currently active |
-| `_mobileTabZoneMap` | Map of dashboard tab names to zone section IDs for determining start zone |
+| `_mobileTabZoneMap` | Map of dashboard tab names to zone section IDs for determining start zone (Projects → projectsSection, Indicators → healthIndicatorsSection) |
+| `_mobileAutoFocusDone` | Flag to ensure auto-focus fires only once per editor session for new chits |
 | `_getMobileVisibleZones()` | Get list of currently visible/available zones (filters out hidden ones) |
 | `_isZoneEmpty(zoneInfo)` | Check if a zone has meaningful content (for greying out in zone list) |
 | `_getMobileStartZoneIdx()` | Get the starting zone index based on the source tab from localStorage |
-| `_mobileShowZone(idx)` | Show a specific zone by index, hiding all others |
+| `_mobileShowZone(idx)` | Show a specific zone by index, hiding all others; for new chits, applies auto-focus on first display (Notes → focus textarea, Checklists → focus input, Tasks → set due date mode) |
 | `_mobileNextZone()` | Navigate to next zone (wraps around) |
 | `_mobilePrevZone()` | Navigate to previous zone (wraps around) |
 | `_createMobileZoneHeader()` | Create the sticky mobile zone navigation header element |
@@ -3860,6 +3862,7 @@ Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-cont
 | Tablet (≤768px) | Full-width editor, wrapped zone headers |
 | Mobile (≤480px) | Stacked header, mobile actions trigger/modal |
 | Mobile Actions Modal | Slide-up modal for mobile button access |
+| Prefill Highlight (`.cwoc-prefill-highlight`) | Pulsing outline animation for prefilled fields (2px solid #8b5a2b, pulses to #d4a574, 1.5s ease-in-out, 2 iterations); removed on first focus |
 | User Switcher (`.cwoc-user-switcher`) | User switcher button, dropdown, and password prompt modal styles |
 | Logout Button (`.cwoc-logout-btn`) | Logout button styling in the header |
 

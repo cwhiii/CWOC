@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
     compute_system_tags, _build_export_envelope, ensure_tags_in_settings,
-    get_next_sync_version,
+    get_next_sync_version, get_db_connection,
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
@@ -342,7 +342,7 @@ def get_all_chits(request: Request):
     conn = None
     try:
         user_id = request.state.user_id
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         chits = []
@@ -581,7 +581,7 @@ def get_chit(chit_id: str, request: Request):
     conn = None
     try:
         user_id = request.state.user_id
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
         row = cursor.fetchone()

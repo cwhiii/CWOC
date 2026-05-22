@@ -16,6 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * BB3: Reusable text input prompt dialog.
@@ -45,7 +48,8 @@ fun CwocPromptDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column {
                 OutlinedTextField(
@@ -54,7 +58,7 @@ fun CwocPromptDialog(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text(placeholder) },
                     singleLine = true,
-                    colors = cwocTextFieldColors()
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -62,7 +66,8 @@ fun CwocPromptDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(inputValue) },
-                enabled = inputValue.isNotBlank()
+                enabled = inputValue.isNotBlank(),
+                colors = CwocDialogDefaults.confirmButtonColors()
             ) {
                 Text(confirmLabel)
             }
@@ -72,6 +77,6 @@ fun CwocPromptDialog(
                 Text(cancelLabel)
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor
     )
 }

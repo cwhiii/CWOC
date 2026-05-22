@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -86,7 +87,8 @@ fun NotebookScreen(
     onNavigateToEditor: (String) -> Unit,
     viewModel: NotebookViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    onQuickAlert: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -124,7 +126,8 @@ fun NotebookScreen(
         ChitListScaffold(
             title = "Notebook",
             syncState = syncState,
-            onFabClick = { onNavigateToEditor("new") }
+            onFabClick = { onNavigateToEditor("new") },
+            onFabLongPress = onQuickAlert
         ) { paddingValues ->
             Column(modifier = Modifier.padding(paddingValues)) {
                 when {
@@ -179,29 +182,41 @@ fun NotebookScreen(
                     }
                     else -> {
                         // Masonry layout matching Notes view — with drag-to-reorder when manual sort
-                        ReorderableStaggeredGrid(
-                            items = filteredSortedChits,
-                            key = { it.id },
-                            columns = StaggeredGridCells.Adaptive(160.dp),
-                            onReorder = { fromIndex, toIndex ->
-                                viewModel.reorderNotebook(filteredSortedChits, fromIndex, toIndex)
-                            },
-                            enabled = sortState.field == SortField.MANUAL,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 8.dp),
-                            verticalItemSpacing = 8.dp,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) { chit, isDragging ->
-                            NotebookCard(
-                                chit = chit,
-                                onClick = { onNavigateToEditor(chit.id) },
-                                onLongClick = { quickEditChit = chit },
-                                onToggleChecklistItem = { itemIndex ->
-                                    viewModel.toggleChecklistItem(chit.id, itemIndex)
+                        // Single column on phone (≤600dp), responsive multi-column on tablet
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            val isPhone = maxWidth <= 600.dp
+                            val gridColumns = if (isPhone) {
+                                StaggeredGridCells.Fixed(1)
+                            } else {
+                                StaggeredGridCells.Adaptive(160.dp)
+                            }
+
+                            ReorderableStaggeredGrid(
+                                items = filteredSortedChits,
+                                key = { it.id },
+                                columns = gridColumns,
+                                onReorder = { fromIndex, toIndex ->
+                                    viewModel.reorderNotebook(filteredSortedChits, fromIndex, toIndex)
                                 },
-                                currentUserId = viewModel.currentUserId
-                            )
+                                enabled = sortState.field == SortField.MANUAL,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 8.dp),
+                                verticalItemSpacing = 8.dp,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) { chit, isDragging ->
+                                NotebookCard(
+                                    chit = chit,
+                                    onClick = { onNavigateToEditor(chit.id) },
+                                    onLongClick = { quickEditChit = chit },
+                                    onToggleChecklistItem = { itemIndex ->
+                                        viewModel.toggleChecklistItem(chit.id, itemIndex)
+                                    },
+                                    currentUserId = viewModel.currentUserId
+                                )
+                            }
                         }
                     }
                 }

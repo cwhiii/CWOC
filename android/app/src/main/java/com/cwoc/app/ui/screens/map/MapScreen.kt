@@ -61,6 +61,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 private val ParchmentBrown = Color(0xFF6B4E31)
 
@@ -333,7 +334,8 @@ private fun MapSearchBar(
                         Icon(Icons.Default.Clear, "Clear", modifier = Modifier.size(18.dp))
                     }
                 }
-            }
+            },
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // "Go to" field
@@ -355,7 +357,8 @@ private fun MapSearchBar(
                         Icon(Icons.Default.Search, "Go", modifier = Modifier.size(18.dp))
                     }
                 }
-            }
+            },
+            colors = CwocInputDefaults.outlinedColors()
         )
     }
 }

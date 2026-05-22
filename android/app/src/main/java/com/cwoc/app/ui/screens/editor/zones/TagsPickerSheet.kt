@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.editor.zones
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
@@ -30,8 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -47,6 +49,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.tags.TagNode
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocPrimary
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * A ModalBottomSheet-based tag picker that displays the full tag tree
@@ -93,8 +99,9 @@ fun TagsPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground
+        containerColor = CwocDialogDefaults.containerColor,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier
@@ -141,10 +148,7 @@ fun TagsPickerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Search tags…") },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -180,7 +184,7 @@ fun TagsPickerSheet(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -208,7 +212,7 @@ fun TagsPickerSheet(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -237,7 +241,7 @@ fun TagsPickerSheet(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(12.dp))
 
             // ─── Create New Tag Section ─────────────────────────────────────
@@ -252,10 +256,7 @@ fun TagsPickerSheet(
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Create new tag…") },
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 IconButton(
@@ -432,7 +433,10 @@ private fun TagTreeRow(
             // I3: Context menu for edit/delete
             androidx.compose.material3.DropdownMenu(
                 expanded = showContextMenu,
-                onDismissRequest = { showContextMenu = false }
+                onDismissRequest = { showContextMenu = false },
+                modifier = Modifier
+                    .background(CwocDialogDefaults.containerColor)
+                    .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
             ) {
                 if (onEdit != null) {
                     androidx.compose.material3.DropdownMenuItem(

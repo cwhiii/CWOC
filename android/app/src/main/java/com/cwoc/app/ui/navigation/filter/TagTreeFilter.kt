@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Data class representing a tag available for filtering.
@@ -146,14 +146,8 @@ fun TagTreeFilter(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = FilterBrownText),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FilterBrownBorder,
-                unfocusedBorderColor = FilterBrownBorder.copy(alpha = 0.6f),
-                focusedContainerColor = FilterParchmentBg,
-                unfocusedContainerColor = FilterParchmentBg,
-                cursorColor = FilterBrownBorder
-            ),
-            shape = RoundedCornerShape(3.dp)
+            shape = RoundedCornerShape(3.dp),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(6.dp))

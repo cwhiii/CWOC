@@ -64,4 +64,21 @@
     <string name="widget_quick_add_desc">Quick-add a new chit</string>
     <string name="widget_today_calendar_desc">Today\'s calendar events</string>
     <string name="widget_upcoming_tasks_desc">Upcoming tasks</string>
+    <string name="widget_hst_bar_desc">Holeman Simplified Time progress bar</string>
+    <string name="widget_upcoming_alarms_desc">Next 3 upcoming alarms with countdown timers</string>
+    <string name="widget_project_progress_desc">Project completion progress bar</string>
+    <string name="widget_quick_capture_desc">Quickly create a new chit of any type</string>
+    <string name="widget_weekly_overview_desc">7-day strip with chit counts per day</string>
+    <string name="widget_weather_desc">Current weather conditions for a chosen location</string>
+    <string name="widget_omni_view_desc">Omni View widget showing filtered chits</string>
+    <string name="widget_checklist_desc">Interactive checklist with checkboxes</string>
+
+    <!-- Widget Empty States -->
+    <string name="widget_empty_no_chits">No chits match current filters</string>
+    <string name="widget_empty_no_alarms">No upcoming alarms</string>
+    <string name="widget_empty_no_checklists">No checklists available</string>
+    <string name="widget_checklist_unavailable">Checklist unavailable</string>
+    <string name="widget_project_unavailable">Project unavailable</string>
+    <string name="widget_weather_unavailable">Weather unavailable</string>
+    <string name="widget_auth_guard">Please log in</string>
 </resources>

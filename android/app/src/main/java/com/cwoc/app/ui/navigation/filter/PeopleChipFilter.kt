@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Data class representing a person (contact or system user) for the filter.
@@ -85,14 +85,8 @@ fun PeopleChipFilter(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = FilterBrownText),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FilterBrownBorder,
-                unfocusedBorderColor = FilterBrownBorder.copy(alpha = 0.6f),
-                focusedContainerColor = FilterParchmentBg,
-                unfocusedContainerColor = FilterParchmentBg,
-                cursorColor = FilterBrownBorder
-            ),
-            shape = RoundedCornerShape(3.dp)
+            shape = RoundedCornerShape(3.dp),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(6.dp))

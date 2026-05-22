@@ -21,7 +21,7 @@ from src.backend.db import (
     get_next_sync_version,
     serialize_json_field,
 )
-from src.backend.routes.audit import insert_audit_entry
+from src.backend.routes.audit import compute_audit_diff, insert_audit_entry
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,7 @@ def get_sync_changes(
             include_set = {"chits"}
 
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
 
         # Get the current server version (next_version - 1)
@@ -267,6 +268,8 @@ def get_sync_changes(
                 settings["custom_view_filters"] = deserialize_json_field(settings.get("custom_view_filters"))
                 settings["hidden_views"] = deserialize_json_field(settings.get("hidden_views"))
                 settings["kiosk_selected_tags"] = deserialize_json_field(settings.get("kiosk_selected_tags"))
+                settings["omni_layout"] = deserialize_json_field(settings.get("omni_layout"))
+                settings["omni_locked_filters"] = deserialize_json_field(settings.get("omni_locked_filters"))
                 response["settings"] = settings
             else:
                 response["settings"] = None
@@ -462,6 +465,7 @@ _SETTINGS_JSON_FIELDS = frozenset([
     "active_clocks", "saved_locations", "recent_tags", "custom_view_filters",
     "email_account", "email_accounts", "view_order",
     "hidden_views", "kiosk_selected_tags", "smart_actions_config",
+    "omni_layout", "omni_locked_filters",
 ])
 
 # All valid settings columns that can be pushed from a mobile client
@@ -746,6 +750,31 @@ _UPDATE_CHIT_SQL = """
 """
 
 
+def _resolve_sync_actor(request: Request, cursor) -> str:
+    """Determine the actor string for audit entries in a sync push request.
+
+    Priority:
+    1. device:<device_name> (from device_tokens table via request.state.device_id)
+    2. device:<device_id> (if name lookup fails or returns empty)
+    3. username (from request.state.username)
+    4. "web" (final fallback)
+    """
+    device_id = getattr(request.state, "device_id", None)
+    if device_id:
+        try:
+            cursor.execute(
+                "SELECT device_name FROM device_tokens WHERE id = ?",
+                (device_id,),
+            )
+            device_row = cursor.fetchone()
+            if device_row and device_row[0]:
+                return f"device:{device_row[0]}"
+        except Exception:
+            pass
+        return f"device:{device_id}"
+    return getattr(request.state, "username", None) or "web"
+
+
 @sync_router.post("/api/sync/push")
 async def sync_push(request: Request):
     """Push local changes from a mobile client to the server.
@@ -779,6 +808,9 @@ async def sync_push(request: Request):
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
+
+        # Resolve actor once for all audit entries in this request
+        actor = _resolve_sync_actor(request, cursor)
 
         current_time = datetime.utcnow().isoformat()
         chit_results = []
@@ -815,6 +847,12 @@ async def sync_push(request: Request):
                         "sync_version": sync_version,
                     })
 
+                    # Audit: log chit creation
+                    try:
+                        insert_audit_entry(conn, "chit", chit_id, "created", actor, entity_summary=client_chit.get("title"))
+                    except Exception as e:
+                        logger.error(f"Sync push: failed to audit chit create for {chit_id}: {e}")
+
                 else:
                     server_sync_version = existing[0] or 0
                     server_owner_id = existing[1]
@@ -822,6 +860,13 @@ async def sync_push(request: Request):
 
                     if server_sync_version <= client_last_known:
                         # ── UPDATE: no conflict — server hasn't changed since client last saw it ──
+
+                        # Fetch full existing row before UPDATE for audit diff
+                        cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
+                        pre_update_row = cursor.fetchone()
+                        pre_update_columns = [col[0] for col in cursor.description]
+                        pre_update_chit = dict(zip(pre_update_columns, pre_update_row))
+
                         sync_version = get_next_sync_version(cursor)
                         values = _build_chit_update_values(client_chit, sync_version, current_time, chit_id)
                         cursor.execute(_UPDATE_CHIT_SQL, values)
@@ -836,6 +881,33 @@ async def sync_push(request: Request):
                             "owner_id": server_owner_id or user_id,
                             "sync_version": sync_version,
                         })
+
+                        # Audit: detect soft-delete, restore, or field-level update
+                        try:
+                            old_deleted = int(pre_update_chit.get("deleted") or 0)
+                            new_deleted = 1 if client_chit.get("deleted") else 0
+
+                            if old_deleted == 0 and new_deleted == 1:
+                                # Soft-delete detected
+                                insert_audit_entry(conn, "chit", chit_id, "deleted", actor, entity_summary=client_chit.get("title"))
+                            elif old_deleted == 1 and new_deleted == 0:
+                                # Restore detected
+                                insert_audit_entry(conn, "chit", chit_id, "restored", actor, entity_summary=client_chit.get("title"))
+                            else:
+                                # Compute field-level diff excluding metadata
+                                diff = compute_audit_diff(
+                                    pre_update_chit,
+                                    client_chit,
+                                    exclude_fields={
+                                        "modified_datetime", "created_datetime", "id",
+                                        "owner_id", "owner_display_name", "owner_username",
+                                        "deleted_datetime", "sync_version",
+                                    },
+                                )
+                                if diff:
+                                    insert_audit_entry(conn, "chit", chit_id, "updated", actor, changes=diff, entity_summary=client_chit.get("title"))
+                        except Exception as e:
+                            logger.error(f"Sync push: failed to audit chit update for {chit_id}: {e}")
 
                     else:
                         # ── CONFLICT: server was modified after client's last sync ──
@@ -901,18 +973,6 @@ async def sync_push(request: Request):
 
                         # ── Audit log entry for conflict resolution ──
                         if resolution_details:
-                            # Determine actor: "device:<name>" for token auth, username for session auth
-                            device_id = getattr(request.state, "device_id", None)
-                            if device_id:
-                                cursor.execute(
-                                    "SELECT device_name FROM device_tokens WHERE id = ?",
-                                    (device_id,),
-                                )
-                                device_row = cursor.fetchone()
-                                actor = f"device:{device_row[0]}" if device_row else f"device:{device_id}"
-                            else:
-                                actor = getattr(request.state, "username", None) or "web"
-
                             insert_audit_entry(
                                 conn,
                                 entity_type="chit",
@@ -921,6 +981,32 @@ async def sync_push(request: Request):
                                 actor=actor,
                                 changes=resolution_details,
                             )
+
+                        # ── Audit soft-delete/restore in merged path ──
+                        try:
+                            if "deleted" in merged_updates:
+                                old_deleted = int(server_chit.get("deleted") or 0)
+                                new_deleted = int(merged_updates["deleted"] or 0)
+                                if old_deleted == 0 and new_deleted == 1:
+                                    insert_audit_entry(
+                                        conn,
+                                        entity_type="chit",
+                                        entity_id=chit_id,
+                                        action="deleted",
+                                        actor=actor,
+                                        entity_summary=client_chit.get("title"),
+                                    )
+                                elif old_deleted == 1 and new_deleted == 0:
+                                    insert_audit_entry(
+                                        conn,
+                                        entity_type="chit",
+                                        entity_id=chit_id,
+                                        action="restored",
+                                        actor=actor,
+                                        entity_summary=client_chit.get("title"),
+                                    )
+                        except Exception as e:
+                            logger.error(f"Audit error (chit merged delete/restore) for {chit_id}: {e}")
 
             except Exception as e:
                 logger.error(f"Error processing pushed chit {chit_id}: {str(e)}", exc_info=True)
@@ -1009,6 +1095,12 @@ async def sync_push(request: Request):
                         "sync_version": sync_version,
                     })
 
+                    # Audit: contact created
+                    try:
+                        insert_audit_entry(conn, "contact", contact_id, "created", actor, entity_summary=display_name)
+                    except Exception as e:
+                        logger.error(f"Sync push: failed to audit contact create for {contact_id}: {e}")
+
                 else:
                     server_sync_version = existing[0] or 0
                     server_owner_id = existing[1]
@@ -1016,6 +1108,13 @@ async def sync_push(request: Request):
 
                     if server_sync_version <= client_last_known:
                         # ── UPDATE: no conflict ──
+
+                        # Fetch full existing row before UPDATE for audit diff
+                        cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+                        pre_update_row = cursor.fetchone()
+                        pre_update_columns = [col[0] for col in cursor.description]
+                        pre_update_contact = dict(zip(pre_update_columns, pre_update_row))
+
                         sync_version = get_next_sync_version(cursor)
 
                         given = client_contact.get("given_name") or ""
@@ -1074,6 +1173,21 @@ async def sync_push(request: Request):
                             "owner_id": server_owner_id or user_id,
                             "sync_version": sync_version,
                         })
+
+                        # Audit: compute field-level diff for non-conflicting contact update
+                        try:
+                            diff = compute_audit_diff(
+                                pre_update_contact,
+                                client_contact,
+                                exclude_fields={
+                                    "modified_datetime", "created_datetime", "id",
+                                    "owner_id", "sync_version",
+                                },
+                            )
+                            if diff:
+                                insert_audit_entry(conn, "contact", contact_id, "updated", actor, changes=diff, entity_summary=display_name)
+                        except Exception as e:
+                            logger.error(f"Sync push: failed to audit contact update for {contact_id}: {e}")
 
                     else:
                         # ── CONFLICT: field-level merge (same as chits) ──
@@ -1148,17 +1262,6 @@ async def sync_push(request: Request):
 
                         # ── Audit log entry for contact conflict resolution ──
                         if resolution_details:
-                            device_id = getattr(request.state, "device_id", None)
-                            if device_id:
-                                cursor.execute(
-                                    "SELECT device_name FROM device_tokens WHERE id = ?",
-                                    (device_id,),
-                                )
-                                device_row = cursor.fetchone()
-                                actor = f"device:{device_row[0]}" if device_row else f"device:{device_id}"
-                            else:
-                                actor = getattr(request.state, "username", None) or "web"
-
                             insert_audit_entry(
                                 conn,
                                 entity_type="contact",
@@ -1200,6 +1303,12 @@ async def sync_push(request: Request):
                         "status": "created",
                         "sync_version": sync_version,
                     }
+
+                    # Audit: settings created
+                    try:
+                        insert_audit_entry(conn, "settings", user_id, "created", actor, entity_summary="user settings")
+                    except Exception as e:
+                        logger.error(f"Sync push: failed to audit settings create for {user_id}: {e}")
                 else:
                     server_sync_version = server_settings_row[0] or 0
                     server_modified = server_settings_row[1] or ""
@@ -1209,21 +1318,88 @@ async def sync_push(request: Request):
                     if server_sync_version <= client_last_known:
                         # No conflict — client's version is based on latest server state
                         sync_version = get_next_sync_version(cursor)
+
+                        # Audit: fetch existing settings before applying update
+                        pre_update_settings = None
+                        try:
+                            cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                            row = cursor.fetchone()
+                            if row:
+                                columns = [col[0] for col in cursor.description]
+                                pre_update_settings = dict(zip(columns, row))
+                        except Exception as e:
+                            logger.error(f"Sync push: failed to fetch pre-update settings for {user_id}: {e}")
+
                         _apply_settings_from_push(cursor, user_id, settings_to_push, sync_version, current_time)
                         settings_result = {
                             "status": "accepted",
                             "sync_version": sync_version,
                         }
+
+                        # Audit: compute field-level diff for non-conflicting settings update
+                        try:
+                            if pre_update_settings is not None:
+                                cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                                row = cursor.fetchone()
+                                if row:
+                                    columns = [col[0] for col in cursor.description]
+                                    post_update_settings = dict(zip(columns, row))
+                                    diff = compute_audit_diff(
+                                        pre_update_settings,
+                                        post_update_settings,
+                                        exclude_fields={
+                                            "modified_datetime", "created_datetime",
+                                            "user_id", "sync_version",
+                                        },
+                                    )
+                                    if diff:
+                                        insert_audit_entry(conn, "settings", user_id, "updated", actor, changes=diff, entity_summary="user settings")
+                        except Exception as e:
+                            logger.error(f"Sync push: failed to audit settings update for {user_id}: {e}")
                     else:
                         # Conflict — LWW on entire record (no field-level merge)
                         if client_modified > server_modified:
                             # Client wins — overwrite server settings entirely
                             sync_version = get_next_sync_version(cursor)
+
+                            # Audit: fetch existing settings before applying update
+                            pre_update_settings = None
+                            try:
+                                cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                                row = cursor.fetchone()
+                                if row:
+                                    columns = [col[0] for col in cursor.description]
+                                    pre_update_settings = dict(zip(columns, row))
+                            except Exception as e:
+                                logger.error(f"Sync push: failed to fetch pre-update settings for {user_id}: {e}")
+
                             _apply_settings_from_push(cursor, user_id, settings_to_push, sync_version, current_time)
                             settings_result = {
                                 "status": "accepted",
                                 "sync_version": sync_version,
                             }
+
+                            # Audit: compute field-level diff for client-wins-conflict settings update
+                            try:
+                                if pre_update_settings is not None:
+                                    cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                                    row = cursor.fetchone()
+                                    if row:
+                                        columns = [col[0] for col in cursor.description]
+                                        post_update_settings = dict(zip(columns, row))
+                                        diff = compute_audit_diff(
+                                            pre_update_settings,
+                                            post_update_settings,
+                                            exclude_fields={
+                                                "modified_datetime", "created_datetime",
+                                                "user_id", "sync_version",
+                                            },
+                                        )
+                                        if diff:
+                                            insert_audit_entry(conn, "settings", user_id, "updated", actor, changes=diff, entity_summary="user settings")
+                            except Exception as e:
+                                logger.error(f"Sync push: failed to audit settings update for {user_id}: {e}")
+
                         else:
                             # Server wins — reject client's settings push
                             settings_result = {

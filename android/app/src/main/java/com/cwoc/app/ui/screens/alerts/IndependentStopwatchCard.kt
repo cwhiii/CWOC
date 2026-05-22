@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.local.entity.StandaloneAlertEntity
 import com.cwoc.app.domain.alerts.StopwatchRuntime
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Displays an independent stopwatch card with:
@@ -98,10 +99,11 @@ fun IndependentStopwatchCard(
                             if (!focusState.isFocused && nameText != (alert.name ?: "")) {
                                 viewModel.updateStandaloneAlert(
                                     alert.id,
-                                    mapOf("name" to nameText)
+                                    mapOf("_type" to "stopwatch", "name" to nameText)
                                 )
                             }
-                        }
+                        },
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import com.cwoc.app.data.mapper.SettingsPayloadMapper.normalizeWeekStartDay
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.remote.BundleDto
 import com.cwoc.app.ui.components.ArrangeViewsDialog
+import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.components.CwocZoneButton
 import com.cwoc.app.ui.screens.settings.components.CollapsibleSection
 import com.cwoc.app.ui.screens.settings.components.OmniLayout
@@ -55,6 +58,8 @@ import com.cwoc.app.ui.screens.settings.components.OmniLayoutModal
 import com.cwoc.app.ui.screens.settings.components.getDefaultOmniLayout
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Views settings tab composable.
@@ -85,7 +90,7 @@ fun ViewsSettingsTab(
             bundles = bundles
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Default View Dropdown ---
         DefaultViewDropdown(
@@ -93,7 +98,7 @@ fun ViewsSettingsTab(
             onViewSelected = { onUpdateSetting("default_view", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Enabled Periods Checkboxes ---
         EnabledPeriodsSection(
@@ -101,7 +106,7 @@ fun ViewsSettingsTab(
             onPeriodsChanged = { onUpdateSetting("enabled_periods", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- View Order with Arrange Views Button ---
         ViewOrderSection(
@@ -109,7 +114,7 @@ fun ViewsSettingsTab(
             onViewOrderChanged = { onUpdateSetting("view_order", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Calendar Section ---
         // Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8
@@ -118,7 +123,7 @@ fun ViewsSettingsTab(
             onUpdateSetting = onUpdateSetting
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Habits Section ---
         // Validates: Requirements 12.1, 12.2, 12.3, 12.4
@@ -128,7 +133,7 @@ fun ViewsSettingsTab(
             onUpdateSetting = onUpdateSetting
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Projects Section ---
         // Validates: Requirements 13.1, 13.2, 13.3, 13.4
@@ -138,7 +143,7 @@ fun ViewsSettingsTab(
             onUpdateSetting = onUpdateSetting
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // --- Maps Section ---
         // Validates: Requirements 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7
@@ -151,7 +156,6 @@ fun ViewsSettingsTab(
         )
     }
 }
-
 
 // ============================================================
 // Omni View Section
@@ -231,9 +235,9 @@ private fun OmniViewSection(
             // --- Reset Omni View to Defaults ---
             OutlinedButton(
                 onClick = { showResetConfirmDialog = true },
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFFB71C1C)
-                )
+                colors = CwocButtonDefaults.dangerColors(),
+                border = CwocButtonDefaults.dangerBorder,
+                shape = CwocButtonDefaults.outsetShape
             ) {
                 Text("Reset Omni View to Defaults")
             }
@@ -259,7 +263,9 @@ private fun OmniViewSection(
     if (showResetConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showResetConfirmDialog = false },
-            title = { Text("Reset Omni View?") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Reset Omni View?", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text("This will restore all Omni View settings (layout, color mode, HST clock mode, bundle toggles, emails-to-show count, and locked filters) to their default values.")
             },
@@ -272,7 +278,7 @@ private fun OmniViewSection(
                     onUpdateSetting("omni_email_count", "3")
                     onUpdateSetting("omni_normalize_colors", "colored")
                     onUpdateSetting("omni_locked_filters", "[]")
-                }) {
+                }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Reset", color = Color(0xFFB71C1C))
                 }
             },
@@ -423,7 +429,8 @@ private fun EmailsToShowDropdown(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -524,7 +531,10 @@ private fun LockedFilterDefaults(
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(
             onClick = onClearDefaults,
-            enabled = hasFilters
+            enabled = hasFilters,
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
         ) {
             Text("Clear Defaults")
         }
@@ -578,7 +588,6 @@ private fun jsonArrayToStringList(arr: JSONArray?): List<String> {
     return list.filter { it.isNotEmpty() }
 }
 
-
 // ============================================================
 // Existing sections (Default View, Enabled Periods, View Order)
 // ============================================================
@@ -596,11 +605,7 @@ private fun DefaultViewDropdown(
     var expanded by remember { mutableStateOf(false) }
 
     Column {
-        Text(
-            text = "Default View",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Default View")
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "The view that opens when you launch the app",
@@ -620,7 +625,8 @@ private fun DefaultViewDropdown(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -663,11 +669,7 @@ private fun EnabledPeriodsSection(
     }
 
     Column {
-        Text(
-            text = "Enabled Periods",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
+        CwocSectionHeading(text = "Enabled Periods")
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Choose which calendar period views are available",
@@ -728,11 +730,7 @@ private fun ViewOrderSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text(
-                    text = "View Order",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "View Order")
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Arrange the order of C CAPTN view tabs",
@@ -805,7 +803,8 @@ private fun ViewOrderSection(
             if (index < views.size - 1) {
                 HorizontalDivider(
                     modifier = Modifier.padding(start = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    color = Color(0xFF8B5A2B),
+                    thickness = 1.dp
                 )
             }
         }
@@ -820,7 +819,6 @@ private fun ViewOrderSection(
         )
     }
 }
-
 
 // ============================================================
 // Calendar Section
@@ -919,6 +917,7 @@ private fun CalendarSection(
 
 /**
  * Week Starts On dropdown with all 7 days: Sun, Mon, Tue, Wed, Thu, Fri, Sat.
+ * Uses numeric values ("0"–"6") matching the web frontend format.
  * Validates: Requirement 11.1
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -928,16 +927,17 @@ private fun WeekStartDayDropdown(
     onDaySelected: (String) -> Unit
 ) {
     val dayOptions = listOf(
-        "sun" to "Sun",
-        "mon" to "Mon",
-        "tue" to "Tue",
-        "wed" to "Wed",
-        "thu" to "Thu",
-        "fri" to "Fri",
-        "sat" to "Sat"
+        "0" to "Sun",
+        "1" to "Mon",
+        "2" to "Tue",
+        "3" to "Wed",
+        "4" to "Thu",
+        "5" to "Fri",
+        "6" to "Sat"
     )
     var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = dayOptions.firstOrNull { it.first == selectedDay }?.second ?: "Sun"
+    val normalizedDay = normalizeWeekStartDay(selectedDay)
+    val selectedLabel = dayOptions.firstOrNull { it.first == normalizedDay }?.second ?: "Sun"
 
     Column {
         Text(
@@ -958,7 +958,8 @@ private fun WeekStartDayDropdown(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -1083,7 +1084,8 @@ private fun ScrollToHourDropdown(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -1141,7 +1143,8 @@ private fun XDaysCountInput(
             isError = hasError,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // Validation hint
@@ -1343,7 +1346,8 @@ private fun HourDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor()
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -1425,7 +1429,8 @@ private fun MapsSection(
                 enabled = !autoZoomEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .alpha(inputAlpha)
+                    .alpha(inputAlpha),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // --- Default Longitude input ---
@@ -1441,7 +1446,8 @@ private fun MapsSection(
                 enabled = !autoZoomEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .alpha(inputAlpha)
+                    .alpha(inputAlpha),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // --- Default Zoom input ---
@@ -1457,7 +1463,8 @@ private fun MapsSection(
                 enabled = !autoZoomEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .alpha(inputAlpha)
+                    .alpha(inputAlpha),
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // Hint text when auto-zoom is enabled
@@ -1472,7 +1479,6 @@ private fun MapsSection(
         }
     }
 }
-
 
 // ============================================================
 // Habits Section
@@ -1526,7 +1532,8 @@ private fun HabitsSection(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor()
+                        .menuAnchor(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
@@ -1570,7 +1577,6 @@ private fun HabitsSection(
         }
     }
 }
-
 
 // ============================================================
 // Projects Section

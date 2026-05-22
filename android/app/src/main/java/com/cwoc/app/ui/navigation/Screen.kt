@@ -62,9 +62,12 @@ sealed class Screen(val route: String) {
         fun createRoute(ruleId: String) = "rule-editor/$ruleId"
     }
 
-    data object Editor : Screen("editor/{chitId}?start={start}&end={end}") {
+    data object Editor : Screen("editor/{chitId}?start={start}&end={end}&sourceTab={sourceTab}") {
         const val NEW_CHIT_ID = "new"
-        fun createRoute(chitId: String) = "editor/$chitId"
+        fun createRoute(chitId: String, sourceTab: String? = null): String {
+            val base = "editor/$chitId"
+            return if (sourceTab != null) "$base?sourceTab=$sourceTab" else base
+        }
         fun createRouteWithPrefill(start: String, end: String) = "editor/new?start=$start&end=$end"
     }
 

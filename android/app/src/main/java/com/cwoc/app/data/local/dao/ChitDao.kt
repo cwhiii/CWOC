@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.cwoc.app.data.local.entity.ChitAlertProjection
 import com.cwoc.app.data.local.entity.ChitEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -125,6 +126,9 @@ interface ChitDao {
 
     @Query("SELECT * FROM chits WHERE deleted = 0 AND alerts IS NOT NULL AND alerts != ''")
     suspend fun getChitsWithAlerts(): List<ChitEntity>
+
+    @Query("SELECT id, title, alerts, startDatetime, endDatetime, dueDatetime, pointInTime, timezone, status, habit, habitGoal, habitSuccess FROM chits WHERE deleted = 0 AND alerts IS NOT NULL AND alerts != '' AND alerts != '[]' AND alerts != 'null'")
+    suspend fun getChitsWithAlertsLight(): List<ChitAlertProjection>
 
     // Phase 3 — Edge case handling queries
 

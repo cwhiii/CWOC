@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.email
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.domain.email.ContrastColor
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -197,7 +200,10 @@ fun RecipientChipField(
                 DropdownMenu(
                     expanded = autocompleteResults.isNotEmpty() && isFocused,
                     onDismissRequest = { /* Keep open while focused */ },
-                    modifier = Modifier.fillMaxWidth(0.9f)
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     autocompleteResults.forEach { contact ->
                         AutocompleteResultItem(

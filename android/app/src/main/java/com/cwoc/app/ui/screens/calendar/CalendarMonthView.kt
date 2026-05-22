@@ -348,17 +348,33 @@ private fun buildDayHeaders(startDayOfWeek: DayOfWeek): List<String> {
 }
 
 /**
- * Parses the weekStartDay setting string into a DayOfWeek.
+ * Parses the week_start_day setting into a DayOfWeek.
+ * Handles both numeric ("0"–"6", where 0=Sunday) and name-based formats.
  * Defaults to Sunday if the value is unrecognized.
  */
 private fun parseWeekStartDay(weekStartDay: String): DayOfWeek {
+    // Try numeric first (canonical format: "0"=Sun, "1"=Mon, ..., "6"=Sat)
+    val numeric = weekStartDay.trim().toIntOrNull()
+    if (numeric != null && numeric in 0..6) {
+        return when (numeric) {
+            0 -> DayOfWeek.SUNDAY
+            1 -> DayOfWeek.MONDAY
+            2 -> DayOfWeek.TUESDAY
+            3 -> DayOfWeek.WEDNESDAY
+            4 -> DayOfWeek.THURSDAY
+            5 -> DayOfWeek.FRIDAY
+            6 -> DayOfWeek.SATURDAY
+            else -> DayOfWeek.SUNDAY
+        }
+    }
+    // Fallback: name-based format (legacy)
     return when (weekStartDay.lowercase()) {
-        "monday" -> DayOfWeek.MONDAY
-        "tuesday" -> DayOfWeek.TUESDAY
-        "wednesday" -> DayOfWeek.WEDNESDAY
-        "thursday" -> DayOfWeek.THURSDAY
-        "friday" -> DayOfWeek.FRIDAY
-        "saturday" -> DayOfWeek.SATURDAY
+        "mon", "monday" -> DayOfWeek.MONDAY
+        "tue", "tuesday" -> DayOfWeek.TUESDAY
+        "wed", "wednesday" -> DayOfWeek.WEDNESDAY
+        "thu", "thursday" -> DayOfWeek.THURSDAY
+        "fri", "friday" -> DayOfWeek.FRIDAY
+        "sat", "saturday" -> DayOfWeek.SATURDAY
         else -> DayOfWeek.SUNDAY
     }
 }

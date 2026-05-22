@@ -35,7 +35,7 @@ _INACTIVITY_SECONDS = 24 * 60 * 60
 
 # Periodic cleanup: run every N requests (lightweight counter)
 _request_counter = 0
-_CLEANUP_INTERVAL = 100
+_CLEANUP_INTERVAL = 500
 
 
 def _is_excluded(path: str, method: str) -> bool:
@@ -114,23 +114,22 @@ def _is_excluded(path: str, method: str) -> bool:
 def _cleanup_expired_sessions() -> None:
     """Delete sessions that are past their expires_datetime.
     
-    Note: We only delete by expires_datetime here. The per-request inactivity
-    check in the middleware handles inactivity-based expiry using the user's
-    personal session_lifetime setting. Using a global inactivity cutoff here
-    would incorrectly delete sessions for users with long/infinite lifetimes.
+    Uses a very short busy_timeout (100ms) so this never blocks request processing.
+    If the DB is locked, we silently skip — cleanup will happen on the next interval.
     """
     conn = None
     try:
         now = utcnow_iso()
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA busy_timeout=100")
         conn.execute(
             "DELETE FROM sessions WHERE expires_datetime < ?",
             (now,),
         )
         conn.commit()
-    except Exception as e:
-        logger.error(f"Session cleanup error: {e}")
+    except Exception:
+        # Silently skip — DB was busy, we'll try again next interval
+        pass
     finally:
         if conn:
             conn.close()
@@ -153,6 +152,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Skip auth for excluded paths
         if _is_excluded(path, method):
             return await call_next(request)
+
+        # Debug logging removed — was causing I/O bottleneck on every request
 
         # Periodic session cleanup
         _request_counter += 1
@@ -216,14 +217,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         session_inactive = (now - last_active).total_seconds() > _user_inactivity
 
                     if not session_expired and not session_inactive and row["is_active"]:
-                        # Valid session — update last_active (non-fatal if it fails)
+                        # Valid session — update last_active at most once per minute
+                        # to reduce write contention on the SQLite database
                         try:
-                            new_last_active = utcnow_iso()
-                            conn.execute(
-                                "UPDATE sessions SET last_active_datetime = ? WHERE token = ?",
-                                (new_last_active, token),
-                            )
-                            conn.commit()
+                            seconds_since_active = (now - last_active).total_seconds()
+                            if seconds_since_active >= 60:
+                                new_last_active = utcnow_iso()
+                                conn.execute(
+                                    "UPDATE sessions SET last_active_datetime = ? WHERE token = ?",
+                                    (new_last_active, token),
+                                )
+                                conn.commit()
                         except Exception as e:
                             logger.warning(f"Auth middleware: failed to update last_active for {row['user_id']} on {path}: {e}")
 
@@ -240,8 +244,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         try:
                             conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                             conn.commit()
-                        except Exception as e:
-                            logger.warning(f"Auth middleware: failed to delete expired session on {path}: {e}")
+                        except Exception:
+                            pass  # Non-critical — skip if DB busy
 
             except Exception as e:
                 logger.error(f"Auth middleware error (path={path}, method={method}): {e}")
@@ -288,13 +292,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     request.state.username = row["username"]
                     request.state.device_id = row["device_id"]
                     return await call_next(request)
+                # If row is None or token is revoked/user inactive, fall through to 401 below
             except Exception as e:
-                logger.error(f"Auth middleware Bearer token error (path={path}): {e}")
+                # DB error (locked, I/O, etc.) — NOT a token rejection.
+                # Return 503 so the client retries instead of triggering a logout.
+                logger.error(f"Auth middleware Bearer token DB error (path={path}): {e}")
+                return JSONResponse(
+                    status_code=503,
+                    content={"detail": "Service temporarily unavailable — please retry"},
+                )
             finally:
                 if conn:
                     conn.close()
 
         # No valid session or token — return appropriate error
+        logger.warning(f"[AUTH-MW] NO VALID AUTH for {method} {path} — denying access")
         if path.startswith("/api/"):
             return JSONResponse(
                 status_code=401,
@@ -302,4 +314,5 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
         else:
             # Page request — redirect to login
+            logger.warning(f"[AUTH-MW] Redirecting to /login")
             return RedirectResponse(url="/login", status_code=302)

@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.checklist.ChecklistItem
 import com.cwoc.app.domain.checklist.ChecklistOperations
 import java.util.UUID
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * ChecklistZone composable for the chit editor.
@@ -226,7 +227,8 @@ fun ChecklistZone(
                         item {
                             HorizontalDivider(
                                 modifier = Modifier.padding(vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant
+                                color = Color(0xFF8B5A2B),
+                                thickness = 1.dp
                             )
                             Text(
                                 text = "Completed (${checkedItems.size})",
@@ -297,7 +299,7 @@ fun ChecklistZone(
                 )
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
 
             // --- Add item input ---
             Row(
@@ -325,7 +327,8 @@ fun ChecklistZone(
                                 newItemText = ""
                             }
                         }
-                    )
+                    ),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(

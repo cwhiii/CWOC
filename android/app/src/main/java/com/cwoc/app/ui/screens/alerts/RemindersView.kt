@@ -55,6 +55,7 @@ import com.cwoc.app.data.repository.SettingsRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -212,7 +213,9 @@ fun RemindersView(
         val chitTitle = reminders.firstOrNull { it.id == chitId }?.title ?: "Untitled"
         AlertDialog(
             onDismissRequest = { deleteConfirmChitId = null },
-            title = { Text("Delete Reminder", color = ParchmentText) },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Reminder", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Text(
                     "Are you sure you want to delete \"$chitTitle\"?",
@@ -225,9 +228,7 @@ fun RemindersView(
                         viewModel.deleteReminder(chitId)
                         deleteConfirmChitId = null
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFD32F2F)
-                    )
+                    colors = CwocDialogDefaults.dangerButtonColors()
                 ) {
                     Text("Delete")
                 }
@@ -450,7 +451,7 @@ private fun formatPointInTime(pointInTime: String?, timeFormat: String): String 
     return try {
         val dateTime = LocalDateTime.parse(pointInTime, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         val dateStr = dateTime.format(DateTimeFormatter.ofPattern("yyyy-MMM-dd"))
-        val timeStr = if (timeFormat == "24") {
+        val timeStr = if (timeFormat == "24hour") {
             dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
         } else {
             dateTime.format(DateTimeFormatter.ofPattern("hh:mm a"))

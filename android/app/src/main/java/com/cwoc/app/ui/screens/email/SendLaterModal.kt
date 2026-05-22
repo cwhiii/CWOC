@@ -12,9 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +33,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.components.DrumRollerTimePicker
+import androidx.compose.material3.Button
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -62,7 +63,9 @@ private val ParchmentBrown = Color(0xFF6B4E31)
 @Composable
 fun SendLaterModal(
     onDismiss: () -> Unit,
-    onSchedule: (isoDatetime: String) -> Unit
+    onSchedule: (isoDatetime: String) -> Unit,
+    is24Hour: Boolean = true,
+    calendarSnap: Int = 5
 ) {
     // Default time: now + 1 hour (Requirement 46.3)
     val defaultTime = LocalTime.now().plusHours(1)
@@ -89,10 +92,12 @@ fun SendLaterModal(
     // Main dialog container
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Text(
                 text = "Schedule Send",
-                fontWeight = FontWeight.Bold
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {
@@ -158,8 +163,7 @@ fun SendLaterModal(
                         onSchedule(isoString)
                     }
                 },
-                enabled = selectedDateMillis != null
-            ) {
+                enabled = selectedDateMillis != null, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Schedule", color = if (selectedDateMillis != null) ParchmentBrown else Color.Gray)
             }
         },
@@ -223,35 +227,20 @@ fun SendLaterModal(
         }
     }
 
-    // ─── Time Picker Dialog ─────────────────────────────────────────────────────
+    // ─── Time Picker (DrumRollerTimePicker) ────────────────────────────────────
 
     if (showTimePicker) {
-        val timePickerState = rememberTimePickerState(
+        DrumRollerTimePicker(
             initialHour = selectedHour,
             initialMinute = selectedMinute,
-            is24Hour = true
-        )
-
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        selectedHour = timePickerState.hour
-                        selectedMinute = timePickerState.minute
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("OK", color = ParchmentBrown)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("Cancel", color = ParchmentBrown)
-                }
-            },
-            title = { Text("Select Time") },
-            text = { TimePicker(state = timePickerState) }
+            is24Hour = is24Hour,
+            minuteStep = calendarSnap,
+            onDismiss = { showTimePicker = false },
+            onTimeSelected = { hour, minute ->
+                selectedHour = hour
+                selectedMinute = minute
+                showTimePicker = false
+            }
         )
     }
 }

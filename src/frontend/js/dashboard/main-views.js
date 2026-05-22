@@ -674,13 +674,12 @@ function displayChecklistView(chitsToDisplay) {
     // Pinned items always sort to the top
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
-    const dateA = new Date(
-      a.last_edited || a.created_datetime || a.start_datetime || 0,
-    );
-    const dateB = new Date(
-      b.last_edited || b.created_datetime || b.start_datetime || 0,
-    );
-    return dateB - dateA;
+    // Sort by checked ratio — least complete first (Requirement 29.2)
+    var aNonEmpty = (a.checklist || []).filter(function(i) { return i && i.text && i.text.trim(); });
+    var bNonEmpty = (b.checklist || []).filter(function(i) { return i && i.text && i.text.trim(); });
+    var aRatio = aNonEmpty.length > 0 ? aNonEmpty.filter(function(i) { return i.checked || i.done; }).length / aNonEmpty.length : 0;
+    var bRatio = bNonEmpty.length > 0 ? bNonEmpty.filter(function(i) { return i.checked || i.done; }).length / bNonEmpty.length : 0;
+    return aRatio - bRatio;
   });
 
   if (sortedChits.length === 0)
@@ -905,9 +904,9 @@ function filterChits(tab) {
     orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators' || tab === 'Email') ? 'none' : '';
   }
 
-  // Show/hide Kanban toggle for Projects tab
+  // Kanban toggle permanently hidden — Kanban is the only Projects mode now
   const kanbanSection = document.getElementById('section-kanban');
-  if (kanbanSection) { kanbanSection.style.display = (tab === 'Projects') ? '' : 'none'; }
+  if (kanbanSection) { kanbanSection.style.display = 'none'; }
 
   // Show/hide Calendar Options (compress/scroll) for Calendar + Month
   const calOptsSection = document.getElementById('section-cal-options');

@@ -179,6 +179,16 @@ interface CwocApiService {
     ): Response<Unit>
 
     /**
+     * PATCH specific fields on a chit without sending the entire entity.
+     * Used by RolloverPersister and other targeted field updates.
+     */
+    @retrofit2.http.PATCH("/api/chits/{id}/fields")
+    suspend fun patchChitFields(
+        @Path("id") chitId: String,
+        @Body fields: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
+
+    /**
      * Update RSVP status for a shared chit.
      * Used by card-level accept/decline buttons (matching web's PATCH /api/chits/{id}/rsvp).
      */
@@ -748,6 +758,16 @@ interface CwocApiService {
     suspend fun getHabitRules(
         @Query("habit") habit: Boolean = true
     ): Response<List<RuleHabitDto>>
+
+    // ─── Search endpoints ───────────────────────────────────────────────────
+
+    /**
+     * Search chits by query string. Returns matching chits with matched field info.
+     */
+    @GET("/api/chits/search")
+    suspend fun searchChits(
+        @Query("q") query: String
+    ): Response<List<com.cwoc.app.data.remote.dto.ChitSearchResult>>
 }
 
 /**
@@ -765,7 +785,8 @@ data class IndicatorObject(
     val zone_config: Map<String, Any?>? = null,
     val conditional_display: Map<String, String>? = null,
     val type: String? = null,
-    val sub_type: String? = null
+    val sub_type: String? = null,
+    val zone_sort_order: Int? = null
 )
 
 /**

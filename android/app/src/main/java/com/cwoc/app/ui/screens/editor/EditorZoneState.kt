@@ -10,6 +10,7 @@ import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.ui.screens.editor.zones.EDITOR_ZONE_ORDER
 import com.cwoc.app.ui.screens.editor.zones.EditorZone
 import com.cwoc.app.ui.screens.editor.zones.SOURCE_TAB_ZONE_MAP
+import com.cwoc.app.ui.screens.editor.zones.ZONE_PREFILL_MAP
 
 /**
  * State holder for the zone-at-a-time navigation system.
@@ -72,10 +73,15 @@ class EditorZoneState(
     companion object {
         /**
          * Determine the starting zone index based on the source tab.
+         * When sourceTab is null (existing chit), start on Overview (index 0).
          */
         fun getStartingZoneIndex(sourceTab: String?, hasDatePrefill: Boolean): Int {
             if (hasDatePrefill) {
                 return EDITOR_ZONE_ORDER.indexOfFirst { it.id == "datesSection" }.coerceAtLeast(0)
+            }
+            if (sourceTab == null) {
+                // Existing chit — start on Overview (titleZone, index 0)
+                return 0
             }
             val targetZoneId = SOURCE_TAB_ZONE_MAP[sourceTab] ?: "datesSection"
             return EDITOR_ZONE_ORDER.indexOfFirst { it.id == targetZoneId }.coerceAtLeast(0)
@@ -114,20 +120,19 @@ fun isZoneEmpty(zoneId: String, formState: ChitFormState): Boolean {
 
 /**
  * Build overview rows from the current form state.
- * Only includes rows for populated fields.
+ * Includes rows for populated fields, plus placeholder rows for prefill zones
+ * when creating a new chit from a specific source tab.
  */
-fun buildOverviewRows(formState: ChitFormState): List<com.cwoc.app.ui.screens.editor.zones.OverviewRow> {
+fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List<com.cwoc.app.ui.screens.editor.zones.OverviewRow> {
     val rows = mutableListOf<com.cwoc.app.ui.screens.editor.zones.OverviewRow>()
-
-    // Title
-    if (formState.title.isNotBlank()) {
-        rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
-            icon = "✏️",
-            text = formState.title,
-            targetZoneId = "titleZone",
-            isTitle = true
-        ))
+    val prefillZoneIds = if (formState.isNew && sourceTab != null) {
+        ZONE_PREFILL_MAP[sourceTab] ?: emptyList()
+    } else {
+        emptyList()
     }
+
+    // Title is NOT included here — it's shown as the editable OutlinedTextField
+    // at the top of the overview zone in ChitEditorScreen.kt
 
     // Dates
     val datesText = buildDatesText(formState)
@@ -233,6 +238,23 @@ fun buildOverviewRows(formState: ChitFormState): List<com.cwoc.app.ui.screens.ed
             text = "Health indicators recorded",
             targetZoneId = "healthIndicatorsSection"
         ))
+    }
+
+    // Add placeholder rows for prefill zones that don't already have a row
+    if (prefillZoneIds.isNotEmpty()) {
+        val existingZoneIds = rows.map { it.targetZoneId }.toSet()
+        for (zoneId in prefillZoneIds) {
+            if (zoneId !in existingZoneIds) {
+                val zone = EDITOR_ZONE_ORDER.find { it.id == zoneId }
+                if (zone != null) {
+                    rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+                        icon = zone.icon,
+                        text = "${zone.label} — tap to start",
+                        targetZoneId = zoneId
+                    ))
+                }
+            }
+        }
     }
 
     return rows

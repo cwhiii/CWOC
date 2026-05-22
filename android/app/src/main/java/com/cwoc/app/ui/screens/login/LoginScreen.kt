@@ -42,6 +42,7 @@ import com.cwoc.app.BuildConfig
 import com.cwoc.app.R
 import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.theme.ParchmentBackground
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 @Composable
 fun LoginScreen(
@@ -97,7 +98,8 @@ fun LoginScreen(
                 keyboardType = KeyboardType.Uri,
                 imeAction = ImeAction.Next
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -108,7 +110,8 @@ fun LoginScreen(
             label = { Text("Username") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -129,7 +132,8 @@ fun LoginScreen(
                     viewModel.login()
                 }
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(20.dp))

@@ -1,9 +1,12 @@
 package com.cwoc.app.ui.screens.email
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FormatBold
@@ -35,6 +38,8 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.email.TextSelection
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 /**
  * Markdown formatting toolbar for the email compose body.
@@ -156,7 +161,10 @@ fun FormattingToolbar(
         }
         DropdownMenu(
             expanded = showHeadingDropdown,
-            onDismissRequest = { showHeadingDropdown = false }
+            onDismissRequest = { showHeadingDropdown = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             DropdownMenuItem(
                 text = { Text("H1") },

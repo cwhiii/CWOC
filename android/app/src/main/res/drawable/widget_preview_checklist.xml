@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview image for Checklist widget in the widget picker -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Parchment background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#f5e6cc" />
+            <stroke android:width="1dp" android:color="#8b4513" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+    <!-- Title bar area -->
+    <item android:top="6dp" android:left="8dp" android:right="8dp" android:bottom="64dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#6b4e31" />
+            <corners android:radius="3dp" />
+        </shape>
+    </item>
+    <!-- Checkbox row 1 (checked) -->
+    <item android:top="24dp" android:left="10dp" android:right="50dp" android:bottom="48dp">
+        <layer-list>
+            <item android:width="10dp" android:height="10dp" android:gravity="left|center_vertical">
+                <shape android:shape="rectangle">
+                    <solid android:color="#6b4e31" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+            <item android:left="14dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#c4a882" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Checkbox row 2 (unchecked) -->
+    <item android:top="40dp" android:left="10dp" android:right="30dp" android:bottom="32dp">
+        <layer-list>
+            <item android:width="10dp" android:height="10dp" android:gravity="left|center_vertical">
+                <shape android:shape="rectangle">
+                    <stroke android:width="1dp" android:color="#6b4e31" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+            <item android:left="14dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#c4a882" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <!-- Checkbox row 3 (unchecked) -->
+    <item android:top="56dp" android:left="10dp" android:right="40dp" android:bottom="16dp">
+        <layer-list>
+            <item android:width="10dp" android:height="10dp" android:gravity="left|center_vertical">
+                <shape android:shape="rectangle">
+                    <stroke android:width="1dp" android:color="#6b4e31" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+            <item android:left="14dp">
+                <shape android:shape="rectangle">
+                    <solid android:color="#c4a882" />
+                    <corners android:radius="2dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</layer-list>

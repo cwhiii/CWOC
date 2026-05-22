@@ -12,6 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -21,9 +22,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocPrimary
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * BB2: Reusable chit picker modal bottom sheet.
@@ -60,7 +65,8 @@ fun ChitPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = CwocDialogDefaults.containerColor,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
     ) {
         Column(
             modifier = Modifier
@@ -82,7 +88,8 @@ fun ChitPickerSheet(
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Search by title…") },
-                singleLine = true
+                singleLine = true,
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -107,7 +114,7 @@ fun ChitPickerSheet(
                             }
                             .padding(vertical = 12.dp, horizontal = 4.dp)
                     )
-                    HorizontalDivider()
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 }
 
                 if (filteredChits.isEmpty()) {

@@ -41,6 +41,7 @@ import com.cwoc.app.data.local.entity.StandaloneAlertEntity
 import com.cwoc.app.domain.alerts.TimerState
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Full implementation of IndependentTimerCard — displays a countdown timer with
@@ -65,7 +66,11 @@ fun IndependentTimerCard(
     val dataMap: Map<String, Any?> = remember(alert.data) {
         try {
             val type = object : TypeToken<Map<String, Any?>>() {}.type
-            gson.fromJson(alert.data, type) ?: emptyMap()
+            val parsed: Map<String, Any?> = gson.fromJson(alert.data, type) ?: emptyMap()
+            // Handle legacy nested format where fields are inside parsed["data"]
+            @Suppress("UNCHECKED_CAST")
+            val nested = parsed["data"] as? Map<String, Any?>
+            if (nested != null && parsed["totalSeconds"] == null) nested else parsed
         } catch (_: Exception) {
             emptyMap()
         }
@@ -149,13 +154,11 @@ fun IndependentTimerCard(
                         .weight(1f)
                         .onFocusChanged { focusState ->
                             if (!focusState.isFocused && nameText != (alert.name ?: "")) {
-                                viewModel.updateStandaloneAlert(
-                                    alert.id,
-                                    mapOf("name" to nameText)
-                                )
+                                saveTimer(viewModel, alert.id, nameText, runtime.state.value.totalMs / 1000, loopChecked)
                             }
                         },
-                    textStyle = MaterialTheme.typography.bodyMedium
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -166,10 +169,7 @@ fun IndependentTimerCard(
                     modifier = Modifier.clickable {
                         loopChecked = !loopChecked
                         runtime.loop = loopChecked
-                        viewModel.updateStandaloneAlert(
-                            alert.id,
-                            mapOf("loop" to loopChecked)
-                        )
+                        saveTimer(viewModel, alert.id, nameText, runtime.state.value.totalMs / 1000, loopChecked)
                     }
                 ) {
                     Checkbox(
@@ -177,10 +177,7 @@ fun IndependentTimerCard(
                         onCheckedChange = { checked ->
                             loopChecked = checked
                             runtime.loop = checked
-                            viewModel.updateStandaloneAlert(
-                                alert.id,
-                                mapOf("loop" to checked)
-                            )
+                            saveTimer(viewModel, alert.id, nameText, runtime.state.value.totalMs / 1000, loopChecked)
                         }
                     )
                     Text("🔁", fontSize = 16.sp)
@@ -204,10 +201,7 @@ fun IndependentTimerCard(
                         runtime.setDuration(h, m, s)
                         // Save to server
                         val totalSec = (h * 3600L) + (m * 60L) + s
-                        viewModel.updateStandaloneAlert(
-                            alert.id,
-                            mapOf("totalSeconds" to totalSec)
-                        )
+                        saveTimer(viewModel, alert.id, nameText, totalSec, loopChecked)
                     }
                 )
             } else if (isRunning || (isPaused && !showDurationInputsWhilePaused)) {
@@ -308,7 +302,8 @@ private fun DurationInputRow(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             modifier = Modifier.width(70.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center)
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Text(":", fontSize = 20.sp, modifier = Modifier.padding(horizontal = 4.dp))
@@ -326,7 +321,8 @@ private fun DurationInputRow(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             modifier = Modifier.width(70.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center)
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Text(":", fontSize = 20.sp, modifier = Modifier.padding(horizontal = 4.dp))
@@ -344,7 +340,8 @@ private fun DurationInputRow(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             modifier = Modifier.width(70.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center)
+            textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
+            colors = CwocInputDefaults.outlinedColors()
         )
     }
 }
@@ -455,4 +452,26 @@ private fun formatRemainingTime(remainingMs: Long): String {
     } else {
         "%02d:%02d:%02d".format(hours, minutes, seconds)
     }
+}
+
+// ─── Helper: Save full timer state via ViewModel ────────────────────────────────
+
+/**
+ * Constructs the full update body with all timer fields and calls viewModel.updateStandaloneAlert.
+ * The server replaces the entire record, so we must always send all fields.
+ */
+private fun saveTimer(
+    viewModel: AlertsViewModel,
+    alertId: String,
+    name: String,
+    totalSeconds: Long,
+    loop: Boolean
+) {
+    val body = mapOf<String, Any?>(
+        "_type" to "timer",
+        "name" to name,
+        "totalSeconds" to totalSeconds,
+        "loop" to loop
+    )
+    viewModel.updateStandaloneAlert(alertId, body)
 }

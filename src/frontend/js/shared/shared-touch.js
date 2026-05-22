@@ -59,6 +59,12 @@ function _cwocVibrate(pattern) {
   } catch (e) { /* vibrate unsupported or blocked */ }
 }
 
+/** Minimum horizontal distance (px) to trigger a swipe gesture */
+var TOUCH_SWIPE_THRESHOLD = 40;
+
+/** Swipe requires |dx| > |dy| * this ratio to distinguish from vertical drag */
+var TOUCH_SWIPE_RATIO = 2;
+
 /**
  * Enable touch-based drag on an element using a long-press activation pattern.
  *
@@ -70,13 +76,23 @@ function _cwocVibrate(pattern) {
  * If the finger moves too far during the hold, the gesture is treated as a
  * normal scroll — no drag callbacks fire and the browser handles scrolling.
  *
+ * Swipe detection: when an `onSwipe` callback is provided, the utility detects
+ * horizontal swipes during active drag (|dx| > 40px AND |dx| > |dy| * 2).
+ * When a swipe is detected, `onSwipe` is called with { direction: 'left'|'right', dx, dy }
+ * and the drag is terminated — `onEnd` will NOT fire (the `swipeHandled` flag is set).
+ * The `onEnd` callback receives a `swipeHandled` property so consumers can also
+ * check whether to execute drop logic.
+ *
  * Idempotent — safe to call multiple times on the same element (previous
  * listeners are removed via the _touchDragCleanup property).
  *
  * @param {HTMLElement} element - The DOM element to attach touch listeners to
- * @param {object} callbacks - { onStart, onMove, onEnd } functions
- * @param {object} [options] - Optional config: { holdMs, moveThreshold, immediate }
+ * @param {object} callbacks - { onStart, onMove, onEnd, onSwipe } functions
+ *   - onSwipe(data): called when horizontal swipe detected; data has { direction, dx, dy, clientX, clientY }
+ * @param {object} [options] - Optional config: { holdMs, moveThreshold, immediate, swipeThreshold, swipeRatio }
  *   - immediate: if true, skip long-press and activate drag immediately (for resize handles etc.)
+ *   - swipeThreshold: min horizontal px for swipe (default 40)
+ *   - swipeRatio: |dx| must exceed |dy| * ratio (default 2)
  */
 function enableTouchDrag(element, callbacks, options) {
   try {
@@ -91,6 +107,8 @@ function enableTouchDrag(element, callbacks, options) {
     var holdMs = opts.holdMs || TOUCH_DRAG_HOLD_MS;
     var moveThreshold = opts.moveThreshold || TOUCH_DRAG_MOVE_THRESHOLD;
     var immediate = !!opts.immediate;
+    var swipeThreshold = opts.swipeThreshold || TOUCH_SWIPE_THRESHOLD;
+    var swipeRatio = opts.swipeRatio || TOUCH_SWIPE_RATIO;
 
     // State for the current touch gesture
     var _holdTimer = null;
@@ -98,6 +116,7 @@ function enableTouchDrag(element, callbacks, options) {
     var _startX = 0;
     var _startY = 0;
     var _cancelled = false;
+    var _swipeHandled = false;
 
     function _extractTouchData(touchEvent) {
       var touch = touchEvent.touches[0] || touchEvent.changedTouches[0];
@@ -135,6 +154,7 @@ function enableTouchDrag(element, callbacks, options) {
       _startY = data.clientY;
       _dragActive = false;
       _cancelled = false;
+      _swipeHandled = false;
 
       if (immediate) {
         // Immediate mode: activate drag right away (for resize handles)
@@ -152,13 +172,33 @@ function enableTouchDrag(element, callbacks, options) {
     }
 
     function _onTouchMove(e) {
-      if (_cancelled) return;
+      if (_cancelled || _swipeHandled) return;
 
       var data = _extractTouchData(e);
       if (!data) return;
 
       if (_dragActive) {
-        // Drag is active — prevent scroll and call onMove
+        // Drag is active — check for horizontal swipe if onSwipe callback provided
+        if (!_swipeHandled && typeof callbacks.onSwipe === 'function') {
+          var dx = data.clientX - _startX;
+          var dy = data.clientY - _startY;
+          if (Math.abs(dx) > swipeThreshold && Math.abs(dx) > Math.abs(dy) * swipeRatio) {
+            // Horizontal swipe detected — fire onSwipe and terminate drag
+            _swipeHandled = true;
+            _dragActive = false;
+            window._touchDragActive = false;
+            element.classList.remove('cwoc-touch-dragging');
+            callbacks.onSwipe({
+              direction: dx > 0 ? 'right' : 'left',
+              dx: dx,
+              dy: dy,
+              clientX: data.clientX,
+              clientY: data.clientY
+            });
+            return;
+          }
+        }
+        // Not a swipe — prevent scroll and call onMove for vertical drag
         e.preventDefault();
         if (typeof callbacks.onMove === 'function') {
           callbacks.onMove(data);
@@ -190,13 +230,18 @@ function enableTouchDrag(element, callbacks, options) {
         element.classList.remove('cwoc-touch-dragging');
         var data = _extractTouchData(e);
         if (data && typeof callbacks.onEnd === 'function') {
+          data.swipeHandled = _swipeHandled;
           callbacks.onEnd(data);
         }
         // Suppress post-drag click/tap
         if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+      } else if (_swipeHandled) {
+        // Swipe was handled — suppress any end behavior
+        // onEnd is NOT called when swipe was detected
       }
 
       _cancelled = false;
+      _swipeHandled = false;
     }
 
     function _onTouchCancel() {
@@ -210,6 +255,7 @@ function enableTouchDrag(element, callbacks, options) {
         element.classList.remove('cwoc-touch-dragging');
       }
       _cancelled = false;
+      _swipeHandled = false;
     }
 
     element.addEventListener('touchstart', _onTouchStart, { passive: true });
@@ -226,6 +272,7 @@ function enableTouchDrag(element, callbacks, options) {
       if (_holdTimer) clearTimeout(_holdTimer);
       _dragActive = false;
       _cancelled = false;
+      _swipeHandled = false;
       element.classList.remove('cwoc-touch-dragging');
       delete element._touchDragCleanup;
     };

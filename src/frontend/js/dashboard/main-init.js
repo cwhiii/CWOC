@@ -984,6 +984,23 @@ document.addEventListener("DOMContentLoaded", function () {
   // (handles: mobile sidebar, topbar restore, version fetch, tag/people filters, notifications)
   _initDashboardSidebar();
 
+  // Wire FAB (New Chit) — click = create, right-click = Quick Alert
+  var fab = document.getElementById('cwoc-fab');
+  if (fab) {
+    fab.addEventListener('click', function() {
+      storePreviousState();
+      if (typeof currentTab !== 'undefined' && currentTab === 'Email') {
+        window.location.href = '/frontend/html/editor.html?new=email';
+      } else {
+        window.location.href = '/frontend/html/editor.html';
+      }
+    });
+    fab.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (typeof _openQuickAlertModal === 'function') _openQuickAlertModal();
+    });
+  }
+
   // Initialize mobile Views button (replaces tab bar on mobile)
   if (typeof initMobileViewsButton === 'function') initMobileViewsButton();
 
@@ -1489,6 +1506,54 @@ document.addEventListener("DOMContentLoaded", function () {
 
       filterChits(_tabOrder[newIdx]);
       setTimeout(function() { _tbSwiping = false; }, 300);
+    }, { passive: true });
+  })();
+
+  // ── Mobile swipe on calendar content to navigate periods ──────────────────
+  (function() {
+    var chitList = document.getElementById('chit-list');
+    if (!chitList) return;
+    var _calSwStartX = 0, _calSwStartY = 0;
+    var _calSwTracking = false;
+    var _calSwThrottled = false;
+    var CAL_SWIPE_MIN = 60;
+
+    chitList.addEventListener('touchstart', function(e) {
+      // Only activate on Calendar tab, mobile viewport
+      if (currentTab !== 'Calendar') return;
+      if (window.innerWidth > 768) return;
+      // Don't interfere with active drag operations
+      if (window._touchDragActive) return;
+      var t = e.touches[0];
+      _calSwStartX = t.clientX;
+      _calSwStartY = t.clientY;
+      _calSwTracking = true;
+    }, { passive: true });
+
+    chitList.addEventListener('touchend', function(e) {
+      if (!_calSwTracking || _calSwThrottled) { _calSwTracking = false; return; }
+      _calSwTracking = false;
+      if (currentTab !== 'Calendar') return;
+      if (window.innerWidth > 768) return;
+      if (window._touchDragActive) return;
+
+      var t = e.changedTouches[0];
+      var dx = t.clientX - _calSwStartX;
+      var dy = Math.abs(t.clientY - _calSwStartY);
+      // Must be a clear horizontal swipe
+      if (Math.abs(dx) < CAL_SWIPE_MIN || dy > Math.abs(dx)) return;
+
+      // Don't navigate if sidebar is open
+      var sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('active')) return;
+
+      _calSwThrottled = true;
+      if (dx < 0) {
+        nextPeriod();
+      } else {
+        previousPeriod();
+      }
+      setTimeout(function() { _calSwThrottled = false; }, 300);
     }, { passive: true });
   })();
 

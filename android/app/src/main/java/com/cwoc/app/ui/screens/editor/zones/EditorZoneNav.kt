@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -96,11 +97,29 @@ val SOURCE_TAB_ZONE_MAP = mapOf(
     "Calendar" to "datesSection",
     "Checklists" to "checklistSection",
     "Alarms" to "alertsSection",
-    "Projects" to "checklistSection",
+    "Projects" to "projectsSection",
     "Tasks" to "taskSection",
     "Notes" to "notesSection",
     "Email" to "emailSection",
     "Indicators" to "healthIndicatorsSection"
+)
+
+/**
+ * Map from source tab name to ALL zone IDs that should be visible/prefilled
+ * in the overview when creating a new chit from that view.
+ *
+ * Unlike SOURCE_TAB_ZONE_MAP (which maps to a single starting zone),
+ * this maps to every zone that should appear expanded or highlighted
+ * in the overview for the given source tab context.
+ */
+val ZONE_PREFILL_MAP = mapOf(
+    "Calendar" to listOf("datesSection"),
+    "Checklists" to listOf("checklistSection"),
+    "Notes" to listOf("notesSection"),
+    "Tasks" to listOf("taskSection", "datesSection"),
+    "Projects" to listOf("projectsSection", "checklistSection"),
+    "Alarms" to listOf("alertsSection"),
+    "Indicators" to listOf("healthIndicatorsSection")
 )
 
 // ─── Sticky Navigation Header ────────────────────────────────────────────────────
@@ -157,15 +176,8 @@ fun EditorZoneNavHeader(
             }
         }
 
-        // Title area
-        Text(
-            text = chitTitle.ifBlank { "New Chit" },
-            color = contentColor.copy(alpha = 0.7f),
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
+        // Spacer to push zone counter and right hamburger to the right
+        Spacer(modifier = Modifier.weight(1f))
 
         // Recurrence/Habit icon in title accessories
         if (habitActive) {
@@ -280,6 +292,7 @@ fun ZoneListPanel(
                     .fillMaxHeight()
                     .background(CwocBackground)
                     .border(width = 2.dp, color = CwocAgedBrownMedium)
+                    .statusBarsPadding()
                     .padding(12.dp)
             ) {
                 // Title
@@ -292,7 +305,7 @@ fun ZoneListPanel(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
                 )
-                HorizontalDivider(color = CwocAgedBrownLight)
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Zone items
@@ -407,6 +420,7 @@ fun ActionsSidebar(
                     .fillMaxHeight()
                     .background(CwocBackground)
                     .border(width = 2.dp, color = CwocAgedBrownMedium)
+                    .statusBarsPadding()
                     .padding(12.dp)
             ) {
                 // Close button at top
@@ -540,7 +554,7 @@ fun OverviewZoneContent(
                 )
                 Text("›", fontSize = 18.sp, color = Color(0xFFA0845A), fontWeight = FontWeight.Bold)
             }
-            HorizontalDivider(color = Color(0xFFE0D4C0), thickness = 1.dp)
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
         }
     }
 }

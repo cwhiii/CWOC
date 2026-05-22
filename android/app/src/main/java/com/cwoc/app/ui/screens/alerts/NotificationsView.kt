@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.remote.NotificationDto
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 /**
  * Notifications mode view — displays server notifications split into
@@ -174,15 +175,16 @@ fun NotificationsView(
         if (showClearConfirmDialog) {
             AlertDialog(
                 onDismissRequest = { showClearConfirmDialog = false },
-                title = { Text("Clear Addressed") },
+                modifier = CwocDialogDefaults.borderModifier,
+                containerColor = CwocDialogDefaults.containerColor,
+                title = { Text("Clear Addressed", style = CwocDialogDefaults.titleStyle) },
                 text = { Text("Delete all addressed notifications? This cannot be undone.") },
                 confirmButton = {
                     TextButton(
                         onClick = {
                             showClearConfirmDialog = false
                             viewModel.clearAddressed()
-                        }
-                    ) {
+                        }, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("Clear All", color = Color(0xFFB71C1C))
                     }
                 },
@@ -534,11 +536,11 @@ private fun StatusBadge(status: String) {
 
 /**
  * Formats a notification date string for display, respecting the user's time_format setting.
- * "12" → "yyyy-MMM-dd hh:mm a", "24" → "yyyy-MMM-dd HH:mm"
+ * "12hour" → "yyyy-MMM-dd hh:mm a", "24hour" → "yyyy-MMM-dd HH:mm"
  * Attempts ISO datetime parsing, falls back to showing the raw string.
  */
 private fun formatNotificationDate(dateStr: String, timeFormat: String): String {
-    val pattern = if (timeFormat == "24") "yyyy-MMM-dd HH:mm" else "yyyy-MMM-dd hh:mm a"
+    val pattern = if (timeFormat == "24hour") "yyyy-MMM-dd HH:mm" else "yyyy-MMM-dd hh:mm a"
     return try {
         val dateTime = LocalDateTime.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         dateTime.format(DateTimeFormatter.ofPattern(pattern))

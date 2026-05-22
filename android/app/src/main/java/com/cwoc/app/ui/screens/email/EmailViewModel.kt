@@ -162,7 +162,7 @@ class EmailViewModel @Inject constructor(
         // Observe settings for email display preferences
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
-                val use24Hour = settings.timeFormat == "24"
+                val use24Hour = settings.timeFormat == "24hour"
                 val checkInterval = settings.emailCheckInterval ?: "manual"
                 val paginateEnabled = settings.paginateEmail == "true"
                 val groupByDate = settings.emailGroupBy != "none"

@@ -1,12 +1,15 @@
 package com.cwoc.app.data.repository
 
+import android.content.Context
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
+import com.cwoc.app.widget.refresh.WidgetUpdateWorker
 import dagger.Lazy
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -27,7 +30,8 @@ class ChitRepository @Inject constructor(
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: Lazy<SyncPushEngine>,
     private val connectivityMonitor: ConnectivityMonitor,
-    private val apiService: Lazy<CwocApiService>
+    private val apiService: Lazy<CwocApiService>,
+    @ApplicationContext private val appContext: Context
 ) {
 
     private val pushScope = CoroutineScope(Dispatchers.IO)
@@ -98,6 +102,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(pinned = true, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("pinned"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Unpin a chit. Updates pinned=false, marks dirty, triggers sync push if online. */
@@ -107,6 +112,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(pinned = false, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("pinned"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Archive a chit. Updates archived=true, marks dirty, triggers sync push if online. */
@@ -116,6 +122,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(archived = true, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("archived"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Unarchive a chit. Updates archived=false, marks dirty, triggers sync push if online. */
@@ -125,6 +132,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(archived = false, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("archived"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Snooze a chit until the given ISO datetime string. Marks dirty, triggers sync push if online. */
@@ -134,6 +142,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(snoozedUntil = until, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("snoozedUntil"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Unsnooze a chit. Clears snoozedUntil, marks dirty, triggers sync push if online. */
@@ -143,6 +152,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(snoozedUntil = null, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("snoozedUntil"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Update a chit's status. Marks dirty, triggers sync push if online. */
@@ -152,6 +162,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(status = newStatus, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("status"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Update RSVP status for a shared chit. Sends directly to server. */
@@ -171,6 +182,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity.copy(title = title, note = note, modifiedDatetime = now))
         dirtyTracker.markDirty(chitId, setOf("title", "note"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Update a chit's date/time fields (for calendar drag-move/resize). Marks dirty, triggers sync push. */
@@ -206,6 +218,7 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(updated)
         dirtyTracker.markDirty(chitId, dirtyFields)
         triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Increment a habit's success count. Marks dirty, triggers sync push. */
@@ -221,6 +234,17 @@ class ChitRepository @Inject constructor(
         ))
         dirtyTracker.markDirty(chitId, setOf("habit_success", "habit_last_action_date"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
+    }
+
+    /** Update a chit's checklist JSON. Marks dirty, triggers sync push if online. */
+    suspend fun updateChecklist(chitId: String, newChecklistJson: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        chitDao.upsert(entity.copy(checklist = newChecklistJson, modifiedDatetime = now))
+        dirtyTracker.markDirty(chitId, setOf("checklist"))
+        triggerPushIfOnline(chitId)
+        notifyWidgets()
     }
 
     /** Decrement a habit's success count. Marks dirty, triggers sync push. */
@@ -235,6 +259,18 @@ class ChitRepository @Inject constructor(
         ))
         dirtyTracker.markDirty(chitId, setOf("habit_success"))
         triggerPushIfOnline(chitId)
+        notifyWidgets()
+    }
+
+    /**
+     * Upsert a chit entity and mark specified fields as dirty, then trigger sync push.
+     * Used when creating or fully updating a chit with known dirty fields.
+     */
+    suspend fun upsertAndSync(entity: ChitEntity, dirtyFields: Set<String>) {
+        chitDao.upsert(entity)
+        dirtyTracker.markDirty(entity.id, dirtyFields)
+        triggerPushIfOnline(entity.id)
+        notifyWidgets()
     }
 
     /**
@@ -247,5 +283,13 @@ class ChitRepository @Inject constructor(
                 syncPushEngine.get().pushSingle(chitId)
             }
         }
+    }
+
+    /**
+     * Notify all home screen widgets that chit data has changed.
+     * Called after any local CRUD operation so widgets reflect the latest state.
+     */
+    private fun notifyWidgets() {
+        WidgetUpdateWorker.refreshNow(appContext)
     }
 }

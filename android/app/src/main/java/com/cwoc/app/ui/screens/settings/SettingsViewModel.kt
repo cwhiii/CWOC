@@ -77,7 +77,7 @@ data class SettingsFormState(
     val omniLockedFilters: String = "[]",
 
     // --- Calendar Section ---
-    val weekStartDay: String = "sun",
+    val weekStartDay: String = "0",
     val allViewStartHour: String = "0",
     val allViewEndHour: String = "23",
     val dayScrollToHour: String = "8",
@@ -1682,7 +1682,7 @@ class SettingsViewModel @Inject constructor(
             omniLockedFilters = entity.omniLockedFilters ?: "[]",
 
             // --- Views Tab: Calendar ---
-            weekStartDay = entity.weekStartDay ?: "sun",
+            weekStartDay = SettingsPayloadMapper.normalizeWeekStartDay(entity.weekStartDay),
             allViewStartHour = entity.allViewStartHour ?: "0",
             allViewEndHour = entity.allViewEndHour ?: "23",
             dayScrollToHour = entity.dayScrollToHour ?: "8",

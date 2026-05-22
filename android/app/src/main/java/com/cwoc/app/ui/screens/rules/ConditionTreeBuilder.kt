@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -334,7 +335,8 @@ private fun ConditionLeafView(
                 textStyle = MaterialTheme.typography.bodySmall,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    .height(48.dp),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
 
@@ -446,7 +448,8 @@ private fun CompactDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .menuAnchor()
+                .menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,

@@ -42,10 +42,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
+import androidx.compose.material3.Button
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // Built-in badge detectors
 private val BUILT_IN_DETECTORS = listOf(
@@ -82,7 +87,7 @@ fun BadgesSettingsTab(
             onMaxBadgesChanged = { onUpdateSetting("badge_max_per_email", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Built-in Detectors
         BuiltInDetectorsSection(
@@ -90,7 +95,7 @@ fun BadgesSettingsTab(
             onDetectorsChanged = { onUpdateSetting("badge_detectors", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Custom Detectors
         CustomDetectorsSection(
@@ -246,7 +251,7 @@ private fun CustomDetectorsSection(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(onClick = { showAddDialog = true }) {
+                OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Detector")
@@ -295,7 +300,9 @@ private fun CustomDetectorsSection(
         val detector = customDetectors[index]
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Detector") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Detector", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Remove \"${detector.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -306,7 +313,7 @@ private fun CustomDetectorsSection(
                         onDetectorsChanged(serializeBadgeDetectorsJson(updated))
                     }
                     showDeleteConfirm = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }, colors = CwocDialogDefaults.dangerButtonColors()) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = null }) { Text("Cancel") }
@@ -368,15 +375,20 @@ private fun DetectorEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it },
-                    label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = pattern, onValueChange = { pattern = it },
-                    label = { Text("Regex Pattern") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Regex Pattern") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 OutlinedTextField(value = icon, onValueChange = { icon = it },
-                    label = { Text("Icon (emoji)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    label = { Text("Icon (emoji)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors())
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Enabled", modifier = Modifier.weight(1f))
                     Switch(checked = enabled, onCheckedChange = { enabled = it })
@@ -444,7 +456,8 @@ private fun BadgeDropdown(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-            modifier = Modifier.menuAnchor().fillMaxWidth()
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = dropdownExpanded,

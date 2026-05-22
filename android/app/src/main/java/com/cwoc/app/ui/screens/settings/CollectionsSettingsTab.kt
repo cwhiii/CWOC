@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -61,6 +62,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.components.CwocSectionHeading
 
 // --- Default color palette (matches web CWOC defaults) ---
 private val DEFAULT_COLORS = listOf(
@@ -136,7 +140,7 @@ fun CollectionsSettingsTab(
             onTagsChanged = { onUpdateSetting("shared_tags", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 2: Custom Colors
         CustomColorsSection(
@@ -149,7 +153,7 @@ fun CollectionsSettingsTab(
             onBlockedBorderColorChanged = { onUpdateSetting("blocked_border_color", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 3: Saved Locations
         SavedLocationsSection(
@@ -157,7 +161,7 @@ fun CollectionsSettingsTab(
             onLocationsChanged = { onUpdateSetting("saved_locations", it) }
         )
 
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         // Section 4: Default Notifications
         DefaultNotificationsSection(
@@ -250,7 +254,7 @@ private fun TagEditorSection(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(onClick = { showAddDialog = true }) {
+                OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Tag")
@@ -303,7 +307,9 @@ private fun TagEditorSection(
         val tag = tags[index]
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Tag") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Tag", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to delete \"${tag.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -311,7 +317,7 @@ private fun TagEditorSection(
                     newTags.removeAt(index)
                     onTagsChanged(serializeTagsJson(newTags))
                     showDeleteConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -493,9 +499,11 @@ private fun EnhancedTagEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, modifier = Modifier.weight(1f))
+                Text(title, modifier = Modifier.weight(1f), style = CwocDialogDefaults.titleStyle)
                 // Favorite star toggle (Req 15.2)
                 IconButton(onClick = { isFavorite = !isFavorite }) {
                     Text(
@@ -517,7 +525,8 @@ private fun EnhancedTagEditDialog(
                     onValueChange = { name = it },
                     label = { Text("Tag Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Preview chip (Req 15.6) — updates within 100ms of color change
@@ -536,7 +545,7 @@ private fun EnhancedTagEditDialog(
                     )
                 }
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 // Background Color section
                 Text("Background Color", style = MaterialTheme.typography.labelMedium)
@@ -587,10 +596,11 @@ private fun EnhancedTagEditDialog(
                     isError = bgHexError,
                     supportingText = if (bgHexError) {{ Text("Invalid hex color") }} else null,
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 // Font Color section (Req 15.5)
                 Text("Font Color", style = MaterialTheme.typography.labelMedium)
@@ -641,17 +651,14 @@ private fun EnhancedTagEditDialog(
                     isError = fgHexError,
                     supportingText = if (fgHexError) {{ Text("Invalid hex color") }} else null,
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 // Sharing section (Req 15.3, 15.4)
-                Text(
-                    text = "🔗 Sharing",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "🔗 Sharing")
 
                 // Current shares list
                 if (shares.isEmpty()) {
@@ -710,7 +717,8 @@ private fun EnhancedTagEditDialog(
                         onValueChange = { shareUserInput = it },
                         label = { Text("User") },
                         singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
 
                     // Role selector
@@ -725,7 +733,8 @@ private fun EnhancedTagEditDialog(
                             modifier = Modifier
                                 .menuAnchor()
                                 .width(100.dp),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = shareRoleExpanded) }
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = shareRoleExpanded) },
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         ExposedDropdownMenu(
                             expanded = shareRoleExpanded,
@@ -767,14 +776,17 @@ private fun EnhancedTagEditDialog(
                         }
                     },
                     enabled = shareUserInput.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
                 ) {
                     Text("➕ Share")
                 }
 
                 // Parent dropdown (optional)
                 if (availableParents.isNotEmpty()) {
-                    HorizontalDivider()
+                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                     ExposedDropdownMenuBox(
                         expanded = parentExpanded,
                         onExpandedChange = { parentExpanded = !parentExpanded }
@@ -787,7 +799,8 @@ private fun EnhancedTagEditDialog(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = parentExpanded) },
                             modifier = Modifier
                                 .menuAnchor()
-                                .fillMaxWidth()
+                                .fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         ExposedDropdownMenu(
                             expanded = parentExpanded,
@@ -828,8 +841,7 @@ private fun EnhancedTagEditDialog(
                         )
                     )
                 },
-                enabled = name.isNotBlank() && !bgHexError && !fgHexError
-            ) {
+                enabled = name.isNotBlank() && !bgHexError && !fgHexError, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Save")
             }
         },
@@ -962,7 +974,7 @@ private fun CustomColorsSection(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(onClick = { showAddDialog = true }) {
+                OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Color")
@@ -1140,7 +1152,9 @@ private fun BorderColorAssignmentDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Assign Border Color") },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text("Assign Border Color", style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Preview of the selected color
@@ -1164,12 +1178,12 @@ private fun BorderColorAssignmentDialog(
         confirmButton = {
             Column {
                 if (showOverdueOption) {
-                    TextButton(onClick = onAssignOverdue) {
+                    TextButton(onClick = onAssignOverdue, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("Overdue Border")
                     }
                 }
                 if (showBlockedOption) {
-                    TextButton(onClick = onAssignBlocked) {
+                    TextButton(onClick = onAssignBlocked, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("Blocked Border")
                     }
                 }
@@ -1196,7 +1210,9 @@ private fun ColorEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -1204,7 +1220,8 @@ private fun ColorEditDialog(
                     onValueChange = { hexValue = it },
                     label = { Text("Hex Color (e.g. #FF5733)") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 // Preview
                 if (hexValue.length >= 4) {
@@ -1224,15 +1241,14 @@ private fun ColorEditDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(hexValue) },
-                enabled = hexValue.matches(Regex("^#[0-9A-Fa-f]{3,8}$"))
-            ) {
+                enabled = hexValue.matches(Regex("^#[0-9A-Fa-f]{3,8}$")), colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Save")
             }
         },
         dismissButton = {
             Row {
                 if (showDelete && onDelete != null) {
-                    TextButton(onClick = onDelete) {
+                    TextButton(onClick = onDelete, colors = CwocDialogDefaults.dangerButtonColors()) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -1297,7 +1313,7 @@ private fun SavedLocationsSection(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(onClick = { showAddDialog = true }) {
+                OutlinedButton(onClick = { showAddDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Location")
@@ -1349,7 +1365,9 @@ private fun SavedLocationsSection(
         val location = locations[index]
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Delete Location") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Location", style = CwocDialogDefaults.titleStyle) },
             text = { Text("Are you sure you want to delete \"${location.name}\"?") },
             confirmButton = {
                 TextButton(onClick = {
@@ -1361,7 +1379,7 @@ private fun SavedLocationsSection(
                     }
                     onLocationsChanged(serializeLocationsJson(newLocations))
                     showDeleteConfirm = null
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -1437,7 +1455,9 @@ private fun LocationEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -1445,22 +1465,23 @@ private fun LocationEditDialog(
                     onValueChange = { name = it },
                     label = { Text("Location Name") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("Address") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(name, address) },
-                enabled = name.isNotBlank()
-            ) {
+                enabled = name.isNotBlank(), colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Save")
             }
         },
@@ -1502,11 +1523,7 @@ private fun DefaultNotificationsSection(
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Start Time Notifications
-                Text(
-                    text = "Start Time Notifications",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Start Time Notifications")
 
                 if (notifications.startNotifications.isEmpty()) {
                     Text(
@@ -1528,20 +1545,16 @@ private fun DefaultNotificationsSection(
                     }
                 }
 
-                OutlinedButton(onClick = { showAddStartDialog = true }) {
+                OutlinedButton(onClick = { showAddStartDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Start Rule")
                 }
 
-                HorizontalDivider()
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
                 // Due Time Notifications
-                Text(
-                    text = "Due Time Notifications",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                CwocSectionHeading(text = "Due Time Notifications")
 
                 if (notifications.dueNotifications.isEmpty()) {
                     Text(
@@ -1563,7 +1576,7 @@ private fun DefaultNotificationsSection(
                     }
                 }
 
-                OutlinedButton(onClick = { showAddDueDialog = true }) {
+                OutlinedButton(onClick = { showAddDueDialog = true }, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Due Rule")
@@ -1660,7 +1673,9 @@ private fun NotificationOffsetDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
+        title = { Text(title, style = CwocDialogDefaults.titleStyle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Value + Unit row
@@ -1678,7 +1693,8 @@ private fun NotificationOffsetDialog(
                         modifier = Modifier.width(80.dp),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        )
+                        ),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
 
                     ExposedDropdownMenuBox(
@@ -1692,7 +1708,8 @@ private fun NotificationOffsetDialog(
                             modifier = Modifier
                                 .menuAnchor()
                                 .width(80.dp),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) }
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
+                            colors = CwocInputDefaults.outlinedColors()
                         )
                         ExposedDropdownMenu(
                             expanded = unitExpanded,
@@ -1742,8 +1759,7 @@ private fun NotificationOffsetDialog(
                         ))
                     }
                 },
-                enabled = (valueText.toIntOrNull() ?: 0) > 0
-            ) {
+                enabled = (valueText.toIntOrNull() ?: 0) > 0, colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Add")
             }
         },

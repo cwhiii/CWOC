@@ -1,11 +1,14 @@
 package com.cwoc.app.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -29,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.sort.SortDirection
 import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 
 /**
  * Human-readable labels for each sort field.
@@ -102,7 +107,10 @@ fun SortPanel(
 
                 ExposedDropdownMenu(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     SortField.entries.forEach { field ->
                         DropdownMenuItem(

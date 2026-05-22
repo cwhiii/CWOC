@@ -39,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cwoc.app.ui.components.CwocPagePanel
 import com.cwoc.app.ui.components.MarkdownRenderer
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Help screen with two states: topic list view and topic detail view.
@@ -90,6 +92,9 @@ fun HelpScreen(
                             )
                         }
                     },
+                    actions = {
+                        com.cwoc.app.ui.components.TopBarProfileAvatar()
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -97,17 +102,22 @@ fun HelpScreen(
                 )
             }
         ) { paddingValues ->
-            Column(
+            CwocPagePanel(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .padding(8.dp)
+            ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
             ) {
                 MarkdownRenderer(
                     markdown = currentTopic.content,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
             }
         }
     } else {
@@ -124,6 +134,9 @@ fun HelpScreen(
                             )
                         }
                     },
+                    actions = {
+                        com.cwoc.app.ui.components.TopBarProfileAvatar()
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -131,6 +144,12 @@ fun HelpScreen(
                 )
             }
         ) { paddingValues ->
+            CwocPagePanel(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(8.dp)
+            ) {
             when {
                 isLoading -> {
                     HelpLoadingState()
@@ -149,9 +168,10 @@ fun HelpScreen(
                         searchQuery = searchQuery,
                         onSearchChange = { searchQuery = it },
                         onTopicClick = { slug -> viewModel.selectTopic(slug) },
-                        modifier = Modifier.padding(paddingValues)
+                        modifier = Modifier
                     )
                 }
+            }
             }
         }
     }
@@ -181,7 +201,8 @@ private fun HelpTopicList(
                 onValueChange = onSearchChange,
                 placeholder = { Text("Search help topics...") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             Spacer(modifier = Modifier.height(8.dp))
         }

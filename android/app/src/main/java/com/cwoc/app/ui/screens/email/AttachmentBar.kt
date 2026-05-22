@@ -3,6 +3,8 @@ package com.cwoc.app.ui.screens.email
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +48,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -214,7 +218,10 @@ private fun AttachmentChip(
         // Context menu (View / Download)
         DropdownMenu(
             expanded = showContextMenu,
-            onDismissRequest = { showContextMenu = false }
+            onDismissRequest = { showContextMenu = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             DropdownMenuItem(
                 text = { Text("View") },

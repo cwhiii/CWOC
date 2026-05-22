@@ -61,16 +61,20 @@ var _mobileZoneListEl = null;
 /** The zone list backdrop */
 var _mobileZoneListBackdrop = null;
 
+/** Whether auto-focus has already fired for this new chit session */
+var _mobileAutoFocusDone = false;
+
 /* ── Tab → Zone Mapping (same as _collapseAllZonesForNewChit) ─────────────── */
 
 var _mobileTabZoneMap = {
   'Calendar':   'datesSection',
   'Checklists': 'checklistSection',
   'Alarms':     'alertsSection',
-  'Projects':   'checklistSection',
+  'Projects':   'projectsSection',
   'Tasks':      'taskSection',
   'Notes':      'notesSection',
   'Email':      'emailSection',
+  'Indicators': 'healthIndicatorsSection',
 };
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
@@ -229,6 +233,8 @@ function _getMobileStartZoneIdx() {
         }
       }
     } catch (e) { /* ignore */ }
+    // Existing chit with no saved session zone — start on Overview (index 0)
+    return 0;
   }
 
   var sourceTab = 'Calendar';
@@ -361,6 +367,30 @@ function _mobileShowZone(idx) {
   // Scroll editor to top
   var editorEl = document.getElementById('mainEditor');
   if (editorEl) editorEl.scrollTop = 0;
+
+  // Auto-focus for new chits — fires once on initial zone display
+  if (window.isNewChit && !_mobileAutoFocusDone) {
+    _mobileAutoFocusDone = true;
+    var sourceTab = 'Calendar';
+    try {
+      var saved = localStorage.getItem('cwoc_source_tab');
+      if (saved) sourceTab = saved;
+    } catch (e) { /* ignore */ }
+
+    setTimeout(function() {
+      if (sourceTab === 'Notes') {
+        var noteEl = document.getElementById('note');
+        if (noteEl) noteEl.focus();
+      } else if (sourceTab === 'Checklists') {
+        var clInput = document.querySelector('#checklistContent .checklist-new-item input, #checklistContent .cl-add-input');
+        if (clInput) clInput.focus();
+      } else if (sourceTab === 'Tasks') {
+        _dateModeSuppressUnsaved = true;
+        _setDateMode('due');
+        _dateModeSuppressUnsaved = false;
+      }
+    }, 150);
+  }
 }
 
 /**
@@ -627,28 +657,28 @@ function _renderMobileOverview(container) {
     return row;
   }
 
-  // 1. Title (always shown — tapping focuses the title input for inline editing)
+  // 1. Title (always shown — inline editable in place)
   var titleInput = document.getElementById('title');
   var titleVal = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : '';
-  if (titleVal) {
-    var titleRow = document.createElement('div');
-    titleRow.className = 'mobile-overview-row mobile-overview-title-row';
-    titleRow.innerHTML = '<span class="mobile-overview-icon">✏️</span>' +
-      '<span class="mobile-overview-text">' + _escHtml(titleVal) + '</span>' +
-      '<span class="mobile-overview-arrow">›</span>';
-    titleRow.addEventListener('click', function() {
-      // Show the title field, focus input
-      var tf = container.querySelector('#titleField');
-      if (tf) tf.style.display = '';
-      titleInput.focus();
-      titleInput.select();
-    });
-    panel.appendChild(titleRow);
-  } else {
-    // No title yet — show editable title input directly
-    var tf = container.querySelector('#titleField');
-    if (tf) tf.style.display = '';
-  }
+  var titleRow = document.createElement('div');
+  titleRow.className = 'mobile-overview-row mobile-overview-title-row mobile-overview-title-editable';
+  titleRow.innerHTML = '<span class="mobile-overview-icon">✏️</span>' +
+    '<input type="text" class="mobile-overview-title-input" value="' + _escHtml(titleVal).replace(/"/g, '&quot;') + '" placeholder="Enter title" />';
+  var titleInlineInput = titleRow.querySelector('.mobile-overview-title-input');
+  // Sync changes back to the real title input
+  titleInlineInput.addEventListener('input', function() {
+    if (titleInput) {
+      titleInput.value = titleInlineInput.value;
+      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  titleInlineInput.addEventListener('change', function() {
+    if (titleInput) {
+      titleInput.value = titleInlineInput.value;
+      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  panel.appendChild(titleRow);
 
   // 2. Weather (only if real weather data loaded)
   if (cws && !cws.classList.contains('weather-placeholder')) {
@@ -677,7 +707,7 @@ function _renderMobileOverview(container) {
     panel.appendChild(makeRow('🗓️', _escHtml(datesText), 'datesSection'));
   }
 
-  // 4. Notes (show preview of the note content)
+  // 4. Notes (show preview of the note content with overflow fade)
   var noteEl = document.getElementById('note');
   if (noteEl && noteEl.value.trim()) {
     var noteLines = noteEl.value.trim().split('\n').filter(function(l) { return l.trim(); });
@@ -686,9 +716,9 @@ function _renderMobileOverview(container) {
       if (trimmed.length > 60) trimmed = trimmed.substring(0, 60) + '…';
       return _escHtml(trimmed);
     }).join('<br>');
-    if (noteLines.length > 3) notePreview += '<br><span style="opacity:0.5;">…' + (noteLines.length - 3) + ' more lines</span>';
+    var hasOverflow = noteLines.length > 3;
     var noteRow = document.createElement('div');
-    noteRow.className = 'mobile-overview-row mobile-overview-multiline';
+    noteRow.className = 'mobile-overview-row mobile-overview-multiline' + (hasOverflow ? ' mobile-overview-overflow' : '');
     noteRow.innerHTML = '<span class="mobile-overview-icon">📝</span>' +
       '<span class="mobile-overview-text">' + notePreview + '</span>' +
       '<span class="mobile-overview-arrow">›</span>';
@@ -733,13 +763,58 @@ function _renderMobileOverview(container) {
     }
   }
 
-  // 6. Location
+  // 6. Status (if set)
+  var statusEl = document.getElementById('status');
+  if (statusEl && statusEl.value) {
+    var statusText = statusEl.value;
+    var priorityEl = document.getElementById('priority');
+    if (priorityEl && priorityEl.value) statusText += ' • ' + priorityEl.value;
+    panel.appendChild(makeRow('📋', _escHtml(statusText), 'taskSection'));
+  }
+
+  // 7. Tags (user tags only, filter out system tags)
+  var userTags = (window._currentTagSelection || []).filter(function(tag) {
+    var systemTags = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes'];
+    if (systemTags.indexOf(tag) >= 0) return false;
+    if (tag.toLowerCase().indexOf('cwoc_system/') === 0) return false;
+    return true;
+  });
+  if (userTags.length > 0) {
+    var tagText = userTags.map(function(t) { return t.split('/').pop(); }).join(', ');
+    panel.appendChild(makeRow('🏷️', _escHtml(tagText), 'tagsSection'));
+  }
+
+  // 8. People
+  var peopleChips = document.querySelectorAll('#peopleContent .people-chip');
+  if (peopleChips.length > 0) {
+    var peopleNames = [];
+    peopleChips.forEach(function(chip) {
+      var name = chip.querySelector('.people-chip-name');
+      if (name) peopleNames.push(name.textContent.trim());
+    });
+    if (peopleNames.length > 0) {
+      panel.appendChild(makeRow('👥', _escHtml(peopleNames.join(', ')), 'peopleSection'));
+    }
+  }
+
+  // 9. Location
   var locEl = document.getElementById('location');
   if (locEl && locEl.value.trim()) {
     panel.appendChild(makeRow('📍', _escHtml(locEl.value.trim()), 'locationSection'));
   }
 
-  // 7. Indicators (show count of populated indicators)
+  // 10. Alerts (show count)
+  if (window._alertsData) {
+    var alertCount = (window._alertsData.alarms || []).length +
+      (window._alertsData.timers || []).length +
+      (window._alertsData.stopwatches || []).length +
+      (window._alertsData.notifications || []).filter(function(n) { return !n._direction || n._direction !== 'unset'; }).length;
+    if (alertCount > 0) {
+      panel.appendChild(makeRow('🔔', alertCount + ' alert' + (alertCount !== 1 ? 's' : '') + ' configured', 'alertsSection'));
+    }
+  }
+
+  // 11. Indicators (show count of populated indicators)
   var healthContent = document.getElementById('healthIndicatorsContent');
   if (healthContent) {
     var entries = healthContent.querySelectorAll('.indicator-field');
@@ -758,7 +833,7 @@ function _renderMobileOverview(container) {
     }
   }
 
-  // 8. Custom zones (only show if fields have actual values; display those values)
+  // 12. Custom zones (only show if fields have actual values; display those values)
   var visibleZones = _getMobileVisibleZones();
   visibleZones.forEach(function(zone) {
     if (!zone.isCustomZone) return;

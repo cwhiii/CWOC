@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Filter text search input with saved search chips.
@@ -71,14 +71,8 @@ fun FilterTextSection(
             fontSize = 13.sp,
             color = FilterBrownText
         ),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = FilterBrownBorder,
-            unfocusedBorderColor = FilterBrownBorder.copy(alpha = 0.6f),
-            focusedContainerColor = FilterParchmentBg,
-            unfocusedContainerColor = FilterParchmentBg,
-            cursorColor = FilterBrownBorder
-        ),
-        shape = RoundedCornerShape(3.dp)
+        shape = RoundedCornerShape(3.dp),
+        colors = CwocInputDefaults.outlinedColors()
     )
 
     // Saved search chips (hidden when empty)

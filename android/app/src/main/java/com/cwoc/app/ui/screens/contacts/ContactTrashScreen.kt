@@ -50,6 +50,7 @@ import com.cwoc.app.ui.components.firstMultiValue
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.cwoc.app.ui.theme.CwocDialogDefaults
 
 /**
  * Contact Trash screen — lists soft-deleted contacts with restore and permanent delete.
@@ -77,7 +78,7 @@ fun ContactTrashScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🗑️ Deleted Contacts") },
+                title = { Text("🗑️ Deleted Contacts", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -94,6 +95,7 @@ fun ContactTrashScreen(
                             Icon(Icons.Default.Delete, "Delete Selected", tint = MaterialTheme.colorScheme.error)
                         }
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 }
             )
         }
@@ -146,7 +148,7 @@ fun ContactTrashScreen(
                             onRestore = { viewModel.restoreContact(contact.id) },
                             onDelete = { showPurgeConfirm = contact.id }
                         )
-                        HorizontalDivider()
+                        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                     }
                 }
             }
@@ -157,13 +159,15 @@ fun ContactTrashScreen(
     showPurgeConfirm?.let { contactId ->
         AlertDialog(
             onDismissRequest = { showPurgeConfirm = null },
-            title = { Text("Permanently Delete") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Permanently Delete", style = CwocDialogDefaults.titleStyle) },
             text = { Text("This contact will be permanently deleted. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.purgeContact(contactId)
                     showPurgeConfirm = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }, colors = CwocDialogDefaults.dangerButtonColors()) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showPurgeConfirm = null }) { Text("Cancel") }
@@ -175,13 +179,15 @@ fun ContactTrashScreen(
     if (showBulkPurgeConfirm) {
         AlertDialog(
             onDismissRequest = { showBulkPurgeConfirm = false },
-            title = { Text("Permanently Delete ${uiState.selectedIds.size} Contact(s)") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Permanently Delete ${uiState.selectedIds.size} Contact(s)", style = CwocDialogDefaults.titleStyle) },
             text = { Text("These contacts will be permanently deleted. This cannot be undone.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.bulkPurge()
                     showBulkPurgeConfirm = false
-                }) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
+                }, colors = CwocDialogDefaults.dangerButtonColors()) { Text("Delete All", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showBulkPurgeConfirm = false }) { Text("Cancel") }

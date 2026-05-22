@@ -35,10 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.cwoc.app.data.remote.NotificationDto
 
 /**
@@ -56,6 +60,9 @@ import com.cwoc.app.data.remote.NotificationDto
 fun ProfileMenu(
     username: String?,
     displayName: String?,
+    profileImageUrl: String? = null,
+    serverUrl: String = "",
+    authToken: String = "",
     onLogout: () -> Unit,
     onSwitchUser: (() -> Unit)? = null,
     onViewProfile: (() -> Unit)? = null,
@@ -77,31 +84,35 @@ fun ProfileMenu(
             onClick = { expanded = true }
         ) {
             Box {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Show first letter of display name, or default person icon
-                    val initial = (displayName ?: username)?.firstOrNull()?.uppercase()
-                    if (initial != null) {
-                        Text(
-                            text = initial,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                val avatarSize = 32.dp
+
+                if (profileImageUrl != null && serverUrl.isNotEmpty()) {
+                    // Load actual profile image via Coil
+                    val fullUrl = "$serverUrl$profileImageUrl"
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(fullUrl)
+                            .addHeader("Authorization", "Bearer $authToken")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Profile",
+                        modifier = Modifier
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            // Fallback to initials while loading
+                            ProfileInitialsCircle(displayName = displayName, username = username)
+                        },
+                        error = {
+                            // Fallback to initials on error
+                            ProfileInitialsCircle(displayName = displayName, username = username)
+                        }
+                    )
+                } else {
+                    // No image URL — show initials fallback
+                    ProfileInitialsCircle(displayName = displayName, username = username)
                 }
 
                 // Notification badge
@@ -153,7 +164,7 @@ fun ProfileMenu(
                 }
             }
 
-            HorizontalDivider()
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
             // Switch User
             if (onSwitchUser != null) {
@@ -186,7 +197,7 @@ fun ProfileMenu(
                 }
             )
 
-            HorizontalDivider()
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
             // Notifications header — clickable to navigate to full notifications view
             DropdownMenuItem(
@@ -240,6 +251,41 @@ fun ProfileMenu(
 }
 
 /**
+ * Initials circle fallback for the profile avatar when no image is available.
+ */
+@Composable
+private fun ProfileInitialsCircle(
+    displayName: String?,
+    username: String?
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        val initial = (displayName ?: username)?.firstOrNull()?.uppercase()
+        if (initial != null) {
+            Text(
+                text = initial,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Profile",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
  * A single notification card within the profile dropdown.
  * Shows title, owner/type info, and action buttons (Accept/Decline or Snooze/Dismiss).
  */
@@ -257,7 +303,7 @@ private fun NotificationCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
     ) {
-        HorizontalDivider(color = Color(0x26896B43))
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
 
         Spacer(modifier = Modifier.height(4.dp))
 

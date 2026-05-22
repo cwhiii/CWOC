@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * A single entry in a multi-value field (phone, email, address, etc.)
@@ -142,7 +143,8 @@ fun MultiValueSection(
                     modifier = Modifier.width(80.dp),
                     placeholder = { Text(defaultLabel, style = MaterialTheme.typography.bodySmall) },
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodySmall
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Value input (flex)
@@ -152,7 +154,8 @@ fun MultiValueSection(
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(valuePlaceholder, style = MaterialTheme.typography.bodySmall) },
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodySmall
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
 
                 // Extra actions (map button, link icon, calendar toggle, etc.)

@@ -57,6 +57,8 @@ import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.domain.email.TextSelection
 import kotlinx.coroutines.delay
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -138,6 +140,10 @@ fun EmailComposeZone(
     onDownloadRaw: () -> Unit,
     onAddContact: () -> Unit,
     onNavigateToMessage: (String) -> Unit,
+
+    // ─── Settings for SendLaterModal ─────────────────────────────────────────
+    is24Hour: Boolean = true,
+    calendarSnap: Int = 5,
 
     modifier: Modifier = Modifier
 ) {
@@ -296,7 +302,8 @@ fun EmailComposeZone(
                 onValueChange = { onSubjectChange(it) },
                 label = { Text("Subject") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
 
@@ -359,7 +366,8 @@ fun EmailComposeZone(
                     label = { Text("Body") },
                     minLines = 8,
                     maxLines = 20,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
             }
 
@@ -420,7 +428,7 @@ fun EmailComposeZone(
         )
 
         Spacer(modifier = Modifier.height(4.dp))
-        HorizontalDivider()
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
         Spacer(modifier = Modifier.height(4.dp))
 
         // ─── Read Receipt Checkbox (Requirements 52.1-52.3) ──────────────────
@@ -538,7 +546,9 @@ fun EmailComposeZone(
             onSchedule = { isoDatetime ->
                 showSendLaterModal = false
                 onSendLater(isoDatetime)
-            }
+            },
+            is24Hour = is24Hour,
+            calendarSnap = calendarSnap
         )
     }
 
@@ -792,10 +802,12 @@ private fun PgpPasswordDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Text(
                 text = "Decrypt Message",
-                fontWeight = FontWeight.Bold
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {
@@ -809,15 +821,15 @@ private fun PgpPasswordDialog(
                     onValueChange = { password = it },
                     label = { Text("Password") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(password) },
-                enabled = password.isNotBlank()
-            ) {
+                enabled = password.isNotBlank(), colors = CwocDialogDefaults.confirmButtonColors()) {
                 Text("Decrypt", color = ParchmentBrown)
             }
         },

@@ -689,6 +689,7 @@ def _resolve_location_coords(owner_id: str, location_ref: str) -> Optional[Dict]
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
 
         cursor.execute(
@@ -893,6 +894,7 @@ def _get_username_for_user(owner_id: str) -> str:
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
         cursor.execute(
             "SELECT username, display_name FROM users WHERE id = ?", (owner_id,)
@@ -988,6 +990,7 @@ def execute_action(
 
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
         current_time = datetime.utcnow().isoformat()
         actor = _build_rule_actor(rule_name, rule_id, owner_id)
@@ -1672,6 +1675,7 @@ def dispatch_trigger(
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
 
         # ── 1. Load enabled rules for this trigger + owner ───────

@@ -16,10 +16,12 @@ var _overlay = null;
 var _activeEl = null;
 var _is12Hour = false;
 var _minuteStep = 5;
+var _baseStep = 5; // original snap step from settings
 var _hourInput = null;
 var _minInput = null;
 var _ampmInput = null;
 var _suppressSync = false;
+var _fineMode = false; // false = Snap, true = All
 
 function _getVal(el) {
   if (el.dataset && el.dataset.time !== undefined) return el.dataset.time;
@@ -47,8 +49,10 @@ cwocTimePicker.open = function(el) {
   _activeEl = el;
 
   if (typeof _snapMinutes !== 'undefined' && _snapMinutes > 0) {
-    _minuteStep = _snapMinutes;
+    _baseStep = _snapMinutes;
   }
+  _fineMode = false; // always start in Snap mode
+  _minuteStep = _baseStep;
 
   var fmt = _getTimeFormat();
   _is12Hour = (fmt === '12hour' || fmt === '12houranalog');
@@ -140,6 +144,38 @@ function _buildAndShow() {
   drums.appendChild(inputRow);
   modal.appendChild(drums);
 
+  // Snap/All toggle (only show if base step > 1)
+  if (_baseStep > 1) {
+    var toggleRow = document.createElement('div');
+    toggleRow.className = 'cwoc-tp-toggle-row';
+
+    var pill = document.createElement('div');
+    pill.className = 'cwoc-2val-toggle cwoc-tp-snap-toggle';
+    pill.id = 'cwoc-tp-snap-pill';
+
+    var snapSpan = document.createElement('span');
+    snapSpan.dataset.val = 'snap';
+    snapSpan.textContent = 'Snap';
+    snapSpan.className = 'active';
+
+    var allSpan = document.createElement('span');
+    allSpan.dataset.val = 'all';
+    allSpan.textContent = 'All';
+
+    pill.appendChild(snapSpan);
+    pill.appendChild(allSpan);
+    toggleRow.appendChild(pill);
+    modal.appendChild(toggleRow);
+
+    pill.addEventListener('click', function() {
+      _fineMode = !_fineMode;
+      snapSpan.classList.toggle('active', !_fineMode);
+      allSpan.classList.toggle('active', _fineMode);
+      _minuteStep = _fineMode ? 1 : _baseStep;
+      _rebuildMinuteDrum();
+    });
+  }
+
   // Buttons
   var btnRow = document.createElement('div');
   btnRow.className = 'cwoc-tp-buttons';
@@ -169,6 +205,20 @@ function _buildAndShow() {
 
   _overlay.appendChild(modal);
   document.body.appendChild(_overlay);
+
+  // Click anywhere on modal (not on an input) → blur focused input (return to scroll mode)
+  modal.addEventListener('mousedown', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('cwoc-tp-num-input')) return;
+    if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+      document.activeElement.blur();
+    }
+  });
+  modal.addEventListener('touchstart', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('cwoc-tp-num-input')) return;
+    if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+      document.activeElement.blur();
+    }
+  });
 
   // Animate in
   requestAnimationFrame(function() {
@@ -218,10 +268,20 @@ function _buildAndShow() {
     var max = _is12Hour ? 12 : 23;
 
     if (pos === 0) {
-      // First digit: allow if it COULD form a valid number (0-2 for 24h, 0-1 for 12h)
+      // First digit: if it can't be the start of a 2-digit hour, treat as complete single-digit hour
       var d = parseInt(digit, 10);
       var maxFirst = _is12Hour ? 1 : 2;
-      if (d > maxFirst) { return; } // reject
+      if (d > maxFirst) {
+        // Single-digit hour (e.g., "9" → "09"), advance to minutes
+        var padded = '0' + digit;
+        var pn = parseInt(padded, 10);
+        if (pn > max || (_is12Hour && pn < 1)) return; // reject invalid
+        _hourInput.value = padded;
+        _scrollDrumTo(0, pn);
+        _minInput.focus();
+        _minInput.setSelectionRange(0, 0);
+        return;
+      }
       _hourInput.value = newVal;
       _hourInput.setSelectionRange(1, 1);
       if (n <= max) _scrollDrumTo(0, n);
@@ -249,20 +309,32 @@ function _buildAndShow() {
     var newVal = val.substring(0, pos) + digit + val.substring(pos + 1);
     newVal = newVal.substring(0, 2);
     var n = parseInt(newVal, 10);
-    if (n > 59) { newVal = val; }
-    else {
-      _minInput.value = newVal;
-      var newPos = pos + 1;
-      if (newPos >= 2 && _ampmInput) {
-        _ampmInput.focus();
-        _ampmInput.select();
-      } else {
-        _minInput.setSelectionRange(Math.min(newPos, 2), Math.min(newPos, 2));
+
+    if (pos === 0) {
+      var md = parseInt(digit, 10);
+      if (md > 5) {
+        // Single-digit minute (e.g., "7" → "07"), advance to AM/PM or done
+        var padded = '0' + digit;
+        _minInput.value = padded;
+        var snapped = Math.round(parseInt(padded, 10) / _minuteStep) * _minuteStep;
+        _scrollDrumTo(1, snapped);
+        if (_ampmInput) { _ampmInput.focus(); _ampmInput.select(); }
+        return;
       }
-      // Scroll to nearest snap for visual feedback
-      var snapped = Math.round(n / _minuteStep) * _minuteStep;
-      _scrollDrumTo(1, snapped);
     }
+
+    if (n > 59) { return; }
+    _minInput.value = newVal;
+    var newPos = pos + 1;
+    if (newPos >= 2 && _ampmInput) {
+      _ampmInput.focus();
+      _ampmInput.select();
+    } else {
+      _minInput.setSelectionRange(Math.min(newPos, 2), Math.min(newPos, 2));
+    }
+    // Scroll to nearest snap for visual feedback
+    var snapped = Math.round(n / _minuteStep) * _minuteStep;
+    _scrollDrumTo(1, snapped);
   });
 
   // Prevent default input behavior (we handle everything in keydown)
@@ -337,6 +409,77 @@ function _addPad(scroller) {
   var p = document.createElement('div');
   p.className = 'cwoc-tp-item cwoc-tp-pad';
   scroller.appendChild(p);
+}
+
+function _rebuildMinuteDrum() {
+  if (!_overlay) return;
+  var allDrums = _overlay.querySelectorAll('.cwoc-tp-drum');
+  var minDrum = allDrums[1];
+  if (!minDrum) return;
+
+  // Save current minute value from input
+  var currentMin = parseInt(_minInput.value, 10) || 0;
+
+  var scroller = minDrum.querySelector('.cwoc-tp-scroller');
+  scroller.innerHTML = '';
+
+  // Top padding
+  _addPad(scroller); _addPad(scroller);
+
+  for (var m = 0; m < 60; m += _minuteStep) {
+    var d = document.createElement('div');
+    d.className = 'cwoc-tp-item';
+    d.dataset.value = m;
+    d.textContent = String(m).padStart(2, '0');
+    scroller.appendChild(d);
+  }
+
+  // Bottom padding
+  _addPad(scroller); _addPad(scroller);
+
+  // Re-attach tap-to-scroll handler
+  scroller.addEventListener('click', function(e) {
+    var item = e.target.closest('.cwoc-tp-item:not(.cwoc-tp-pad)');
+    if (item) {
+      var items = scroller.querySelectorAll('.cwoc-tp-item:not(.cwoc-tp-pad)');
+      var idx = Array.from(items).indexOf(item);
+      var itemH = item.offsetHeight;
+      scroller.scrollTo({ top: (2 * itemH) + (idx * itemH) - (scroller.offsetHeight / 2 - itemH / 2), behavior: 'smooth' });
+    }
+  });
+
+  // Re-attach scroll sync
+  scroller.addEventListener('scroll', function() { _onScroll(scroller); });
+  scroller.addEventListener('touchstart', function() {
+    _suppressSync = false;
+    if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+      document.activeElement.blur();
+    }
+  });
+  scroller.addEventListener('mousedown', function() {
+    _suppressSync = false;
+    if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+      document.activeElement.blur();
+    }
+  });
+  scroller.addEventListener('wheel', function() {
+    _suppressSync = false;
+    if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+      document.activeElement.blur();
+    }
+  });
+
+  // Scroll to nearest valid value
+  var snapped = Math.round(currentMin / _minuteStep) * _minuteStep;
+  if (snapped >= 60) snapped = 0;
+  _scrollDrumTo(1, snapped);
+
+  // If in All mode, keep the exact minute in the input
+  if (_fineMode) {
+    _minInput.value = String(currentMin).padStart(2, '0');
+  } else {
+    _minInput.value = String(snapped).padStart(2, '0');
+  }
 }
 
 function _onScroll(scroller) {

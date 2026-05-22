@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Gesture and interaction reference dialog for Android.
@@ -28,11 +30,12 @@ fun ReferenceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Text(
                 text = "📖 Gesture Reference",
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF4A3728)
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {
@@ -44,7 +47,7 @@ fun ReferenceDialog(
                     ReferenceItem("Tap backdrop", "Close sidebar/panel")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFF6B4E31).copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 ReferenceSection("Chit Interactions") {
                     ReferenceItem("Tap chit card", "Open in editor")
@@ -53,7 +56,7 @@ fun ReferenceDialog(
                     ReferenceItem("Swipe right on chit", "Quick complete/pin")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFF6B4E31).copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 ReferenceSection("Calendar") {
                     ReferenceItem("Tap event", "Open in editor")
@@ -62,7 +65,7 @@ fun ReferenceDialog(
                     ReferenceItem("Tap empty slot", "Create chit at time")
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = Color(0xFF6B4E31).copy(alpha = 0.3f))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
                 ReferenceSection("General") {
                     ReferenceItem("Pull down", "Refresh / sync")
@@ -73,7 +76,7 @@ fun ReferenceDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = Color(0xFF8B5A2B))
+                Text("Close")
             }
         }
     )

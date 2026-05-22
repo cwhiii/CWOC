@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import com.cwoc.app.ui.components.CwocPagePanel
+import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,15 +92,23 @@ fun WeatherScreen(
                         )
                     }
                 },
+                actions = {
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
     ) { innerPadding ->
+        CwocPagePanel(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(8.dp)
+        ) {
         Box(
             modifier = Modifier
-                .padding(innerPadding)
                 .fillMaxSize()
                 .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
@@ -123,6 +134,7 @@ fun WeatherScreen(
                 state = pullToRefreshState,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+        }
         }
     }
 }
@@ -163,7 +175,7 @@ private fun WeatherErrorState(
                 modifier = Modifier.padding(horizontal = 32.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onRetry) {
+            Button(onClick = onRetry, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
                 Text("Retry")
             }
         }
@@ -243,7 +255,8 @@ private fun LocationForecastCard(location: LocationForecast) {
                 if (index > 0) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
+                        color = Color(0xFF8B5A2B),
+                        thickness = 1.dp
                     )
                 }
                 DailyForecastRow(forecast = forecast)

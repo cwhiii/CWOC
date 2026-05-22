@@ -2,6 +2,8 @@ package com.cwoc.app.ui.screens.calendar
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,9 @@ import com.cwoc.app.ui.util.DateUtils
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
+import kotlin.math.abs
 
 /**
  * Calendar screen with day/week toggle, date navigation, and event list.
@@ -129,7 +135,40 @@ fun CalendarScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val startX = down.position.x
+                val startY = down.position.y
+                var totalX = 0f
+                var totalY = 0f
+                var fired = false
+
+                do {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: break
+                    totalX = change.position.x - startX
+                    totalY = change.position.y - startY
+
+                    // If vertical movement dominates early, bail out (let child scroll)
+                    if (!fired && abs(totalY) > 30f && abs(totalY) > abs(totalX)) {
+                        break
+                    }
+                } while (event.changes.any { it.pressed })
+
+                // On pointer up: check if it was a clear horizontal swipe
+                if (!fired && abs(totalX) > 80f && abs(totalX) > abs(totalY) * 2f) {
+                    if (totalX < 0) {
+                        viewModel.nextPeriod()
+                    } else {
+                        viewModel.previousPeriod()
+                    }
+                }
+            }
+        }
+    ) {
 
         // Event display based on view mode
         when {
@@ -314,7 +353,9 @@ fun CalendarScreen(
     if (currentPendingDrag != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { pendingRecurringDrag = null },
-            title = { Text("Edit recurring event") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Edit recurring event", style = CwocDialogDefaults.titleStyle) },
             text = { Text("How would you like to apply this time change?") },
             confirmButton = {
                 Column {
@@ -328,7 +369,7 @@ fun CalendarScreen(
                             currentPendingDrag.newPit
                         )
                         pendingRecurringDrag = null
-                    }) { Text("🔁 All in series") }
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) { Text("🔁 All in series") }
                     androidx.compose.material3.TextButton(onClick = {
                         // "This instance only" — would need to create exception + standalone chit
                         // For now, just update the parent (simplified)
@@ -340,7 +381,7 @@ fun CalendarScreen(
                             currentPendingDrag.newPit
                         )
                         pendingRecurringDrag = null
-                    }) { Text("✂️ This instance only") }
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) { Text("✂️ This instance only") }
                 }
             },
             dismissButton = {
@@ -460,7 +501,4 @@ private fun parseColor(colorString: String): Color {
 }
 
 // --- Additional view composables (stubs for tasks 2.2–2.5) ---
-
-
-
 

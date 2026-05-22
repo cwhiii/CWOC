@@ -1,11 +1,14 @@
 package com.cwoc.app.ui.screens.editor.zones
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.recurrence.RecurrenceEngine
@@ -35,11 +39,14 @@ import com.cwoc.app.domain.recurrence.RecurrenceRule
 import com.cwoc.app.ui.components.FlatpickrCalendarPicker
 import com.cwoc.app.ui.components.formatYMDDate
 import com.cwoc.app.ui.components.parseYMDDate
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocOutline
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Recurrence presets that map to standard RRULE JSON strings.
@@ -194,7 +201,7 @@ fun RecurrenceZone(
 
             // --- Custom Builder (shown when Custom is selected) ---
             if (activePreset == RecurrencePreset.CUSTOM && parsedRule != null) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 CustomRecurrenceBuilder(
                     rule = parsedRule,
                     gson = gson,
@@ -204,7 +211,7 @@ fun RecurrenceZone(
 
             // --- Clear Button ---
             if (parsedRule != null) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 TextButton(onClick = { onRecurrenceRuleChanged(null) }) {
                     Text("Clear Recurrence")
                 }
@@ -212,7 +219,7 @@ fun RecurrenceZone(
 
             // --- Recurrence Exceptions (read-only) ---
             if (exceptions.isNotEmpty()) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 RecurrenceExceptionsDisplay(exceptions = exceptions)
             }
         }
@@ -286,11 +293,15 @@ private fun CustomRecurrenceBuilder(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = frequencyExpanded) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .menuAnchor()
+                    .menuAnchor(),
+                colors = CwocInputDefaults.outlinedColors()
             )
             ExposedDropdownMenu(
                 expanded = frequencyExpanded,
-                onDismissRequest = { frequencyExpanded = false }
+                onDismissRequest = { frequencyExpanded = false },
+                modifier = Modifier
+                    .background(CwocDialogDefaults.containerColor)
+                    .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
             ) {
                 RecurrenceFrequency.entries.forEach { freq ->
                     DropdownMenuItem(
@@ -331,7 +342,8 @@ private fun CustomRecurrenceBuilder(
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         // --- By-Day Checkboxes (shown for weekly frequency) ---
@@ -367,7 +379,7 @@ private fun CustomRecurrenceBuilder(
         }
 
         // --- Until / Count ---
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
         Text(
             text = "Ends",
             style = MaterialTheme.typography.labelMedium,
@@ -423,7 +435,8 @@ private fun CustomRecurrenceBuilder(
                 label = { Text("occurrences") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }

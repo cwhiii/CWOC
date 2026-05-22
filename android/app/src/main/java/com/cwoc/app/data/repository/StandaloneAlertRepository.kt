@@ -53,11 +53,14 @@ class StandaloneAlertRepository @Inject constructor(
      */
     suspend fun create(type: String, name: String?, data: Map<String, Any?>): Result<StandaloneAlertDto> {
         return try {
+            // Flatten data fields into the top-level body — the server expects all fields
+            // at the root level, not nested under a "data" key. It stores the entire body
+            // as the JSON data column.
             val body = mutableMapOf<String, Any?>(
                 "_type" to type,
-                "name" to name,
-                "data" to data
+                "name" to name
             )
+            body.putAll(data)
             val response = apiService.createStandaloneAlert(body)
             if (response.isSuccessful) {
                 val dto = response.body()!!

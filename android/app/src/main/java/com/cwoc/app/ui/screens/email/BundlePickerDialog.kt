@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Dialog that lists all available bundles and allows the user to select one
@@ -60,11 +62,12 @@ fun BundlePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = CwocDialogDefaults.borderModifier,
+        containerColor = CwocDialogDefaults.containerColor,
         title = {
             Text(
                 text = "Add to Bundle",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                style = CwocDialogDefaults.titleStyle,
             )
         },
         text = {

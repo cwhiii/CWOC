@@ -36,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.ui.components.CwocPagePanel
 import kotlinx.coroutines.delay
-
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import androidx.compose.material3.Button
 
 /**
  * Settings screen with a ScrollableTabRow and TopAppBar with back navigation.
@@ -170,7 +172,9 @@ fun SettingsScreen(
     if (showUnsavedChangesDialog) {
         AlertDialog(
             onDismissRequest = { showUnsavedChangesDialog = false },
-            title = { Text("Unsaved Changes") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Unsaved Changes", style = CwocDialogDefaults.titleStyle) },
             text = { Text("You have unsaved changes. What would you like to do?") },
             confirmButton = {
                 Row {
@@ -184,14 +188,14 @@ fun SettingsScreen(
                         showUnsavedChangesDialog = false
                         settingsViewModel.discardChanges()
                         onNavigateBack()
-                    }) {
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("Discard")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     TextButton(onClick = {
                         showUnsavedChangesDialog = false
                         settingsViewModel.saveAndExit()
-                    }) {
+                    }, colors = CwocDialogDefaults.confirmButtonColors()) {
                         Text("Save")
                     }
                 }
@@ -203,7 +207,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("Settings", style = CwocDialogDefaults.titleStyle) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (isDirty) {
@@ -237,6 +241,7 @@ fun SettingsScreen(
                             Text("Saved ✓")
                         }
                     }
+                    com.cwoc.app.ui.components.TopBarProfileAvatar()
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -244,10 +249,14 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
-        Column(
+        CwocPagePanel(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(8.dp)
+        ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
             ScrollableTabRow(
                 selectedTabIndex = selectedTabIndex,
@@ -326,6 +335,7 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
         }
     }
 }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FormatBold
@@ -48,7 +51,6 @@ import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.FormatStrikethrough
-import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MyLocation
@@ -64,6 +66,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -104,12 +107,18 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.mapper.ChitFormState
@@ -126,7 +135,14 @@ import com.cwoc.app.ui.screens.editor.zones.DateZone
 import com.cwoc.app.ui.screens.editor.zones.EditorZoneHeader
 import com.cwoc.app.ui.screens.editor.zones.HabitsZone
 import com.cwoc.app.ui.screens.editor.zones.TagsPickerSheet
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.cwoc.app.ui.theme.CwocDialogDefaults
+import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.theme.CwocBackground
+import com.cwoc.app.ui.theme.CwocOutline
+import com.cwoc.app.ui.theme.CwocPrimary
+import androidx.compose.material3.Button
 
 /**
  * Full-screen editor for creating and editing chits.
@@ -136,6 +152,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChitEditorScreen(
     chitId: String,
+    sourceTab: String? = null,
     onNavigateBack: () -> Unit,
     viewModel: ChitEditorViewModel = hiltViewModel(),
     chitRepository: ChitRepository? = null
@@ -190,10 +207,12 @@ fun ChitEditorScreen(
     if (showUnsavedDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.cancelBack() },
-            title = { Text("Unsaved Changes") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Unsaved Changes", style = CwocDialogDefaults.titleStyle) },
             text = { Text("You have unsaved changes. What would you like to do?") },
             confirmButton = {
-                TextButton(onClick = { viewModel.saveAndExit() }) {
+                TextButton(onClick = { viewModel.saveAndExit() }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Save")
                 }
             },
@@ -201,7 +220,7 @@ fun ChitEditorScreen(
                 TextButton(onClick = { viewModel.cancelBack() }) {
                     Text("Cancel")
                 }
-                TextButton(onClick = { viewModel.discardAndExit() }) {
+                TextButton(onClick = { viewModel.discardAndExit() }, colors = CwocDialogDefaults.confirmButtonColors()) {
                     Text("Discard")
                 }
             }
@@ -212,13 +231,15 @@ fun ChitEditorScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Chit?") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Delete Chit?", style = CwocDialogDefaults.titleStyle) },
             text = { Text("This chit will be moved to trash.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
                     viewModel.deleteChit()
-                }) {
+                }, colors = CwocDialogDefaults.dangerButtonColors()) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
@@ -233,13 +254,31 @@ fun ChitEditorScreen(
     // ─── Zone Navigation State ────────────────────────────────────────────
     val isDirty by viewModel.isDirty.collectAsState()
     val zoneState = rememberEditorZoneState(
-        sourceTab = null, // TODO: pass from navigation args
+        sourceTab = sourceTab,
         hasDatePrefill = false
     )
 
     // Update visible zones when form state changes (email/habit visibility)
     LaunchedEffect(formState.emailStatus, formState.habit) {
         zoneState.updateVisibleZones(formState)
+    }
+
+    // ─── Auto-Focus for New Chits (Notes / Checklists) ────────────────────
+    val notesFocusRequester = remember { FocusRequester() }
+    val checklistFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(sourceTab, formState.isNew) {
+        if (formState.isNew && (sourceTab == "Notes" || sourceTab == "Checklists")) {
+            delay(300)
+            try {
+                when (sourceTab) {
+                    "Notes" -> notesFocusRequester.requestFocus()
+                    "Checklists" -> checklistFocusRequester.requestFocus()
+                }
+            } catch (_: Exception) {
+                // Component may not be composed yet — silently ignore
+            }
+        }
     }
 
     // Parse chit color for nav bar
@@ -334,7 +373,9 @@ fun ChitEditorScreen(
     if (showOptionsMenu) {
         AlertDialog(
             onDismissRequest = { showOptionsMenu = false },
-            title = { Text("Options") },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Options", style = CwocDialogDefaults.titleStyle) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     // Hide in Calendar toggle
@@ -379,8 +420,8 @@ fun ChitEditorScreen(
                         // QR Code
                         TextButton(onClick = { showOptionsMenu = false; showQrDialog = true }) { Text("📱 QR Code") }
                         // Delete
-                        HorizontalDivider()
-                        TextButton(onClick = { showOptionsMenu = false; showDeleteConfirm = true }) {
+                        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                        TextButton(onClick = { showOptionsMenu = false; showDeleteConfirm = true }, colors = CwocDialogDefaults.dangerButtonColors()) {
                             Text("🗑️ Delete", color = Color(0xFFB22222))
                         }
                     }
@@ -444,10 +485,12 @@ fun ChitEditorScreen(
                 }
 
                 // Zone content — single zone at a time, scrollable
+                // Apply chit color as background (matching web: mainEditor.style.backgroundColor = hex)
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .background(chitNavColor ?: CwocBackground)
                         .pointerInput(Unit) {
                             var startX = 0f
                             var startTime = 0L
@@ -484,14 +527,7 @@ fun ChitEditorScreen(
                         // Render the current zone's content
                         when (zoneState.currentZone.id) {
                             "titleZone" -> {
-                                // Overview zone
-                                val overviewRows = remember(formState) { buildOverviewRows(formState) }
-                                com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
-                                    rows = overviewRows,
-                                    onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) }
-                                )
-                                // Title input always visible in overview
-                                Spacer(modifier = Modifier.height(12.dp))
+                                // Title input — the ONE place the title appears
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -519,10 +555,18 @@ fun ChitEditorScreen(
                                         onValueChange = { viewModel.updateForm(formState.copy(title = it)) },
                                         label = { Text("Title") },
                                         singleLine = true,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
+                                        colors = CwocInputDefaults.outlinedColors()
                                     )
                                 }
                                 TitleMetadataRow(formState = formState)
+                                // Overview summary rows (dates, status, tags, etc.)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                val overviewRows = remember(formState) { buildOverviewRows(formState, sourceTab) }
+                                com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
+                                    rows = overviewRows,
+                                    onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) }
+                                )
                             }
 
                             "datesSection" -> {
@@ -556,7 +600,8 @@ fun ChitEditorScreen(
                                     defaultTimezone = editorSettings.defaultTimezone,
                                     defaultNotifications = editorSettings.defaultNotifications,
                                     alertsJson = formState.alerts,
-                                    onAlertsChanged = { viewModel.updateForm(formState.copy(alerts = it)) }
+                                    onAlertsChanged = { viewModel.updateForm(formState.copy(alerts = it)) },
+                                    highlightDueDate = (sourceTab == "Tasks" && formState.isNew)
                                 )
                             }
 
@@ -629,12 +674,39 @@ fun ChitEditorScreen(
 
                             "notesSection" -> {
                                 val chitLinkSuggestions by viewModel.chitLinkSuggestions.collectAsState()
+                                val availableChitsForPicker by viewModel.availableChitsForPicker.collectAsState()
+                                LaunchedEffect(Unit) { viewModel.loadAvailableChitsForPicker() }
                                 NotesZone(
                                     note = formState.note,
                                     onNoteChange = { viewModel.updateForm(formState.copy(note = it)) },
                                     context = context,
+                                    onMoveToChecklist = { lines ->
+                                        // Convert note lines to checklist items using Gson
+                                        val gson = com.google.gson.Gson()
+                                        val existingItems: MutableList<Map<String, Any>> = try {
+                                            if (!formState.checklist.isNullOrBlank() && formState.checklist != "[]") {
+                                                gson.fromJson(formState.checklist, object : com.google.gson.reflect.TypeToken<MutableList<Map<String, Any>>>() {}.type)
+                                            } else mutableListOf()
+                                        } catch (_: Exception) { mutableListOf() }
+
+                                        val newItems = lines.map { text ->
+                                            mapOf<String, Any>(
+                                                "id" to java.util.UUID.randomUUID().toString(),
+                                                "text" to text,
+                                                "level" to 0.0,
+                                                "checked" to false
+                                            )
+                                        }
+                                        existingItems.addAll(newItems)
+                                        viewModel.updateForm(formState.copy(checklist = gson.toJson(existingItems)))
+                                    },
                                     chitLinkSuggestions = chitLinkSuggestions,
-                                    onChitLinkSearch = { viewModel.searchChitTitles(it) }
+                                    onChitLinkSearch = { viewModel.searchChitTitles(it) },
+                                    availableChits = availableChitsForPicker,
+                                    onSendNoteToChit = { targetChitId, mode ->
+                                        viewModel.sendNoteToChit(targetChitId, mode)
+                                    },
+                                    externalFocusRequester = notesFocusRequester
                                 )
                             }
 
@@ -649,7 +721,8 @@ fun ChitEditorScreen(
                                     noteText = formState.note,
                                     onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
                                     autoCompleteEnabled = formState.autoCompleteChecklist == true,
-                                    currentStatus = formState.status
+                                    currentStatus = formState.status,
+                                    externalFocusRequester = checklistFocusRequester
                                 )
                             }
 
@@ -706,7 +779,8 @@ fun ChitEditorScreen(
                                 AlertsZone(
                                     alertsJson = formState.alerts,
                                     onAlertsChanged = { viewModel.updateForm(formState.copy(alerts = it)) },
-                                    timeFormat = editorSettings.timeFormat
+                                    timeFormat = editorSettings.timeFormat,
+                                    calendarSnap = editorSettings.calendarSnap
                                 )
                             }
 
@@ -827,6 +901,7 @@ fun ChitEditorScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
+
             }
         }
 
@@ -850,6 +925,8 @@ fun ChitEditorScreen(
     // Snooze picker dialog
     if (showSnoozeDialog) {
         SnoozePickerDialog(
+            is24Hour = (editorSettings.timeFormat == "24hour"),
+            calendarSnap = editorSettings.calendarSnap,
             onSnoozeSelected = { isoString ->
                 chitRepository?.let { repo ->
                     coroutineScope.launch { repo.snooze(formState.id, isoString) }
@@ -1034,7 +1111,8 @@ private fun PrerequisitesZone(
                                 newPrereqText = ""
                             }
                         }
-                    )
+                    ),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
@@ -1164,7 +1242,7 @@ private fun TagsZone(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
         }
 
@@ -1515,7 +1593,7 @@ private fun PeopleZone(
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider()
+            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(4.dp))
         }
 
@@ -1534,7 +1612,10 @@ private fun PeopleZone(
                     )
                     DropdownMenu(
                         expanded = showUserPicker,
-                        onDismissRequest = { showUserPicker = false }
+                        onDismissRequest = { showUserPicker = false },
+                        modifier = Modifier
+                            .background(CwocDialogDefaults.containerColor)
+                            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                     ) {
                         availableUsers.forEach { userName ->
                             DropdownMenuItem(
@@ -1597,7 +1678,8 @@ private fun PeopleZone(
                                 onPeopleSearchQueryChange("")
                             }
                         }
-                    )
+                    ),
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
@@ -1658,11 +1740,15 @@ private fun PeopleZone(
                         readOnly = true,
                         label = { Text("Assigned To") },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(assignedExpanded) }
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(assignedExpanded) },
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     ExposedDropdownMenu(
                         expanded = assignedExpanded,
-                        onDismissRequest = { assignedExpanded = false }
+                        onDismissRequest = { assignedExpanded = false },
+                        modifier = Modifier
+                            .background(CwocDialogDefaults.containerColor)
+                            .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                     ) {
                         DropdownMenuItem(
                             text = { Text("(Unassigned)") },
@@ -1707,7 +1793,8 @@ private fun PeopleZone(
         ModalBottomSheet(
             onDismissRequest = { showContactBrowser = false },
             sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.background
+            containerColor = CwocDialogDefaults.containerColor,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = CwocPrimary) }
         ) {
             Column(
                 modifier = Modifier
@@ -1729,7 +1816,8 @@ private fun PeopleZone(
                     onValueChange = { browserSearch = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Search contacts…") },
-                    singleLine = true
+                    singleLine = true,
+                    colors = CwocInputDefaults.outlinedColors()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -1864,7 +1952,10 @@ private fun LocationZone(
                 )
                 DropdownMenu(
                     expanded = showSavedLocations,
-                    onDismissRequest = { showSavedLocations = false }
+                    onDismissRequest = { showSavedLocations = false },
+                    modifier = Modifier
+                        .background(CwocDialogDefaults.containerColor)
+                        .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                 ) {
                     savedLocations.forEach { loc ->
                         DropdownMenuItem(
@@ -1904,7 +1995,8 @@ private fun LocationZone(
             onValueChange = onLocationChange,
             label = { Text("Location") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -2022,138 +2114,258 @@ private fun LocationZone(
     }
 }
 
-// ─── Notes Zone (gaps 22-26) ─────────────────────────────────────────────────────
+// ─── Notes Zone ──────────────────────────────────────────────────────────────────
 
 /**
- * Notes zone with format toolbar, undo/redo, full editor modal, and data actions.
+ * Notes zone — no expand/collapse, always fully visible.
+ * Single-row toolbar: pinned left (Data, Preview/Edit, Undo, Redo) + scrollable right (format buttons).
+ * Full-width text input. Data button dropdown matches web (Copy, Download, Send to chit, Move to checklist, Share).
+ * Formatting buttons wrap the currently selected text (matching web behavior exactly).
+ * Heading buttons are stacked in a dropdown (tap "H" to show H1/H2/H3 options).
  */
 @Composable
 private fun NotesZone(
     note: String,
     onNoteChange: (String) -> Unit,
     context: Context,
-    // J4: Move lines to checklist callback
     onMoveToChecklist: ((List<String>) -> Unit)? = null,
-    // J5: Chit link autocomplete
     chitLinkSuggestions: List<Pair<String, String>> = emptyList(),
-    onChitLinkSearch: (String) -> Unit = {}
+    onChitLinkSearch: (String) -> Unit = {},
+    availableChits: List<Pair<String, String>> = emptyList(),
+    onSendNoteToChit: ((targetChitId: String, mode: String) -> Unit)? = null,
+    externalFocusRequester: FocusRequester? = null
 ) {
-    var isExpanded by remember { mutableStateOf(note.isNotBlank()) }
     var showPreview by remember { mutableStateOf(false) }
-    var showFullEditor by remember { mutableStateOf(false) }
+    var showDataMenu by remember { mutableStateOf(false) }
+    var showSendToChit by remember { mutableStateOf(false) }
+    var showHeadingDropdown by remember { mutableStateOf(false) }
     // J5: Chit link autocomplete state
     var showChitLinkPicker by remember { mutableStateOf(false) }
     var chitLinkQuery by remember { mutableStateOf("") }
-    // Undo/redo stacks (gap 23/31)
+    // Undo/redo stacks
     var undoStack by remember { mutableStateOf(listOf<String>()) }
     var redoStack by remember { mutableStateOf(listOf<String>()) }
+    // TextFieldValue to track selection state for formatting
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = note, selection = TextRange(note.length)))
+    }
+    // Focus tracking for keyboard-pinned toolbar
+    var isNotesFocused by remember { mutableStateOf(false) }
+    val focusRequester = externalFocusRequester ?: remember { FocusRequester() }
+
+    // Sync external note changes into textFieldValue (e.g. from undo/redo)
+    LaunchedEffect(note) {
+        if (textFieldValue.text != note) {
+            textFieldValue = TextFieldValue(text = note, selection = TextRange(note.length))
+        }
+    }
 
     fun pushUndo(oldValue: String) {
         undoStack = undoStack + oldValue
         redoStack = emptyList()
     }
 
-    EditorZoneHeader(
-        title = "Notes",
-        isExpanded = isExpanded,
-        onToggle = { isExpanded = !isExpanded },
-        trailingContent = {
-            if (isExpanded) {
-                Row {
-                    // Full editor button (gap 24/32)
-                    IconButton(onClick = { showFullEditor = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Fullscreen, "Full Editor", modifier = Modifier.size(18.dp))
-                    }
-                    TextButton(onClick = { showPreview = !showPreview }) {
-                        Text(if (showPreview) "Edit" else "Preview")
-                    }
-                }
-            } else if (note.isNotBlank()) {
-                Text(
-                    text = "${note.lines().size} line${if (note.lines().size != 1) "s" else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    ) {
-        if (showPreview) {
-            MarkdownRenderer(
-                markdown = note,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            )
+    /** Wrap formatting (bold, italic, strikethrough, code). No selection = no-op (matches web). */
+    fun applyWrapFormat(delimiter: String) {
+        val start = textFieldValue.selection.min
+        val end = textFieldValue.selection.max
+        val text = textFieldValue.text
+        if (start == end) return
+        pushUndo(text)
+        val before = text.substring(0, start)
+        val selected = text.substring(start, end)
+        val after = text.substring(end)
+        val newText = "$before$delimiter$selected$delimiter$after"
+        val newEnd = start + delimiter.length + selected.length + delimiter.length
+        textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, newEnd))
+        onNoteChange(newText)
+    }
+
+    /** Link formatting. No selection = no-op. URL detection matches web. */
+    fun applyLinkFormat() {
+        val start = textFieldValue.selection.min
+        val end = textFieldValue.selection.max
+        val text = textFieldValue.text
+        if (start == end) return
+        pushUndo(text)
+        val before = text.substring(0, start)
+        val selected = text.substring(start, end)
+        val after = text.substring(end)
+        val isUrl = selected.trim().let { it.startsWith("http://") || it.startsWith("https://") }
+        val newText: String
+        val newSel: TextRange
+        if (isUrl) {
+            newText = "${before}[link text](${selected.trim()})$after"
+            newSel = TextRange(start + 1, start + 1 + "link text".length)
         } else {
-            // Format toolbar (gap 22/30)
-            NotesFormatToolbar(
-                note = note,
-                onNoteChange = { newNote ->
-                    pushUndo(note)
-                    onNoteChange(newNote)
-                }
-            )
+            newText = "${before}[$selected](url)$after"
+            val urlPos = start + 1 + selected.length + 2
+            newSel = TextRange(urlPos, urlPos + 3)
+        }
+        textFieldValue = TextFieldValue(text = newText, selection = newSel)
+        onNoteChange(newText)
+    }
 
-            // Undo/Redo buttons (gap 23/31)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                IconButton(
-                    onClick = {
-                        if (undoStack.isNotEmpty()) {
-                            redoStack = redoStack + note
-                            val prev = undoStack.last()
-                            undoStack = undoStack.dropLast(1)
-                            onNoteChange(prev)
+    /** Heading: strips existing prefix, applies new level. Works with or without selection. */
+    fun applyHeadingFormat(level: Int) {
+        val text = textFieldValue.text
+        val cursorPos = textFieldValue.selection.min
+        val lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1
+        val lineEnd = text.indexOf('\n', cursorPos).let { if (it == -1) text.length else it }
+        val lineText = text.substring(lineStart, lineEnd)
+        if (lineText.isBlank() && textFieldValue.selection.min == textFieldValue.selection.max) return
+        pushUndo(text)
+        val stripped = lineText.replace(Regex("^#{1,3}\\s+"), "")
+        val prefix = "#".repeat(level) + " "
+        val replacement = prefix + stripped
+        val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
+        textFieldValue = TextFieldValue(text = newText, selection = TextRange(lineStart, lineStart + replacement.length))
+        onNoteChange(newText)
+    }
+
+    /** List prefix: prefixes current line or each selected line. */
+    fun applyLinePrefixFormat(prefix: String, numbered: Boolean = false) {
+        val text = textFieldValue.text
+        val start = textFieldValue.selection.min
+        val end = textFieldValue.selection.max
+        pushUndo(text)
+        if (start != end) {
+            val before = text.substring(0, start)
+            val selected = text.substring(start, end)
+            val after = text.substring(end)
+            val prefixed = if (numbered) {
+                selected.split('\n').mapIndexed { i, l -> "${i + 1}. $l" }.joinToString("\n")
+            } else {
+                selected.split('\n').joinToString("\n") { "$prefix$it" }
+            }
+            val newText = "$before$prefixed$after"
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + prefixed.length))
+            onNoteChange(newText)
+        } else {
+            val lineStart = text.lastIndexOf('\n', start - 1) + 1
+            val lineEnd = text.indexOf('\n', start).let { if (it == -1) text.length else it }
+            val lineText = text.substring(lineStart, lineEnd)
+            val actualPrefix = if (numbered) "1. " else prefix
+            val replacement = actualPrefix + lineText
+            val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
+            val newCursor = lineStart + replacement.length
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+            onNoteChange(newText)
+        }
+    }
+
+    /** Blockquote: only acts when text is selected (matches web). */
+    fun applyBlockquoteFormat() {
+        val start = textFieldValue.selection.min
+        val end = textFieldValue.selection.max
+        val text = textFieldValue.text
+        if (start == end) return
+        pushUndo(text)
+        val before = text.substring(0, start)
+        val selected = text.substring(start, end)
+        val after = text.substring(end)
+        val quoted = selected.split('\n').joinToString("\n") { "> $it" }
+        val newText = "$before$quoted$after"
+        textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + quoted.length))
+        onNoteChange(newText)
+    }
+
+    /** Horizontal rule: inserts at cursor position. */
+    fun applyHorizontalRule() {
+        val text = textFieldValue.text
+        val cursorPos = textFieldValue.selection.min
+        pushUndo(text)
+        val insertion = "\n---\n"
+        val newText = text.substring(0, cursorPos) + insertion + text.substring(cursorPos)
+        val newCursor = cursorPos + insertion.length
+        textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+        onNoteChange(newText)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // ── Content area ──
+        if (showPreview) {
+            // Preview mode: Data + Edit toggle header + rendered markdown
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                        DropdownMenuItem(text = { Text("📋 Copy to clipboard") }, onClick = {
+                            showDataMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Note", note))
+                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("⬇️ Download as file") }, onClick = {
+                            showDataMenu = false
+                            try {
+                                val fileName = "note_${System.currentTimeMillis()}.md"
+                                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                                java.io.File(downloadsDir, fileName).writeText(note)
+                                android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
+                        if (onMoveToChecklist != null) {
+                            DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
+                                showDataMenu = false
+                                val lines = note.lines().filter { it.isNotBlank() }
+                                if (lines.isNotEmpty()) { onMoveToChecklist(lines); onNoteChange("") }
+                            }, enabled = note.isNotBlank())
                         }
-                    },
-                    enabled = undoStack.isNotEmpty(),
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(Icons.Default.Undo, "Undo", modifier = Modifier.size(18.dp))
+                        DropdownMenuItem(text = { Text("🔗 Share") }, onClick = {
+                            showDataMenu = false
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, note) }, "Share Note"))
+                        }, enabled = note.isNotBlank())
+                    }
                 }
-                IconButton(
-                    onClick = {
-                        if (redoStack.isNotEmpty()) {
-                            undoStack = undoStack + note
-                            val next = redoStack.last()
-                            redoStack = redoStack.dropLast(1)
-                            onNoteChange(next)
-                        }
-                    },
-                    enabled = redoStack.isNotEmpty(),
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(Icons.Default.Redo, "Redo", modifier = Modifier.size(18.dp))
+                IconButton(onClick = { showPreview = false }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(18.dp))
                 }
             }
-
+            MarkdownRenderer(markdown = note, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+        } else {
+            // Full-width text input using TextFieldValue for selection tracking
             OutlinedTextField(
-                value = note,
+                value = textFieldValue,
                 onValueChange = { newValue ->
-                    pushUndo(note)
-                    // J6: Auto-continue bullet/numbered lists on Enter
-                    val processedValue = autoListContinuation(note, newValue)
-                    onNoteChange(processedValue)
-                    // J5: Detect [[ for chit link autocomplete
-                    val lastBrackets = processedValue.lastIndexOf("[[")
-                    if (lastBrackets >= 0) {
-                        val afterBrackets = processedValue.substring(lastBrackets + 2)
-                        if (!afterBrackets.contains("]]")) {
-                            showChitLinkPicker = true
-                            chitLinkQuery = afterBrackets
+                    val oldText = textFieldValue.text
+                    textFieldValue = newValue
+                    if (newValue.text != oldText) {
+                        pushUndo(oldText)
+                        val processedValue = autoListContinuation(oldText, newValue.text)
+                        if (processedValue != newValue.text) {
+                            textFieldValue = TextFieldValue(text = processedValue, selection = TextRange(processedValue.length))
+                        }
+                        onNoteChange(processedValue)
+                        // J5: Detect [[ for chit link autocomplete
+                        val lastBrackets = processedValue.lastIndexOf("[[")
+                        if (lastBrackets >= 0) {
+                            val afterBrackets = processedValue.substring(lastBrackets + 2)
+                            if (!afterBrackets.contains("]]")) {
+                                showChitLinkPicker = true
+                                chitLinkQuery = afterBrackets
+                            } else {
+                                showChitLinkPicker = false
+                            }
                         } else {
                             showChitLinkPicker = false
                         }
-                    } else {
-                        showChitLinkPicker = false
                     }
                 },
-                label = { Text("Note") },
-                minLines = 3,
-                maxLines = 12,
-                modifier = Modifier.fillMaxWidth()
+                placeholder = { Text("Note") },
+                minLines = 5,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { isNotesFocused = it.isFocused },
+                colors = CwocInputDefaults.outlinedColors()
             )
 
             // J5: Chit link autocomplete with suggestions dropdown
             if (showChitLinkPicker) {
-                // Trigger search when query changes
                 LaunchedEffect(chitLinkQuery) {
                     onChitLinkSearch(chitLinkQuery)
                 }
@@ -2180,14 +2392,12 @@ private fun NotesZone(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        // Insert the title and close with ]]
                                         val lastBrackets = note.lastIndexOf("[[")
                                         if (lastBrackets >= 0) {
                                             val before = note.substring(0, lastBrackets + 2)
-                                            val afterClose = note.indexOf("]]", lastBrackets)
-                                            val after = if (afterClose >= 0) note.substring(afterClose)
-                                                else "]]" + note.substring(lastBrackets + 2 + chitLinkQuery.length)
-                                            onNoteChange(before + title + "]]")
+                                            val newText = before + title + "]]"
+                                            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newText.length))
+                                            onNoteChange(newText)
                                         }
                                         showChitLinkPicker = false
                                     }
@@ -2206,246 +2416,64 @@ private fun NotesZone(
                 }
             }
 
-            // Data actions (gap 26/34)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Note", note))
-                    },
-                    label = { Text("Copy") },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(16.dp)) },
-                    enabled = note.isNotBlank()
-                )
-                AssistChip(
-                    onClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, note)
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "Send Note"))
-                    },
-                    label = { Text("Send") },
-                    leadingIcon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp)) },
-                    enabled = note.isNotBlank()
-                )
-                // J3: Download as .md file
-                AssistChip(
-                    onClick = {
-                        try {
-                            val fileName = "note_${System.currentTimeMillis()}.md"
-                            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                                android.os.Environment.DIRECTORY_DOWNLOADS
-                            )
-                            val file = java.io.File(downloadsDir, fileName)
-                            file.writeText(note)
-                            android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
-                        } catch (e: Exception) {
-                            android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    label = { Text("Download") },
-                    leadingIcon = { Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp)) },
-                    enabled = note.isNotBlank()
-                )
-                // J4: Move lines to checklist
-                if (onMoveToChecklist != null) {
-                    AssistChip(
-                        onClick = {
-                            // Convert note lines to checklist items
-                            val lines = note.lines().filter { it.isNotBlank() }
-                            if (lines.isNotEmpty()) {
-                                onMoveToChecklist(lines)
-                                onNoteChange("") // Clear the note after moving
-                            }
-                        },
-                        label = { Text("To Checklist") },
-                        leadingIcon = { Icon(Icons.Default.Checklist, null, modifier = Modifier.size(16.dp)) },
-                        enabled = note.isNotBlank()
-                    )
+        }
+    }
+
+    // ── Format toolbar pinned above keyboard (separate window overlay) ──
+    com.cwoc.app.ui.components.KeyboardPinnedBar(visible = !showPreview) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(androidx.compose.ui.graphics.Color(0xFFF5F0E8))
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { showPreview = !showPreview }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Visibility, "Preview", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { if (undoStack.isNotEmpty()) { redoStack = redoStack + note; val prev = undoStack.last(); undoStack = undoStack.dropLast(1); onNoteChange(prev) } }, enabled = undoStack.isNotEmpty(), modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Undo, "Undo", modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = { if (redoStack.isNotEmpty()) { undoStack = undoStack + note; val next = redoStack.last(); redoStack = redoStack.dropLast(1); onNoteChange(next) } }, enabled = redoStack.isNotEmpty(), modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Redo, "Redo", modifier = Modifier.size(18.dp))
+            }
+            Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = { applyWrapFormat("**") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatBold, "Bold", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyWrapFormat("_") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatItalic, "Italic", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyWrapFormat("~~") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatStrikethrough, "S", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyLinkFormat() }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Link, "Link", modifier = Modifier.size(18.dp)) }
+                Box {
+                    IconButton(onClick = { showHeadingDropdown = true }, modifier = Modifier.size(32.dp)) { Text("H▾", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)) }
+                    DropdownMenu(expanded = showHeadingDropdown, onDismissRequest = { showHeadingDropdown = false }) {
+                        DropdownMenuItem(text = { Text("H1", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(1); showHeadingDropdown = false })
+                        DropdownMenuItem(text = { Text("H2", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(2); showHeadingDropdown = false })
+                        DropdownMenuItem(text = { Text("H3", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(3); showHeadingDropdown = false })
+                    }
                 }
+                IconButton(onClick = { applyLinePrefixFormat("- ") }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatListBulleted, "Bullet", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyLinePrefixFormat("1. ", numbered = true) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatListNumbered, "Num", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyBlockquoteFormat() }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.FormatQuote, "Quote", modifier = Modifier.size(18.dp)) }
+                IconButton(onClick = { applyWrapFormat("`") }, modifier = Modifier.size(32.dp)) { Text("{ }", style = MaterialTheme.typography.labelSmall) }
+                IconButton(onClick = { applyHorizontalRule() }, modifier = Modifier.size(32.dp)) { Text("—", style = MaterialTheme.typography.labelSmall) }
             }
         }
     }
 
-    // Full editor modal (gap 24/32)
-    if (showFullEditor) {
-        FullEditorModal(
-            note = note,
-            onNoteChange = onNoteChange,
-            onDismiss = { showFullEditor = false }
+    // Send-to-Chit picker
+    if (showSendToChit && availableChits.isNotEmpty()) {
+        com.cwoc.app.ui.components.ChitPickerSheet(
+            chits = availableChits,
+            onChitSelected = { targetChitId ->
+                onSendNoteToChit?.invoke(targetChitId, "copy")
+                showSendToChit = false
+            },
+            onDismiss = { showSendToChit = false },
+            title = "Send Notes To..."
         )
     }
-}
-
-// ─── Notes Format Toolbar (gap 22/30) ────────────────────────────────────────────
-
-/**
- * Markdown format toolbar with Bold, Italic, Strikethrough, Link, H1-H3,
- * Bullet List, Numbered List, Blockquote, Code, Horizontal Rule.
- */
-@Composable
-private fun NotesFormatToolbar(
-    note: String,
-    onNoteChange: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        // Bold
-        IconButton(onClick = { onNoteChange(wrapSelection(note, "**")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatBold, "Bold", modifier = Modifier.size(18.dp))
-        }
-        // Italic
-        IconButton(onClick = { onNoteChange(wrapSelection(note, "*")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatItalic, "Italic", modifier = Modifier.size(18.dp))
-        }
-        // Strikethrough
-        IconButton(onClick = { onNoteChange(wrapSelection(note, "~~")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatStrikethrough, "Strikethrough", modifier = Modifier.size(18.dp))
-        }
-        // Link
-        IconButton(onClick = { onNoteChange(note + "\n[text](url)") }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.Link, "Link", modifier = Modifier.size(18.dp))
-        }
-        // H1
-        IconButton(onClick = { onNoteChange(prependLine(note, "# ")) }, modifier = Modifier.size(32.dp)) {
-            Text("H1", style = MaterialTheme.typography.labelSmall)
-        }
-        // H2
-        IconButton(onClick = { onNoteChange(prependLine(note, "## ")) }, modifier = Modifier.size(32.dp)) {
-            Text("H2", style = MaterialTheme.typography.labelSmall)
-        }
-        // H3
-        IconButton(onClick = { onNoteChange(prependLine(note, "### ")) }, modifier = Modifier.size(32.dp)) {
-            Text("H3", style = MaterialTheme.typography.labelSmall)
-        }
-        // Bullet list
-        IconButton(onClick = { onNoteChange(prependLine(note, "- ")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatListBulleted, "Bullet", modifier = Modifier.size(18.dp))
-        }
-        // Numbered list
-        IconButton(onClick = { onNoteChange(prependLine(note, "1. ")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatListNumbered, "Numbered", modifier = Modifier.size(18.dp))
-        }
-        // Blockquote
-        IconButton(onClick = { onNoteChange(prependLine(note, "> ")) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.FormatQuote, "Quote", modifier = Modifier.size(18.dp))
-        }
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        // Code
-        IconButton(onClick = { onNoteChange(wrapSelection(note, "`")) }, modifier = Modifier.size(32.dp)) {
-            Text("{ }", style = MaterialTheme.typography.labelSmall)
-        }
-        // Horizontal Rule
-        IconButton(onClick = { onNoteChange(note + "\n---\n") }, modifier = Modifier.size(32.dp)) {
-            Text("—", style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
-
-// ─── Full Editor Modal (gap 24/32) ───────────────────────────────────────────────
-
-@Composable
-private fun FullEditorModal(
-    note: String,
-    onNoteChange: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var localNote by remember { mutableStateOf(note) }
-    // J2: Three modes — Edit, Preview, Split (side-by-side)
-    var viewMode by remember { mutableStateOf("edit") } // "edit", "preview", "split"
-
-    AlertDialog(
-        onDismissRequest = {
-            onNoteChange(localNote)
-            onDismiss()
-        },
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Notes Editor")
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { viewMode = "edit" }) {
-                        Text("Edit", color = if (viewMode == "edit") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    TextButton(onClick = { viewMode = "split" }) {
-                        Text("Split", color = if (viewMode == "split") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    TextButton(onClick = { viewMode = "preview" }) {
-                        Text("Preview", color = if (viewMode == "preview") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth().height(400.dp)) {
-                when (viewMode) {
-                    "preview" -> {
-                        MarkdownRenderer(
-                            markdown = localNote,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)
-                        )
-                    }
-                    "split" -> {
-                        // J2: Side-by-side split view
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            // Edit pane (left)
-                            OutlinedTextField(
-                                value = localNote,
-                                onValueChange = { localNote = it },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                minLines = 10
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            // Preview pane (right)
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .padding(4.dp)
-                            ) {
-                                MarkdownRenderer(
-                                    markdown = localNote,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
-                    }
-                    else -> {
-                        OutlinedTextField(
-                            value = localNote,
-                            onValueChange = { localNote = it },
-                            modifier = Modifier.fillMaxSize(),
-                            minLines = 15
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onNoteChange(localNote)
-                onDismiss()
-            }) {
-                Text("Done")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text("Cancel")
-            }
-        }
-    )
 }
 
 // ─── Projects Zone (gap 33) ──────────────────────────────────────────────────────
@@ -2548,7 +2576,10 @@ private fun ProjectsZone(
                                         )
                                         DropdownMenu(
                                             expanded = showStatusMenu,
-                                            onDismissRequest = { showStatusMenu = false }
+                                            onDismissRequest = { showStatusMenu = false },
+                                            modifier = Modifier
+                                                .background(CwocDialogDefaults.containerColor)
+                                                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                                         ) {
                                             listOf("ToDo", "In Progress", "Blocked", "Complete").forEach { newStatus ->
                                                 DropdownMenuItem(
@@ -2623,7 +2654,8 @@ private fun ProjectsZone(
                                     newChildId = ""
                                 }
                             }
-                        )
+                        ),
+                        colors = CwocInputDefaults.outlinedColors()
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(onClick = {
@@ -2662,7 +2694,7 @@ private fun ProjectsZone(
 
             // N3: Move to Project (for non-master chits)
             if (!isProjectMaster && onMoveToProject != null) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 AssistChip(
                     onClick = onMoveToProject,
                     label = { Text("Add to Project") },
@@ -2779,7 +2811,8 @@ private fun HealthIndicatorsZone(
                         },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        colors = CwocInputDefaults.outlinedColors()
                     )
 
                     // Unit label
@@ -2826,7 +2859,8 @@ private fun HealthIndicatorsZone(
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 label = { Text("ID") },
-                placeholder = { Text("Indicator ID") }
+                placeholder = { Text("Indicator ID") },
+                colors = CwocInputDefaults.outlinedColors()
             )
             OutlinedTextField(
                 value = newValue,
@@ -2836,7 +2870,8 @@ private fun HealthIndicatorsZone(
                 label = { Text("Value") },
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                )
+                ),
+                colors = CwocInputDefaults.outlinedColors()
             )
             IconButton(
                 onClick = {
@@ -2872,7 +2907,8 @@ private fun HealthIndicatorsZone(
                 label = { Text("Health Data (JSON)") },
                 minLines = 3,
                 maxLines = 8,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
             )
         }
     }
@@ -2972,11 +3008,15 @@ private fun DropdownField(
             readOnly = true,
             label = { Text(label) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor()
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
         ) {
             DropdownMenuItem(
                 text = { Text("None") },
@@ -3052,7 +3092,8 @@ private fun ChipInputField(
                         textFieldValue = ""
                     }
                 }
-            )
+            ),
+            colors = CwocInputDefaults.outlinedColors()
         )
         Spacer(modifier = Modifier.width(8.dp))
         IconButton(onClick = {
