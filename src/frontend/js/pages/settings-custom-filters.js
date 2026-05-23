@@ -12,15 +12,15 @@
 
 /** View definitions in display order (Omni first, then tab order) */
 var _customFilterViews = [
-  { key: 'Omni', iconType: 'img', src: '/static/cwod_logo.png', label: 'Omni' },
-  { key: 'Calendar', iconType: 'img', src: '/static/calendar.png', label: 'Calendar' },
-  { key: 'Checklists', iconType: 'img', src: '/static/checklists.png', label: 'Checklists' },
-  { key: 'Tasks', iconType: 'img', src: '/static/tasks.png', label: 'Tasks' },
-  { key: 'Projects', iconType: 'img', src: '/static/projects.png', label: 'Projects' },
-  { key: 'Notes', iconType: 'img', src: '/static/notes.png', label: 'Notes' },
+  { key: 'Omni', iconType: 'img', src: '/static/images/cwod_logo.png', label: 'Omni' },
+  { key: 'Calendar', iconType: 'img', src: '/static/images/calendar.png', label: 'Calendar' },
+  { key: 'Checklists', iconType: 'img', src: '/static/images/checklists.png', label: 'Checklists' },
+  { key: 'Tasks', iconType: 'img', src: '/static/images/tasks.png', label: 'Tasks' },
+  { key: 'Projects', iconType: 'img', src: '/static/images/projects.png', label: 'Projects' },
+  { key: 'Notes', iconType: 'img', src: '/static/images/notes.png', label: 'Notes' },
   { key: 'Email', iconType: 'fa', cls: 'fas fa-envelope', label: 'Email' },
-  { key: 'Indicators', iconType: 'img', src: '/static/Indicators.png', label: 'Indicators' },
-  { key: 'Alarms', iconType: 'img', src: '/static/alerts.png', label: 'Alarms' }
+  { key: 'Indicators', iconType: 'img', src: '/static/images/Indicators.png', label: 'Indicators' },
+  { key: 'Alarms', iconType: 'img', src: '/static/images/alerts.png', label: 'Alarms' }
 ];
 
 /** In-memory state of custom view filters (loaded from settings) */

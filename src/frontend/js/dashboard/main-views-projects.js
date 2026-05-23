@@ -43,7 +43,7 @@ function _showProjectQuickMenu(e, project) {
 
   var menu = document.createElement('div');
   menu.className = 'cwoc-project-quick-menu';
-  menu.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+  menu.style.cssText = 'position:fixed;background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
 
   // Position near the click, clamped to viewport
   var menuX = Math.min(e.clientX, window.innerWidth - 220);

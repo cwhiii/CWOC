@@ -260,7 +260,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   logoLink.style.cssText = 'display:inline-block;vertical-align:middle;';
   logoLink.title = 'Go to Dashboard';
   var logo = document.createElement('img');
-  logo.src = '/static/cwod_logo.png';
+  logo.src = '/static/images/cwod_logo.png';
   logo.alt = 'Logo';
   logoLink.appendChild(logo);
   h2.appendChild(logoLink);
@@ -309,7 +309,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   };
 
   var profileImg = document.createElement('img');
-  profileImg.src = '/static/default-avatar.svg';
+  profileImg.src = '/static/images/default-avatar.svg';
   profileImg.alt = 'Profile';
   profileImg.className = 'cwoc-profile-img';
   profileBtn.appendChild(profileImg);
@@ -531,8 +531,8 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       activeOthers.forEach(function(u) {
         var item = document.createElement('div');
         item.className = 'cwoc-switch-user-item';
-        var avatarSrc = u.profile_image_url ? _escHtml(u.profile_image_url) : '/static/default-avatar.svg';
-        item.innerHTML = '<img src="' + avatarSrc + '" class="cwoc-switch-user-avatar" alt="" onerror="this.src=\'/static/default-avatar.svg\'" />' +
+        var avatarSrc = u.profile_image_url ? _escHtml(u.profile_image_url) : '/static/images/default-avatar.svg';
+        item.innerHTML = '<img src="' + avatarSrc + '" class="cwoc-switch-user-avatar" alt="" onerror="this.src=\'/static/images/default-avatar.svg\'" />' +
           '<span class="cwoc-switch-user-name">' + _escHtml(u.display_name) + '</span>' +
           '<span class="cwoc-switch-user-username">(' + _escHtml(u.username) + ')</span>';
         item.onclick = function(e) {
@@ -821,14 +821,14 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       btn.title = user.username;
       if (user.profile_image_url && img) {
         img.src = user.profile_image_url;
-        img.onerror = function() { this.src = '/static/default-avatar.svg'; this.onerror = null; };
+        img.onerror = function() { this.src = '/static/images/default-avatar.svg'; this.onerror = null; };
       }
     } else if (typeof waitForAuth === 'function') {
       waitForAuth().then(function(u) {
         if (u && btn) btn.title = u.username;
         if (u && u.profile_image_url && img) {
           img.src = u.profile_image_url;
-          img.onerror = function() { this.src = '/static/default-avatar.svg'; this.onerror = null; };
+          img.onerror = function() { this.src = '/static/images/default-avatar.svg'; this.onerror = null; };
         }
       });
     }

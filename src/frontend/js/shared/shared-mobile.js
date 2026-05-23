@@ -80,7 +80,6 @@ function _isMobileOverlay() {
  * Initialize mobile sidebar overlay behavior.
  * - On ≤768px: sidebar defaults to closed on page load
  * - Creates/manages the .sidebar-backdrop element
- * - Adds a visible close button inside the sidebar for mobile
  * - Listens for resize events to handle crossing the 768px boundary
  *
  * Call this once from DOMContentLoaded (e.g., in main.js).
@@ -92,18 +91,6 @@ function initMobileSidebar() {
 
   // Ensure backdrop element exists
   _ensureSidebarBackdrop();
-
-  // Add a close button inside the sidebar for mobile (only once)
-  if (!sidebar.querySelector('.sidebar-close-btn')) {
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'sidebar-close-btn';
-    closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
-    closeBtn.setAttribute('aria-label', 'Hide sidebar');
-    closeBtn.addEventListener('click', function () {
-      _onSidebarBackdropClick();
-    });
-    sidebar.insertBefore(closeBtn, sidebar.firstChild);
-  }
 
   // On page load at ≤768px: force sidebar closed
   if (_isMobileOverlay()) {
@@ -338,8 +325,26 @@ function enableLongPress(el, callback) {
 // ── Mobile Views Button (replaces tab bar on mobile) ─────────────────────────
 
 /**
- * On mobile (≤480px), add a "Views" button next to the header title.
- * Tapping it opens a full-screen dropdown with the 6 C CAPTN tabs.
+ * Map of view names to their icon image paths (matching the web tab bar images).
+ */
+var _mobileViewIconMap = {
+  'Calendar': '/static/images/calendar.png',
+  'Checklists': '/static/images/checklists.png',
+  'Tasks': '/static/images/tasks.png',
+  'Projects': '/static/images/projects.png',
+  'Notes': '/static/images/notes.png',
+  'Email': '/static/images/email.png',
+  'Indicators': '/static/images/Indicators.png',
+  'Alarms': '/static/images/alerts.png',
+  'Alerts': '/static/images/alerts.png',
+  'Notebook': null, // Font Awesome icon, no image
+  'Search': null,   // Font Awesome icon, no image
+  'Omni': '/static/images/cwod_logo.png'
+};
+
+/**
+ * On mobile (≤480px), add a unified views control to the header right side.
+ * Shows [view icon] [view name] [☰] — tapping anywhere opens the right views panel.
  * The original .tabs row is hidden via CSS.
  *
  * Call once from DOMContentLoaded on the dashboard page.
@@ -348,12 +353,11 @@ function initMobileViewsButton() {
   var header = document.querySelector('.header');
   if (!header) return;
 
-  // Tab button in header, pushed to right edge via margin-left:auto
+  // Unified views control: icon + name + hamburger
   var btn = document.createElement('button');
   btn.className = 'mobile-views-btn';
   btn.id = 'mobile-views-btn';
-  // Show current view name instead of generic "Views"
-  btn.textContent = '☰ ' + (typeof currentTab !== 'undefined' && currentTab ? currentTab : 'Views');
+  _buildViewsBtnContent(btn);
   header.appendChild(btn);
 
   // Backdrop
@@ -381,12 +385,6 @@ function initMobileViewsButton() {
     });
     panel.appendChild(opt);
   });
-
-  var closeBtn = document.createElement('button');
-  closeBtn.className = 'mobile-views-close';
-  closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
-  closeBtn.addEventListener('click', function () { _closeViewsPanel(); });
-  panel.appendChild(closeBtn);
 
   document.body.appendChild(panel);
 
@@ -446,14 +444,28 @@ function initMobileViewsButton() {
 }
 
 /**
- * Update the mobile Views button label to show the current tab name.
+ * Build the inner content of the mobile views area: [icon] [☰ button]
+ * The ☰ button exactly matches the left hamburger styling.
+ */
+function _buildViewsBtnContent(btn) {
+  var label = (typeof currentTab !== 'undefined' && currentTab) ? currentTab : 'Calendar';
+  var iconSrc = _mobileViewIconMap[label] || null;
+  var html = '';
+  if (iconSrc) {
+    html += '<img class="mobile-views-btn-icon" src="' + iconSrc + '" alt="" />';
+  }
+  html += '<span class="mobile-views-btn-hamburger">☰</span>';
+  btn.innerHTML = html;
+}
+
+/**
+ * Update the mobile Views button to show the current tab icon + name + ☰.
  * Called from filterChits() and on initial load after state restore.
  */
 function _updateMobileViewsLabel() {
   var btn = document.getElementById('mobile-views-btn');
   if (!btn) return;
-  var label = (typeof currentTab !== 'undefined' && currentTab) ? currentTab : 'Views';
-  btn.textContent = '☰ ' + label;
+  _buildViewsBtnContent(btn);
 }
 
 
@@ -463,21 +475,9 @@ function _updateMobileViewsLabel() {
  * Add a close button inside the reference overlay content for mobile.
  * On desktop, clicking outside the content closes it. On mobile the content
  * fills the screen so there's no outside area to tap.
+ * NOTE: Removed per UI redesign — reference overlay is dismissed via ESC or
+ * tapping the backdrop (which now exists on mobile too).
  */
 function initMobileReferenceClose() {
-  var content = document.querySelector('.reference-content');
-  if (!content) return;
-  if (content.querySelector('.ref-close-btn')) return; // already added
-
-  var btn = document.createElement('button');
-  btn.className = 'ref-close-btn';
-  btn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
-  btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;' +
-    'font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;' +
-    'background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;' +
-    'cursor:pointer;min-height:44px;';
-  btn.addEventListener('click', function () {
-    if (typeof _closeReference === 'function') _closeReference();
-  });
-  content.appendChild(btn);
+  // No-op: close buttons removed from all sidebars/overlays on mobile
 }

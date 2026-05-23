@@ -1009,7 +1009,7 @@ private fun BadgesSection(
     CollapsibleSection(
         title = "🏷️ Badges",
         sectionId = "email_badges",
-        defaultExpanded = true
+        defaultExpanded = false
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Max badges per email

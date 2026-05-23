@@ -2409,7 +2409,7 @@ function _buildNestedChitCard(chit) {
     // Nest icon (replaces the checkbox/contact image area)
     var nestIconWrap = document.createElement('div');
     nestIconWrap.className = 'email-cb-wrap email-nest-icon';
-    nestIconWrap.innerHTML = '<img src="/static/nest-eggs.svg" style="height:1.2em;vertical-align:middle;" alt="" />';
+    nestIconWrap.innerHTML = '<img src="/static/images/nest-eggs.svg" style="height:1.2em;vertical-align:middle;" alt="" />';
     nestIconWrap.title = 'Nested chit';
     card.appendChild(nestIconWrap);
 

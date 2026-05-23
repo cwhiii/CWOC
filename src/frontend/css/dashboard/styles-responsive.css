@@ -50,7 +50,7 @@
         z-index: 1003;
         padding: 10px !important;
         box-sizing: border-box !important;
-        background: url("/static/parchment.jpg") center/cover;
+        background: url("/static/images/parchment.jpg") center/cover;
         background-color: var(--sidebar-bg);
     }
 
@@ -58,37 +58,9 @@
         left: 0 !important;
     }
 
-    /* ── Sidebar close button ─────────────────────────────────────────────── */
+    /* ── Sidebar close button (removed — dismiss via backdrop/swipe) ─────── */
     .sidebar-close-btn {
-        display: block;
-        position: sticky;
-        top: 0;
-        width: 100%;
-        padding: 10px;
-        margin-bottom: 10px;
-        background: var(--aged-brown-medium, #8b4513);
-        color: #fff8e1;
-        border: 1px solid var(--btn-border, #5a3f2a);
-        border-radius: 3px;
-        font-family: 'Lora', Georgia, serif;
-        font-weight: bold;
-        font-size: 1em;
-        cursor: pointer;
-        z-index: 10;
-        min-height: 44px;
-        overflow: hidden;
-    }
-    .sidebar-close-btn:disabled,
-    .sidebar-close-btn {
-        opacity: 1 !important;
-        background: var(--aged-brown-medium, #8b4513) !important;
-        color: #fff8e1 !important;
-        border: 1px solid var(--btn-border, #5a3f2a) !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-    }
-    .sidebar-close-btn:hover {
-        background: var(--btn-hover, #6b4e31) !important;
+        display: none !important;
     }
 
     /* ── Sidebar backdrop for overlay mode ─────────────────────────────────── */
@@ -237,7 +209,7 @@
         height: 32px;
     }
 
-    /* ── Mobile hamburger: visible, between logo and title ────────────────── */
+    /* ── Mobile hamburger: visible, after logo ───────────────────────────── */
     .mobile-hamburger {
         display: inline-flex !important;
         align-items: center;
@@ -255,15 +227,9 @@
         flex-shrink: 0;
     }
 
-    /* ── Title: compact, inline ───────────────────────────────────────────── */
+    /* ── Title: hidden on mobile ─────────────────────────────────────────── */
     h1 {
-        font-size: 1em;
-        padding: 2px 4px;
-        height: auto;
-        width: auto;
-        display: inline-flex;
-        flex-shrink: 1;
-        min-width: 0;
+        display: none !important;
     }
 
     /* ── Tabs: HIDDEN on mobile — replaced by Views button ───────────────── */
@@ -276,19 +242,29 @@
         display: none !important;
     }
 
-    /* ── Views button: visible on mobile ──────────────────────────────────── */
+    /* ── Views button: visible on mobile, same font size as title ────────── */
     .mobile-views-btn {
         display: inline-flex !important;
-        margin-left: 0;
+        margin-left: auto;
         margin-right: 0;
         order: 11;
+        font-size: 1em;
     }
 
-    /* ── Profile menu: tight against views button on mobile ──────────────── */
+    /* ── Profile menu: fixed center of screen ─────────────────────────────── */
     .cwoc-profile-menu {
-        order: 10;
-        margin-left: auto !important;
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        margin-left: 0 !important;
         margin-right: 0 !important;
+        flex-shrink: 0;
+        z-index: 1;
+    }
+
+    /* ── Hide sidebar close button on mobile (removed) ────────────────────── */
+    .sidebar-close-btn {
+        display: none !important;
     }
 
     /* ── Reference overlay: single-column within each section ─────────────── */

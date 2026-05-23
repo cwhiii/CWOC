@@ -45,6 +45,7 @@ fun IndependentAlertsBoard(
     modifier: Modifier = Modifier
 ) {
     val standaloneAlerts by viewModel.standaloneAlerts.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     // Group alerts by type
     val alarms = remember(standaloneAlerts) {
@@ -63,6 +64,19 @@ fun IndependentAlertsBoard(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // ─── Error display (temporary debug) ──────────────────────────────
+        if (errorMessage != null) {
+            item {
+                Text(
+                    text = "ERROR: $errorMessage",
+                    color = Color.Red,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                )
+            }
+        }
         // ─── Alarms Section ───────────────────────────────────────────────
         item {
             SectionHeader(

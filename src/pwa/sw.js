@@ -107,10 +107,10 @@ const APP_SHELL_URLS = [
     // ── Icons & static assets ──
     '/static/cwoc-icon-192.png',
     '/static/cwoc-icon-512.png',
-    '/static/cwod_logo.png',
-    '/static/cwod_logo-favicon.png',
-    '/static/cwod_logo-large.png',
-    '/static/parchment.jpg',
+    '/static/images/cwod_logo.png',
+    '/static/images/cwod_logo-favicon.png',
+    '/static/images/cwod_logo-large.png',
+    '/static/images/parchment.jpg',
 
     // ── Self-hosted fonts ──
     '/static/fonts/lora/Lora-VariableFont_wght.ttf',

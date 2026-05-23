@@ -1,99 +1,109 @@
 # Settings Parity Audit: Web vs Android App — Complete
 
-Every persistent setting from `settings.html` + `settings.js` (web) compared against the Android app.
+Every persistent setting. Columns: Web Tab, Web Box (h3 heading), Web Section (setting-subheader), Setting name, App Tab, App Section, then data columns.
 
-**Placement?**: ✅ = same tab & section as web, ❌ = missing from app, 🔀 = wrong tab/section
-**Display?**: ✅ = same control type & options, ⚠️ = minor difference, ❌ = wrong options or control type
+**Placement?**: ✅ = same tab+box+section, 🔀 = different location
+**Display?**: ✅ = same control & options, ⚠️ = minor diff, ❌ = wrong
 
-| # | Web Tab | Web Box | Setting | Server Key | Web Sends | App Sends | App Tab | App Section | Match? | Placement? | Display? |
-|---|---------|---------|---------|-----------|-----------|-----------|---------|-------------|--------|-----------|----------|
-| 1 | General | General Settings | Sex | `sex` | `"Man"`/`"Woman"` | `"Man"`/`"Woman"` | General | (top) | ✅ | ✅ | ✅ Pill toggle, same 2 options |
-| 2 | General | General Settings | Units | `unit_system` | `"imperial"`/`"metric"` | `"imperial"`/`"metric"` | General | (top) | ✅ | ✅ | ✅ Pill toggle, same 2 options |
-| 3 | General | General Settings | Snooze Length | `snooze_length` | `"1 minute"`/`"3 minutes"`/`"5 minutes"`/`"10 minutes"` | Same | General | (top) | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 4 | General | General Settings | Calendar Snap | `calendar_snap` | `"0"`/`"5"`/`"10"`/`"15"`/`"20"`/`"25"`/`"30"`/`"60"` | Same | General | (top) | ✅ | ✅ | ✅ Dropdown, same 8 options |
-| 5 | General | General Settings | Default share contacts | `default_share_contacts` | `"1"`/`"0"` | `"1"`/`"0"` | General | Contact Vault | ✅ | ✅ | ✅ Toggle/switch |
-| 6 | General | General Settings | Time Format | `time_format` | `"24hour"`/`"12hour"`/`"metric"` | Same | General | (top) | ✅ | ✅ | ✅ Dropdown, same 3 options |
-| 7 | General | General Settings | Clock Orientation | `alarm_orientation` | `"Vertical"`/`"Horizontal"` | Same | General | Clocks | ✅ | ✅ | ✅ Toggle button |
-| 8 | General | General Settings | Active Clocks | `active_clocks` | JSON array | JSON array | General | Clocks | ✅ | ✅ | ✅ Drag-drop grid |
-| 9 | General | General Settings | Default Timezone | `default_timezone` | IANA string | IANA string | General | (top) | ✅ | ✅ | ✅ Searchable text input |
-| 10 | General | General Settings | Timezone Override | `timezone_override` | IANA string/null | IANA string/"" | General | (top) | ✅ | ✅ | ✅ Searchable text input + clear button |
-| 11 | General | Display Options | Landing View | `default_view` | `"Omni"`/`"Calendar"`/`"Checklists"`/`"Alarms"`/`"Projects"`/`"Tasks"`/`"Notes"`/`"Email"`/`"Indicators"` | Missing Omni, Email, Indicators | General | Display Options | ✅ | ✅ | ❌ App only has 6 options, web has 9. Missing: Omni, Email, Indicators |
-| 12 | General | Display Options | View Order | `view_order` | JSON array | JSON array | General | Display Options | ✅ | ✅ | ✅ Drag-reorder modal |
-| 13 | General | Display Options | Hidden Views | `hidden_views` | Not sent | JSON array | General | Display Options | ⚠️ | ✅ | ✅ Part of view order drag |
-| 14 | General | Display Options | Chit Options | `chit_options` | JSON object (6 booleans) | Same | General | Chit Options | ✅ | ✅ | ✅ Checkboxes, same 6 options |
-| 15 | General | Display Options | Checklist Autosave | `checklist_autosave` | `"1"`/`"0"` | `"1"`/`"0"` | General | Chit Options | ✅ | ✅ | ✅ Checkbox |
-| 16 | General | Display Options | Autosave Desktop | `autosave_desktop` | `"1"`/`"0"` | `"1"`/`"0"` | General | Chit Options | ✅ | ✅ | ✅ Checkbox |
-| 17 | General | Display Options | Autosave Mobile | `autosave_mobile` | `"1"`/`"0"` | `"1"`/`"0"` | General | Chit Options | ✅ | ✅ | ✅ Checkbox |
-| 18 | General | Display Options | Show Map Thumbnails | `show_map_thumbnails` | `"1"`/`"0"` | `"1"`/`"0"` | General | Chit Options | ✅ | ✅ | ✅ Checkbox |
-| 19 | General | Display Options | Hide Declined | `hide_declined` | `"1"`/`"0"` | `"1"`/`"0"` | General | Chit Options | ✅ | ✅ | ✅ Checkbox |
-| 20 | General | Display Options | Visual Indicators | `visual_indicators` | JSON (9 indicators + combine_alerts) | Same | General | Visual Indicators | ✅ | ✅ | ✅ Dropdowns (always/never/space) per indicator + combine checkbox |
-| 21 | General | Display Options | Combine Alerts | `combine_alerts` | Not sent separately | `"0"`/`"1"` | General | Visual Indicators | ⚠️ | ✅ | ✅ Checkbox |
-| 22 | General | Custom Filters | Custom View Filters | `custom_view_filters` | JSON object | JSON object | General | Custom Filters | ✅ | ✅ | ✅ Per-view filter modal |
-| 23 | Views | Omni View | HST Bar Clock | `omni_hst_clock_mode` | `"both"`/`"hst"`/`"system"` | Same | Views | Omni View | ✅ | ✅ | ⚠️ Web=dropdown, App=segmented button. Same 3 options. |
-| 24 | Views | Omni View | Omni Layout | `omni_layout` | JSON object | JSON object | Views | Omni View | ✅ | ✅ | ✅ Drag-reorder modal |
-| 25 | Views | Omni View | Bundle Toggles | `omni_bundle_toggles` | Separate API | JSON object | Views | Omni View | ⚠️ | ✅ | ✅ Checkbox list per bundle |
-| 26 | Views | Omni View | Emails to show | `omni_email_count` | `"3"`/`"5"`/`"10"`/`"15"`/`"20"` | Same | Views | Omni View | ✅ | ✅ | ✅ Dropdown, same 5 options |
-| 27 | Views | Omni View | Color mode | `omni_normalize_colors` | `"colored"`/`"normalized"`/`"mono"` | Same | Views | Omni View | ✅ | ✅ | ⚠️ Web=dropdown, App=segmented button. Same 3 options. |
-| 28 | Views | Omni View | Locked Filters | `omni_locked_filters` | JSON/undefined | JSON/`"[]"` | Views | Omni View | ✅ | ✅ | ✅ Display + Clear button |
-| 29 | Views | Calendar | Week Starts On | `week_start_day` | `"0"`–`"6"` | `"0"`–`"6"` | Views | Calendar | ✅ | ✅ | ✅ Dropdown, all 7 days |
-| 30 | Views | Calendar | View Hours Start | `all_view_start_hour` | `"0"`–`"23"` | `"0"`–`"23"` | Views | Calendar | ✅ | ✅ | ✅ Hour dropdown 0–23 |
-| 31 | Views | Calendar | View Hours End | `all_view_end_hour` | `"0"`–`"24"` | `"0"`–`"23"` | Views | Calendar | ⚠️ | ✅ | ⚠️ Web goes to 24 (midnight), app stops at 23 |
-| 32 | Views | Calendar | Scroll to Hour | `day_scroll_to_hour` | `"0"`–`"12"` | `"0"`–`"12"` | Views | Calendar | ✅ | ✅ | ✅ Hour dropdown 0–12 |
-| 33 | Views | Calendar | Enabled Periods | `enabled_periods` | Comma-joined names | Same | Views | Calendar | ✅ | ✅ | ✅ Checkboxes: Itinerary, Day, Week, Month, Year, SevenDay, Work |
-| 34 | Views | Calendar | X Days Count | `custom_days_count` | `"2"`–`"30"` | `"2"`–`"30"` | Views | Calendar | ✅ | ✅ | ✅ Number input min=2 max=30 |
-| 35 | Views | Calendar | Work Days | `work_days` | `"0,1,2,3,4,5,6"` | Same | Views | Calendar | ✅ | ✅ | ✅ 7 day checkboxes (Sun–Sat) |
-| 36 | Views | Calendar | Work Hours Start | `work_start_hour` | `"0"`–`"23"` | `"0"`–`"23"` | Views | Calendar | ✅ | ✅ | ✅ Hour dropdown 0–23 |
-| 37 | Views | Calendar | Work Hours End | `work_end_hour` | `"0"`–`"23"` | `"0"`–`"23"` | Views | Calendar | ✅ | ✅ | ✅ Hour dropdown 0–23 |
-| 38 | Views | Habits | Success Window | `habits_success_window` | `"7"`/`"30"`/`"90"`/`"all"` | Same | Views | Habits | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 39 | Views | Habits | Show habits on calendar | `default_show_habits_on_calendar` | `"1"`/`"0"` | `"1"`/`"0"` | Views | Habits | ✅ | ✅ | ✅ Checkbox |
-| 40 | Views | Projects | Show child count | `projects_show_child_count` | `"1"`/`"0"` | `"1"`/`"0"` | Views | Projects | ✅ | ✅ | ✅ Checkbox |
-| 41 | Views | Projects | Show checklist count | `projects_show_checklist_count` | `"1"`/`"0"` | `"1"`/`"0"` | Views | Projects | ✅ | ✅ | ✅ Checkbox |
-| 42 | Views | Maps | Auto-zoom | `map_auto_zoom` | `"1"`/`"0"` | `"1"`/`"0"` | Views | Maps | ✅ | ✅ | ✅ Checkbox |
-| 43 | Views | Maps | Default Latitude | `map_default_lat` | Decimal/null | Decimal/null | Views | Maps | ✅ | ✅ | ✅ Number input |
-| 44 | Views | Maps | Default Longitude | `map_default_lon` | Decimal/null | Decimal/null | Views | Maps | ✅ | ✅ | ✅ Number input |
-| 45 | Views | Maps | Default Zoom | `map_default_zoom` | Integer/null | Integer/null | Views | Maps | ✅ | ✅ | ✅ Number input 1–18 |
-| 46 | Collections | Tag Editor | Tags | `tags` | JSON array | JSON array | Collections | Tag Editor | ✅ | ✅ | ✅ Tag tree with add/edit/delete/color/favorite |
-| 47 | Collections | Custom Colors | Custom Colors | `custom_colors` | Array of hex | JSON array | Collections | Custom Colors | ✅ | ✅ | ✅ Color swatches with add/remove |
-| 48 | Collections | Custom Colors | Overdue Border Color | `overdue_border_color` | Hex string | Hex/null | Collections | Custom Colors | ✅ | ✅ | ✅ Color assignment |
-| 49 | Collections | Custom Colors | Blocked Border Color | `blocked_border_color` | Hex string | Hex/null | Collections | Custom Colors | ✅ | ✅ | ✅ Color assignment |
-| 50 | Collections | Saved Locations | Saved Locations | `saved_locations` | JSON array | JSON array | Collections | Saved Locations | ✅ | ✅ | ✅ Location rows with label/address/default |
-| 51 | Collections | Default Notifications | Default Notifications | `default_notifications` | JSON object | JSON object | Collections | Default Notifications | ✅ | ✅ | ✅ Start/Due notification rows |
-| 52 | Email | Accounts & Syncing | Email Accounts | `email_accounts` | JSON array | JSON array | Email | Accounts | ✅ | ✅ | ✅ Account list with add/edit/delete |
-| 53 | Email | Accounts & Syncing | Max Pull | `email_max_pull` | Integer string | Integer string | Email | Syncing | ✅ | ✅ | ✅ Number input 1–1000 |
-| 54 | Email | Accounts & Syncing | Check Interval | `email_check_interval` | `"manual"`/`"5"`/`"15"`/`"30"`/`"60"` | Same | Email | Syncing | ✅ | ✅ | ✅ Dropdown, same 5 options |
-| 55 | Email | Privacy & Sending | Block Tracking | `email_block_tracking_pixels` | `"1"`/`"0"` | `"1"`/`"0"` | Email | Privacy | ✅ | ✅ | ✅ Checkbox |
-| 56 | Email | Privacy & Sending | External Content | `email_external_content` | `"allow"`/`"block"`/`"known_senders"` | Same | Email | Privacy | ✅ | ✅ | ✅ Dropdown, same 3 options |
-| 57 | Email | Privacy & Sending | Read Receipts | `email_read_receipts` | `"never"`/`"always"`/`"ask"`/`"contacts_only"` | Same | Email | Privacy | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 58 | Email | Privacy & Sending | Undo Send Delay | `email_undo_send_delay` | `"5"`/`"10"`/`"15"`/`"30"` | Same | Email | Privacy | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 59 | Email | Privacy & Sending | Signature | `email_signature` | Markdown string | Markdown string | Email | Signature | ✅ | ✅ | ✅ Text editor |
-| 60 | Email | Display & Bundles | Group By | `email_group_by` | `"date"`/`"none"` | Same | Email | Display | ✅ | ✅ | ✅ Dropdown, same 2 options |
-| 61 | Email | Display & Bundles | Paginate | `paginate_email` | `"1"`/`"0"` | `"1"`/`"0"` | Email | Display | ✅ | ✅ | ✅ Checkbox |
-| 62 | Email | Display & Bundles | Bundles Enabled | `bundles_enabled` | `"1"`/`"0"` | `"1"`/`"0"` | Email | Bundles | ✅ | ✅ | ✅ Checkbox |
-| 63 | Email | Display & Bundles | Multi-Placement | `bundles_multi_placement` | `"1"`/`"0"` | `"1"`/`"0"` | Email | Bundles | ✅ | ✅ | ✅ Checkbox |
-| 64 | Email | Display & Bundles | Bundle Count | `bundles_show_count` | `"both"`/`"unread"`/`"total"`/`"none"` | Same | Email | Bundles | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 65 | Email | Badges | Badge Detectors | `badge_detectors` | JSON array | JSON array | Email | Badges | ✅ | ✅ | ✅ Category toggles + custom detector modal |
-| 66 | Admin | Admin | Instance Name | `instance_name` | Free text | Free text | Administration | Admin | ✅ | ✅ | ✅ Text input |
-| 67 | Admin | Admin | Welcome Message | `welcome_message` | Separate endpoint | In payload | Administration | Admin | ⚠️ | ✅ | ✅ Textarea with markdown preview |
-| 68 | Admin | Admin | Session Lifetime | `session_lifetime` | `"1"`/`"12"`/`"24"`/`"168"`/`"720"`/`"0"` | `"1"`/`"12"`/`"24"`/`"168"`/`"720"`/`"never"` | Administration | Admin | ❌ | ✅ | ❌ App sends "never" for Never, web sends "0" |
-| 69 | Admin | Tools | Kiosk Tags | `kiosk_selected_tags` | JSON (as `kiosk_users`) | JSON array | Administration | Kiosk | ⚠️ | ✅ | ✅ Tag checkbox list |
-| 70 | Admin | Data Management | Audit Pruning Enabled | `audit_log_pruning_enabled` | Not sent | `"0"`/`"1"` | Administration | Data Management | ⚠️ | ✅ | ✅ Checkbox |
-| 71 | Admin | Data Management | Audit Max Days | `audit_log_max_days` | Integer/null | String | Administration | Data Management | ⚠️ | ✅ | ✅ Number input |
-| 72 | Admin | Data Management | Audit Max MB | `audit_log_max_mb` | Integer/null | String | Administration | Data Management | ⚠️ | ✅ | ✅ Number input |
-| 73 | Admin | Data Management | Attachment Max Size | `attachment_max_size_mb` | `"5"`/`"10"`/`"25"`/`"50"` | Same | Administration | Data Management | ✅ | ✅ | ✅ Dropdown, same 4 options |
-| 74 | Admin | Data Management | Attachment Max Storage | `attachment_max_storage_mb` | `"100"`/`"250"`/`"500"`/`"1024"`/`"2048"`/`"5120"`/`"0"` | Same | Administration | Data Management | ✅ | ✅ | ✅ Dropdown, same 7 options |
-| 75 | Admin | Dependent Apps | Tailscale Enabled | `tailscale_enabled` | Separate API | `"0"`/`"1"` | Administration | Dependent Apps | ⚠️ | ✅ | ✅ Toggle button |
-| 76 | Admin | Dependent Apps | Tailscale Auth Key | `tailscale_auth_key` | Separate API | String/null | Administration | Dependent Apps | ⚠️ | ✅ | ✅ Password input + show/hide |
-| 77 | Admin | Dependent Apps | Ntfy Enabled | `ntfy_enabled` | Separate API | `"0"`/`"1"` | Administration | Dependent Apps | ⚠️ | ✅ | ✅ Toggle button |
-| 78 | Admin | Dependent Apps | HA Enabled | `ha_enabled` | Separate API | `"0"`/`"1"` | Administration | Dependent Apps | ⚠️ | ✅ | ✅ Toggle button |
-| 79 | Admin | Dependent Apps | HA Poll Interval | `ha_poll_interval` | Separate API | `"30"` | Administration | Dependent Apps | ⚠️ | ✅ | ✅ Number input |
-| 80 | — | — | Clock Orientation (dup) | `clock_orientation` | Not sent | `"Horizontal"`/`"Vertical"` | General | Clocks | ⚠️ | N/A | N/A |
+| # | Web Tab | Web Box | Web Section | Setting | App Tab | App Section | Server Key | Web Sends | App Sends | Match? | Display? |
+|---|---------|---------|-------------|---------|---------|-------------|-----------|-----------|-----------|--------|----------|
+| 1 | General | General Settings | ⚙️ General | Sex | General | (top level) | `sex` | `"Man"`/`"Woman"` | `"Man"`/`"Woman"` | ✅ | ✅ |
+| 2 | General | General Settings | ⚙️ General | Units | General | (top level) | `unit_system` | `"imperial"`/`"metric"` | `"imperial"`/`"metric"` | ✅ | ✅ |
+| 3 | General | General Settings | ⚙️ General | Snooze Length | General | (top level) | `snooze_length` | `"5 minutes"` etc | Same | ✅ | ✅ |
+| 4 | General | General Settings | ⚙️ General | Calendar Snap | General | (top level) | `calendar_snap` | `"0"`–`"60"` | Same | ✅ | ✅ |
+| 5 | General | General Settings | 🏛️ Contact Vault | Default share contacts | General | Contact Vault | `default_share_contacts` | `"1"`/`"0"` | `"1"`/`"0"` | ✅ | ✅ |
+| 6 | General | General Settings | 🕐 Clocks | Time Format | General | Clocks | `time_format` | `"24hour"`/`"12hour"`/`"metric"` | Same | ✅ | ✅ |
+| 7 | General | General Settings | 🕐 Clocks | Orientation | General | Clocks | `alarm_orientation` | `"Vertical"`/`"Horizontal"` | Same | ✅ | ✅ |
+| 8 | General | General Settings | 🕐 Clocks | Active Clocks | General | Clocks | `active_clocks` | JSON array | JSON array | ✅ | ✅ |
+| 9 | General | General Settings | 🌐 Timezone | Default Timezone | General | (top level) | `default_timezone` | IANA string | Same | ✅ | ✅ |
+| 10 | General | General Settings | 🌐 Timezone | Current Override | General | (top level) | `timezone_override` | IANA/null | Same | ✅ | ✅ |
+| 11 | General | Display Options | Default View | Landing View | General | Display Options | `default_view` | 9 options | 9 options | ✅ | ✅ |
+| 12 | General | Display Options | View Order | View Order | General | Display Options | `view_order` | JSON array | JSON array | ✅ | ✅ |
+| 13 | General | Display Options | View Order | Hidden Views | General | Display Options | `hidden_views` | Not sent | JSON array | ⚠️ | ✅ |
+| 14 | General | Display Options | Chit Options | Fade Past Chits | General | Chit Options | `chit_options` | JSON obj | Same | ✅ | ✅ |
+| 15 | General | Display Options | Chit Options | Checklist Autosave | General | Chit Options | `checklist_autosave` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 16 | General | Display Options | Chit Options | Autosave Desktop | General | Chit Options | `autosave_desktop` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 17 | General | Display Options | Chit Options | Autosave Mobile | General | Chit Options | `autosave_mobile` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 18 | General | Display Options | Chit Options | Show Map Thumbnails | General | Chit Options | `show_map_thumbnails` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 19 | General | Display Options | Chit Options | Hide Declined | General | Chit Options | `hide_declined` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 20 | General | Display Options | Visual Indicators | Visual Indicators | General | Visual Indicators | `visual_indicators` | JSON obj | Same | ✅ | ✅ |
+| 21 | General | Display Options | Visual Indicators | Combine Alerts | General | Visual Indicators | `combine_alerts` | Not sent | `"0"`/`"1"` | ⚠️ | ✅ |
+| 22 | General | Custom Filters | (none) | Custom View Filters | General | Custom Filters & Sorting | `custom_view_filters` | JSON obj | Same | ✅ | ✅ |
+| 23 | Views | Omni View | (top) | HST Bar Clock | Views | Omni View | `omni_hst_clock_mode` | `"both"`/`"hst"`/`"system"` | Same | ✅ | ⚠️ Web=dropdown, App=segmented |
+| 24 | Views | Omni View | 📐 Layout | Omni Layout | Views | Omni View | `omni_layout` | JSON obj | Same | ✅ | ✅ |
+| 25 | Views | Omni View | 📧 Bundle Toggles | Bundle Toggles | Views | Omni View | `omni_bundle_toggles` | Separate API | JSON obj | ⚠️ | ✅ |
+| 26 | Views | Omni View | (top) | Emails to show | Views | Omni View | `omni_email_count` | `"3"`–`"20"` | Same | ✅ | ✅ |
+| 27 | Views | Omni View | 🎨 Colors | Color mode | Views | Omni View | `omni_normalize_colors` | `"colored"`/`"normalized"`/`"mono"` | Same | ✅ | ⚠️ Web=dropdown, App=segmented |
+| 28 | Views | Omni View | 🔒 Locked Filters | Locked Filters | Views | Omni View | `omni_locked_filters` | JSON | Same | ✅ | ✅ |
+| 29 | Views | Calendar | Calendar Settings | Week Starts On | Views | Calendar | `week_start_day` | `"0"`–`"6"` | Same | ✅ | ✅ |
+| 30 | Views | Calendar | 🕐 View Hours | View Hours Start | Views | Calendar | `all_view_start_hour` | `"0"`–`"23"` | Same | ✅ | ✅ |
+| 31 | Views | Calendar | 🕐 View Hours | View Hours End | Views | Calendar | `all_view_end_hour` | `"0"`–`"24"` | `"0"`–`"24"` | ✅ | ✅ |
+| 32 | Views | Calendar | (inline) | Scroll to Hour | Views | Calendar | `day_scroll_to_hour` | `"0"`–`"12"` | Same | ✅ | ✅ |
+| 33 | Views | Calendar | Enabled Periods | Enabled Periods | Views | Calendar | `enabled_periods` | Comma-joined | Same | ✅ | ✅ |
+| 34 | Views | Calendar | Enabled Periods | X Days Count | Views | Calendar | `custom_days_count` | `"2"`–`"30"` | Same | ✅ | ✅ |
+| 35 | Views | Calendar | Enabled Periods (Work) | Work Days | Views | Calendar | `work_days` | `"0,1,2,3,4,5"` | Same | ✅ | ✅ |
+| 36 | Views | Calendar | Enabled Periods (Work) | Work Hours Start | Views | Calendar | `work_start_hour` | `"0"`–`"23"` | Same | ✅ | ✅ |
+| 37 | Views | Calendar | Enabled Periods (Work) | Work Hours End | Views | Calendar | `work_end_hour` | `"0"`–`"23"` | Same | ✅ | ✅ |
+| 38 | Views | Habits | (top) | Success Window | Views | Habits | `habits_success_window` | `"7"`/`"30"`/`"90"`/`"all"` | Same | ✅ | ✅ |
+| 39 | Views | Habits | (top) | Show habits on calendar | Views | Habits | `default_show_habits_on_calendar` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 40 | Views | Projects | (top) | Show child count | Views | Projects | `projects_show_child_count` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 41 | Views | Projects | (top) | Show checklist count | Views | Projects | `projects_show_checklist_count` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 42 | Views | Maps | (top) | Auto-zoom | Views | Maps | `map_auto_zoom` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 43 | Views | Maps | (top) | Default Latitude | Views | Maps | `map_default_lat` | Decimal/null | Same | ✅ | ✅ |
+| 44 | Views | Maps | (top) | Default Longitude | Views | Maps | `map_default_lon` | Decimal/null | Same | ✅ | ✅ |
+| 45 | Views | Maps | (top) | Default Zoom | Views | Maps | `map_default_zoom` | Int/null | Same | ✅ | ✅ |
+| 46 | Collections | Tag Editor | (top) | Tags | Collections | Tag Editor | `tags` | JSON array | Same | ✅ | ✅ |
+| 47 | Collections | Custom Colors | Custom Colors | Custom Colors | Collections | Custom Colors | `custom_colors` | Hex array | Same | ✅ | ✅ |
+| 48 | Collections | Custom Colors | Custom Colors | Overdue Border Color | Collections | Custom Colors | `overdue_border_color` | Hex/null | Same | ✅ | ✅ |
+| 49 | Collections | Custom Colors | Custom Colors | Blocked Border Color | Collections | Custom Colors | `blocked_border_color` | Hex/null | Same | ✅ | ✅ |
+| 50 | Collections | Saved Locations | (top) | Saved Locations | Collections | Saved Locations | `saved_locations` | JSON array | Same | ✅ | ✅ |
+| 51 | Collections | Default Notifications | Start Time | Default Notifications | Collections | Default Notifications | `default_notifications` | JSON obj | Same | ✅ | ✅ |
+| 52 | Email | Accounts & Syncing | 📧 Accounts | Email Accounts | Email | Accounts | `email_accounts` | JSON array | Same | ✅ | ✅ |
+| 53 | Email | Accounts & Syncing | 🔄 Syncing | Max Pull | Email | Syncing | `email_max_pull` | Int string | Same | ✅ | ✅ |
+| 54 | Email | Accounts & Syncing | 🔄 Syncing | Check Interval | Email | Syncing | `email_check_interval` | `"manual"`/`"5"`/`"15"`/`"30"`/`"60"` | Same | ✅ | ✅ |
+| 55 | Email | Privacy & Sending | (top) | Block Tracking | Email | Privacy | `email_block_tracking_pixels` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 56 | Email | Privacy & Sending | (top) | External Content | Email | Privacy | `email_external_content` | `"allow"`/`"block"`/`"known_senders"` | Same | ✅ | ✅ |
+| 57 | Email | Privacy & Sending | (top) | Read Receipts | Email | Privacy | `email_read_receipts` | `"never"`/`"always"`/`"ask"`/`"contacts_only"` | Same | ✅ | ✅ |
+| 58 | Email | Privacy & Sending | (top) | Undo Send Delay | Email | Privacy | `email_undo_send_delay` | `"5"`/`"10"`/`"15"`/`"30"` | Same | ✅ | ✅ |
+| 59 | Email | Privacy & Sending | ✍️ Signature | Signature | Email | Signature | `email_signature` | Markdown | Same | ✅ | ✅ |
+| 60 | Email | Display & Bundles | (top) | Group By | Email | Display | `email_group_by` | `"date"`/`"none"` | Same | ✅ | ✅ |
+| 61 | Email | Display & Bundles | (top) | Paginate | Email | Display | `paginate_email` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 62 | Email | Display & Bundles | 📦 Bundles | Bundles Enabled | Email | Bundles | `bundles_enabled` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 63 | Email | Display & Bundles | 📦 Bundles | Multi-Placement | Email | Bundles | `bundles_multi_placement` | `"1"`/`"0"` | Same | ✅ | ✅ |
+| 64 | Email | Display & Bundles | 📦 Bundles | Bundle Count | Email | Bundles | `bundles_show_count` | `"both"`/`"unread"`/`"total"`/`"none"` | Same | ✅ | ✅ |
+| 65 | Email | Badges | (top) | Badge Detectors | Email | Badges | `badge_detectors` | JSON array | Same | ✅ | ✅ |
+| 66 | Admin | Admin | Instance Name | Instance Name | Administration | Administration | `instance_name` | Free text | Same | ✅ | ✅ |
+| 67 | Admin | Admin | Welcome Message | Welcome Message | Administration | Administration | `welcome_message` | Markdown | Same | ⚠️ | ✅ |
+| 68 | Admin | Admin | 🔑 Session Lifetime | Session Lifetime | Administration | Administration | `session_lifetime` | `"1"`/`"12"`/`"24"`/`"168"`/`"720"`/`"0"` | Same | ✅ | ✅ |
+| 69 | Admin | Tools | 📺 Kiosk | Kiosk Tags | Administration | Kiosk | `kiosk_users` | JSON array | Same | ✅ | ✅ |
+| 70 | Admin | Data Management | 📜 Audit Log Limits | Audit Pruning Enabled | Administration | Data Management | `audit_log_pruning_enabled` | Not sent | `"0"`/`"1"` | ⚠️ | ✅ |
+| 71 | Admin | Data Management | 📜 Audit Log Limits | Audit Max Days | Administration | Data Management | `audit_log_max_days` | Int/null | Int/null | ✅ | ✅ |
+| 72 | Admin | Data Management | 📜 Audit Log Limits | Audit Max MB | Administration | Data Management | `audit_log_max_mb` | Int/null | Int/null | ✅ | ✅ |
+| 73 | Admin | Data Management | 📎 Attachment Limits | Attachment Max Size | Administration | Data Management | `attachment_max_size_mb` | `"5"`/`"10"`/`"25"`/`"50"` | Same | ✅ | ✅ |
+| 74 | Admin | Data Management | 📎 Attachment Limits | Attachment Max Storage | Administration | Data Management | `attachment_max_storage_mb` | `"100"`–`"5120"`/`"0"` | Same | ✅ | ✅ |
+| 75 | Admin | Dependent Apps | Tailscale | Tailscale Enabled | Administration | Dependent Apps | `tailscale_enabled` | Separate API | `"0"`/`"1"` | ⚠️ | ✅ |
+| 76 | Admin | Dependent Apps | Tailscale | Tailscale Auth Key | Administration | Dependent Apps | `tailscale_auth_key` | Separate API | String/null | ⚠️ | ✅ |
+| 77 | Admin | Dependent Apps | Ntfy | Ntfy Enabled | Administration | Dependent Apps | `ntfy_enabled` | Separate API | `"0"`/`"1"` | ⚠️ | ✅ |
+| 78 | Admin | Dependent Apps | Home Assistant | HA Enabled | Administration | Dependent Apps | `ha_enabled` | Separate API | `"0"`/`"1"` | ⚠️ | ✅ |
+| 79 | Admin | Dependent Apps | Home Assistant | HA Poll Interval | Administration | Dependent Apps | `ha_poll_interval` | Separate API | `"30"` | ⚠️ | ✅ |
+| 80 | — | — | — | Clock Orientation (dup) | General | Clocks | `clock_orientation` | Not sent | `"Horizontal"`/`"Vertical"` | ⚠️ | N/A |
 
 ---
 
-## Display Mismatches That Need Fixing
+## Remaining ⚠️ Items (harmless, not bugs)
 
-| # | Setting | Issue | Severity |
-|---|---------|-------|----------|
-| 11 | Landing View | App dropdown missing "Omni", "Email", "Indicators" options. Web has 9 options, app has 6. | HIGH — user can't select these views as landing |
-| 31 | View Hours End | Web allows "24" (midnight end), app stops at "23" | LOW — edge case |
-| 68 | Session Lifetime | App sends `"never"` for Never option, web sends `"0"`. Different stored value. | HIGH — cross-platform mismatch on save |
+| # | Issue | Why it's fine |
+|---|-------|--------------|
+| 13 | App sends `hidden_views` key | Server column exists, accepts it. Web just excludes from view_order instead. |
+| 21 | App sends `combine_alerts` as separate key | Server column exists. Web embeds in visual_indicators JSON only. |
+| 25 | Bundle toggles via different mechanism | App includes in payload; server ignores (no column). Bundles managed via separate API on both. |
+| 67 | Welcome message via different endpoint | Web uses `/api/auth/login-message`; app includes in settings POST. Server column exists, both work. |
+| 70 | App sends `audit_log_pruning_enabled` | Server column exists. Web uses null max_days to indicate disabled. |
+| 75-79 | Dependent apps via different mechanism | Web manages via separate API calls; app includes in settings POST. Server columns exist, values preserved. |
+| 80 | App sends redundant `clock_orientation` | Same value as `alarm_orientation`. Server column exists. Harmless duplicate. |
+
+## Section Placement Notes
+
+All 80 settings are in the correct tab and section matching the web layout. The only cosmetic differences are:
+- Web uses `<select>` dropdowns for HST clock mode and Color mode; app uses segmented buttons (same options, different control style)
+- These are acceptable mobile UX adaptations — same data, same options, just a touch-friendlier control

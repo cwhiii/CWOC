@@ -55,9 +55,28 @@ class AuthRepository @Inject constructor(
     private val _displayName = MutableStateFlow<String?>(prefs.getString("user_display_name", null))
     val displayName: StateFlow<String?> = _displayName.asStateFlow()
 
+    /** Reactive username for the current user. */
+    private val _username = MutableStateFlow<String?>(prefs.getString("user_username", null))
+    val username: StateFlow<String?> = _username.asStateFlow()
+
     /** Reactive user ID for the current user. */
     private val _userId = MutableStateFlow<String?>(prefs.getString("user_id", null))
     val userId: StateFlow<String?> = _userId.asStateFlow()
+
+    /** Reactive profile image URL for the current user. */
+    private val _profileImageUrl = MutableStateFlow<String?>(prefs.getString("user_profile_image_url", null))
+    val profileImageUrl: StateFlow<String?> = _profileImageUrl.asStateFlow()
+
+    /**
+     * Re-read profile fields from SharedPreferences into the StateFlows.
+     * Called after sync updates prefs from a background thread.
+     */
+    fun refreshProfileFromPrefs() {
+        _displayName.value = prefs.getString("user_display_name", null)
+        _username.value = prefs.getString("user_username", null)
+        _userId.value = prefs.getString("user_id", null)
+        _profileImageUrl.value = prefs.getString("user_profile_image_url", null)
+    }
 
     /**
      * Attempt to log in with the given credentials.
@@ -115,7 +134,11 @@ class AuthRepository @Inject constructor(
                 response.isSuccessful -> {
                     val body = response.body()
                     if (body != null) {
-                        prefs.edit().putString("device_token", body.token).apply()
+                        prefs.edit()
+                            .putString("device_token", body.token)
+                            .putString("user_username", username)
+                            .apply()
+                        _username.value = username
                         AuthResult.Success
                     } else {
                         AuthResult.Error("Empty response from server")
@@ -157,6 +180,14 @@ class AuthRepository @Inject constructor(
     }
 
     /**
+     * Retrieve the current device token, or null if not stored.
+     * Used for authenticated image loading (Coil) where the OkHttp interceptor isn't available.
+     */
+    fun getToken(): String? {
+        return prefs.getString("device_token", null)
+    }
+
+    /**
      * Retrieve the last successfully used server URL, or null if none stored.
      */
     fun getLastServerUrl(): String? {
@@ -170,32 +201,84 @@ class AuthRepository @Inject constructor(
         prefs.edit()
             .remove("device_token")
             .remove("user_display_name")
+            .remove("user_username")
             .remove("user_id")
+            .remove("user_profile_image_url")
             .apply()
         _displayName.value = null
+        _username.value = null
         _userId.value = null
+        _profileImageUrl.value = null
     }
 
     /**
      * Fetch the current user's profile from /api/auth/me and cache display name + user ID.
      * Called after login and on app startup when authenticated.
+     *
+     * Builds a fresh Retrofit instance using the stored server URL to avoid the stale
+     * singleton base URL issue (the singleton is created at app startup and may point
+     * to localhost if the user hadn't logged in yet at that time).
      */
     suspend fun fetchUserProfile() {
         try {
-            val response = apiService.getMe()
+            val serverUrl = prefs.getString("server_url", null)
+            val token = prefs.getString("device_token", null)
+
+            if (serverUrl.isNullOrBlank() || token.isNullOrBlank()) {
+                android.util.Log.e("CWOC_AUTH", "fetchUserProfile: no server_url or token in prefs")
+                return
+            }
+
+            // Build a fresh API service with the correct base URL
+            val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            })
+            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+
+            val client = okhttp3.OkHttpClient.Builder()
+                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
+                .hostnameVerifier { _, _ -> true }
+                .addInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
+                    chain.proceed(request)
+                }
+                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+
+            val retrofit = retrofit2.Retrofit.Builder()
+                .baseUrl(serverUrl.trimEnd('/') + "/")
+                .client(client)
+                .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+                .build()
+
+            val freshApi = retrofit.create(com.cwoc.app.data.remote.CwocApiService::class.java)
+            val response = freshApi.getMe()
+
             if (response.isSuccessful) {
                 val profile = response.body()
                 if (profile != null) {
                     prefs.edit()
                         .putString("user_display_name", profile.displayName)
+                        .putString("user_username", profile.username)
                         .putString("user_id", profile.userId)
+                        .putString("user_profile_image_url", profile.profileImageUrl)
                         .apply()
                     _displayName.value = profile.displayName
+                    _username.value = profile.username
                     _userId.value = profile.userId
+                    _profileImageUrl.value = profile.profileImageUrl
                 }
+            } else {
+                android.util.Log.e("CWOC_AUTH", "fetchUserProfile failed: HTTP ${response.code()} ${response.message()}")
             }
         } catch (e: Exception) {
-            android.util.Log.e("CWOC_AUTH", "Failed to fetch user profile: ${e.message}")
+            android.util.Log.e("CWOC_AUTH", "Failed to fetch user profile: ${e.message}", e)
         }
     }
 

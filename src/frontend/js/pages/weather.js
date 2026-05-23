@@ -360,7 +360,7 @@ function _wxUpdateDateDisplay() {
     logoLink.href = '/';
     logoLink.className = 'maps-mobile-logo';
     var logoImg = document.createElement('img');
-    logoImg.src = '/static/cwod_logo-favicon.png';
+    logoImg.src = '/static/images/cwod_logo-favicon.png';
     logoImg.alt = 'Home';
     logoLink.appendChild(logoImg);
     toolbar.appendChild(logoLink);

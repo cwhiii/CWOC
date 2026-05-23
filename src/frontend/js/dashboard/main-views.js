@@ -396,8 +396,8 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
 
   if (chit.start_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Start: ${formatDate(chit.start_datetime_obj || new Date(chit.start_datetime))}`, 'start');
   if (chit.point_in_time && !chit.email_message_id && !chit.email_status) addMeta(`📌 ${formatDate(new Date(chit.point_in_time))}`, 'point-in-time');
-  if (chit.modified_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
-  if (chit.created_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
+  if (!_opts.hideDates && chit.modified_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
+  if (!_opts.hideDates && chit.created_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
   var _rawTags = chit.tags || [];
   if (typeof _rawTags === 'string') { try { _rawTags = JSON.parse(_rawTags); } catch(e) { _rawTags = []; } }
   if (!Array.isArray(_rawTags)) _rawTags = [];
@@ -828,20 +828,20 @@ function _restoreViewModeButtons() {
 
 // ─── Favicon per view ───
 var _viewFavicons = {
-  Calendar: '/static/calendar.png',
-  Checklists: '/static/checklists.png',
-  Tasks: '/static/tasks.png',
-  Projects: '/static/projects.png',
-  Notes: '/static/notes.png',
-  Alarms: '/static/alerts.png',
-  Email: '/static/email.png',
-  Indicators: '/static/Indicators.png',
-  Search: '/static/cwod_logo-favicon.png',
-  Omni: '/static/cwod_logo-favicon.png'
+  Calendar: '/static/images/calendar.png',
+  Checklists: '/static/images/checklists.png',
+  Tasks: '/static/images/tasks.png',
+  Projects: '/static/images/projects.png',
+  Notes: '/static/images/notes.png',
+  Alarms: '/static/images/alerts.png',
+  Email: '/static/images/email.png',
+  Indicators: '/static/images/Indicators.png',
+  Search: '/static/images/cwod_logo-favicon.png',
+  Omni: '/static/images/cwod_logo-favicon.png'
 };
 
 function _updateFavicon(tab) {
-  var href = _viewFavicons[tab] || '/static/cwod_logo-favicon.png';
+  var href = _viewFavicons[tab] || '/static/images/cwod_logo-favicon.png';
   var link = document.querySelector('link[rel="icon"]');
   if (link) link.href = href;
 }
@@ -936,6 +936,11 @@ function filterChits(tab) {
   const indControls = document.getElementById('section-indicators');
   if (indControls) {
     indControls.style.display = (tab === 'Indicators') ? '' : 'none';
+  }
+
+  // Sync sidebar Indicators mode buttons when switching to Indicators tab
+  if (tab === 'Indicators' && typeof _indSyncSidebarModeButtons === 'function') {
+    _indSyncSidebarModeButtons();
   }
 
   // Show/hide Email controls in sidebar

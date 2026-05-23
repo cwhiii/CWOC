@@ -109,6 +109,29 @@
     width: auto;
 }
 
+/* ── Sidebar header: logo + title ─────────────────────────────────────────── */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(107, 78, 49, 0.3);
+}
+.sidebar-header-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #5a3f2a;
+    flex-shrink: 0;
+}
+.sidebar-header-title {
+    font-family: 'Lora', serif;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #4a2c2a;
+}
+
 /* ── Sidebar sections ─────────────────────────────────────────────────────── */
 .sidebar-section {
     margin-bottom: 12px;

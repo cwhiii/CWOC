@@ -1,12 +1,10 @@
 package com.cwoc.app.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -17,9 +15,11 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.R
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -35,7 +35,6 @@ private val HexagonShape = object : Shape {
         val radius = minOf(cx, cy)
 
         // Start at top point, go clockwise
-        // Vertices at -90°, -30°, 30°, 90°, 150°, 210° (in standard math coords)
         for (i in 0 until 6) {
             val angleDeg = -90.0 + i * 60.0
             val angleRad = Math.toRadians(angleDeg)
@@ -58,6 +57,7 @@ private val HexagonShape = object : Shape {
  * the internal clickable modifier consuming touch events before detectTapGestures.
  *
  * Shape: regular hexagon with points at top and bottom.
+ * Icon: create_new.png (same image as the web sidebar used to have).
  */
 @Composable
 fun NewChitFab(
@@ -80,11 +80,10 @@ fun NewChitFab(
         tonalElevation = 6.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Default.Add,
+            Image(
+                painter = painterResource(id = R.drawable.create_new),
                 contentDescription = "Create new chit",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
     }

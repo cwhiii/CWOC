@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
     <head>
-        <link rel="icon" href="/static/create_new.png" />
+        <link rel="icon" href="/static/images/create_new.png" />
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Chit Editor - C.W.'s Omni Chits</title>
@@ -33,7 +33,7 @@
     </head>
     <body>
         <div class="header-row">
-            <a href="#" id="editor-logo-link" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;" onclick="cancelOrExit(); return false;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
+            <a href="#" id="editor-logo-link" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;" onclick="cancelOrExit(); return false;"><img src="/static/images/create_new.png" alt="Logo" class="header-image" /></a>
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
@@ -73,7 +73,7 @@
             <!-- Profile menu (rightmost element in header) -->
             <div class="cwoc-profile-menu" id="cwoc-profile-menu" style="margin-left:auto;flex-shrink:0;">
                 <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); _cwocToggleProfileMenu();">
-                    <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                    <img src="/static/images/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
                 </button>
             </div>
         </div>
@@ -1052,7 +1052,7 @@
                                 <button type="button" onclick="toggleEmailViewMode(event)" id="email-render-toggle-btn" class="zone-button" title="Toggle rendered markdown view" style="display:none;"><i class="fas fa-eye"></i><span class="hideWhenNarrow"> Render</span></button>
                                 <button type="button" onclick="_emailUndo(event)" class="zone-button notes-undo-redo" title="Undo (Cmd+Z)">↺</button>
                                 <button type="button" onclick="_emailRedo(event)" class="zone-button notes-undo-redo" title="Redo (Cmd+Shift+Z)">↻</button>
-                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit"><img src="/static/email.png" style="height:1em;vertical-align:middle;" alt="" /><span class="hideWhenNarrow"> Email</span></button>
+                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit"><img src="/static/images/email.png" style="height:1em;vertical-align:middle;" alt="" /><span class="hideWhenNarrow"> Email</span></button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
@@ -1466,7 +1466,7 @@
         </div>
 
         <!-- Options quick menu (dropdown from Options button) -->
-        <div id="editorOptionsMenu" style="display:none;position:absolute;z-index:9000;background:url('/static/parchment-bg.jpg') #fffaf0;background-size:cover;border:2px solid #6b4e31;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:6px 0;min-width:200px;font-family:Lora,Georgia,serif;">
+        <div id="editorOptionsMenu" style="display:none;position:absolute;z-index:9000;background:url('/static/images/parchment.jpg') #fffaf0;background-size:cover;border:2px solid #6b4e31;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.25);padding:6px 0;min-width:200px;font-family:Lora,Georgia,serif;">
             <button type="button" id="optMenuHideCalendar" class="editor-opt-menu-item" onclick="_optToggleHideCalendar()">
                 <i class="fas fa-calendar-xmark"></i> <span id="optMenuHideCalLabel">Hide in Calendar</span>
             </button>
@@ -1474,7 +1474,7 @@
                 <i class="fas fa-thumbtack"></i> <span id="optMenuReminderLabel">Mark as Reminder</span>
             </button>
             <button type="button" id="optMenuNest" class="editor-opt-menu-item" onclick="_optNestClick()">
-                <img src="/static/nest.svg" style="height:1.2em;vertical-align:middle;margin-right:4px;" alt="" /> Nest into Thread
+                <img src="/static/images/nest.svg" style="height:1.2em;vertical-align:middle;margin-right:4px;" alt="" /> Nest into Thread
             </button>
             <button type="button" id="optMenuAuditLog" class="editor-opt-menu-item" onclick="_optAuditLog()">
                 📜 Audit Log
@@ -1483,7 +1483,7 @@
                 📱 QR Code
             </button>
             <button type="button" id="optMenuEmail" class="editor-opt-menu-item" onclick="_optEmail()">
-                <img src="/static/email.png" style="height:1em;vertical-align:middle;margin-right:4px;" alt="" /> Make Email
+                <img src="/static/images/email.png" style="height:1em;vertical-align:middle;margin-right:4px;" alt="" /> Make Email
             </button>
             <button type="button" class="editor-opt-menu-item" onclick="_optPrintChit()">
                 <i class="fas fa-print"></i> Print Chit

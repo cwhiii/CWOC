@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -491,6 +492,7 @@ fun WeekTimeGrid(
     hourStart: Int = 0,
     hourEnd: Int = 24,
     dayCount: Int = 7,
+    workDaysFilter: List<Int>? = null, // If non-null, only show columns for these day numbers (0=Sun, 1=Mon, ...)
     onEventTap: (ChitEntity) -> Unit = {},
     onEmptySlotTap: (LocalDateTime) -> Unit = {},
     onEventDragEnd: (String, String?, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
@@ -504,7 +506,17 @@ fun WeekTimeGrid(
     val gridLineColor = MaterialTheme.colorScheme.outlineVariant
     val currentTimeColor = Color(0xFF4A2C2A)
     val today = LocalDate.now()
-    val days = (0 until dayCount).map { weekStartDate.plusDays(it.toLong()) }
+    val days = if (workDaysFilter != null) {
+        // Filter the week's days to only include configured work days
+        val allDays = (0 until dayCount).map { weekStartDate.plusDays(it.toLong()) }
+        allDays.filter { day ->
+            // Convert java.time DayOfWeek (MONDAY=1..SUNDAY=7) to CWOC format (0=Sun, 1=Mon, ...)
+            val cwocDayNum = if (day.dayOfWeek == java.time.DayOfWeek.SUNDAY) 0 else day.dayOfWeek.value
+            cwocDayNum in workDaysFilter
+        }
+    } else {
+        (0 until dayCount).map { weekStartDate.plusDays(it.toLong()) }
+    }
     val density = LocalDensity.current
 
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
@@ -515,8 +527,9 @@ fun WeekTimeGrid(
         }
     }
 
-    LaunchedEffect(scrollToHour, zoomScale) {
-        val px = with(density) { scrollToHour.toFloat() * effectiveHourHeight.toPx() }
+    LaunchedEffect(scrollToHour, zoomScale, hourStart) {
+        val offsetHour = (scrollToHour - hourStart).coerceAtLeast(0)
+        val px = with(density) { offsetHour.toFloat() * effectiveHourHeight.toPx() }
         scrollState.scrollTo(px.toInt())
     }
 
@@ -534,12 +547,46 @@ fun WeekTimeGrid(
                 }
             }
     ) {
+        // All-day data (computed before header so toggle can live in header)
+        val allDayByDay = remember(events, days) {
+            days.map { day ->
+                events.mapNotNull { event ->
+                    val info = getCalendarDateInfoForEvent(event)
+                    if (!info.hasDate || !info.isAllDay) return@mapNotNull null
+                    if (!eventMatchesDay(info, day)) return@mapNotNull null
+                    event to info
+                }
+            }
+        }
+        val hasAnyAllDay = allDayByDay.any { it.isNotEmpty() }
+        // 0 = hidden, 1 = show first 3, 2 = show all
+        var allDayMode by remember { mutableIntStateOf(1) }
+
         // Day headers (today highlighted with reversed colors)
         Row(modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.width(hourLabelWidth), contentAlignment = Alignment.Center) {
-                val wn = weekStartDate.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear())
-                Text("W$wn", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp)
+            // Left box: all-day cycle toggle (or empty spacer if no all-day events)
+            Box(
+                modifier = Modifier
+                    .width(hourLabelWidth)
+                    .then(
+                        if (hasAnyAllDay) Modifier.clickable {
+                            allDayMode = (allDayMode + 1) % 3
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (hasAnyAllDay) {
+                    Text(
+                        text = when (allDayMode) {
+                            0 -> "☀"
+                            1 -> "☀³"
+                            else -> "☀∞"
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF4A2C2A),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             days.forEach { day ->
                 val isTodayCol = day == today
@@ -567,74 +614,35 @@ fun WeekTimeGrid(
                 }
             }
         }
-
-        // All-day events row (above the time grid)
-        val allDayByDay = remember(events, days) {
-            days.map { day ->
-                events.mapNotNull { event ->
-                    val info = getCalendarDateInfoForEvent(event)
-                    if (!info.hasDate || !info.isAllDay) return@mapNotNull null
-                    if (!eventMatchesDay(info, day)) return@mapNotNull null
-                    event to info
-                }
-            }
-        }
-        val hasAnyAllDay = allDayByDay.any { it.isNotEmpty() }
-        var allDayExpanded by remember { mutableStateOf(true) }
-        if (hasAnyAllDay) {
-            // All-day section with collapse/expand toggle (matching web's ☀ Hide / ▲ Show)
+        if (hasAnyAllDay && allDayMode > 0) {
+            // All-day events (no separate toggle row — toggle is in the header)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFE8DCC8))
             ) {
-                // Toggle button row
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { allDayExpanded = !allDayExpanded }
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 2.dp)
                 ) {
-                    Text(
-                        text = if (allDayExpanded) "☀ Hide" else "▲ Show",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF4A2C2A),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 9.sp
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    val totalAllDay = allDayByDay.sumOf { it.size }
-                    Text(
-                        text = "$totalAllDay all-day",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF6B4E31),
-                        fontSize = 8.sp
-                    )
-                }
-                // All-day events (collapsible)
-                if (allDayExpanded) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                    ) {
-                        Spacer(modifier = Modifier.width(hourLabelWidth))
-                        days.forEachIndexed { idx, _ ->
-                            Column(
-                                modifier = Modifier.weight(1f).padding(horizontal = 1.dp)
-                            ) {
-                                allDayByDay[idx].take(3).forEach { (event, info) ->
-                                    AllDayEventChip(event, info, onEventTap, { })
-                                }
-                                if (allDayByDay[idx].size > 3) {
-                                    Text(
-                                        "+${allDayByDay[idx].size - 3} more",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF6B4E31),
-                                        fontSize = 8.sp
-                                    )
-                                }
+                    Spacer(modifier = Modifier.width(hourLabelWidth))
+                    days.forEachIndexed { idx, _ ->
+                        Column(
+                            modifier = Modifier.weight(1f).padding(horizontal = 1.dp)
+                        ) {
+                            val dayEvents = allDayByDay[idx]
+                            val visibleEvents = if (allDayMode == 1) dayEvents.take(3) else dayEvents
+                            visibleEvents.forEach { (event, info) ->
+                                AllDayEventChip(event, info, onEventTap, { })
+                            }
+                            if (allDayMode == 1 && dayEvents.size > 3) {
+                                Text(
+                                    "+${dayEvents.size - 3} more",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF6B4E31),
+                                    fontSize = 8.sp
+                                )
                             }
                         }
                     }

@@ -9,9 +9,11 @@ import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.domain.recurrence.RecurrenceEngine
 import com.cwoc.app.domain.recurrence.RecurrenceException
 import com.cwoc.app.domain.recurrence.RecurrenceRule
+import com.cwoc.app.domain.settings.PeriodFilterUtil
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,14 +43,20 @@ data class CalendarUiState(
     val dayScrollToHour: Int = 6, // hour to auto-scroll to on load
     val calendarSnap: Int = 15, // snap grid minutes for drag
     val workStartHour: Int = 8,
-    val workEndHour: Int = 18
+    val workEndHour: Int = 18,
+    val weekStartDay: String = "0", // 0=Sunday, 1=Monday, etc.
+    val allViewStartHour: Int = 0, // hour range start for non-work views
+    val allViewEndHour: Int = 24, // hour range end for non-work views
+    val workDays: List<Int> = listOf(1, 2, 3, 4, 5), // day numbers (0=Sun, 1=Mon, ...)
+    val enabledPeriods: List<String> = listOf("Itinerary", "Day", "Work", "Week", "SevenDay", "Month", "Year")
 ) {
     /** Display title for the current date/period. */
     val headerTitle: String
         get() = when (viewMode) {
             CalendarViewMode.DAY -> selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy"))
             CalendarViewMode.WEEK -> {
-                val weekStart = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                val startDow = calendarParseWeekStartDay(weekStartDay)
+                val weekStart = selectedDate.with(TemporalAdjusters.previousOrSame(startDow))
                 val weekEnd = weekStart.plusDays(6)
                 val startFmt = weekStart.format(DateTimeFormatter.ofPattern("MMM d"))
                 val endFmt = weekEnd.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
@@ -83,6 +91,9 @@ class CalendarViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
 
+    /** Active loadEvents coroutine — cancelled before each new load to prevent stacking. */
+    private var loadEventsJob: Job? = null
+
     companion object {
         private const val PREF_KEY_VIEW_MODE = "calendar_view_mode"
         private const val DEFAULT_X_DAY_COUNT = 7
@@ -97,7 +108,7 @@ class CalendarViewModel @Inject constructor(
 
         _uiState.update { it.copy(viewMode = restoredMode) }
 
-        // Load settings (xDayCount, timeFormat, scrollToHour, snap, work hours), then load events
+        // Load settings (xDayCount, timeFormat, scrollToHour, snap, work hours, week start, etc.), then load events
         viewModelScope.launch {
             val xDayCount = loadXDayCount()
             val settings = settingsRepository.get()
@@ -106,6 +117,11 @@ class CalendarViewModel @Inject constructor(
             val snap = settings?.calendarSnap?.toIntOrNull() ?: 15
             val workStart = settings?.workStartHour?.toIntOrNull() ?: 8
             val workEnd = settings?.workEndHour?.toIntOrNull() ?: 18
+            val weekStart = settings?.weekStartDay ?: "0"
+            val allStart = settings?.allViewStartHour?.toIntOrNull() ?: 0
+            val allEnd = settings?.allViewEndHour?.toIntOrNull() ?: 24
+            val workDays = settings?.workDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() } ?: listOf(1, 2, 3, 4, 5)
+            val enabledPeriods = PeriodFilterUtil.filterEnabledPeriods(PeriodFilterUtil.DISPLAY_ORDER, settings?.enabledPeriods)
             _uiState.update {
                 it.copy(
                     xDayCount = xDayCount,
@@ -113,7 +129,12 @@ class CalendarViewModel @Inject constructor(
                     dayScrollToHour = scrollToHour,
                     calendarSnap = snap,
                     workStartHour = workStart,
-                    workEndHour = workEnd
+                    workEndHour = workEnd,
+                    weekStartDay = weekStart,
+                    allViewStartHour = allStart,
+                    allViewEndHour = allEnd,
+                    workDays = workDays,
+                    enabledPeriods = enabledPeriods
                 )
             }
             loadEvents()
@@ -173,7 +194,8 @@ class CalendarViewModel @Inject constructor(
     }
 
     private fun loadEvents() {
-        viewModelScope.launch {
+        loadEventsJob?.cancel()
+        loadEventsJob = viewModelScope.launch {
             val state = _uiState.value
             val (dayStart, dayEnd) = getDateRange(state.selectedDate, state.viewMode, state.xDayCount)
 
@@ -182,11 +204,32 @@ class CalendarViewModel @Inject constructor(
                 chitRepository.getChitsForDay(dayStart, dayEnd),
                 chitRepository.getRecurringChits()
             ) { rangeEvents, recurringChits ->
+                // Filter out chits hidden from calendar (matches web's show_on_calendar filter)
+                val visibleRangeEvents = rangeEvents.filter { it.showOnCalendar != false }
+                val visibleRecurringChits = recurringChits.filter { it.showOnCalendar != false }
+
                 // Parse the date range for recurrence expansion
-                val rangeStartDate = state.selectedDate.minusDays(7) // buffer
+                // Use the actual visible range start (no buffer before) to avoid generating
+                // instances that would need to be filtered out by the rendering layer.
+                // The buffer is only needed for multi-day events that START before the range
+                // but EXTEND into it — those are already handled by getChitsForDay.
+                val rangeStartDate = when (state.viewMode) {
+                    CalendarViewMode.DAY, CalendarViewMode.WORK_HOURS -> state.selectedDate
+                    CalendarViewMode.WEEK -> {
+                        val startDow = calendarParseWeekStartDay(state.weekStartDay)
+                        state.selectedDate.with(TemporalAdjusters.previousOrSame(startDow))
+                    }
+                    CalendarViewMode.MONTH -> state.selectedDate.withDayOfMonth(1)
+                    CalendarViewMode.YEAR -> LocalDate.of(state.selectedDate.year, 1, 1)
+                    CalendarViewMode.ITINERARY -> state.selectedDate
+                    CalendarViewMode.X_DAY -> state.selectedDate
+                }
                 val rangeEndDate = when (state.viewMode) {
                     CalendarViewMode.DAY, CalendarViewMode.WORK_HOURS -> state.selectedDate.plusDays(1)
-                    CalendarViewMode.WEEK -> state.selectedDate.plusDays(7)
+                    CalendarViewMode.WEEK -> {
+                        val startDow = calendarParseWeekStartDay(state.weekStartDay)
+                        state.selectedDate.with(TemporalAdjusters.previousOrSame(startDow)).plusDays(7)
+                    }
                     CalendarViewMode.MONTH -> state.selectedDate.plusMonths(1).plusDays(7)
                     CalendarViewMode.YEAR -> state.selectedDate.plusYears(1)
                     CalendarViewMode.ITINERARY -> state.selectedDate.plusDays(31)
@@ -198,7 +241,7 @@ class CalendarViewModel @Inject constructor(
                 val expandedInstances = mutableListOf<ChitEntity>()
                 val recurringIds = mutableSetOf<String>()
 
-                recurringChits.forEach { chit ->
+                visibleRecurringChits.forEach { chit ->
                     recurringIds.add(chit.id)
                     val rule = parseRecurrenceRule(chit.recurrenceRule) ?: return@forEach
                     val baseStart = parseLocalDateTime(chit.startDatetime ?: chit.dueDatetime ?: chit.pointInTime) ?: return@forEach
@@ -216,11 +259,16 @@ class CalendarViewModel @Inject constructor(
                     )
 
                     instances.forEach { instance ->
-                        // Create a virtual copy of the chit with the instance's dates
+                        // Create a virtual copy of the chit with the instance's dates.
+                        // Clear dueDatetime and pointInTime so getCalendarDateInfoForEvent
+                        // uses startDatetime (the expanded date) instead of the original
+                        // due/pit date — otherwise ALL instances pile up on the original date.
                         val virtualChit = chit.copy(
                             id = "${chit.id}_v_${instance.date}",
                             startDatetime = instance.startDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                             endDatetime = instance.endDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                            dueDatetime = null,
+                            pointInTime = null,
                             // Clear recurrence on virtual instances so they don't get re-expanded
                             recurrenceRule = null
                         )
@@ -230,7 +278,7 @@ class CalendarViewModel @Inject constructor(
 
                 // Merge: non-recurring events from range + expanded instances + birthdays
                 // Exclude the base recurring chits from rangeEvents (they're replaced by instances)
-                val nonRecurring = rangeEvents.filter { it.id !in recurringIds }
+                val nonRecurring = visibleRangeEvents.filter { it.id !in recurringIds }
                 val birthdayChits = loadBirthdayChits()
                 // Expand birthday recurrences too (they repeat yearly)
                 val expandedBirthdays = mutableListOf<ChitEntity>()
@@ -244,6 +292,8 @@ class CalendarViewModel @Inject constructor(
                                 id = "${bChit.id}_b_${inst.date}",
                                 startDatetime = inst.startDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                                 endDatetime = inst.endDatetime?.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                                dueDatetime = null,
+                                pointInTime = null,
                                 recurrenceRule = null
                             ))
                         }
@@ -258,7 +308,7 @@ class CalendarViewModel @Inject constructor(
                 nonRecurring + expandedInstances + expandedBirthdays
             }.collect { mergedEvents ->
                 _uiState.update {
-                    it.copy(isLoading = false, events = mergedEvents)
+                    it.copy(isLoading = false, events = mergedEvents.distinctBy { e -> e.id })
                 }
             }
         }
@@ -377,7 +427,8 @@ class CalendarViewModel @Inject constructor(
                 start to end
             }
             CalendarViewMode.WEEK -> {
-                val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                val startDow = calendarParseWeekStartDay(_uiState.value.weekStartDay)
+                val weekStart = date.with(TemporalAdjusters.previousOrSame(startDow))
                 val start = weekStart.atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 val end = weekStart.plusDays(7).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 start to end
@@ -452,5 +503,35 @@ class CalendarViewModel @Inject constructor(
         } catch (_: Exception) {
             DEFAULT_X_DAY_COUNT
         }
+    }
+}
+
+/**
+ * Parses the week_start_day setting ("0"=Sun, "1"=Mon, ..., "6"=Sat) into a DayOfWeek.
+ * Top-level so it can be used from both CalendarUiState (data class) and CalendarViewModel.
+ * Defaults to Sunday if unrecognized.
+ */
+private fun calendarParseWeekStartDay(weekStartDay: String): DayOfWeek {
+    val numeric = weekStartDay.trim().toIntOrNull()
+    if (numeric != null && numeric in 0..6) {
+        return when (numeric) {
+            0 -> DayOfWeek.SUNDAY
+            1 -> DayOfWeek.MONDAY
+            2 -> DayOfWeek.TUESDAY
+            3 -> DayOfWeek.WEDNESDAY
+            4 -> DayOfWeek.THURSDAY
+            5 -> DayOfWeek.FRIDAY
+            6 -> DayOfWeek.SATURDAY
+            else -> DayOfWeek.SUNDAY
+        }
+    }
+    return when (weekStartDay.lowercase()) {
+        "mon", "monday" -> DayOfWeek.MONDAY
+        "tue", "tuesday" -> DayOfWeek.TUESDAY
+        "wed", "wednesday" -> DayOfWeek.WEDNESDAY
+        "thu", "thursday" -> DayOfWeek.THURSDAY
+        "fri", "friday" -> DayOfWeek.FRIDAY
+        "sat", "saturday" -> DayOfWeek.SATURDAY
+        else -> DayOfWeek.SUNDAY
     }
 }

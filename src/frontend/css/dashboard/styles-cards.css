@@ -1826,7 +1826,7 @@ li.cwoc-dragging {
     overflow-y: auto;
     overflow-x: hidden;
     padding: 4px;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: rgba(120, 90, 30, 0.14);
     border-radius: 4px;
 }

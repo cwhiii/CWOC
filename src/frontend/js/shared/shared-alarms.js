@@ -44,7 +44,7 @@ function _sharedFmtTime(time24) {
 
 // ── Sound ──
 function _sharedPlayAlarm() {
-  if (!window._sharedAlarmAudio) window._sharedAlarmAudio = new Audio('/static/alarm.mp3');
+  if (!window._sharedAlarmAudio) window._sharedAlarmAudio = new Audio('/static/sounds/alarm.mp3');
   window._sharedAlarmAudio.loop = true;
   cwocPlayAudio(window._sharedAlarmAudio, { loop: true });
   if (window._sharedAlarmTimeout) clearTimeout(window._sharedAlarmTimeout);
@@ -56,7 +56,7 @@ function _sharedStopAlarm() {
   if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) {}
 }
 function _sharedPlayTimer() {
-  if (!window._sharedTimerAudio) window._sharedTimerAudio = new Audio('/static/timer.mp3');
+  if (!window._sharedTimerAudio) window._sharedTimerAudio = new Audio('/static/sounds/timer.mp3');
   window._sharedTimerAudio.loop = true;
   cwocPlayAudio(window._sharedTimerAudio, { loop: true });
 }
@@ -342,7 +342,7 @@ function _sharedShowAlertModal(opts) {
   overlay.addEventListener('wheel', function(e) { e.preventDefault(); }, { passive: false });
 
   var modal = document.createElement('div');
-  modal.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fff8e1;border:3px solid #8b4513;border-radius:12px;padding:0;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 60px rgba(212,175,55,0.3);font-family:Lora, Georgia, serif;color:#3c2f2f;text-align:center;overflow:hidden;";
+  modal.style.cssText = "background:url('/static/images/parchment.jpg') center/cover;background-color:#fff8e1;border:3px solid #8b4513;border-radius:12px;padding:0;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 60px rgba(212,175,55,0.3);font-family:Lora, Georgia, serif;color:#3c2f2f;text-align:center;overflow:hidden;";
   var bar = document.createElement('div'); bar.style.cssText = 'width:100%;height:6px;background:#e8dcc8;overflow:hidden;';
   var barFill = document.createElement('div'); barFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);';
   bar.appendChild(barFill); modal.appendChild(bar);
@@ -485,7 +485,7 @@ function _sharedBrowserNotif(title, body, chitId) {
   var targetUrl = chitId
     ? '/frontend/html/editor.html?id=' + chitId
     : '/?tab=Alarms&view=independent';
-  var opts = { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true, data: { url: targetUrl } };
+  var opts = { body: body, icon: '/static/images/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true, data: { url: targetUrl } };
   try {
     var n = new Notification(title, opts);
     n.onclick = function() { window.focus(); window.location.href = targetUrl; };

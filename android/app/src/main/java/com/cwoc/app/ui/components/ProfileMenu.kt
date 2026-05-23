@@ -94,6 +94,8 @@ fun ProfileMenu(
                             .data(fullUrl)
                             .addHeader("Authorization", "Bearer $authToken")
                             .crossfade(true)
+                            .memoryCacheKey(fullUrl)
+                            .diskCacheKey(fullUrl)
                             .build(),
                         contentDescription = "Profile",
                         modifier = Modifier

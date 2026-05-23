@@ -40,8 +40,8 @@ class ProjectsViewModel @Inject constructor(
     private val _projects = MutableStateFlow<List<ProjectWithChildren>>(emptyList())
     val projects: StateFlow<List<ProjectWithChildren>> = _projects.asStateFlow()
 
-    private val _expandedProjects = MutableStateFlow<Set<String>>(emptySet())
-    val expandedProjects: StateFlow<Set<String>> = _expandedProjects.asStateFlow()
+    private val _expandedProjects = MutableStateFlow<Set<String>?>(null)
+    val expandedProjects: StateFlow<Set<String>?> = _expandedProjects.asStateFlow()
 
     /** Time format from settings ("12hour" or "24hour"). */
     private val _timeFormat = MutableStateFlow("12hour")
@@ -50,6 +50,14 @@ class ProjectsViewModel @Inject constructor(
     /** Calendar snap interval from settings. */
     private val _calendarSnap = MutableStateFlow(5)
     val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
+
+    /** Whether to show child chit count on project headers. */
+    private val _showChildCount = MutableStateFlow(false)
+    val showChildCount: StateFlow<Boolean> = _showChildCount.asStateFlow()
+
+    /** Whether to show aggregate checklist count on project headers. */
+    private val _showChecklistCount = MutableStateFlow(false)
+    val showChecklistCount: StateFlow<Boolean> = _showChecklistCount.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -67,18 +75,24 @@ class ProjectsViewModel @Inject constructor(
                     )
                 }
                 _projects.value = projectsWithChildren
+                // On first load, expand all projects by default
+                if (_expandedProjects.value == null) {
+                    _expandedProjects.value = projectsWithChildren.map { it.project.id }.toSet()
+                }
             }
         }
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _timeFormat.value = settings.timeFormat ?: "12hour"
                 _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
+                _showChildCount.value = settings.projectsShowChildCount == "1"
+                _showChecklistCount.value = settings.projectsShowChecklistCount == "1"
             }
         }
     }
 
     fun toggleExpanded(projectId: String) {
-        _expandedProjects.value = _expandedProjects.value.let { current ->
+        _expandedProjects.value = (_expandedProjects.value ?: emptySet()).let { current ->
             if (projectId in current) current - projectId else current + projectId
         }
     }
@@ -186,6 +200,14 @@ class ProjectsViewModel @Inject constructor(
             chitRepository.markDirty(newId, "title")
             chitRepository.markDirty(projectId, "childChits")
         }
+    }
+
+    /**
+     * Get the saved manual order for the Projects tab.
+     * Reads directly from ChitReorderHelper's local cache (which is synced from server on app init).
+     */
+    fun getManualOrder(): List<String> {
+        return chitReorderHelper.getLocalOrder("Projects")
     }
 
     /**

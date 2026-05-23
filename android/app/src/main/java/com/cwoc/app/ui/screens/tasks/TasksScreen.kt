@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.screens.tasks
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -394,6 +395,7 @@ private fun TasksFlatList(
             items = tasks,
             key = { it.id },
             onReorder = onReorder,
+            onLongPressItem = { task -> onLongPressTask(task) },
             enabled = true,
             modifier = modifier.padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -403,7 +405,7 @@ private fun TasksFlatList(
                 task = task,
                 sortState = sortState,
                 onClick = { onClickTask(task.id) },
-                onLongClick = { onLongPressTask(task) },
+                onLongClick = { }, // Handled by ReorderableLazyColumn gesture
                 onStatusChange = onStatusChange,
                 onChecklistToggle = onChecklistToggle,
                 showMapThumbnails = showMapThumbnails,
@@ -514,17 +516,11 @@ private fun TaskCard(
                 )
             }
 
-            // ── Content zone recess (Task 24) — wraps everything below header row ──
+            // ── Content zone — wraps everything below header row ──
             Spacer(modifier = Modifier.height(6.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0x0A000000), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            ) {
-                Column {
+            Column {
                     // ── Phase 1.4: Meta values row ──
-                    MetaValuesRow(task = task, sortState = sortState, textColor = cardTextColor)
+                    MetaValuesRow(task = task, sortState = sortState, textColor = cardTextColor, bgColor = cardBgColor)
 
                     // ── Inline Checklist Items (Task 18) ──
                     InlineChecklistSection(
@@ -600,7 +596,6 @@ private fun TaskCard(
                             textColor = cardTextColor
                         )
                     }
-                }
             }
         }
     }
@@ -652,11 +647,10 @@ private fun IndicatorIcons(task: ChitEntity, textColor: Color, isSubChit: Boolea
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MetaValuesRow(task: ChitEntity, sortState: SortState, textColor: Color) {
+private fun MetaValuesRow(task: ChitEntity, sortState: SortState, textColor: Color, bgColor: Color = Color(0xFFFDF6E3)) {
     val metaColor = textColor.copy(alpha = 0.75f)
     val hasAnyMeta = task.priority != null || task.dueDatetime != null ||
-        task.startDatetime != null || task.pointInTime != null ||
-        task.modifiedDatetime != null || task.createdDatetime != null
+        task.startDatetime != null || task.pointInTime != null
 
     if (!hasAnyMeta) return
 
@@ -719,36 +713,24 @@ private fun MetaValuesRow(task: ChitEntity, sortState: SortState, textColor: Col
                 color = metaColor
             )
         }
-        // Updated
-        if (task.modifiedDatetime != null) {
-            MetaChip(
-                text = "Updated: ${DateUtils.formatDisplayDate(task.modifiedDatetime)}",
-                isSortActive = sortState.field == SortField.MODIFIED_DATE,
-                sortDir = sortState.direction,
-                color = metaColor
-            )
-        }
-        // Created
-        if (task.createdDatetime != null) {
-            MetaChip(
-                text = "Created: ${DateUtils.formatDisplayDate(task.createdDatetime)}",
-                isSortActive = sortState.field == SortField.CREATED_DATE,
-                sortDir = sortState.direction,
-                color = metaColor
-            )
-        }
     }
 }
 
 @Composable
 private fun MetaChip(text: String, isSortActive: Boolean, sortDir: SortDirection, color: Color) {
-    Text(
-        text = text + if (isSortActive) sortArrow(sortDir) else "",
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-        fontWeight = if (isSortActive) FontWeight.Bold else FontWeight.Normal,
-        fontSize = 11.sp
-    )
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = Color(0xFFFFFFF0) // solid ivory background for readability
+    ) {
+        Text(
+            text = text + if (isSortActive) sortArrow(sortDir) else "",
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = if (isSortActive) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+        )
+    }
 }
 
 private fun sortArrow(dir: SortDirection): String = if (dir == SortDirection.ASC) " ▲" else " ▼"
@@ -785,7 +767,8 @@ private fun StatusDropdownRow(
         Box {
             Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = if (isBlocked) blockedColor else statusCol.copy(alpha = 0.12f),
+                color = if (isBlocked) blockedColor else Color(0xFFFFFFF0), // solid ivory
+                border = BorderStroke(1.dp, if (isBlocked) blockedColor else statusCol.copy(alpha = 0.4f)),
                 modifier = Modifier.clickable(enabled = !isViewerRole) { onToggleDropdown(true) }
             ) {
                 Text(
@@ -857,9 +840,8 @@ private fun NotePreview(note: String, expanded: Boolean, onToggle: () -> Unit, t
 // ─── Inline Checklist Section (Task 18) ─────────────────────────────────────────
 
 /**
- * Renders the first 5 checklist items inline on the task card with checkboxes.
- * If more than 5 items exist, shows "+N more" text.
- * Wraps in a content zone recess background.
+ * Renders the first 5 INCOMPLETE checklist items inline on the task card with checkboxes.
+ * Completed items are hidden. If more than 5 incomplete items exist, shows "+N more" text.
  */
 @Composable
 private fun InlineChecklistSection(
@@ -870,63 +852,58 @@ private fun InlineChecklistSection(
 ) {
     if (checklistJson.isNullOrBlank()) return
 
-    // Parse checklist items (flatten top-level only for inline display)
-    val items = remember(checklistJson) { parseChecklistItems(checklistJson) }
-    if (items.isEmpty()) return
+    // Parse checklist items and filter to incomplete only
+    val allItems = remember(checklistJson) { parseChecklistItems(checklistJson) }
+    val incompleteItems = remember(allItems) { allItems.filter { !it.checked } }
+    if (incompleteItems.isEmpty()) return
 
-    val displayItems = items.take(5)
-    val remaining = items.size - 5
+    val displayItems = incompleteItems.take(5)
+    val remaining = incompleteItems.size - 5
 
     Spacer(modifier = Modifier.height(6.dp))
-    // Wrap in content zone recess background (Task 18.6)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0x0A000000), RoundedCornerShape(3.dp))
-            .padding(4.dp)
-    ) {
-        Column {
-            displayItems.forEachIndexed { index, item ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Checkbox(
-                        checked = item.checked,
-                        onCheckedChange = { newChecked ->
-                            val updatedJson = toggleChecklistItem(checklistJson, index, newChecked)
+    Column {
+        displayItems.forEach { item ->
+            // Find the original index in the full list for toggling
+            val originalIndex = allItems.indexOf(item)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Checkbox(
+                    checked = false,
+                    onCheckedChange = { newChecked ->
+                        if (originalIndex >= 0) {
+                            val updatedJson = toggleChecklistItem(checklistJson, originalIndex, newChecked)
                             onChecklistToggle(chitId, updatedJson)
-                        },
-                        modifier = Modifier.size(24.dp),
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = Color(0xFF5A8A5B),
-                            uncheckedColor = textColor.copy(alpha = 0.5f)
-                        )
+                        }
+                    },
+                    modifier = Modifier.size(24.dp),
+                    colors = CheckboxDefaults.colors(
+                        uncheckedColor = textColor.copy(alpha = 0.5f)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = item.text,
-                        fontSize = 12.sp,
-                        color = if (item.checked) textColor.copy(alpha = 0.5f) else textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-            // "+N more" indicator (Task 18.3)
-            if (remaining > 0) {
+                )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "+$remaining more",
-                    fontSize = 11.sp,
-                    color = Color(0xFF8B7355),
-                    modifier = Modifier.padding(start = 28.dp, top = 2.dp)
+                    text = item.text,
+                    fontSize = 12.sp,
+                    color = textColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
+        // "+N more" indicator
+        if (remaining > 0) {
+            Text(
+                text = "+$remaining more",
+                fontSize = 11.sp,
+                color = Color(0xFF8B7355),
+                modifier = Modifier.padding(start = 28.dp, top = 2.dp)
+            )
+        }
     }
 }
-
 /** Simple data class for a flattened checklist item. */
 private data class ChecklistItem(val text: String, val checked: Boolean)
 

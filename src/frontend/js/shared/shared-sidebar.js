@@ -58,12 +58,10 @@ function _cwocInjectSidebar() {
   /* ── Scrollable area ─────────────────────────────────────────────────── */
   html += '<div class="sidebar-scroll">';
 
-  /* 1. Create Chit */
-  html += '<div class="sidebar-section" id="section-create" style="margin-top:0;">';
-  html += '  <button class="create-chit action-button" id="sidebar-create-btn">';
-  html += '    <img src="/static/create_new.png" alt="" />';
-  html += '    Create Chit';
-  html += '  </button>';
+  /* Sidebar header: logo + "Omni Chits" */
+  html += '<div class="sidebar-header">';
+  html += '  <img src="/static/images/cwod_logo.png" alt="" class="sidebar-header-logo" />';
+  html += '  <span class="sidebar-header-title">Omni Chits</span>';
   html += '</div>';
 
   /* Email controls — only visible on Email tab */
@@ -82,6 +80,7 @@ function _cwocInjectSidebar() {
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="sent" onchange="_setEmailSubFilter(\'sent\')"> <i class="fas fa-paper-plane"></i> Sent</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="drafts" onchange="_setEmailSubFilter(\'drafts\')"> <i class="fas fa-file-alt"></i> Drafts</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="scheduled" onchange="_setEmailSubFilter(\'scheduled\')"> <i class="fas fa-clock"></i> Scheduled</label>';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="archived" onchange="_setEmailSubFilter(\'archived\')"> <i class="fas fa-archive"></i> Archive</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="email-trash" onchange="window.location.href=\'/frontend/html/trash.html?filter=email\'"> <i class="fas fa-trash-alt"></i> Trash</label>';
   html += '      </div>';
   html += '    </div>';
@@ -196,6 +195,12 @@ function _cwocInjectSidebar() {
 
   /* 3d. Indicators time range (only visible on Indicators tab) */
   html += '<div class="sidebar-section" id="section-indicators" style="display:none;">';
+  html += '  <label class="sidebar-section-label">View Mode</label>';
+  html += '  <div style="display:flex;gap:4px;margin-bottom:8px;">';
+  html += '    <button class="action-button _ind-mode-btn" data-mode="charts" onclick="_indSetSidebarMode(\'charts\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;background:ivory;color:#3b1f0a;">📊 Charts</button>';
+  html += '    <button class="action-button _ind-mode-btn" data-mode="calendar" onclick="_indSetSidebarMode(\'calendar\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">📅 Calendar</button>';
+  html += '    <button class="action-button _ind-mode-btn" data-mode="log" onclick="_indSetSidebarMode(\'log\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">📋 Log</button>';
+  html += '  </div>';
   html += '  <label class="sidebar-section-label">Time Range</label>';
   html += '  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">';
   html += '    <button class="action-button _ind-btn _ind-active" onclick="_indicatorsSetRange(\'day\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">Day</button>';
@@ -392,7 +397,7 @@ function _cwocInjectSidebar() {
   /* Bottom pinned: Settings, Reference, Help */
   html += '<div class="sidebar-bottom">';
   html += '  <button class="action-button" id="sidebar-settings-btn" style="margin-bottom:6px;">';
-  html += '    <img src="/static/settings.png" alt="Settings" />';
+  html += '    <img src="/static/images/settings.png" alt="Settings" />';
   html += '    Settings';
   html += '  </button>';
   html += '  <div style="display:flex;gap:6px;">';
@@ -478,16 +483,6 @@ function _cwocInitSidebar(context) {
   }
 
   /* ── Wire button onclick handlers ────────────────────────────────────── */
-
-  var createBtn = document.getElementById('sidebar-create-btn');
-  if (createBtn) {
-    createBtn.onclick = function() { _cb('onCreateChit')(); };
-    createBtn.onauxclick = function() { window.open('/frontend/html/editor.html', '_blank'); };
-    createBtn.addEventListener('contextmenu', function(e) {
-      e.preventDefault();
-      if (typeof _openQuickAlertModal === 'function') _openQuickAlertModal();
-    });
-  }
 
   /* Wire email sidebar Check Mail button */
   var checkMailBtn = document.getElementById('sidebar-check-mail-btn');

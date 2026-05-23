@@ -819,7 +819,7 @@ function _showMonthDayOverflow(e, dayChits, dayDate) {
 
   var popup = document.createElement('div');
   popup.className = 'cwoc-month-overflow-popup';
-  popup.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:10px;min-width:220px;max-width:300px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+  popup.style.cssText = 'position:fixed;background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:10px;min-width:220px;max-width:300px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
 
   // Header with date
   var header = document.createElement('div');
@@ -1042,7 +1042,7 @@ function displayItineraryView(chitsToDisplay) {
   chitList.innerHTML = "";
   const itineraryView = document.createElement("div");
   itineraryView.className = "itinerary-view";
-  itineraryView.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fdf6e3;";
+  itineraryView.style.cssText = "background:url('/static/images/parchment.jpg') center/cover;background-color:#fdf6e3;";
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const now = new Date();

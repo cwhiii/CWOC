@@ -4,8 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,7 +34,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,14 +41,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,16 +61,12 @@ import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
-import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.CwocPromptDialog
 import com.cwoc.app.ui.components.ReorderableStaggeredGrid
-import com.cwoc.app.ui.components.SnoozePickerDialog
-import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.parseHexColor
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
-import kotlinx.coroutines.launch
 
 /**
  * Projects/Kanban view — displays project master chits with expandable Kanban boards.
@@ -101,23 +95,33 @@ fun ProjectsScreen(
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val sortState = filterSortViewModel?.sortState?.collectAsState()?.value ?: SortState()
 
-    // Settings for SnoozePickerDialog
-    val timeFormat by viewModel.timeFormat.collectAsState()
-    val calendarSnap by viewModel.calendarSnap.collectAsState()
-
     // Determine if manual sort is active (enables drag-to-reorder)
     val isManualSort = sortState.field == SortField.MANUAL
 
-    // Long-press action menu state
-    var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
-    var showSnoozeDialog by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
+    // Project header count settings
+    val showChildCount by viewModel.showChildCount.collectAsState()
+    val showChecklistCount by viewModel.showChecklistCount.collectAsState()
 
     // Apply filters and sort to the project master chits
-    val filteredSortedProjects = remember(projects, filterState, sortState) {
+    // Read manual order directly from ChitReorderHelper (uses "Projects" key directly,
+    // doesn't depend on FilterSortViewModel.currentTabRoute being set)
+    val manualOrder = remember(projects) {
+        viewModel.getManualOrder()
+    }
+
+    val filteredSortedProjects = remember(projects, filterState, sortState, manualOrder) {
         val projectChits = projects.map { it.project }
         val filteredChits = FilterEngine.applyFilters(projectChits, filterState)
-        val sortedChits = SortEngine.sort(filteredChits, sortState.field, sortState.direction)
+        val sortedChits = if (manualOrder.isNotEmpty() && (sortState.field == SortField.MANUAL || sortState.field == SortField.NONE)) {
+            // Apply saved manual order: items in order come first, then new items at end
+            val orderMap = manualOrder.withIndex().associate { (i, id) -> id to i }
+            filteredChits.sortedBy { orderMap[it.id] ?: Int.MAX_VALUE }
+        } else if (sortState.field == SortField.NONE || sortState.field == SortField.MANUAL) {
+            // No manual order saved and no explicit sort — preserve original order
+            filteredChits
+        } else {
+            SortEngine.sort(filteredChits, sortState.field, sortState.direction)
+        }
         // Map back to ProjectWithChildren, preserving the filtered/sorted order
         val filteredIds = sortedChits.map { it.id }
         filteredIds.mapNotNull { id -> projects.find { it.project.id == id } }
@@ -156,17 +160,19 @@ fun ProjectsScreen(
                             enabled = isManualSort,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalItemSpacing = 8.dp
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalItemSpacing = 6.dp
                         ) { projectWithChildren, _ ->
                             ProjectCard(
                                 project = projectWithChildren,
-                                isExpanded = projectWithChildren.project.id in expandedIds,
+                                isExpanded = expandedIds?.contains(projectWithChildren.project.id) ?: true,
                                 onToggleExpand = { viewModel.toggleExpanded(projectWithChildren.project.id) },
                                 onChildTap = { chitId -> onNavigateToEditor(chitId) },
-                                onLongPress = { menuChit = projectWithChildren.project },
+                                onLongPress = { /* No context menu on project masters */ },
                                 onCreateChild = { title -> viewModel.createChildChit(projectWithChildren.project.id, title) },
-                                onStatusChange = { chitId, newStatus -> viewModel.moveToColumn(chitId, newStatus) }
+                                onStatusChange = { chitId, newStatus -> viewModel.moveToColumn(chitId, newStatus) },
+                                showChildCount = showChildCount,
+                                showChecklistCount = showChecklistCount
                             )
                         }
                     }
@@ -266,56 +272,6 @@ fun ProjectsScreen(
             }
         }
 
-        // ChitActionMenu for long-press
-        val currentMenuChit = menuChit
-        if (currentMenuChit != null) {
-            ChitActionMenu(
-                expanded = true,
-                chit = currentMenuChit,
-                onDismiss = { menuChit = null },
-                onPin = {
-                    chitRepository?.let { repo ->
-                        coroutineScope.launch {
-                            if (currentMenuChit.pinned) repo.unpin(currentMenuChit.id)
-                            else repo.pin(currentMenuChit.id)
-                        }
-                    }
-                },
-                onArchive = {
-                    chitRepository?.let { repo ->
-                        coroutineScope.launch {
-                            if (currentMenuChit.archived) repo.unarchive(currentMenuChit.id)
-                            else repo.archive(currentMenuChit.id)
-                        }
-                    }
-                },
-                onSnooze = {
-                    showSnoozeDialog = true
-                },
-                onEdit = { onNavigateToEditor(currentMenuChit.id) },
-                onDelete = { /* Projects screen doesn't have soft-delete */ }
-            )
-        }
-
-        // Snooze picker dialog
-        if (showSnoozeDialog && currentMenuChit != null) {
-            SnoozePickerDialog(
-                is24Hour = (timeFormat == "24hour"),
-                calendarSnap = calendarSnap,
-                onSnoozeSelected = { isoString ->
-                    chitRepository?.let { repo ->
-                        coroutineScope.launch {
-                            repo.snooze(currentMenuChit.id, isoString)
-                        }
-                    }
-                    showSnoozeDialog = false
-                    menuChit = null
-                },
-                onDismiss = {
-                    showSnoozeDialog = false
-                }
-            )
-        }
     }
 }
 
@@ -350,11 +306,10 @@ private fun ProjectCard(
     onChildTap: (String) -> Unit,
     onLongPress: () -> Unit,
     onCreateChild: (String) -> Unit = {},
-    onStatusChange: ((String, KanbanStatus) -> Unit)? = null
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
+    showChildCount: Boolean = false,
+    showChecklistCount: Boolean = false
 ) {
-    // Phone-width detection for compact styling
-    val isPhone = LocalConfiguration.current.screenWidthDp <= 600
-
     // Determine project card background color from chit color
     val projectBgColor = remember(project.project.color) {
         if (!project.project.color.isNullOrBlank() && project.project.color != "transparent") {
@@ -384,91 +339,108 @@ private fun ProjectCard(
         )
     }
 
+    // Matches web: border:2px solid #8b5a2b, border-radius:6px, margin-bottom:0.6em
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .chitColorBorder(project.project.color)
-            .animateContentSize()
-            .combinedClickable(
-                onClick = onToggleExpand,
-                onLongClick = onLongPress
-            ),
-        border = CwocChitCardStyle.cardBorder,
+            .animateContentSize(),
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(2.dp, Color(0xFF8B5A2B)),
         colors = CardDefaults.cardColors(containerColor = projectBgColor),
-        elevation = CwocChitCardStyle.cardElevation()
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(if (isPhone) 4.dp else 12.dp)) {
-            // Project header
+        Column {
+            // Project header — matches web: padding:0.3em 0.4em, font-size:0.82em
+            // Tap to expand/collapse, NO long-press menu on project masters
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Drag grip indicator
+                Text(
+                    text = "≡",
+                    fontSize = 12.sp,
+                    color = projectTextColor.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(end = 4.dp)
+                )
                 Text(
                     text = project.project.title ?: "Untitled Project",
-                    style = MaterialTheme.typography.titleSmall,
                     color = projectTextColor,
                     fontWeight = FontWeight.Bold,
-                    fontSize = if (isPhone) 14.sp else MaterialTheme.typography.titleSmall.fontSize,
+                    fontSize = 13.sp,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp
                 )
+                // Progress count — matches web: only shown when settings enabled
+                val totalChildren = project.children.values.sumOf { it.size }
+                val completedChildren = (project.children[KanbanStatus.COMPLETE] ?: emptyList()).size
+                if (totalChildren > 0 && (showChildCount || showChecklistCount)) {
+                    val progressParts = mutableListOf<String>()
+                    if (showChildCount) {
+                        val checkmark = if (completedChildren == totalChildren) " ✓" else ""
+                        progressParts.add("$completedChildren/$totalChildren$checkmark")
+                    }
+                    if (showChecklistCount) {
+                        // Aggregate checklist progress across all children
+                        var clChecked = 0
+                        var clTotal = 0
+                        project.children.values.flatten().forEach { child ->
+                            val cl = child.checklist
+                            if (!cl.isNullOrBlank() && cl != "[]") {
+                                try {
+                                    val itemType = object : com.google.gson.reflect.TypeToken<List<Map<String, Any>>>() {}.type
+                                    val items: List<Map<String, Any>>? = com.google.gson.Gson().fromJson(cl, itemType)
+                                    items?.forEach { item ->
+                                        val text = item["text"]?.toString()?.trim() ?: ""
+                                        if (text.isNotEmpty()) {
+                                            clTotal++
+                                            val checked = item["checked"] == true || item["done"] == true
+                                            if (checked) clChecked++
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        if (clTotal > 0) {
+                            val checkmark = if (clChecked == clTotal) " ☑" else ""
+                            progressParts.add("$clChecked/$clTotal$checkmark")
+                        }
+                    }
+                    if (progressParts.isNotEmpty()) {
+                        Text(
+                            text = "(${progressParts.joinToString(", ")})",
+                            fontSize = 10.sp,
+                            color = projectTextColor.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+                }
                 // "+" button to create a new child chit
                 IconButton(
                     onClick = { showCreateChildDialog = true },
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(22.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Create new child chit",
                         tint = projectTextColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = projectTextColor
+                    tint = projectTextColor,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            // Pin indicator
-            if (project.project.pinned) {
-                Text(
-                    text = "📌 Pinned",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = projectTextColor.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            // Q7: Project progress bar (% of children in Complete status)
-            val totalChildren = project.children.values.sumOf { it.size }
-            val completedChildren = (project.children[KanbanStatus.COMPLETE] ?: emptyList()).size
-            if (totalChildren > 0) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = { completedChildren.toFloat() / totalChildren.toFloat() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(6.dp),
-                        color = Color(0xFF4A6741),
-                        trackColor = Color(0xFFEDE0D4)
-                    )
-                    Text(
-                        text = "$completedChildren/$totalChildren",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = projectTextColor.copy(alpha = 0.8f)
-                    )
-                }
-            }
-
-            // Kanban board (expanded)
+            // Kanban board (expanded) — no extra padding, sits directly below header
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = expandVertically(),
@@ -477,8 +449,7 @@ private fun ProjectCard(
                 KanbanBoard(
                     columns = project.children,
                     onChildTap = onChildTap,
-                    onStatusChange = onStatusChange,
-                    isPhone = isPhone
+                    onStatusChange = onStatusChange
                 )
             }
         }
@@ -489,24 +460,38 @@ private fun ProjectCard(
 private fun KanbanBoard(
     columns: Map<KanbanStatus, List<ChitEntity>>,
     onChildTap: (String) -> Unit,
-    onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
-    isPhone: Boolean = false
+    onStatusChange: ((String, KanbanStatus) -> Unit)? = null
 ) {
+    // Only show 4 top-level columns — Rejected is nested inside Complete
+    val topLevelStatuses = listOf(
+        KanbanStatus.TODO,
+        KanbanStatus.IN_PROGRESS,
+        KanbanStatus.BLOCKED,
+        KanbanStatus.COMPLETE
+    )
+
+    // Matches web: display:flex, gap:0, border-right between columns
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .padding(top = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        KanbanStatus.entries.forEach { status ->
+        topLevelStatuses.forEachIndexed { index, status ->
             val chits = columns[status] ?: emptyList()
+            val rejectedChits = if (status == KanbanStatus.COMPLETE) {
+                columns[KanbanStatus.REJECTED] ?: emptyList()
+            } else {
+                emptyList()
+            }
             KanbanColumnView(
                 status = status,
                 chits = chits,
+                rejectedChits = rejectedChits,
                 onChildTap = onChildTap,
                 onStatusChange = onStatusChange,
                 modifier = Modifier.weight(1f),
-                isPhone = isPhone
+                showRightBorder = index < topLevelStatuses.size - 1
             )
         }
     }
@@ -520,204 +505,227 @@ private fun KanbanColumnView(
     onChildTap: (String) -> Unit,
     onStatusChange: ((String, KanbanStatus) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    isPhone: Boolean = false,
-    // Q5: Add existing chit to this column
-    onAddExisting: (() -> Unit)? = null,
-    // Q6: Create new child in this column
-    onCreateNew: (() -> Unit)? = null
+    rejectedChits: List<ChitEntity> = emptyList(),
+    showRightBorder: Boolean = true
 ) {
+    // State for collapsed Rejected sub-section (collapsed by default when it has items)
+    var rejectedExpanded by remember { mutableStateOf(rejectedChits.isEmpty()) }
+
+    // Matches web: flex:1, border-right:2px solid rgba(139,90,43,0.35), padding:0.2em
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFFEDE0D0))
-            .padding(4.dp)
-    ) {
-        // Column header with count badge
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(vertical = if (isPhone) 3.dp else 0.dp)
-        ) {
-            Text(
-                text = status.displayName,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF6B4E31),
-                fontWeight = FontWeight.Bold,
-                fontSize = if (isPhone) 11.sp else 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+            .then(
+                if (showRightBorder) Modifier.drawRightBorder()
+                else Modifier
             )
-            Spacer(modifier = Modifier.width(2.dp))
-            Box(
+            .padding(horizontal = 3.dp, vertical = 2.dp)
+    ) {
+        // Column header — matches web: font-weight:bold, opacity:0.85, text-align:center,
+        // padding:2px 0 3px, font-size:0.75em, border-bottom:2px solid rgba(139,90,43,0.3)
+        Text(
+            text = status.displayName,
+            color = Color(0xFF6B4E31).copy(alpha = 0.85f),
+            fontWeight = FontWeight.Bold,
+            fontSize = 9.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .drawBottomBorder()
+                .padding(bottom = 3.dp),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        // Child chit cards — matches web: padding:0.2em 0.3em, font-size:0.78em,
+        // margin-bottom:0.15em, line-height:1.2, border-width:1px
+        chits.forEach { chit ->
+            KanbanChitCard(
+                chit = chit,
+                status = status,
+                onChildTap = onChildTap,
+                onStatusChange = onStatusChange
+            )
+        }
+
+        if (chits.isEmpty() && rejectedChits.isEmpty()) {
+            Text(
+                text = "—",
+                fontSize = 9.sp,
+                color = Color(0xFFAA9977),
+                modifier = Modifier.padding(2.dp)
+            )
+        }
+
+        // Rejected sub-section nested inside Complete column
+        if (status == KanbanStatus.COMPLETE && rejectedChits.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            // Divider + collapsible header
+            Row(
                 modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF6B4E31)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .clickable { rejectedExpanded = !rejectedExpanded }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${chits.size}",
-                    color = Color.White,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Rej",
+                    color = Color(0xFF9E9E9E),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 8.sp
+                )
+                Spacer(modifier = Modifier.width(1.dp))
+                Text(
+                    text = "(${rejectedChits.size})",
+                    color = Color(0xFF9E9E9E).copy(alpha = 0.6f),
+                    fontSize = 7.sp
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = if (rejectedExpanded) "▼" else "▶",
+                    fontSize = 6.sp,
+                    color = Color(0xFF9E9E9E)
+                )
+            }
+            // Rejected chit cards (collapsible)
+            AnimatedVisibility(
+                visible = rejectedExpanded,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Column {
+                    rejectedChits.forEach { chit ->
+                        KanbanChitCard(
+                            chit = chit,
+                            status = KanbanStatus.REJECTED,
+                            onChildTap = onChildTap,
+                            onStatusChange = onStatusChange
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Draw a right border matching web's border-right:2px solid rgba(139,90,43,0.35)
+ */
+private fun Modifier.drawRightBorder(): Modifier = this.drawWithContent {
+    drawContent()
+    drawLine(
+        color = Color(0xFF8B5A2B).copy(alpha = 0.35f),
+        start = Offset(size.width, 0f),
+        end = Offset(size.width, size.height),
+        strokeWidth = 2.dp.toPx()
+    )
+}
+
+/**
+ * Draw a bottom border matching web's border-bottom:2px solid rgba(139,90,43,0.3)
+ */
+private fun Modifier.drawBottomBorder(): Modifier = this.drawWithContent {
+    drawContent()
+    drawLine(
+        color = Color(0xFF8B5A2B).copy(alpha = 0.3f),
+        start = Offset(0f, size.height),
+        end = Offset(size.width, size.height),
+        strokeWidth = 2.dp.toPx()
+    )
+}
+
+/**
+ * Individual chit card within a Kanban column.
+ * Matches web mobile: padding:0.2em 0.3em, font-size:0.78em, border-width:1px, line-height:1.2
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun KanbanChitCard(
+    chit: ChitEntity,
+    status: KanbanStatus,
+    onChildTap: (String) -> Unit,
+    onStatusChange: ((String, KanbanStatus) -> Unit)?
+) {
+    // Determine card background from chit color
+    val cardBgColor = remember(chit.color) {
+        if (!chit.color.isNullOrBlank() && chit.color != "transparent") {
+            parseHexColor(chit.color) ?: CwocChitCardStyle.CardBackground
+        } else {
+            CwocChitCardStyle.CardBackground
+        }
+    }
+    val cardTextColor = remember(cardBgColor) {
+        CwocChitCardStyle.contrastTextColor(cardBgColor)
+    }
+
+    var showStatusMenu by remember { mutableStateOf(false) }
+
+    Box {
+        // Matches web: padding:0.2em 0.3em, border:1px solid #8b5a2b, border-radius:6px,
+        // margin-bottom:0.15em, line-height:1.2
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 1.dp)
+                .combinedClickable(
+                    onClick = { onChildTap(chit.id) },
+                    onLongClick = { showStatusMenu = true }
+                ),
+            shape = RoundedCornerShape(4.dp),
+            border = BorderStroke(1.dp, Color(0xFF8B5A2B)),
+            colors = CardDefaults.cardColors(containerColor = cardBgColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                Text(
+                    text = chit.title ?: "Untitled",
+                    color = cardTextColor,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = if (status == KanbanStatus.COMPLETE || status == KanbanStatus.REJECTED)
+                        TextDecoration.LineThrough else TextDecoration.None
+                )
+                // Due date (compact)
+                if (chit.dueDatetime != null) {
+                    Text(
+                        text = chit.dueDatetime.take(10),
+                        color = cardTextColor.copy(alpha = 0.7f),
+                        fontSize = 8.sp,
+                        lineHeight = 10.sp
+                    )
+                }
+                // Priority (compact)
+                if (!chit.priority.isNullOrBlank()) {
+                    Text(
+                        text = chit.priority,
+                        color = cardTextColor.copy(alpha = 0.7f),
+                        fontSize = 8.sp,
+                        lineHeight = 10.sp
+                    )
+                }
+            }
+        }
+        // Long-press status change dropdown
+        DropdownMenu(
+            expanded = showStatusMenu,
+            onDismissRequest = { showStatusMenu = false }
+        ) {
+            KanbanStatus.entries.filter { it != status }.forEach { targetStatus ->
+                DropdownMenuItem(
+                    text = { Text("→ ${targetStatus.displayName}", fontSize = 12.sp) },
+                    onClick = {
+                        showStatusMenu = false
+                        onStatusChange?.invoke(chit.id, targetStatus)
+                    }
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Child chit cards with colors applied
-        chits.forEach { chit ->
-            // Determine card background from chit color
-            val cardBgColor = remember(chit.color) {
-                if (!chit.color.isNullOrBlank() && chit.color != "transparent") {
-                    parseHexColor(chit.color) ?: CwocChitCardStyle.CardBackground
-                } else {
-                    CwocChitCardStyle.CardBackground
-                }
-            }
-            val cardTextColor = remember(cardBgColor) {
-                CwocChitCardStyle.contrastTextColor(cardBgColor)
-            }
-
-            var showStatusMenu by remember { mutableStateOf(false) }
-
-            Box {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = if (isPhone) 4.dp else 0.dp,
-                        vertical = if (isPhone) 2.dp else 2.dp
-                    )
-                    .combinedClickable(
-                        onClick = { onChildTap(chit.id) },
-                        onLongClick = { showStatusMenu = true }
-                    ),
-                border = CwocChitCardStyle.cardBorder,
-                colors = CardDefaults.cardColors(containerColor = cardBgColor),
-                elevation = CwocChitCardStyle.cardElevation()
-            ) {
-                Column(modifier = Modifier.padding(4.dp)) {
-                    // Indicator icons (pinned, stealth, alerts, prereqs)
-                    val indicators = buildString {
-                        if (chit.pinned) append("🔖 ")
-                        if (chit.stealth == true) append("🥷 ")
-                        if (chit.alarm == true || chit.notification == true) append("🔔 ")
-                        if (!chit.prerequisites.isNullOrEmpty()) append("⛓️ ")
-                    }.trim()
-                    if (indicators.isNotEmpty()) {
-                        Text(
-                            text = indicators,
-                            fontSize = 8.sp,
-                            modifier = Modifier.padding(bottom = 1.dp)
-                        )
-                    }
-
-                    Text(
-                        text = chit.title ?: "Untitled",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = cardTextColor,
-                        fontSize = if (isPhone) 12.sp else 10.sp,
-                        maxLines = if (isPhone) 1 else 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textDecoration = if (status == KanbanStatus.COMPLETE || status == KanbanStatus.REJECTED)
-                            TextDecoration.LineThrough else TextDecoration.None
-                    )
-                    // Priority/severity
-                    if (!chit.priority.isNullOrBlank()) {
-                        Text(
-                            text = chit.priority,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = cardTextColor.copy(alpha = 0.7f),
-                            fontSize = 8.sp
-                        )
-                    }
-                    // Due date on child cards
-                    if (chit.dueDatetime != null) {
-                        Text(
-                            text = "Due: ${chit.dueDatetime.take(10)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = cardTextColor.copy(alpha = 0.7f),
-                            fontSize = 8.sp
-                        )
-                    }
-                    // Checklist progress
-                    if (!chit.checklist.isNullOrBlank() && chit.checklist != "[]") {
-                        com.cwoc.app.ui.components.ChecklistProgressBadge(
-                            checklistJson = chit.checklist,
-                            textColor = cardTextColor.copy(alpha = 0.7f)
-                        )
-                    }
-                    // Note preview (first line, truncated)
-                    if (!chit.note.isNullOrBlank()) {
-                        Text(
-                            text = chit.note.lines().firstOrNull()?.take(50) ?: "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = cardTextColor.copy(alpha = 0.6f),
-                            fontSize = 8.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    // Owner badge
-                    if (!chit.ownerDisplayName.isNullOrBlank()) {
-                        Text(
-                            text = "👤 ${chit.ownerDisplayName}",
-                            fontSize = 8.sp,
-                            color = cardTextColor.copy(alpha = 0.6f)
-                        )
-                    }
-                    // Assignee badge
-                    if (!chit.assignedTo.isNullOrBlank()) {
-                        Text(
-                            text = "📌 ${chit.assignedTo}",
-                            fontSize = 8.sp,
-                            color = cardTextColor.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-            }
-            // Long-press status change dropdown
-            DropdownMenu(
-                expanded = showStatusMenu,
-                onDismissRequest = { showStatusMenu = false }
-            ) {
-                KanbanStatus.entries.filter { it != status }.forEach { targetStatus ->
-                    DropdownMenuItem(
-                        text = { Text("→ ${targetStatus.displayName}", fontSize = 12.sp) },
-                        onClick = {
-                            showStatusMenu = false
-                            onStatusChange?.invoke(chit.id, targetStatus)
-                        }
-                    )
-                }
-            }
-            } // end Box
-        }
-
-        if (chits.isEmpty()) {
-            Text(
-                text = "—",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFFAA9977),
-                modifier = Modifier.padding(4.dp)
-            )
-        }
-
-        // Q5/Q6: Add buttons at bottom of column
-        Spacer(modifier = Modifier.height(4.dp))
-        if (onAddExisting != null) {
-            Text(
-                text = "+ Add",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF6B4E31),
-                modifier = Modifier
-                    .clickable { onAddExisting() }
-                    .padding(4.dp)
-            )
-        }
-    }
+    } // end Box
 }
 
 @Composable

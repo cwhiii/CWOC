@@ -41,21 +41,22 @@ import org.json.JSONArray
 /**
  * The C CAPTN view tabs: Calendar, Checklists, Alarms, Projects, Tasks, Notes, Indicators.
  * Each tab maps to an existing Screen route string.
- * Icons match the web's tab strip (fa-calendar, fa-list-check, fa-bell, fa-folder, fa-tasks, fa-sticky-note, fa-chart-line).
+ * Icons: Material vector icons for inline use, plus drawable resource IDs matching the web's
+ * tab strip PNG images (used in the views panel and header).
  * Omni uses the CWOC logo drawable instead of a Material icon.
  */
-enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector?) {
-    Calendar("Calendar", "calendar", Icons.Default.CalendarMonth),
-    Checklists("Checklists", "checklists", Icons.Default.Checklist),
-    Alarms("Alerts", "alarms", Icons.Default.Alarm),
-    Projects("Projects", "projects", Icons.Default.Folder),
-    Tasks("Tasks", "tasks", Icons.Default.Task),
-    Notes("Notes", "notes", Icons.Default.Notes),
-    Notebook("Notebook", "notebook", Icons.Default.Notes),
-    Indicators("Indicators", "indicators", Icons.Default.ShowChart),
-    Email("Email", "email", Icons.Default.Email),
-    Omni("Omni", "omni", null),
-    Search("Search", "search", Icons.Default.Search)
+enum class CCaptnTab(val label: String, val route: String, val icon: ImageVector?, val drawableResId: Int?) {
+    Calendar("Calendar", "calendar", Icons.Default.CalendarMonth, R.drawable.tab_calendar),
+    Checklists("Checklists", "checklists", Icons.Default.Checklist, R.drawable.tab_checklists),
+    Alarms("Alerts", "alarms", Icons.Default.Alarm, R.drawable.tab_alerts),
+    Projects("Projects", "projects", Icons.Default.Folder, R.drawable.tab_projects),
+    Tasks("Tasks", "tasks", Icons.Default.Task, R.drawable.tab_tasks),
+    Notes("Notes", "notes", Icons.Default.Notes, R.drawable.tab_notes),
+    Notebook("Notebook", "notebook", Icons.Default.Notes, R.drawable.tab_notes),
+    Indicators("Indicators", "indicators", Icons.Default.ShowChart, R.drawable.tab_indicators),
+    Email("Email", "email", Icons.Default.Email, R.drawable.tab_email),
+    Omni("Omni", "omni", null, R.drawable.cwoc_logo),
+    Search("Search", "search", Icons.Default.Search, null)
 }
 
 /**

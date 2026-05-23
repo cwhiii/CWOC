@@ -289,6 +289,10 @@ class NotificationSchedulerImpl @Inject constructor(
      *    - We compute: target_datetime ± (value * unit) to get the absolute fire time.
      *
      * Weather notifications (unit == "weather") are skipped — they're server-side only.
+     *
+     * 3. Notify flags: {"_type": "_notify_flags", "at_start": true, "at_due": true}
+     *    - Simple flags indicating "fire a notification at start time" and/or "at due time".
+     *    - We compute the absolute fire time from the chit's startDatetime / dueDatetime.
      */
     private fun parseAlerts(chit: ChitEntity): List<ChitAlert> {
         val alertsJson = chit.alerts ?: return emptyList()
@@ -305,6 +309,7 @@ class NotificationSchedulerImpl @Inject constructor(
                 when (alertType) {
                     "alarm" -> parseAlarmAlert(chit, alertMap, index)?.let { results.add(it) }
                     "notification" -> parseNotificationAlert(chit, alertMap, index)?.let { results.add(it) }
+                    "_notify_flags" -> parseNotifyFlagsAlert(chit, alertMap, index).let { results.addAll(it) }
                 }
             }
 
@@ -472,6 +477,68 @@ class NotificationSchedulerImpl @Inject constructor(
     }
 
     /**
+     * Parses a _notify_flags alert entry and returns 0-2 ChitAlerts.
+     *
+     * _notify_flags format: {"_type": "_notify_flags", "at_start": true, "at_due": true}
+     * - at_start: fire a reminder at the chit's startDatetime
+     * - at_due: fire a reminder at the chit's dueDatetime
+     *
+     * Uses sub-indices (index*100 + 0 for start, index*100 + 1 for due) to avoid
+     * request code collisions with other alerts on the same chit.
+     */
+    private fun parseNotifyFlagsAlert(chit: ChitEntity, alertMap: Map<String, Any>, index: Int): List<ChitAlert> {
+        val results = mutableListOf<ChitAlert>()
+        val zoneId = getChitZoneId(chit)
+
+        val atStart = when (val v = alertMap["at_start"]) {
+            is Boolean -> v
+            is String -> v.equals("true", ignoreCase = true)
+            else -> false
+        }
+        val atDue = when (val v = alertMap["at_due"]) {
+            is Boolean -> v
+            is String -> v.equals("true", ignoreCase = true)
+            else -> false
+        }
+
+        if (atStart) {
+            val startStr = chit.startDatetime ?: chit.pointInTime
+            if (startStr != null) {
+                val millis = parseDatetimeToMillis(startStr, zoneId)
+                if (millis != null) {
+                    results.add(ChitAlert(
+                        chitId = chit.id,
+                        chitTitle = chit.title ?: "CWOC Reminder",
+                        alertType = AlertType.REMINDER,
+                        triggerTimeMillis = millis,
+                        alertIndex = index * 100  // sub-index for start
+                    ))
+                    Log.d(TAG, "_notify_flags at_start: chit=${chit.id}, fires at ${java.time.Instant.ofEpochMilli(millis)}")
+                }
+            }
+        }
+
+        if (atDue) {
+            val dueStr = chit.dueDatetime
+            if (dueStr != null) {
+                val millis = parseDatetimeToMillis(dueStr, zoneId)
+                if (millis != null) {
+                    results.add(ChitAlert(
+                        chitId = chit.id,
+                        chitTitle = chit.title ?: "CWOC Reminder",
+                        alertType = AlertType.REMINDER,
+                        triggerTimeMillis = millis,
+                        alertIndex = index * 100 + 1  // sub-index for due
+                    ))
+                    Log.d(TAG, "_notify_flags at_due: chit=${chit.id}, fires at ${java.time.Instant.ofEpochMilli(millis)}")
+                }
+            }
+        }
+
+        return results
+    }
+
+    /**
      * Gets the ZoneId for a chit. Uses the chit's stored timezone if available,
      * otherwise falls back to the device's default timezone.
      */
@@ -556,6 +623,7 @@ class NotificationSchedulerImpl @Inject constructor(
                 when (alertType) {
                     "alarm" -> parseAlarmAlertProj(proj, alertMap, index)?.let { results.add(it) }
                     "notification" -> parseNotificationAlertProj(proj, alertMap, index)?.let { results.add(it) }
+                    "_notify_flags" -> parseNotifyFlagsAlertProj(proj, alertMap, index).let { results.addAll(it) }
                 }
             }
             results
@@ -676,6 +744,60 @@ class NotificationSchedulerImpl @Inject constructor(
             triggerTimeMillis = fireMillis,
             alertIndex = index
         )
+    }
+
+    /**
+     * Projection-based version of parseNotifyFlagsAlert.
+     * Handles {"_type": "_notify_flags", "at_start": true, "at_due": true}.
+     */
+    private fun parseNotifyFlagsAlertProj(proj: com.cwoc.app.data.local.entity.ChitAlertProjection, alertMap: Map<String, Any>, index: Int): List<ChitAlert> {
+        val results = mutableListOf<ChitAlert>()
+        val zoneId = getZoneId(proj.timezone)
+
+        val atStart = when (val v = alertMap["at_start"]) {
+            is Boolean -> v
+            is String -> v.equals("true", ignoreCase = true)
+            else -> false
+        }
+        val atDue = when (val v = alertMap["at_due"]) {
+            is Boolean -> v
+            is String -> v.equals("true", ignoreCase = true)
+            else -> false
+        }
+
+        if (atStart) {
+            val startStr = proj.startDatetime ?: proj.pointInTime
+            if (startStr != null) {
+                val millis = parseDatetimeToMillis(startStr, zoneId)
+                if (millis != null) {
+                    results.add(ChitAlert(
+                        chitId = proj.id,
+                        chitTitle = proj.title ?: "CWOC Reminder",
+                        alertType = AlertType.REMINDER,
+                        triggerTimeMillis = millis,
+                        alertIndex = index * 100
+                    ))
+                }
+            }
+        }
+
+        if (atDue) {
+            val dueStr = proj.dueDatetime
+            if (dueStr != null) {
+                val millis = parseDatetimeToMillis(dueStr, zoneId)
+                if (millis != null) {
+                    results.add(ChitAlert(
+                        chitId = proj.id,
+                        chitTitle = proj.title ?: "CWOC Reminder",
+                        alertType = AlertType.REMINDER,
+                        triggerTimeMillis = millis,
+                        alertIndex = index * 100 + 1
+                    ))
+                }
+            }
+        }
+
+        return results
     }
 
     private fun getZoneId(timezone: String?): ZoneId {

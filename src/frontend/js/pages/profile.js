@@ -229,7 +229,7 @@ function _populateProfileFields(user) {
     if (displayImg) displayImg.src = user.profile_image_url + '?t=' + Date.now();
     if (removeBtn) removeBtn.style.display = '';
   } else {
-    if (displayImg) displayImg.src = '/static/default-avatar.svg';
+    if (displayImg) displayImg.src = '/static/images/default-avatar.svg';
     if (removeBtn) removeBtn.style.display = 'none';
   }
 
@@ -801,11 +801,11 @@ async function _removeProfileImage() {
       return;
     }
     var displayImg = document.getElementById('profile-image-display');
-    if (displayImg) displayImg.src = '/static/default-avatar.svg';
+    if (displayImg) displayImg.src = '/static/images/default-avatar.svg';
     var removeBtn = document.getElementById('remove-profile-image-btn');
     if (removeBtn) removeBtn.style.display = 'none';
     var topImg = document.getElementById('cwoc-profile-img');
-    if (topImg) topImg.src = '/static/default-avatar.svg';
+    if (topImg) topImg.src = '/static/images/default-avatar.svg';
     _showMessage(msgDiv, 'Profile image removed.', 'success');
   } catch (err) {
     console.error('[Profile] Image remove error:', err);

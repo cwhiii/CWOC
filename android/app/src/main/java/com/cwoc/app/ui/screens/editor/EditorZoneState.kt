@@ -11,6 +11,7 @@ import com.cwoc.app.ui.screens.editor.zones.EDITOR_ZONE_ORDER
 import com.cwoc.app.ui.screens.editor.zones.EditorZone
 import com.cwoc.app.ui.screens.editor.zones.SOURCE_TAB_ZONE_MAP
 import com.cwoc.app.ui.screens.editor.zones.ZONE_PREFILL_MAP
+import com.cwoc.app.ui.util.DateUtils
 
 /**
  * State holder for the zone-at-a-time navigation system.
@@ -79,12 +80,10 @@ class EditorZoneState(
             if (hasDatePrefill) {
                 return EDITOR_ZONE_ORDER.indexOfFirst { it.id == "datesSection" }.coerceAtLeast(0)
             }
-            if (sourceTab == null) {
-                // Existing chit — start on Overview (titleZone, index 0)
-                return 0
-            }
-            val targetZoneId = SOURCE_TAB_ZONE_MAP[sourceTab] ?: "datesSection"
-            return EDITOR_ZONE_ORDER.indexOfFirst { it.id == targetZoneId }.coerceAtLeast(0)
+            // Both new chits and existing chits start on Overview (index 0).
+            // For new chits, the Overview zone embeds the relevant zone content
+            // based on sourceTab (handled in ChitEditorScreen).
+            return 0
         }
     }
 }
@@ -264,17 +263,36 @@ private fun buildDatesText(formState: ChitFormState): String {
     val parts = mutableListOf<String>()
 
     if (formState.pointInTime != null) {
-        parts.add(formState.pointInTime)
+        parts.add(DateUtils.formatOverviewDateTime(formState.pointInTime))
     } else if (formState.perpetual) {
         parts.add("Perpetual (ongoing)")
     } else {
         if (formState.startDatetime != null) {
-            var s = formState.startDatetime
-            if (formState.endDatetime != null) s += " → ${formState.endDatetime}"
-            parts.add(s)
+            if (formState.endDatetime != null) {
+                val startDate = DateUtils.formatOverviewDateOnly(formState.startDatetime)
+                val endDate = DateUtils.formatOverviewDateOnly(formState.endDatetime)
+                if (startDate != null && startDate == endDate) {
+                    // Same date — show date once with time range
+                    val startTime = DateUtils.formatOverviewTimeOnly(formState.startDatetime)
+                    val endTime = DateUtils.formatOverviewTimeOnly(formState.endDatetime)
+                    val s = if (startTime != null && endTime != null) {
+                        "$startDate $startTime → $endTime"
+                    } else if (startTime != null) {
+                        "$startDate $startTime"
+                    } else {
+                        startDate
+                    }
+                    parts.add(s)
+                } else {
+                    // Different dates — show full datetime for each
+                    parts.add("${DateUtils.formatOverviewDateTime(formState.startDatetime)} → ${DateUtils.formatOverviewDateTime(formState.endDatetime)}")
+                }
+            } else {
+                parts.add(DateUtils.formatOverviewDateTime(formState.startDatetime))
+            }
         }
         if (formState.dueDatetime != null) {
-            parts.add("Due: ${formState.dueDatetime}")
+            parts.add("Due: ${DateUtils.formatOverviewDateTime(formState.dueDatetime)}")
         }
     }
 

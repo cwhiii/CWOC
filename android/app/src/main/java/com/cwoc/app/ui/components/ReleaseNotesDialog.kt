@@ -41,8 +41,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocPrimary
-import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.cwoc.app.data.remote.TrustedHttpClient
 
 /**
  * Data class representing a single day's release notes.
@@ -233,7 +233,7 @@ private suspend fun fetchReleaseNotes(
             .get()
             .build()
 
-        val client = OkHttpClient()
+        val client = TrustedHttpClient.instance
         val response = client.newCall(request).execute()
 
         if (response.isSuccessful) {

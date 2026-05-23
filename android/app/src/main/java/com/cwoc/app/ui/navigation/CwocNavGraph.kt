@@ -108,7 +108,8 @@ fun CwocNavGraph(
                 onNavigateToNewChitWithPrefill = { start, end ->
                     navController.navigate(Screen.Editor.createRouteWithPrefill(start, end))
                 },
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                filterSortViewModel = filterSortViewModel
             )
         }
 
@@ -148,7 +149,11 @@ fun CwocNavGraph(
 
         composable(Screen.Indicators.route) {
             IndicatorsScreen(
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                filterSortViewModel = filterSortViewModel,
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
             )
         }
 
@@ -267,7 +272,8 @@ fun CwocNavGraph(
                 },
                 onNavigateToWeather = {
                     navController.navigate(Screen.Weather.route)
-                }
+                },
+                filterSortViewModel = filterSortViewModel
             )
         }
 
@@ -357,7 +363,8 @@ fun CwocNavGraph(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                filterSortViewModel = filterSortViewModel
             )
         }
 

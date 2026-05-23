@@ -670,7 +670,7 @@ _EXCLUDED_PATHS = [
     ("/health", "GET"),
     ("/login", "GET"),
     ("/static/style.css", "GET"),
-    ("/static/parchment.jpg", "GET"),
+    ("/static/images/parchment.jpg", "GET"),
     ("/static/fonts/lora/lora.woff2", "GET"),
     ("/frontend/js/shared/shared.js", "GET"),
     ("/frontend/html/index.html", "GET"),

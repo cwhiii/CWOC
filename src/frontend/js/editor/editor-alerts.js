@@ -48,7 +48,7 @@ let _timerAudio = null;
 
 function _playAlarmSound() {
   if (!_alarmAudio) {
-    _alarmAudio = new Audio("/static/alarm.mp3");
+    _alarmAudio = new Audio("/static/sounds/alarm.mp3");
   }
   _alarmAudio.loop = true;
   cwocPlayAudio(_alarmAudio, { loop: true });
@@ -60,7 +60,7 @@ function _stopAlarmSound() {
 
 function _playTimerSound() {
   if (!_timerAudio) {
-    _timerAudio = new Audio("/static/timer.mp3");
+    _timerAudio = new Audio("/static/sounds/timer.mp3");
   }
   _timerAudio.loop = true;
   cwocPlayAudio(_timerAudio, { loop: true });

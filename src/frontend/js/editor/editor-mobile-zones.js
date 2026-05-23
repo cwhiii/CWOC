@@ -237,33 +237,8 @@ function _getMobileStartZoneIdx() {
     return 0;
   }
 
-  var sourceTab = 'Calendar';
-  try {
-    var saved = localStorage.getItem('cwoc_source_tab');
-    if (saved) sourceTab = saved;
-  } catch (e) { /* ignore */ }
-
-  // If URL has start/end params, force Calendar
-  if (params.get('start') || params.get('end')) {
-    sourceTab = 'Calendar';
-  }
-
-  // For Email tab: find the email zone if visible, otherwise return -1
-  // to signal that we should wait for it.
-  if (sourceTab === 'Email') {
-    var visibleZones = _getMobileVisibleZones();
-    for (var i = 0; i < visibleZones.length; i++) {
-      if (visibleZones[i].id === 'emailSection') return i;
-    }
-    return -1; // signal: wait for email zone
-  }
-
-  var targetZoneId = _mobileTabZoneMap[sourceTab] || 'datesSection';
-  var visibleZones = _getMobileVisibleZones();
-
-  for (var i = 0; i < visibleZones.length; i++) {
-    if (visibleZones[i].id === targetZoneId) return i;
-  }
+  // New chits always start on Overview (index 0).
+  // The overview will embed the relevant zone content based on source tab.
   return 0;
 }
 
@@ -312,16 +287,80 @@ function _mobileShowZone(idx) {
   if (!activeZone) return;
 
   if (activeZone.isTitle) {
-    // Show the Overview panel — compact read-only summary of populated fields
-    if (titleContainer) {
-      titleContainer.classList.add('mobile-zone-active');
-      _renderMobileOverview(titleContainer);
+    if (window.isNewChit) {
+      // New chit: title is editable in the nav header; show relevant zone(s) inline
+      if (titleContainer) {
+        titleContainer.classList.add('mobile-zone-active');
+        // Hide the real title field (title is now in the nav header)
+        var titleField = titleContainer.querySelector('#titleField');
+        if (titleField) titleField.style.display = 'none';
+        var cws = document.getElementById('compactWeatherSection');
+        if (cws) cws.style.setProperty('display', 'none', 'important');
+        var oldControls = titleContainer.querySelector('.mobile-title-zone-controls');
+        if (oldControls) oldControls.style.display = 'none';
+        // Remove any leftover overview panel
+        var existingPanel = titleContainer.querySelector('.mobile-overview-panel');
+        if (existingPanel) existingPanel.remove();
+      }
+
+      // Determine which zone(s) to show based on source tab
+      var sourceTab = 'Calendar';
+      try {
+        var saved = localStorage.getItem('cwoc_source_tab');
+        if (saved) sourceTab = saved;
+      } catch (e) { /* ignore */ }
+
+      var newChitZoneMap = {
+        'Calendar':   [['datesSection', 'datesContent']],
+        'Checklists': [['checklistSection', 'checklistContent']],
+        'Alarms':     [['alertsSection', 'alertsContent']],
+        'Projects':   [['projectsSection', 'projectsContent'], ['checklistSection', 'checklistContent']],
+        'Tasks':      [['taskSection', 'taskContent']],
+        'Notes':      [['notesSection', 'notesContent']],
+        'Email':      [['emailSection', 'emailContent']],
+        'Indicators': [['healthIndicatorsSection', 'healthIndicatorsContent']],
+      };
+
+      var zonesToShow = newChitZoneMap[sourceTab] || [['datesSection', 'datesContent']];
+
+      // Show both columns so zone sections are visible
+      var colOne = grid.querySelector('.column-one');
+      var colTwo = grid.querySelector('.column-two');
+      if (colOne) colOne.style.display = 'block';
+      if (colTwo) colTwo.style.display = 'block';
+
+      // Expand the relevant zone(s)
+      zonesToShow.forEach(function(pair) {
+        var sectionId = pair[0];
+        var contentId = pair[1];
+        var section = document.getElementById(sectionId);
+        var content = document.getElementById(contentId);
+        if (section) {
+          section.style.display = '';
+          section.removeAttribute('data-mobile-zone-hidden');
+          section.classList.remove('collapsed');
+          var zIcon = section.querySelector('.zone-toggle-icon');
+          if (zIcon) zIcon.textContent = '🔼';
+          section.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function(btn) {
+            btn.style.display = '';
+          });
+        }
+        if (content) {
+          content.style.display = '';
+        }
+      });
+    } else {
+      // Existing chit: show the Overview panel — compact read-only summary of populated fields
+      if (titleContainer) {
+        titleContainer.classList.add('mobile-zone-active');
+        _renderMobileOverview(titleContainer);
+      }
+      // Hide both columns
+      var colOne = grid.querySelector('.column-one');
+      var colTwo = grid.querySelector('.column-two');
+      if (colOne) colOne.style.display = 'none';
+      if (colTwo) colTwo.style.display = 'none';
     }
-    // Hide both columns
-    var colOne = grid.querySelector('.column-one');
-    var colTwo = grid.querySelector('.column-two');
-    if (colOne) colOne.style.display = 'none';
-    if (colTwo) colTwo.style.display = 'none';
   } else {
     // Show a regular zone — expand it
     var section = document.getElementById(activeZone.id);
@@ -427,8 +466,7 @@ function _createMobileZoneHeader() {
   header.innerHTML =
     '<button class="mobile-zone-nav-prev" aria-label="Actions menu">☰</button>' +
     '<span class="mobile-zone-nav-title"></span>' +
-    '<span class="mobile-zone-nav-counter"></span>' +
-    '<button class="mobile-zone-nav-next" aria-label="Zones menu">☰</button>';
+    '<button class="mobile-zone-nav-next" aria-label="Zones menu"><span class="mobile-zone-nav-next-label"></span><span class="mobile-zone-nav-next-hamburger">☰</span></button>';
 
   header.querySelector('.mobile-zone-nav-prev').addEventListener('click', function(e) {
     e.stopPropagation();
@@ -453,15 +491,16 @@ function _createMobileZoneHeader() {
 
 /**
  * Update the sticky header content.
+ * When on the Overview zone (titleZone), the title is an editable input.
+ * On all other zones, it's read-only text.
  */
 function _updateMobileZoneHeader(zoneInfo, idx, total) {
   if (!_mobileZoneHeaderEl) return;
   var title = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-title');
-  var counter = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-counter');
   var nextBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-next');
   var prevBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-prev');
 
-  // Show chit title (truncated) in center
+  // Show chit title in center — editable on Overview zone, read-only elsewhere
   var chitTitle = '';
   var titleInput = document.getElementById('title');
   if (titleInput && titleInput.value.trim()) {
@@ -469,14 +508,26 @@ function _updateMobileZoneHeader(zoneInfo, idx, total) {
   }
 
   if (title) {
-    title.innerHTML = '<span class="mobile-zone-nav-chit-title">' +
-      (chitTitle ? chitTitle : 'New Chit') + '</span>';
+    // Always show editable title input in the nav header (all zones)
+    title.innerHTML = '<input type="text" class="mobile-zone-nav-chit-title-input" value="' +
+      (chitTitle ? chitTitle.replace(/"/g, '&quot;') : '') + '" placeholder="Enter title" />';
+    var headerTitleInput = title.querySelector('.mobile-zone-nav-chit-title-input');
+    if (headerTitleInput && titleInput) {
+      headerTitleInput.addEventListener('input', function() {
+        titleInput.value = headerTitleInput.value;
+        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      headerTitleInput.addEventListener('change', function() {
+        titleInput.value = headerTitleInput.value;
+        titleInput.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
   }
-  if (counter) counter.textContent = (idx + 1) + '/' + total;
 
-  // Put zone name in the right hamburger button (like dashboard Views button)
+  // Put zone name in the right button (matching dashboard Views button pattern: [label] [☰])
   if (nextBtn) {
-    nextBtn.textContent = '☰ ' + zoneInfo.label;
+    var labelSpan = nextBtn.querySelector('.mobile-zone-nav-next-label');
+    if (labelSpan) labelSpan.textContent = zoneInfo.label;
   }
 
   // Apply chit color as nav bar background with contrasting text
@@ -499,11 +550,16 @@ function _applyMobileNavBarColor() {
     _mobileZoneHeaderEl.style.backgroundImage = 'none';
     _mobileZoneHeaderEl.style.color = textColor;
 
-    // Style the title and counter
+    // Style the title
     var titleEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-title');
-    var counterEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-counter');
     if (titleEl) titleEl.style.color = textColor;
-    if (counterEl) counterEl.style.color = textColor;
+
+    // Style the title input if present (Overview zone)
+    var titleInputEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-chit-title-input');
+    if (titleInputEl) {
+      titleInputEl.style.color = textColor;
+      titleInputEl.style.borderBottomColor = textColor;
+    }
 
     // Style the buttons with a slightly darker/lighter variant
     var prevBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-prev');
@@ -521,9 +577,14 @@ function _applyMobileNavBarColor() {
     _mobileZoneHeaderEl.style.color = '';
 
     var titleEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-title');
-    var counterEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-counter');
     if (titleEl) titleEl.style.color = '';
-    if (counterEl) counterEl.style.color = '';
+
+    // Reset title input if present
+    var titleInputEl = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-chit-title-input');
+    if (titleInputEl) {
+      titleInputEl.style.color = '';
+      titleInputEl.style.borderBottomColor = '';
+    }
 
     var prevBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-prev');
     var nextBtn = _mobileZoneHeaderEl.querySelector('.mobile-zone-nav-next');
@@ -553,7 +614,7 @@ function _injectTitleZoneControls(titleContainer) {
   if (nestBtn && nestBtn.style.display !== 'none') {
     var nestClone = document.createElement('button');
     nestClone.className = 'mobile-title-zone-btn';
-    nestClone.innerHTML = '<img src="/static/nest.svg" style="height:1.2em;vertical-align:middle;" alt="" /> Nest';
+    nestClone.innerHTML = '<img src="/static/images/nest.svg" style="height:1.2em;vertical-align:middle;" alt="" /> Nest';
     nestClone.addEventListener('click', function() {
       if (typeof _nestButtonClick === 'function') _nestButtonClick();
     });
@@ -657,28 +718,8 @@ function _renderMobileOverview(container) {
     return row;
   }
 
-  // 1. Title (always shown — inline editable in place)
-  var titleInput = document.getElementById('title');
-  var titleVal = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : '';
-  var titleRow = document.createElement('div');
-  titleRow.className = 'mobile-overview-row mobile-overview-title-row mobile-overview-title-editable';
-  titleRow.innerHTML = '<span class="mobile-overview-icon">✏️</span>' +
-    '<input type="text" class="mobile-overview-title-input" value="' + _escHtml(titleVal).replace(/"/g, '&quot;') + '" placeholder="Enter title" />';
-  var titleInlineInput = titleRow.querySelector('.mobile-overview-title-input');
-  // Sync changes back to the real title input
-  titleInlineInput.addEventListener('input', function() {
-    if (titleInput) {
-      titleInput.value = titleInlineInput.value;
-      titleInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-  });
-  titleInlineInput.addEventListener('change', function() {
-    if (titleInput) {
-      titleInput.value = titleInlineInput.value;
-      titleInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  });
-  panel.appendChild(titleRow);
+  // 1. Title is now in the nav header (editable there on Overview zone).
+  // No title row needed in the overview panel.
 
   // 2. Weather (only if real weather data loaded)
   if (cws && !cws.classList.contains('weather-placeholder')) {
@@ -968,10 +1009,8 @@ function _createMobileZoneList() {
   var panel = document.createElement('div');
   panel.className = 'mobile-zone-list-panel';
   panel.innerHTML = '<h3 class="mobile-zone-list-title">Zones</h3>' +
-    '<div class="mobile-zone-list-items"></div>' +
-    '<button class="mobile-zone-list-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar</button>';
+    '<div class="mobile-zone-list-items"></div>';
 
-  panel.querySelector('.mobile-zone-list-close').addEventListener('click', _closeMobileZoneList);
   document.body.appendChild(panel);
   _mobileZoneListEl = panel;
 }
@@ -1050,19 +1089,16 @@ function _createMobileActionsSidebar() {
   // Panel
   var panel = document.createElement('div');
   panel.className = 'mobile-actions-sidebar';
-  panel.innerHTML = '<button class="mobile-actions-sidebar-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar</button>' +
-    '<div class="mobile-actions-sidebar-spacer"></div>' +
+  panel.innerHTML = '<div class="mobile-actions-sidebar-spacer"></div>' +
     '<div class="mobile-actions-sidebar-items"></div>';
 
-  panel.querySelector('.mobile-actions-sidebar-close').addEventListener('click', _closeMobileActionsSidebar);
   document.body.appendChild(panel);
   _mobileActionsSidebarEl = panel;
 }
 
 /**
- * Open the left actions sidebar, populating with current header buttons.
- * Excludes QR and Log buttons (those are in the title zone only).
- * Layout: Hide | Calculator | Snooze | Options | Exit
+ * Open the left actions sidebar, populating with all actions (flattened, no Options submenu).
+ * Order: Exit, Save & Exit, Save & Stay, separator, then all other options.
  */
 function _openMobileActionsSidebar() {
   if (!_mobileActionsSidebarEl) _createMobileActionsSidebar();
@@ -1082,31 +1118,57 @@ function _openMobileActionsSidebar() {
     return item;
   }
 
-  // ── Save buttons (shown when unsaved changes exist) ──
+  // Helper to create a separator
+  function _makeSeparator() {
+    var sep = document.createElement('hr');
+    sep.className = 'mobile-actions-sidebar-separator';
+    return sep;
+  }
+
+  // ── 1. Exit (arrow pointing left) ──
+  list.appendChild(_makeSidebarBtnCustom('← Exit', function() {
+    if (typeof cancelOrExit === 'function') cancelOrExit();
+  }));
+
+  // ── 2-3. Save buttons (shown when unsaved changes exist) ──
   var hasUnsaved = window._cwocSave && window._cwocSave.hasChanges();
   if (hasUnsaved) {
-    list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-save"></i> 📌 Save & Stay', function() {
-      if (typeof saveChitAndStay === 'function') saveChitAndStay();
-    }, 'mobile-actions-save-btn'));
-    list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-save"></i> 🚪 Save & Exit', function() {
+    list.appendChild(_makeSidebarBtnCustom('🚪 Save & Exit', function() {
       if (typeof saveChit === 'function') saveChit();
+    }, 'mobile-actions-save-btn'));
+    list.appendChild(_makeSidebarBtnCustom('📌 Save & Stay', function() {
+      if (typeof saveChitAndStay === 'function') saveChitAndStay();
     }, 'mobile-actions-save-btn'));
   }
 
-  // 1. Hide in Calendar
+  // ── Separator ──
+  list.appendChild(_makeSeparator());
+
+  // ── All options (flattened from Options menu + sidebar items, no duplicates) ──
+
+  // Hide in Calendar
   var hideLabel = (document.getElementById('showOnCalendar') && !document.getElementById('showOnCalendar').checked)
-    ? '<i class="fas fa-calendar-check"></i> Show in Calendar'
-    : '<i class="fas fa-calendar-xmark"></i> Hide in Calendar';
+    ? '🗓️ Show in Calendar'
+    : '🗓️ Hide in Calendar';
   list.appendChild(_makeSidebarBtnCustom(hideLabel, function() {
     if (typeof toggleHideInCalendar === 'function') toggleHideInCalendar();
   }));
 
-  // 2. Calculator
+  // Reminder
+  var notifVal = document.getElementById('notification');
+  var reminderLabel = (notifVal && notifVal.value === 'true')
+    ? '🔕 Remove Reminder'
+    : '🔔 Mark as Reminder';
+  list.appendChild(_makeSidebarBtnCustom(reminderLabel, function() {
+    if (typeof _optToggleReminder === 'function') _optToggleReminder();
+  }));
+
+  // Calculator
   list.appendChild(_makeSidebarBtnCustom('🧮 Calculator', function() {
     if (typeof cwocToggleCalculator === 'function') cwocToggleCalculator();
   }));
 
-  // 3. Snooze
+  // Snooze
   var snoozeLabel = (window._currentSnoozedUntil && new Date(window._currentSnoozedUntil) > new Date())
     ? '😴 Snoozed'
     : '😴 Snooze';
@@ -1114,15 +1176,56 @@ function _openMobileActionsSidebar() {
     if (typeof _openSnoozeModal === 'function') _openSnoozeModal();
   }));
 
-  // 4. Options
-  list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-ellipsis-vertical"></i> Options', function() {
-    if (typeof _toggleOptionsMenu === 'function') _toggleOptionsMenu();
+  // QR Code
+  list.appendChild(_makeSidebarBtnCustom('📱 QR Code', function() {
+    if (typeof _optQR === 'function') _optQR();
   }));
 
-  // 5. Exit
-  list.appendChild(_makeSidebarBtnCustom('<i class="fas fa-times"></i> Exit', function() {
-    if (typeof cancelOrExit === 'function') cancelOrExit();
+  // Nest into Thread (only for existing chits)
+  if (!window.isNewChit) {
+    list.appendChild(_makeSidebarBtnCustom('🪺 Nest into Thread', function() {
+      if (typeof _optNestClick === 'function') _optNestClick();
+    }));
+  }
+
+  // Audit Log (only for existing chits)
+  if (!window.isNewChit) {
+    list.appendChild(_makeSidebarBtnCustom('📜 Audit Log', function() {
+      if (typeof _optAuditLog === 'function') _optAuditLog();
+    }));
+  }
+
+  // Make Email (only if not already an email chit)
+  var emailSection = document.getElementById('emailSection');
+  var isEmail = emailSection && emailSection.classList.contains('email-active');
+  if (!isEmail) {
+    list.appendChild(_makeSidebarBtnCustom('✉️ Make Email', function() {
+      if (typeof _optEmail === 'function') _optEmail();
+    }));
+  }
+
+  // Print
+  list.appendChild(_makeSidebarBtnCustom('🖨️ Print Chit', function() {
+    if (typeof _optPrintChit === 'function') _optPrintChit();
   }));
+
+  // Archive (only for existing chits)
+  if (!window.isNewChit) {
+    var archivedVal = document.getElementById('archived');
+    var archiveLabel = (archivedVal && archivedVal.value === 'true')
+      ? '📦 Unarchive'
+      : '📦 Archive';
+    list.appendChild(_makeSidebarBtnCustom(archiveLabel, function() {
+      if (typeof _optArchive === 'function') _optArchive();
+    }));
+  }
+
+  // Delete (only for existing chits)
+  if (!window.isNewChit) {
+    list.appendChild(_makeSidebarBtnCustom('🗑️ Delete', function() {
+      if (typeof _optDelete === 'function') _optDelete();
+    }, 'mobile-actions-delete-btn'));
+  }
 
   _mobileActionsSidebarBackdrop.classList.add('active');
   _mobileActionsSidebarEl.classList.add('active');

@@ -509,6 +509,37 @@ function _checkPendingDeleteUndo() {
   } catch (e) { /* ignore */ }
 }
 
+/* ── Sort preference sync helpers ─────────────────────────────────────────── */
+
+/**
+ * Wait for sort preferences and sort orders to finish loading from the server.
+ * Returns a Promise that resolves once both are ready (or after a timeout).
+ */
+function _waitForSortPrefs() {
+  var prefs = window._sortPrefsReady || Promise.resolve();
+  var orders = window._sortOrdersReady || Promise.resolve();
+  // Race against a timeout so we never block rendering for more than 2s
+  var timeout = new Promise(function(resolve) { setTimeout(resolve, 2000); });
+  return Promise.race([Promise.all([prefs, orders]), timeout]);
+}
+
+/**
+ * Apply the server-synced sort preference for the current tab.
+ * Called after sort prefs have loaded to ensure the first render uses the correct sort.
+ */
+function _applySortPrefForCurrentTab() {
+  if (currentSortField) return; // Already set (e.g., from session restore)
+  if (typeof getSortPreference !== 'function') return;
+  var pref = getSortPreference(currentTab);
+  if (pref && pref.field) {
+    currentSortField = pref.field;
+    currentSortDir = pref.dir || 'asc';
+    var sortSel = document.getElementById('sort-select');
+    if (sortSel) sortSel.value = currentSortField;
+    _updateSortUI();
+  }
+}
+
 /* ── Data loading and display orchestration ──────────────────────────────── */
 function fetchChits() {
   console.debug("Fetching chits...");
@@ -1281,14 +1312,21 @@ document.addEventListener("DOMContentLoaded", function () {
       getCurrentTimezone().then(function(tz) {
         _currentTimezone = tz;
         console.debug('[Timezone] Resolved current timezone:', _currentTimezone);
+        return _waitForSortPrefs();
+      }).then(function() {
+        _applySortPrefForCurrentTab();
         fetchChits();
       }).catch(function() {
         _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         console.debug('[Timezone] Fallback timezone:', _currentTimezone);
+        _applySortPrefForCurrentTab();
         fetchChits();
       });
     } else {
-      fetchChits();
+      _waitForSortPrefs().then(function() {
+        _applySortPrefForCurrentTab();
+        fetchChits();
+      });
     }
     updateDateRange();
 

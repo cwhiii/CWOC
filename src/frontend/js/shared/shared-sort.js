@@ -50,9 +50,10 @@ const SORT_PREFS_KEY = 'cwoc_sort_preferences';
 /**
  * Load sort preferences (field + direction per tab) from the backend API.
  * Called once at page init. Backend is the source of truth.
+ * Returns a Promise so callers can await completion before rendering.
  */
 function _loadSortPreferencesFromServer() {
-  fetch('/api/sort-preferences', { credentials: 'same-origin' })
+  var p = fetch('/api/sort-preferences', { credentials: 'same-origin' })
     .then(function (res) {
       if (!res.ok) return;
       return res.json();
@@ -64,6 +65,8 @@ function _loadSortPreferencesFromServer() {
     .catch(function (err) {
       console.error('[SortPrefs] Failed to load from server:', err);
     });
+  window._sortPrefsReady = p;
+  return p;
 }
 
 // Load sort preferences from server on page init
@@ -131,9 +134,10 @@ function resetAllSortOrders() {
  * Load sort orders from the backend API and merge into localStorage.
  * Called once at page init to ensure cross-device consistency.
  * Backend is the source of truth — overwrites localStorage on load.
+ * Returns a Promise so callers can await completion before rendering.
  */
 function _loadSortOrdersFromServer() {
-  fetch('/api/sort-orders', { credentials: 'same-origin' })
+  var p = fetch('/api/sort-orders', { credentials: 'same-origin' })
     .then(function (res) {
       if (!res.ok) return;
       return res.json();
@@ -153,6 +157,8 @@ function _loadSortOrdersFromServer() {
     .catch(function (err) {
       console.error('[SortOrder] Failed to load from server:', err);
     });
+  window._sortOrdersReady = p;
+  return p;
 }
 
 // Load sort orders from server on page init

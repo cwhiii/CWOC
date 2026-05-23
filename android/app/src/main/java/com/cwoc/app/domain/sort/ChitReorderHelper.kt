@@ -27,6 +27,22 @@ class ChitReorderHelper @Inject constructor(
 
     companion object {
         private const val MANUAL_ORDER_KEY = "manual_order_"
+
+        /**
+         * Maps Android route names to web tab names (capitalized, as stored on server).
+         */
+        private val ROUTE_TO_WEB_TAB: Map<String, String> = mapOf(
+            "calendar" to "Calendar",
+            "checklists" to "Checklists",
+            "alarms" to "Alarms",
+            "projects" to "Projects",
+            "tasks" to "Tasks",
+            "notes" to "Notes",
+            "notebook" to "Notebook",
+            "indicators" to "Indicators",
+            "email" to "Email",
+            "omni" to "Omni"
+        )
     }
 
     /**
@@ -35,7 +51,7 @@ class ChitReorderHelper @Inject constructor(
      * 1. Saves to SharedPreferences immediately (local, instant UI response)
      * 2. Calls PUT /api/sort-orders/{tab} with the ordered IDs (remote, cross-device sync)
      *
-     * @param tab The view tab name (e.g., "Notes", "Checklists", "Projects")
+     * @param tab The view tab name (e.g., "Notes", "Checklists", "Projects") — can be Android route or web tab name
      * @param chitIds The ordered list of chit IDs representing the new sort order
      * @return Result.success if the API call succeeded, Result.failure otherwise.
      *         Local SharedPreferences are always updated regardless of API result.
@@ -44,9 +60,10 @@ class ChitReorderHelper @Inject constructor(
         // 1. Update local SharedPreferences immediately for instant UI
         saveLocalOrder(tab, chitIds)
 
-        // 2. Persist to backend API for cross-device sync
+        // 2. Persist to backend API for cross-device sync using web-compatible tab name
+        val webTab = ROUTE_TO_WEB_TAB[tab] ?: tab.replaceFirstChar { it.uppercase() }
         return try {
-            val response = apiService.get().reorderChits(tab, ReorderRequest(ids = chitIds))
+            val response = apiService.get().reorderChits(webTab, ReorderRequest(ids = chitIds))
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {

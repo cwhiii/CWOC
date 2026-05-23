@@ -53,7 +53,6 @@ import com.cwoc.app.ui.screens.settings.components.DragZone
 import com.cwoc.app.ui.screens.settings.components.ProjectItem
 import com.cwoc.app.ui.screens.settings.components.TagItem
 import com.cwoc.app.ui.components.ArrangeViewsDialog
-import com.cwoc.app.ui.components.CwocSectionHeading
 import com.cwoc.app.ui.components.CwocZoneButton
 import org.json.JSONArray
 import org.json.JSONObject
@@ -141,9 +140,7 @@ private fun calendarSnapDisplayLabel(value: String): String {
 
 /**
  * General settings tab composable.
- * Fields: time format (12h/24h toggle), week start day dropdown,
- * calendar snap interval dropdown, snooze length dropdown,
- * default timezone (searchable), unit system toggle.
+ * Organized into collapsible sections matching the web layout.
  *
  * Validates: Requirements 2.3, 2.4
  */
@@ -161,209 +158,155 @@ fun GeneralSettingsTab(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        // --- Time Format Dropdown (24 Hour / 12 Hour / HST) ---
-        Text(
-            text = "Time Format",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        SettingsDropdown(
-            selectedValue = when (formState.timeFormat) {
-                "24hour" -> "24 Hour"
-                "metric" -> "HST"
-                else -> "12 Hour"
-            },
-            options = listOf("24 Hour", "12 Hour", "HST"),
-            onOptionSelected = { selected ->
-                val value = when (selected) {
-                    "24 Hour" -> "24hour"
-                    "HST" -> "metric"
-                    else -> "12hour"
-                }
-                onUpdateSetting("time_format", value)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Calendar Snap Interval Dropdown ---
-        Text(
-            text = "Calendar Snap Interval",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        // Apply nearest-valid-option fallback if stored value isn't in the valid set
-        val effectiveCalendarSnap = if (formState.calendarSnapInterval in CALENDAR_SNAP_OPTIONS) {
-            formState.calendarSnapInterval
-        } else {
-            nearestValidOption(formState.calendarSnapInterval, CALENDAR_SNAP_OPTIONS)
-        }
-        // If stored value doesn't match a valid option, update form state to nearest valid
-        LaunchedEffect(formState.calendarSnapInterval) {
-            if (formState.calendarSnapInterval !in CALENDAR_SNAP_OPTIONS) {
-                val resolved = nearestValidOption(formState.calendarSnapInterval, CALENDAR_SNAP_OPTIONS)
-                onUpdateSetting("calendar_snap_interval", resolved)
-            }
-        }
-        SettingsDropdown(
-            selectedValue = calendarSnapDisplayLabel(effectiveCalendarSnap),
-            options = CALENDAR_SNAP_OPTIONS.map { calendarSnapDisplayLabel(it) },
-            onOptionSelected = { selected ->
-                val value = when (selected) {
-                    "None" -> "0"
-                    else -> selected.replace(" min", "")
-                }
-                onUpdateSetting("calendar_snap_interval", value)
-            }
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Snooze Length Dropdown ---
-        Text(
-            text = "Snooze Length",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        // Web format: "1 minute", "3 minutes", "5 minutes", "10 minutes"
-        val snoozeValidOptions = listOf("1 minute", "3 minutes", "5 minutes", "10 minutes")
-        val snoozeDisplayMap = mapOf(
-            "1 minute" to "1 min",
-            "3 minutes" to "3 min",
-            "5 minutes" to "5 min",
-            "10 minutes" to "10 min"
-        )
-        // Normalize stored value (might be just "5" from old app version)
-        val normalizedSnooze = run {
-            if (formState.snoozeLength in snoozeValidOptions) formState.snoozeLength
-            else {
-                // Try to match by extracting number
-                val num = formState.snoozeLength.trim().split(" ").firstOrNull()?.toIntOrNull()
-                when (num) {
-                    1 -> "1 minute"
-                    3 -> "3 minutes"
-                    5 -> "5 minutes"
-                    10 -> "10 minutes"
-                    else -> "5 minutes"
+        // =====================================================================
+        // 1. ⚙️ General (sectionId: "general_general")
+        // =====================================================================
+        CollapsibleSection(
+            title = "⚙️ General",
+            sectionId = "general_general",
+            defaultExpanded = false
+        ) {
+            // --- Sex Pill Toggle (♂ Man / ♀ Woman) ---
+            Text(
+                text = "Sex",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val sexOptions = listOf("Man" to "♂ Man", "Woman" to "♀ Woman")
+                sexOptions.forEachIndexed { index, (value, label) ->
+                    SegmentedButton(
+                        selected = formState.sex.equals(value, ignoreCase = true),
+                        onClick = { onUpdateSetting("sex", value) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = sexOptions.size
+                        )
+                    ) {
+                        Text(label)
+                    }
                 }
             }
-        }
-        // If stored value doesn't match a valid option, update form state
-        LaunchedEffect(formState.snoozeLength) {
-            if (formState.snoozeLength !in snoozeValidOptions) {
-                onUpdateSetting("snooze_length", normalizedSnooze)
-            }
-        }
-        SettingsDropdown(
-            selectedValue = snoozeDisplayMap[normalizedSnooze] ?: "5 min",
-            options = listOf("1 min", "3 min", "5 min", "10 min"),
-            onOptionSelected = { selected ->
-                val webValue = when (selected) {
-                    "1 min" -> "1 minute"
-                    "3 min" -> "3 minutes"
-                    "5 min" -> "5 minutes"
-                    "10 min" -> "10 minutes"
-                    else -> "5 minutes"
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Unit System Toggle (imperial / metric) ---
+            Text(
+                text = "Unit System",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val unitOptions = listOf("imperial", "metric")
+                unitOptions.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = formState.unitSystem == option,
+                        onClick = { onUpdateSetting("unit_system", option) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = unitOptions.size
+                        )
+                    ) {
+                        Text(option.replaceFirstChar { it.uppercase() })
+                    }
                 }
-                onUpdateSetting("snooze_length", webValue)
             }
-        )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Default Timezone (Searchable) ---
-        Text(
-            text = "Default Timezone",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        TimezoneSearchField(
-            selectedTimezone = formState.defaultTimezone,
-            onTimezoneSelected = { onUpdateSetting("default_timezone", it) }
-        )
+            // --- Snooze Length Dropdown ---
+            Text(
+                text = "Snooze Length",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            // Web format: "1 minute", "3 minutes", "5 minutes", "10 minutes"
+            val snoozeValidOptions = listOf("1 minute", "3 minutes", "5 minutes", "10 minutes")
+            val snoozeDisplayMap = mapOf(
+                "1 minute" to "1 min",
+                "3 minutes" to "3 min",
+                "5 minutes" to "5 min",
+                "10 minutes" to "10 min"
+            )
+            // Normalize stored value (might be just "5" from old app version)
+            val normalizedSnooze = run {
+                if (formState.snoozeLength in snoozeValidOptions) formState.snoozeLength
+                else {
+                    // Try to match by extracting number
+                    val num = formState.snoozeLength.trim().split(" ").firstOrNull()?.toIntOrNull()
+                    when (num) {
+                        1 -> "1 minute"
+                        3 -> "3 minutes"
+                        5 -> "5 minutes"
+                        10 -> "10 minutes"
+                        else -> "5 minutes"
+                    }
+                }
+            }
+            // If stored value doesn't match a valid option, update form state
+            LaunchedEffect(formState.snoozeLength) {
+                if (formState.snoozeLength !in snoozeValidOptions) {
+                    onUpdateSetting("snooze_length", normalizedSnooze)
+                }
+            }
+            SettingsDropdown(
+                selectedValue = snoozeDisplayMap[normalizedSnooze] ?: "5 min",
+                options = listOf("1 min", "3 min", "5 min", "10 min"),
+                onOptionSelected = { selected ->
+                    val webValue = when (selected) {
+                        "1 min" -> "1 minute"
+                        "3 min" -> "3 minutes"
+                        "5 min" -> "5 minutes"
+                        "10 min" -> "10 minutes"
+                        else -> "5 minutes"
+                    }
+                    onUpdateSetting("snooze_length", webValue)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Calendar Snap Interval Dropdown ---
+            Text(
+                text = "Calendar Snap Interval",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            // Apply nearest-valid-option fallback if stored value isn't in the valid set
+            val effectiveCalendarSnap = if (formState.calendarSnapInterval in CALENDAR_SNAP_OPTIONS) {
+                formState.calendarSnapInterval
+            } else {
+                nearestValidOption(formState.calendarSnapInterval, CALENDAR_SNAP_OPTIONS)
+            }
+            // If stored value doesn't match a valid option, update form state to nearest valid
+            LaunchedEffect(formState.calendarSnapInterval) {
+                if (formState.calendarSnapInterval !in CALENDAR_SNAP_OPTIONS) {
+                    val resolved = nearestValidOption(formState.calendarSnapInterval, CALENDAR_SNAP_OPTIONS)
+                    onUpdateSetting("calendar_snap_interval", resolved)
+                }
+            }
+            SettingsDropdown(
+                selectedValue = calendarSnapDisplayLabel(effectiveCalendarSnap),
+                options = CALENDAR_SNAP_OPTIONS.map { calendarSnapDisplayLabel(it) },
+                onOptionSelected = { selected ->
+                    val value = when (selected) {
+                        "None" -> "0"
+                        else -> selected.replace(" min", "")
+                    }
+                    onUpdateSetting("calendar_snap_interval", value)
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Current Override Timezone ---
-        Text(
-            text = "Current Override",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        TimezoneOverrideField(
-            currentOverride = formState.timezoneOverride,
-            onOverrideSelected = { onUpdateSetting("timezone_override", it) }
-        )
-        Text(
-            text = "Overrides the auto-detected timezone. Leave empty to use device detection.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(
-            onClick = { onUpdateSetting("timezone_override", "") },
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
-            )
-        ) {
-            Text("✕ Clear Override")
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Unit System Toggle (imperial / metric) ---
-        Text(
-            text = "Unit System",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            val unitOptions = listOf("imperial", "metric")
-            unitOptions.forEachIndexed { index, option ->
-                SegmentedButton(
-                    selected = formState.unitSystem == option,
-                    onClick = { onUpdateSetting("unit_system", option) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = unitOptions.size
-                    )
-                ) {
-                    Text(option.replaceFirstChar { it.uppercase() })
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Sex Pill Toggle (♂ Man / ♀ Woman) ---
-        Text(
-            text = "Sex",
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            val sexOptions = listOf("Man" to "♂ Man", "Woman" to "♀ Woman")
-            sexOptions.forEachIndexed { index, (value, label) ->
-                SegmentedButton(
-                    selected = formState.sex.equals(value, ignoreCase = true),
-                    onClick = { onUpdateSetting("sex", value) },
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = sexOptions.size
-                    )
-                ) {
-                    Text(label)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Contact Vault Section ---
+        // =====================================================================
+        // 2. 🏛️ Contact Vault (sectionId: "general_contact_vault")
+        // =====================================================================
         CollapsibleSection(
             title = "🏛️ Contact Vault",
-            sectionId = "contact_vault"
+            sectionId = "general_contact_vault",
+            defaultExpanded = false
         ) {
             Row(
                 modifier = Modifier
@@ -391,18 +334,278 @@ fun GeneralSettingsTab(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Display Options Section ---
-        // Validates: Requirements 6.4, 6.5
+        // =====================================================================
+        // 3. 🕐 Clocks (sectionId: "general_clocks")
+        // =====================================================================
         CollapsibleSection(
-            title = "🖥️ Display Options",
-            sectionId = "display_options"
+            title = "🕐 Clocks",
+            sectionId = "general_clocks",
+            defaultExpanded = false
         ) {
-            // --- Reset All Sort Orders ---
-            var showResetSortDialog by remember { mutableStateOf(false) }
+            // --- Time Format Dropdown (24 Hour / 12 Hour / HST) ---
+            Text(
+                text = "Time Format",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            SettingsDropdown(
+                selectedValue = when (formState.timeFormat) {
+                    "24hour" -> "24 Hour"
+                    "metric" -> "HST"
+                    else -> "12 Hour"
+                },
+                options = listOf("24 Hour", "12 Hour", "HST"),
+                onOptionSelected = { selected ->
+                    val value = when (selected) {
+                        "24 Hour" -> "24hour"
+                        "HST" -> "metric"
+                        else -> "12hour"
+                    }
+                    onUpdateSetting("time_format", value)
+                }
+            )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Orientation Toggle ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Orientation",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = {
+                        val newOrientation = if (formState.clockOrientation.lowercase() == "horizontal") "Vertical" else "Horizontal"
+                        onUpdateSetting("clock_orientation", newOrientation)
+                    },
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
+                ) {
+                    Text(
+                        text = if (formState.clockOrientation.lowercase() == "horizontal") "Horizontal" else "Vertical"
+                    )
+                }
+            }
+
+            // --- Active/Inactive Clocks DragGrid ---
+            val allClockTypes = listOf("24 Hour", "HST", "12 Hour", "12 Hour Analog")
+
+            // Parse active clocks from JSON array
+            val activeClocksFromState = remember(formState.activeClocks) {
+                try {
+                    val jsonArray = JSONArray(formState.activeClocks)
+                    (0 until jsonArray.length()).map { jsonArray.getString(it) }
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            }
+
+            // Build DragItem list: active clocks in order, then inactive ones
+            val dragItems = remember(activeClocksFromState) {
+                val activeItems = activeClocksFromState.map { clockType ->
+                    DragItem(id = clockType, label = clockType, zone = DragZone.ACTIVE)
+                }
+                val inactiveItems = allClockTypes
+                    .filter { it !in activeClocksFromState }
+                    .map { clockType ->
+                        DragItem(id = clockType, label = clockType, zone = DragZone.INACTIVE)
+                    }
+                activeItems + inactiveItems
+            }
+
+            // Determine orientation for DragGrid
+            val gridOrientation = if (formState.clockOrientation.lowercase() == "vertical") {
+                DragGridOrientation.VERTICAL
+            } else {
+                DragGridOrientation.HORIZONTAL
+            }
+
+            // Show "Add Clock" button when Active zone is empty
+            if (activeClocksFromState.isEmpty()) {
+                Button(
+                    onClick = {
+                        // Move the first available inactive clock to active
+                        val firstInactive = allClockTypes.firstOrNull { it !in activeClocksFromState }
+                        if (firstInactive != null) {
+                            val newActive = JSONArray()
+                            newActive.put(firstInactive)
+                            onUpdateSetting("active_clocks", newActive.toString())
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    colors = CwocButtonDefaults.outsetColors(),
+                    border = CwocButtonDefaults.outsetBorder,
+                    shape = CwocButtonDefaults.outsetShape
+                ) {
+                    Text("Add Clock")
+                }
+            }
+
+            DragGrid(
+                items = dragItems,
+                onReorder = { newItems ->
+                    // Extract active items in their new order
+                    val newActiveClocks = newItems
+                        .filter { it.zone == DragZone.ACTIVE }
+                        .map { it.id }
+                    val newJsonArray = JSONArray()
+                    newActiveClocks.forEach { newJsonArray.put(it) }
+                    onUpdateSetting("active_clocks", newJsonArray.toString())
+                },
+                columns = 2,
+                orientation = gridOrientation
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =====================================================================
+        // 4. 🌐 Timezone (sectionId: "general_timezone")
+        // =====================================================================
+        CollapsibleSection(
+            title = "🌐 Timezone",
+            sectionId = "general_timezone",
+            defaultExpanded = false
+        ) {
+            // --- Default Timezone (Searchable) ---
+            Text(
+                text = "Default Timezone",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            TimezoneSearchField(
+                selectedTimezone = formState.defaultTimezone,
+                onTimezoneSelected = { onUpdateSetting("default_timezone", it) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Current Override Timezone ---
+            Text(
+                text = "Current Override",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            TimezoneOverrideField(
+                currentOverride = formState.timezoneOverride,
+                onOverrideSelected = { onUpdateSetting("timezone_override", it) }
+            )
+            Text(
+                text = "Overrides the auto-detected timezone. Leave empty to use device detection.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
             Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = { onUpdateSetting("timezone_override", "") },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("✕ Clear Override")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =====================================================================
+        // 5. Default View (sectionId: "general_default_view")
+        // =====================================================================
+        CollapsibleSection(
+            title = "Default View",
+            sectionId = "general_default_view",
+            defaultExpanded = false
+        ) {
+            // Landing View dropdown
+            Text(
+                text = "Landing View",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            SettingsDropdown(
+                selectedValue = formState.landingView,
+                options = listOf(
+                    "Omni",
+                    "Calendar",
+                    "Checklists",
+                    "Alerts",
+                    "Projects",
+                    "Tasks",
+                    "Notes",
+                    "Email",
+                    "Indicators"
+                ),
+                onOptionSelected = { selected ->
+                    onUpdateSetting("landing_view", selected)
+                }
+            )
+            Text(
+                text = "Applies only on fresh app open, not when returning from the editor or other pages.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =====================================================================
+        // 6. View Order (sectionId: "general_view_order")
+        // =====================================================================
+        CollapsibleSection(
+            title = "View Order",
+            sectionId = "general_view_order",
+            defaultExpanded = false
+        ) {
+            var showArrangeViewsDialog by remember { mutableStateOf(false) }
+
+            CwocZoneButton(
+                onClick = { showArrangeViewsDialog = true }
+            ) {
+                Text("Arrange Views")
+            }
+            Text(
+                text = "Reorder or hide dashboard tabs. Omni is always first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            // Arrange Views Dialog
+            if (showArrangeViewsDialog) {
+                ArrangeViewsDialog(
+                    currentViewOrder = formState.viewOrder,
+                    onSave = { newOrder ->
+                        onUpdateSetting("view_order", newOrder)
+                    },
+                    onDismiss = { showArrangeViewsDialog = false }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =====================================================================
+        // 7. Sort Order (sectionId: "general_sort_order")
+        // =====================================================================
+        CollapsibleSection(
+            title = "Sort Order",
+            sectionId = "general_sort_order",
+            defaultExpanded = false
+        ) {
+            var showResetSortDialog by remember { mutableStateOf(false) }
 
             Button(
                 onClick = { showResetSortDialog = true },
@@ -458,12 +661,94 @@ fun GeneralSettingsTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Visual Indicators Configuration ---
+        // =====================================================================
+        // 8. Chit Options (sectionId: "general_chit_options")
+        // =====================================================================
+        CollapsibleSection(
+            title = "Chit Options",
+            sectionId = "general_chit_options",
+            defaultExpanded = false
+        ) {
+            // Parse the chit_options JSON to get individual checkbox states
+            val chitOptionsJson = remember(formState.chitOptions) {
+                try {
+                    JSONObject(formState.chitOptions)
+                } catch (e: Exception) {
+                    // Default JSON with correct defaults
+                    JSONObject().apply {
+                        put("checklist_autosave", false)
+                        put("auto_save_desktop", false)
+                        put("auto_save_mobile", false)
+                        put("fade_past_chits", true)
+                        put("highlight_overdue_chits", true)
+                        put("highlight_blocked_chits", true)
+                        put("delete_past_alarm_chits", false)
+                        put("show_tab_counts", false)
+                        put("prefer_google_maps", false)
+                        put("show_map_thumbnails", false)
+                        put("hide_declined", false)
+                    }
+                }
+            }
+
+            // Define the 11 checkboxes in exact order with their JSON keys and labels
+            val chitCheckboxes = listOf(
+                "checklist_autosave" to "Checklist Auto-Save",
+                "auto_save_desktop" to "Auto-save on Desktop",
+                "auto_save_mobile" to "Auto-save on Mobile",
+                "fade_past_chits" to "Fade Past Chits",
+                "highlight_overdue_chits" to "Highlight Overdue",
+                "highlight_blocked_chits" to "Highlight Blocked",
+                "delete_past_alarm_chits" to "Delete Past Alarms",
+                "show_tab_counts" to "Show Tab Counts",
+                "prefer_google_maps" to "Prefer Google for Maps",
+                "show_map_thumbnails" to "Show Map Thumbnails",
+                "hide_declined" to "Hide declined chits"
+            )
+
+            chitCheckboxes.forEach { (key, label) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = chitOptionsJson.optBoolean(key, when (key) {
+                            "fade_past_chits", "highlight_overdue_chits", "highlight_blocked_chits" -> true
+                            else -> false
+                        }),
+                        onCheckedChange = { checked ->
+                            // Rebuild the JSON with the updated value
+                            val updatedJson = try {
+                                JSONObject(formState.chitOptions)
+                            } catch (e: Exception) {
+                                JSONObject()
+                            }
+                            updatedJson.put(key, checked)
+                            onUpdateSetting("chit_options", updatedJson.toString())
+                        }
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // =====================================================================
+        // 9. Visual Indicators (sectionId: "general_visual_indicators")
+        // =====================================================================
         CollapsibleSection(
             title = "Visual Indicators",
-            sectionId = "visual_indicators"
+            sectionId = "general_visual_indicators",
+            defaultExpanded = false
         ) {
             // Parse the visual indicators JSON
             val viJson = remember(formState.visualIndicators) {
@@ -584,265 +869,17 @@ fun GeneralSettingsTab(
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // --- W1: Clocks / World Clocks ---
-        CwocSectionHeading(text = "Clocks")
-
-        // --- Orientation Toggle ---
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Orientation",
-                style = MaterialTheme.typography.labelLarge
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            OutlinedButton(
-                onClick = {
-                    val newOrientation = if (formState.clockOrientation.lowercase() == "horizontal") "Vertical" else "Horizontal"
-                    onUpdateSetting("clock_orientation", newOrientation)
-                },
-                colors = CwocButtonDefaults.outsetColors(),
-                border = CwocButtonDefaults.outsetBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Text(
-                    text = if (formState.clockOrientation.lowercase() == "horizontal") "Horizontal" else "Vertical"
-                )
-            }
-        }
-
-        // --- Active/Inactive Clocks DragGrid ---
-        val allClockTypes = listOf("24 Hour", "HST", "12 Hour", "12 Hour Analog")
-
-        // Parse active clocks from JSON array
-        val activeClocksFromState = remember(formState.activeClocks) {
-            try {
-                val jsonArray = JSONArray(formState.activeClocks)
-                (0 until jsonArray.length()).map { jsonArray.getString(it) }
-            } catch (e: Exception) {
-                emptyList()
-            }
-        }
-
-        // Build DragItem list: active clocks in order, then inactive ones
-        val dragItems = remember(activeClocksFromState) {
-            val activeItems = activeClocksFromState.map { clockType ->
-                DragItem(id = clockType, label = clockType, zone = DragZone.ACTIVE)
-            }
-            val inactiveItems = allClockTypes
-                .filter { it !in activeClocksFromState }
-                .map { clockType ->
-                    DragItem(id = clockType, label = clockType, zone = DragZone.INACTIVE)
-                }
-            activeItems + inactiveItems
-        }
-
-        // Determine orientation for DragGrid
-        val gridOrientation = if (formState.clockOrientation.lowercase() == "vertical") {
-            DragGridOrientation.VERTICAL
-        } else {
-            DragGridOrientation.HORIZONTAL
-        }
-
-        // Show "Add Clock" button when Active zone is empty
-        if (activeClocksFromState.isEmpty()) {
-            Button(
-                onClick = {
-                    // Move the first available inactive clock to active
-                    val firstInactive = allClockTypes.firstOrNull { it !in activeClocksFromState }
-                    if (firstInactive != null) {
-                        val newActive = JSONArray()
-                        newActive.put(firstInactive)
-                        onUpdateSetting("active_clocks", newActive.toString())
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                colors = CwocButtonDefaults.outsetColors(),
-                border = CwocButtonDefaults.outsetBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Text("Add Clock")
-            }
-        }
-
-        DragGrid(
-            items = dragItems,
-            onReorder = { newItems ->
-                // Extract active items in their new order
-                val newActiveClocks = newItems
-                    .filter { it.zone == DragZone.ACTIVE }
-                    .map { it.id }
-                val newJsonArray = JSONArray()
-                newActiveClocks.forEach { newJsonArray.put(it) }
-                onUpdateSetting("active_clocks", newJsonArray.toString())
-            },
-            columns = 2,
-            orientation = gridOrientation
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Display Options Section ---
-        CollapsibleSection(
-            title = "Display Options",
-            sectionId = "display_options_views"
-        ) {
-            // Landing View dropdown
-            Text(
-                text = "Landing View",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            SettingsDropdown(
-                selectedValue = formState.landingView,
-                options = listOf(
-                    "Omni",
-                    "Calendar",
-                    "Checklists",
-                    "Alerts",
-                    "Projects",
-                    "Tasks",
-                    "Notes",
-                    "Email",
-                    "Indicators"
-                ),
-                onOptionSelected = { selected ->
-                    onUpdateSetting("landing_view", selected)
-                }
-            )
-            Text(
-                text = "Applies only on fresh app open, not when returning from the editor or other pages.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // --- Arrange Views Button ---
-            var showArrangeViewsDialog by remember { mutableStateOf(false) }
-
-            Text(
-                text = "View Order",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            CwocZoneButton(
-                onClick = { showArrangeViewsDialog = true }
-            ) {
-                Text("Arrange Views")
-            }
-            Text(
-                text = "Reorder or hide dashboard tabs. Omni is always first.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            // Arrange Views Dialog
-            if (showArrangeViewsDialog) {
-                ArrangeViewsDialog(
-                    currentViewOrder = formState.viewOrder,
-                    onSave = { newOrder ->
-                        onUpdateSetting("view_order", newOrder)
-                    },
-                    onDismiss = { showArrangeViewsDialog = false }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Chit Options Section ---
-        CollapsibleSection(
-            title = "Chit Options",
-            sectionId = "chit_options"
-        ) {
-            // Parse the chit_options JSON to get individual checkbox states
-            val chitOptionsJson = remember(formState.chitOptions) {
-                try {
-                    JSONObject(formState.chitOptions)
-                } catch (e: Exception) {
-                    // Default JSON with correct defaults
-                    JSONObject().apply {
-                        put("checklist_autosave", false)
-                        put("auto_save_desktop", false)
-                        put("auto_save_mobile", false)
-                        put("fade_past_chits", true)
-                        put("highlight_overdue_chits", true)
-                        put("highlight_blocked_chits", true)
-                        put("delete_past_alarm_chits", false)
-                        put("show_tab_counts", false)
-                        put("prefer_google_maps", false)
-                        put("show_map_thumbnails", false)
-                        put("hide_declined", false)
-                    }
-                }
-            }
-
-            // Define the 11 checkboxes in exact order with their JSON keys and labels
-            val chitCheckboxes = listOf(
-                "checklist_autosave" to "Checklist Auto-Save",
-                "auto_save_desktop" to "Auto-save on Desktop",
-                "auto_save_mobile" to "Auto-save on Mobile",
-                "fade_past_chits" to "Fade Past Chits",
-                "highlight_overdue_chits" to "Highlight Overdue",
-                "highlight_blocked_chits" to "Highlight Blocked",
-                "delete_past_alarm_chits" to "Delete Past Alarms",
-                "show_tab_counts" to "Show Tab Counts",
-                "prefer_google_maps" to "Prefer Google for Maps",
-                "show_map_thumbnails" to "Show Map Thumbnails",
-                "hide_declined" to "Hide declined chits"
-            )
-
-            chitCheckboxes.forEach { (key, label) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = chitOptionsJson.optBoolean(key, when (key) {
-                            "fade_past_chits", "highlight_overdue_chits", "highlight_blocked_chits" -> true
-                            else -> false
-                        }),
-                        onCheckedChange = { checked ->
-                            // Rebuild the JSON with the updated value
-                            val updatedJson = try {
-                                JSONObject(formState.chitOptions)
-                            } catch (e: Exception) {
-                                JSONObject()
-                            }
-                            updatedJson.put(key, checked)
-                            onUpdateSetting("chit_options", updatedJson.toString())
-                        }
-                    )
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Custom Filters & Sorting Section ---
+        // =====================================================================
+        // 10. Custom Filters & Sorting (sectionId: "general_custom_filters")
+        // =====================================================================
         CustomFiltersSection(
             formState = formState,
             onUpdateSetting = onUpdateSetting
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -890,7 +927,8 @@ private fun CustomFiltersSection(
 
     CollapsibleSection(
         title = "Custom Filters & Sorting",
-        sectionId = "custom_filters"
+        sectionId = "general_custom_filters",
+        defaultExpanded = false
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             viewNames.forEach { viewName ->

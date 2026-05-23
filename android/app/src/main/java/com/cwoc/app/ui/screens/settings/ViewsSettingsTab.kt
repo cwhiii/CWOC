@@ -185,7 +185,8 @@ private fun OmniViewSection(
 
     CollapsibleSection(
         title = "\uD83D\uDD2E Omni View",
-        sectionId = "omni_view"
+        sectionId = "omni_view",
+        defaultExpanded = false
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -855,7 +856,8 @@ private fun CalendarSection(
 
     CollapsibleSection(
         title = "\uD83D\uDCC5 Calendar",
-        sectionId = "calendar"
+        sectionId = "calendar",
+        defaultExpanded = false
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // --- Week Starts On dropdown ---
@@ -1396,7 +1398,8 @@ private fun MapsSection(
 
     CollapsibleSection(
         title = "\uD83D\uDDFA\uFE0F Maps",
-        sectionId = "maps"
+        sectionId = "maps",
+        defaultExpanded = false
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // --- Auto-zoom checkbox ---
@@ -1501,7 +1504,8 @@ private fun HabitsSection(
 ) {
     CollapsibleSection(
         title = "Habits",
-        sectionId = "views_habits"
+        sectionId = "views_habits",
+        defaultExpanded = false
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1598,7 +1602,8 @@ private fun ProjectsSection(
 ) {
     CollapsibleSection(
         title = "Projects",
-        sectionId = "views_projects"
+        sectionId = "views_projects",
+        defaultExpanded = false
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp)

@@ -20,6 +20,15 @@ inclusion: always
 - 1940s parchment/magic aesthetic with brown tones, Lora serif font (self-hosted variable font in `static/fonts/lora/`), parchment background textures
 - CSS variables defined in `frontend/css/shared/shared-page.css` for secondary pages, `frontend/css/dashboard/styles-variables.css` for the dashboard
 
+## Static Assets (`src/static/`)
+- **`images/`** — all active images (logos, tab icons, parchment background, SVGs). New images go here.
+- **`sounds/`** — audio files (alarm.mp3, timer.mp3). New audio goes here.
+- **`archive/`** — unused images kept for reference (not served in production UI).
+- **`fonts/`** — self-hosted Lora variable font.
+- **`tracking/`** — smart-link provider SVG icons.
+- **`vendor/`** — vendored JS/CSS libraries (Flatpickr, Font Awesome, Leaflet, etc.).
+- URL pattern: `/static/images/filename.png`, `/static/sounds/filename.mp3`
+
 ## Key Dependencies
 - `fastapi`, `uvicorn`, `pydantic` (Python)
 - No npm/node — no package.json, no bundler

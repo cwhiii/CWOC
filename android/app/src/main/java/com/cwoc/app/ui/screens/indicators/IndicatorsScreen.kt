@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,7 +50,9 @@ import com.cwoc.app.domain.chart.ChartDataTransformer
 import com.cwoc.app.domain.chart.MappedPoint
 import com.cwoc.app.domain.chart.TimeRange
 import com.cwoc.app.ui.components.CwocSectionHeading
+import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
+import com.cwoc.app.domain.filter.FilterState
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -58,18 +61,33 @@ import java.util.Locale
 
 /**
  * Indicators/Health Charts view — displays charts for health indicators.
- * Supports 3 sub-modes: Charts, Calendar, Log (matching web's pill toggle).
+ * Supports 3 sub-modes: Charts, Calendar, Log (controlled by sidebar).
  * Time range is controlled by the sidebar.
  */
 @Composable
 fun IndicatorsScreen(
     modifier: Modifier = Modifier,
     viewModel: IndicatorsViewModel = hiltViewModel(),
-    sidebarStateViewModel: SidebarStateViewModel? = null
+    sidebarStateViewModel: SidebarStateViewModel? = null,
+    filterSortViewModel: FilterSortViewModel? = null,
+    onNavigateToEditor: ((String) -> Unit)? = null
 ) {
     val charts by viewModel.charts.collectAsState()
     val selectedRange by viewModel.selectedRange.collectAsState()
-    val healthEntries by viewModel.healthEntries.collectAsState()
+    val allHealthEntries by viewModel.healthEntries.collectAsState()
+
+    // Apply search text filter to health entries (filter by chit title)
+    val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
+    val healthEntries = remember(allHealthEntries, filterState.searchText) {
+        if (filterState.searchText.isEmpty()) allHealthEntries
+        else {
+            val query = filterState.searchText.lowercase()
+            allHealthEntries.filter { entry ->
+                entry.chitTitle?.lowercase()?.contains(query) == true ||
+                entry.indicatorType.lowercase().contains(query)
+            }
+        }
+    }
 
     // Mode driven by sidebar state
     val sidebarState = sidebarStateViewModel?.state?.collectAsState()?.value
@@ -79,10 +97,10 @@ fun IndicatorsScreen(
     LaunchedEffect(sidebarState?.indicatorsRange) {
         if (sidebarState != null) {
             val range = when (sidebarState.indicatorsRange) {
-                "day" -> TimeRange.SEVEN_DAYS
+                "day" -> TimeRange.ONE_DAY
                 "week" -> TimeRange.SEVEN_DAYS
                 "month" -> TimeRange.THIRTY_DAYS
-                "year" -> TimeRange.NINETY_DAYS
+                "year" -> TimeRange.THREE_SIXTY_FIVE_DAYS
                 "all" -> TimeRange.ALL
                 else -> TimeRange.THIRTY_DAYS
             }
@@ -104,17 +122,26 @@ fun IndicatorsScreen(
                 } else {
                     LazyColumn {
                         items(charts, key = { it.type }) { chart ->
-                            IndicatorChartCard(chart = chart)
+                            IndicatorChartCard(
+                                chart = chart,
+                                onNavigateToEditor = onNavigateToEditor
+                            )
                             Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
                 }
             }
             "calendar" -> {
-                IndicatorsCalendarView(healthEntries = healthEntries)
+                IndicatorsCalendarView(
+                    healthEntries = healthEntries,
+                    onNavigateToEditor = onNavigateToEditor
+                )
             }
             "log" -> {
-                IndicatorsLogView(healthEntries = healthEntries)
+                IndicatorsLogView(
+                    healthEntries = healthEntries,
+                    onNavigateToEditor = onNavigateToEditor
+                )
             }
         }
     }
@@ -125,7 +152,10 @@ fun IndicatorsScreen(
  * Green = all readings in range, Amber = any reading out of range, Empty = no data.
  */
 @Composable
-private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
+private fun IndicatorsCalendarView(
+    healthEntries: List<HealthEntry>,
+    onNavigateToEditor: ((String) -> Unit)? = null
+) {
     val today = remember { LocalDate.now() }
     val year = today.year
     val viewModel: IndicatorsViewModel = hiltViewModel()
@@ -138,30 +168,34 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
             .groupBy { it.date }
     }
 
-    // Build range map from indicator objects: type name → (min, max)
+    // Build range map from indicator objects: object ID → (min, max)
     val rangeMap = remember(indicatorObjects) {
         indicatorObjects.associate { obj ->
-            obj.name.lowercase() to Pair(obj.range_min, obj.range_max)
+            obj.id to Pair(obj.range_min?.toFloat(), obj.range_max?.toFloat())
         }
     }
 
     /**
-     * Classify a day's color: "green" (all in range), "amber" (any out of range), "none" (no data).
+     * Classify a day's color based on readings vs ranges.
      */
     fun classifyDay(date: LocalDate): String {
         val entries = entriesByDate[date] ?: return "none"
         if (entries.isEmpty()) return "none"
 
-        var hasOutOfRange = false
         for (entry in entries) {
-            val range = rangeMap[entry.indicatorType.lowercase()]
+            val range = rangeMap[entry.objectId]
             if (range != null) {
                 val (min, max) = range
-                if (min != null && entry.value < min) { hasOutOfRange = true; break }
-                if (max != null && entry.value > max) { hasOutOfRange = true; break }
+                if (min != null && entry.value < min) return "amber"
+                if (max != null && entry.value > max) return "amber"
             }
         }
-        return if (hasOutOfRange) "amber" else "green"
+        return "green"
+    }
+
+    /** Get the first chit ID for a given date (for navigation). */
+    fun getChitIdForDate(date: LocalDate): String? {
+        return entriesByDate[date]?.firstOrNull()?.chitId
     }
 
     if (healthEntries.isEmpty()) {
@@ -182,6 +216,18 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Year header
+        item {
+            Text(
+                text = year.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2B1E0F),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            )
+        }
+
         items(12) { monthIndex ->
             val month = YearMonth.of(year, monthIndex + 1)
             val monthName = month.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
@@ -199,7 +245,6 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
                         color = Color(0xFF6B4E31)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    // Day cells in a wrapping row
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -210,10 +255,11 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
                             val date = LocalDate.of(year, monthIndex + 1, day)
                             val classification = classifyDay(date)
                             val isToday = date == today
+                            val hasData = entriesByDate.containsKey(date)
                             val cellColor = when (classification) {
-                                "green" -> Color(0xFF4A6741) // Green — all in range
-                                "amber" -> Color(0xFFD4A017) // Amber — out of range
-                                else -> Color(0xFFEDE0D4) // Empty — no data
+                                "green" -> Color(0xFF4CAF50)
+                                "amber" -> Color(0xFFFF9800)
+                                else -> Color(0xFFE0D4B5)
                             }
                             Box(
                                 modifier = Modifier
@@ -221,17 +267,37 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(cellColor)
                                     .then(
-                                        if (isToday) Modifier.background(Color(0xFF6B4E31).copy(alpha = 0.3f))
-                                        else Modifier
+                                        if (isToday) Modifier.background(
+                                            Color.Transparent
+                                        ) else Modifier
+                                    )
+                                    .then(
+                                        if (hasData && onNavigateToEditor != null) {
+                                            Modifier.clickable {
+                                                val chitId = getChitIdForDate(date)
+                                                if (chitId != null) onNavigateToEditor(chitId)
+                                            }
+                                        } else Modifier
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isToday) {
-                                    Text(
-                                        text = "•",
-                                        fontSize = 8.sp,
-                                        color = Color.White
+                                    // Draw outline for today
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(Color.Transparent)
+                                            .then(
+                                                Modifier.background(Color.Transparent)
+                                            )
                                     )
+                                    Canvas(modifier = Modifier.size(14.dp)) {
+                                        drawRect(
+                                            color = Color(0xFF2B1E0F),
+                                            style = Stroke(width = 2f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -248,47 +314,38 @@ private fun IndicatorsCalendarView(healthEntries: List<HealthEntry>) {
                     .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFF4A6741))
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("All in range", style = MaterialTheme.typography.labelSmall, color = Color(0xFF6B4E31))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFFD4A017))
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Out of range", style = MaterialTheme.typography.labelSmall, color = Color(0xFF6B4E31))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFFEDE0D4))
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("No data", style = MaterialTheme.typography.labelSmall, color = Color(0xFF6B4E31))
-                }
+                LegendItem(color = Color(0xFF4CAF50), label = "All in range")
+                LegendItem(color = Color(0xFFFF9800), label = "Out of range")
+                LegendItem(color = Color(0xFFE0D4B5), label = "No data")
             }
         }
+    }
+}
+
+@Composable
+private fun LegendItem(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(color)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF6B4E31))
     }
 }
 
 /**
  * Log view — reverse-chronological list of health data entries.
  * Each entry shows date, chit title, and indicator readings.
+ * Tapping an entry navigates to the chit editor.
  */
 @Composable
-private fun IndicatorsLogView(healthEntries: List<HealthEntry>) {
+private fun IndicatorsLogView(
+    healthEntries: List<HealthEntry>,
+    onNavigateToEditor: ((String) -> Unit)? = null
+) {
     if (healthEntries.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -304,11 +361,12 @@ private fun IndicatorsLogView(healthEntries: List<HealthEntry>) {
         return
     }
 
-    // Group entries by date, sorted reverse-chronologically
-    val groupedByDate = remember(healthEntries) {
+    // Group entries by chit (date + chitId), sorted reverse-chronologically
+    val groupedEntries = remember(healthEntries) {
         healthEntries
-            .sortedByDescending { it.date }
-            .groupBy { it.date }
+            .groupBy { Pair(it.date, it.chitId) }
+            .entries
+            .sortedByDescending { it.key.first }
     }
 
     LazyColumn(
@@ -320,45 +378,51 @@ private fun IndicatorsLogView(healthEntries: List<HealthEntry>) {
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        groupedByDate.forEach { (date, entries) ->
-            item(key = date.toString()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
+        items(groupedEntries.size, key = { groupedEntries[it].key.toString() }) { index ->
+            val (key, entries) = groupedEntries[index]
+            val (date, chitId) = key
+            val chitTitle = entries.firstOrNull()?.chitTitle ?: "(Untitled)"
+            val summary = entries.joinToString(", ") { "${it.indicatorType}: ${formatValue(it.value)}" }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (chitId != null && onNavigateToEditor != null) {
+                            Modifier.clickable { onNavigateToEditor(chitId) }
+                        } else Modifier
+                    ),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    // Date column
+                    Text(
+                        text = date.format(DateTimeFormatter.ofPattern("MM/dd")),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF6B4E31),
+                        modifier = Modifier.width(48.dp)
+                    )
+                    // Body column
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
-                            style = MaterialTheme.typography.labelMedium,
+                            text = chitTitle,
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF6B4E31)
+                            color = Color(0xFF2B1E0F),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        entries.forEach { entry ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    if (!entry.chitTitle.isNullOrBlank()) {
-                                        Text(
-                                            text = entry.chitTitle,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color(0xFF4A3520),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Text(
-                                        text = "${entry.indicatorType}: ${entry.value}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color(0xFF1A1208)
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF5A4228),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -366,14 +430,24 @@ private fun IndicatorsLogView(healthEntries: List<HealthEntry>) {
     }
 }
 
+private fun formatValue(value: Float): String {
+    return if (value == value.toLong().toFloat()) {
+        value.toLong().toString()
+    } else {
+        String.format("%.1f", value)
+    }
+}
+
 
 // ─── Chart Components ────────────────────────────────────────────────────────
 
 @Composable
-private fun IndicatorChartCard(chart: IndicatorChart) {
+private fun IndicatorChartCard(
+    chart: IndicatorChart,
+    onNavigateToEditor: ((String) -> Unit)? = null
+) {
     var tooltipPoint by remember { mutableStateOf<MappedPoint?>(null) }
     var isExpanded by remember { mutableStateOf(true) }
-    // S1: Per-type color based on indicator type name
     val chartColor = remember(chart.type) { indicatorTypeColor(chart.type) }
 
     Card(
@@ -381,31 +455,24 @@ private fun IndicatorChartCard(chart: IndicatorChart) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF5E6D3))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // S3: Legend row — type name + color indicator + unit + expand/collapse
+            // Header row — display name + unit + expand/collapse
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { isExpanded = !isExpanded },
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Color dot for legend
-                Canvas(modifier = Modifier.padding(end = 8.dp)) {
+                Canvas(modifier = Modifier.size(12.dp).padding(end = 4.dp)) {
                     drawCircle(color = chartColor, radius = 6f)
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = chart.type.replaceFirstChar { it.uppercase() },
+                    text = chart.displayName + if (chart.unit.isNotBlank()) " (${chart.unit})" else "",
                     style = MaterialTheme.typography.titleSmall,
                     color = Color(0xFF6B4E31),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                // S2: Add reading button
-                androidx.compose.material3.TextButton(
-                    onClick = { /* Would open a number input dialog for new reading */ }
-                ) {
-                    Text("+ Add Reading", style = MaterialTheme.typography.labelSmall)
-                }
-                // Expand/collapse indicator
                 Text(
                     text = if (isExpanded) "▼" else "▶",
                     style = MaterialTheme.typography.labelMedium,
@@ -413,62 +480,73 @@ private fun IndicatorChartCard(chart: IndicatorChart) {
                 )
             }
 
-            // Chart content (collapsible)
             if (isExpanded) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-            if (chart.points.isEmpty()) {
-                Text(
-                    text = "No data for this period",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF8B7355)
-                )
-            } else {
-                CanvasLineChart(
-                    chart = chart,
-                    lineColor = chartColor,
-                    onPointTapped = { tooltipPoint = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                )
-
-                tooltipPoint?.let { point ->
+                if (chart.points.isEmpty()) {
                     Text(
-                        text = "${point.dataPoint.value} on ${point.dataPoint.date.format(DateTimeFormatter.ofPattern("MMM d"))}",
+                        text = "No data for this period",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF8B7355)
+                    )
+                } else {
+                    // Latest value display
+                    val latest = chart.points.last()
+                    Text(
+                        text = "Latest: ${formatValue(latest.value)} ${chart.unit}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF6B4E31),
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
+
+                    CanvasLineChart(
+                        chart = chart,
+                        lineColor = chartColor,
+                        onPointTapped = { point ->
+                            tooltipPoint = point
+                            // Navigate to chit on tap
+                            if (point != null && point.dataPoint.chitId != null && onNavigateToEditor != null) {
+                                onNavigateToEditor(point.dataPoint.chitId)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                    )
+
+                    tooltipPoint?.let { point ->
+                        Text(
+                            text = "${formatValue(point.dataPoint.value)} ${chart.unit} on ${point.dataPoint.date.format(DateTimeFormatter.ofPattern("MMM d"))}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF6B4E31),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
-            } // end if (isExpanded)
         }
     }
 }
 
 /**
- * S1: Returns a unique color for each indicator type.
+ * Returns a unique color for each indicator type.
  */
 private fun indicatorTypeColor(type: String): Color {
-    return when (type.lowercase()) {
-        "heart_rate", "heartrate", "pulse" -> Color(0xFFE53935) // Red
-        "blood_pressure", "bp" -> Color(0xFF1E88E5) // Blue
-        "weight" -> Color(0xFF43A047) // Green
-        "temperature", "temp" -> Color(0xFFFF8F00) // Amber
-        "sleep" -> Color(0xFF5E35B1) // Purple
-        "steps" -> Color(0xFF00897B) // Teal
-        "oxygen", "spo2" -> Color(0xFF039BE5) // Light blue
-        "glucose", "blood_sugar" -> Color(0xFFF4511E) // Deep orange
-        else -> {
-            // Generate from hash for unknown types
-            val colors = listOf(
-                Color(0xFF6B4E31), Color(0xFF8B5A2B), Color(0xFF4A6741),
-                Color(0xFF1565C0), Color(0xFF9B59B6), Color(0xFFD2691E)
-            )
-            colors[(type.hashCode().and(0x7FFFFFFF)) % colors.size]
-        }
-    }
+    // Match the web's color cycle
+    val webColors = listOf(
+        Color(0xFFB22222), // firebrick
+        Color(0xFF4682B4), // steelblue
+        Color(0xFFD4A017), // gold
+        Color(0xFF6B8E23), // olivedrab
+        Color(0xFF8B5A2B), // saddlebrown
+        Color(0xFFD2691E), // chocolate
+        Color(0xFF2E8B57), // seagreen
+        Color(0xFFCC4444), // red variant
+        Color(0xFF9370DB), // mediumpurple
+        Color(0xFF20B2AA)  // lightseagreen
+    )
+    val index = (type.hashCode().and(0x7FFFFFFF)) % webColors.size
+    return webColors[index]
 }
 
 
@@ -480,6 +558,8 @@ private fun CanvasLineChart(
     modifier: Modifier = Modifier
 ) {
     var mappedPoints by remember { mutableStateOf<List<MappedPoint>>(emptyList()) }
+    val gridColor = Color(0xFFE0D4B5)
+    val textColor = Color(0xFF6B4E31)
 
     Canvas(
         modifier = modifier
@@ -492,10 +572,66 @@ private fun CanvasLineChart(
                 }
             }
     ) {
+        val padding = 40f
         val points = ChartDataTransformer.mapToPixels(
-            chart.points, size.width, size.height, 32f
+            chart.points, size.width, size.height, padding
         )
         mappedPoints = points
+
+        val drawWidth = size.width - (padding * 2)
+        val drawHeight = size.height - (padding * 2)
+
+        // Draw gridlines (4 horizontal lines)
+        if (chart.points.isNotEmpty()) {
+            val minVal = chart.points.minOf { it.value }
+            val maxVal = chart.points.maxOf { it.value }
+            val valRange = if (maxVal == minVal) 1f else maxVal - minVal
+
+            for (i in 0..3) {
+                val y = padding + (drawHeight / 3f) * i
+                // Gridline
+                drawLine(
+                    color = gridColor,
+                    start = Offset(padding, y),
+                    end = Offset(size.width - padding, y),
+                    strokeWidth = 0.5f
+                )
+                // Y-axis label
+                val labelVal = maxVal - (valRange / 3f) * i
+                drawContext.canvas.nativeCanvas.drawText(
+                    formatValue(labelVal),
+                    padding - 4f,
+                    y + 4f,
+                    android.graphics.Paint().apply {
+                        color = 0xFF6B4E31.toInt()
+                        textSize = 22f
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                    }
+                )
+            }
+
+            // X-axis date labels (up to 4)
+            val dateLabels = minOf(chart.points.size, 4)
+            if (dateLabels > 0 && points.isNotEmpty()) {
+                for (i in 0 until dateLabels) {
+                    val idx = if (dateLabels == 1) 0
+                    else (i * (chart.points.size - 1)) / (dateLabels - 1)
+                    val pt = chart.points[idx]
+                    val mappedPt = points.getOrNull(idx) ?: continue
+                    val dateLabel = pt.date.format(DateTimeFormatter.ofPattern("M/d"))
+                    drawContext.canvas.nativeCanvas.drawText(
+                        dateLabel,
+                        mappedPt.x,
+                        size.height - 4f,
+                        android.graphics.Paint().apply {
+                            color = 0xFF6B4E31.toInt()
+                            textSize = 22f
+                            textAlign = android.graphics.Paint.Align.CENTER
+                        }
+                    )
+                }
+            }
+        }
 
         if (points.size < 2) {
             points.firstOrNull()?.let { p ->

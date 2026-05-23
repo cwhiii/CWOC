@@ -242,6 +242,26 @@ class SyncEngine @Inject constructor(
             val finalDbCount = chitDao.getCount()
             Log.d(TAG, "Sync complete. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
             reportLog("Sync success: version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
+
+            // ── Fetch user profile via the SAME working apiService that just synced ──
+            // This ensures profile_image_url is always populated using the proven sync pipeline.
+            try {
+                val meResponse = apiService.getMe()
+                if (meResponse.isSuccessful) {
+                    val profile = meResponse.body()
+                    if (profile != null) {
+                        prefs.edit()
+                            .putString("user_display_name", profile.displayName)
+                            .putString("user_username", profile.username)
+                            .putString("user_id", profile.userId)
+                            .putString("user_profile_image_url", profile.profileImageUrl)
+                            .apply()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch user profile during sync: ${e.message}")
+            }
+
             return SyncResult.Success(body.server_version)
 
         } catch (e: IOException) {

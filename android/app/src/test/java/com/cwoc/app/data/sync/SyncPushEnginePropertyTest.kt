@@ -1,5 +1,6 @@
 package com.cwoc.app.data.sync
 
+import android.content.SharedPreferences
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.dao.SettingsDao
@@ -60,7 +61,6 @@ class SyncPushEnginePropertyTest {
         fakeSettingsDao = FakePushSettingsDao()
         fakeSettingsConflictResolver = FakePushSettingsConflictResolver()
         pushEngine = SyncPushEngineImpl(
-            apiService = fakeApiService,
             chitDao = fakeChitDao,
             contactDao = fakeContactDao,
             settingsDao = fakeSettingsDao,
@@ -68,7 +68,8 @@ class SyncPushEnginePropertyTest {
             syncMetadataDao = fakeSyncMetadataDao,
             syncStateManager = fakeSyncStateManager,
             settingsConflictResolver = fakeSettingsConflictResolver,
-            gson = gson
+            gson = gson,
+            prefs = FakePushSharedPreferences()
         )
     }
 
@@ -928,4 +929,48 @@ class FakePushSettingsConflictResolver : SettingsConflictResolver(
     override suspend fun resolve(serverSettings: SettingsEntity) {
         resolvedSettings = serverSettings
     }
+}
+
+/**
+ * Fake SharedPreferences for push engine tests.
+ * Returns a server_url and device_token so buildApiService() can construct a Retrofit instance.
+ * Note: Tests using this fake will need a mock web server (e.g., MockWebServer) to intercept
+ * actual HTTP calls, since buildApiService() now creates its own Retrofit internally.
+ */
+class FakePushSharedPreferences : SharedPreferences {
+
+    private val data = mutableMapOf<String, String?>(
+        "server_url" to "http://localhost:3333",
+        "device_token" to "fake-test-token"
+    )
+
+    override fun getString(key: String?, defValue: String?): String? =
+        data[key] ?: defValue
+
+    override fun getAll(): MutableMap<String, *> = data.toMutableMap()
+    override fun getInt(key: String?, defValue: Int): Int = defValue
+    override fun getLong(key: String?, defValue: Long): Long = defValue
+    override fun getFloat(key: String?, defValue: Float): Float = defValue
+    override fun getBoolean(key: String?, defValue: Boolean): Boolean = defValue
+    override fun contains(key: String?): Boolean = data.containsKey(key)
+    override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? = defValues
+
+    override fun edit(): SharedPreferences.Editor = object : SharedPreferences.Editor {
+        override fun putString(key: String?, value: String?): SharedPreferences.Editor {
+            if (key != null) data[key] = value
+            return this
+        }
+        override fun putStringSet(key: String?, values: MutableSet<String>?): SharedPreferences.Editor = this
+        override fun putInt(key: String?, value: Int): SharedPreferences.Editor = this
+        override fun putLong(key: String?, value: Long): SharedPreferences.Editor = this
+        override fun putFloat(key: String?, value: Float): SharedPreferences.Editor = this
+        override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor = this
+        override fun remove(key: String?): SharedPreferences.Editor = this
+        override fun clear(): SharedPreferences.Editor = this
+        override fun commit(): Boolean = true
+        override fun apply() {}
+    }
+
+    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
+    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {}
 }

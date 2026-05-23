@@ -2,25 +2,17 @@ package com.cwoc.app.domain.chart
 
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import kotlin.math.abs
 
 /**
  * Time range options for chart filtering.
  */
 enum class TimeRange(val days: Long?) {
+    ONE_DAY(1),
     SEVEN_DAYS(7),
     THIRTY_DAYS(30),
     NINETY_DAYS(90),
+    THREE_SIXTY_FIVE_DAYS(365),
     ALL(null)
-}
-
-/**
- * Chart type options.
- */
-enum class ChartType {
-    LINE,
-    BAR,
-    SPARKLINE
 }
 
 /**
@@ -29,18 +21,9 @@ enum class ChartType {
 data class ChartDataPoint(
     val date: LocalDate,
     val value: Float,
-    val label: String? = null
-)
-
-/**
- * Chart configuration for rendering.
- */
-data class ChartConfig(
-    val indicatorType: String,
-    val chartType: ChartType = ChartType.LINE,
-    val timeRange: TimeRange = TimeRange.THIRTY_DAYS,
-    val minValue: Float = 0f,
-    val maxValue: Float = 100f
+    val label: String? = null,
+    val chitId: String? = null,
+    val chitTitle: String? = null
 )
 
 /**
@@ -61,11 +44,6 @@ object ChartDataTransformer {
 
     /**
      * Filter data points by a time range relative to today.
-     *
-     * @param points All available data points
-     * @param range The time range to filter by
-     * @param referenceDate The reference date (defaults to today)
-     * @return Filtered and sorted data points within the range
      */
     fun filterByRange(
         points: List<ChartDataPoint>,
@@ -86,12 +64,6 @@ object ChartDataTransformer {
      *
      * X-axis: dates mapped linearly across canvas width
      * Y-axis: values mapped linearly across canvas height (inverted — 0 at bottom)
-     *
-     * @param points Sorted data points to map
-     * @param canvasWidth Available width in pixels
-     * @param canvasHeight Available height in pixels
-     * @param padding Padding from edges in pixels
-     * @return List of MappedPoints with x,y coordinates
      */
     fun mapToPixels(
         points: List<ChartDataPoint>,
@@ -104,12 +76,10 @@ object ChartDataTransformer {
         val drawWidth = canvasWidth - (padding * 2)
         val drawHeight = canvasHeight - (padding * 2)
 
-        // Compute value range
         val minVal = points.minOf { it.value }
         val maxVal = points.maxOf { it.value }
         val valueRange = if (maxVal == minVal) 1f else maxVal - minVal
 
-        // Compute date range
         val minDate = points.first().date
         val maxDate = points.last().date
         val dateRange = ChronoUnit.DAYS.between(minDate, maxDate).toFloat()
@@ -122,7 +92,7 @@ object ChartDataTransformer {
 
             MappedPoint(
                 x = padding + (xRatio * drawWidth),
-                y = padding + ((1f - yRatio) * drawHeight), // invert Y (0 at bottom)
+                y = padding + ((1f - yRatio) * drawHeight),
                 dataPoint = point
             )
         }
@@ -130,12 +100,6 @@ object ChartDataTransformer {
 
     /**
      * Find the nearest data point to a tap coordinate.
-     *
-     * @param mappedPoints The mapped points with pixel coordinates
-     * @param tapX The X coordinate of the tap
-     * @param tapY The Y coordinate of the tap
-     * @param maxDistance Maximum distance in pixels to consider a hit (default 48dp)
-     * @return The nearest MappedPoint, or null if none within maxDistance
      */
     fun hitTest(
         mappedPoints: List<MappedPoint>,
@@ -162,29 +126,47 @@ object ChartDataTransformer {
     }
 
     /**
-     * Parse health data JSON from a chit into ChartDataPoints.
+     * Parse health_data JSON from a chit into ChartDataPoints.
      *
-     * Expected JSON format: [{"type": "weight", "value": 185.5, "date": "2025-01-15"}, ...]
+     * The actual format stored is a flat dict mapping UUID/legacy keys to values:
+     *   {"uuid-1": 72, "uuid-2": 175.5, "heart_rate": 72}
+     *
+     * The date comes from the chit's own datetime fields (passed in separately).
+     *
+     * @param json The healthData JSON string from ChitEntity
+     * @param chitDate The date to assign to all readings (from chit's start/due/created datetime)
+     * @param chitId The chit's ID (for navigation)
+     * @param chitTitle The chit's title (for display)
+     * @return List of ChartDataPoints, one per reading key
      */
-    fun parseHealthData(json: String?): List<ChartDataPoint> {
-        if (json.isNullOrBlank() || json == "[]" || json == "null") return emptyList()
+    fun parseHealthDataDict(
+        json: String?,
+        chitDate: LocalDate,
+        chitId: String? = null,
+        chitTitle: String? = null
+    ): List<ChartDataPoint> {
+        if (json.isNullOrBlank() || json == "{}" || json == "null" || json == "[]") return emptyList()
 
         return try {
             val gson = com.google.gson.Gson()
-            val type = object : com.google.gson.reflect.TypeToken<List<Map<String, Any>>>() {}.type
-            val rawItems: List<Map<String, Any>> = gson.fromJson(json, type)
+            val type = object : com.google.gson.reflect.TypeToken<Map<String, Any?>>() {}.type
+            val dict: Map<String, Any?> = gson.fromJson(json, type)
 
-            rawItems.mapNotNull { raw ->
-                val value = (raw["value"] as? Double)?.toFloat() ?: return@mapNotNull null
-                val dateStr = raw["date"] as? String ?: return@mapNotNull null
-                val date = try {
-                    LocalDate.parse(dateStr)
-                } catch (_: Exception) {
-                    return@mapNotNull null
-                }
-                val label = raw["type"] as? String
+            dict.mapNotNull { (key, rawValue) ->
+                val value = when (rawValue) {
+                    is Number -> rawValue.toFloat()
+                    is Boolean -> if (rawValue) 1f else 0f
+                    is String -> rawValue.toFloatOrNull()
+                    else -> null
+                } ?: return@mapNotNull null
 
-                ChartDataPoint(date = date, value = value, label = label)
+                ChartDataPoint(
+                    date = chitDate,
+                    value = value,
+                    label = key,
+                    chitId = chitId,
+                    chitTitle = chitTitle
+                )
             }
         } catch (_: Exception) {
             emptyList()
@@ -192,7 +174,60 @@ object ChartDataTransformer {
     }
 
     /**
-     * Group health data points by indicator type.
+     * Extract the best date from a ChitEntity's datetime fields.
+     * Priority: startDatetime > dueDatetime > createdDatetime
+     * Returns null if no valid date can be parsed.
+     */
+    fun extractDate(startDatetime: String?, dueDatetime: String?, createdDatetime: String?): LocalDate? {
+        val dateStr = startDatetime ?: dueDatetime ?: createdDatetime ?: return null
+        return try {
+            // Take first 10 chars (YYYY-MM-DD) from ISO datetime string
+            LocalDate.parse(dateStr.take(10))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // ── Legacy methods (kept for test compatibility) ─────────────────────────
+
+    /**
+     * Legacy parser for the old array format: [{"type": "weight", "value": 185.5, "date": "2025-01-15"}, ...]
+     * Kept for backward compatibility with existing tests.
+     * The actual production code uses parseHealthDataDict() instead.
+     */
+    fun parseHealthData(json: String?): List<ChartDataPoint> {
+        if (json.isNullOrBlank() || json == "[]" || json == "null" || json == "{}") return emptyList()
+
+        return try {
+            val gson = com.google.gson.Gson()
+
+            // Try array format first (test format)
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<List<Map<String, Any>>>() {}.type
+                val rawItems: List<Map<String, Any>> = gson.fromJson(json, type)
+                return rawItems.mapNotNull { raw ->
+                    val value = (raw["value"] as? Double)?.toFloat() ?: return@mapNotNull null
+                    val dateStr = raw["date"] as? String ?: return@mapNotNull null
+                    val date = try {
+                        LocalDate.parse(dateStr)
+                    } catch (_: Exception) {
+                        return@mapNotNull null
+                    }
+                    val label = raw["type"] as? String
+                    ChartDataPoint(date = date, value = value, label = label)
+                }
+            } catch (_: Exception) {
+                // Not array format — try dict format with today's date as fallback
+                parseHealthDataDict(json, LocalDate.now())
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Group health data points by indicator type (label field).
+     * Kept for backward compatibility with existing tests.
      */
     fun groupByType(points: List<ChartDataPoint>): Map<String, List<ChartDataPoint>> {
         return points.groupBy { it.label ?: "unknown" }

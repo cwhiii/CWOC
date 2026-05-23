@@ -77,6 +77,7 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.cwoc.app.data.remote.TrustedHttpClient
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -755,7 +756,7 @@ private suspend fun uploadContactImage(
             .post(multipartBody)
             .build()
 
-        okhttp3.OkHttpClient().newCall(request).execute()
+        TrustedHttpClient.instance.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
@@ -782,7 +783,7 @@ private suspend fun uploadContactBitmap(
             .post(multipartBody)
             .build()
 
-        okhttp3.OkHttpClient().newCall(request).execute()
+        TrustedHttpClient.instance.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
@@ -798,7 +799,7 @@ private suspend fun deleteContactImage(
             .delete()
             .build()
 
-        okhttp3.OkHttpClient().newCall(request).execute()
+        TrustedHttpClient.instance.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
@@ -1751,7 +1752,7 @@ private suspend fun changePassword(
             .put(requestBody)
             .build()
 
-        val response = okhttp3.OkHttpClient().newCall(request).execute()
+        val response = TrustedHttpClient.instance.newCall(request).execute()
         when {
             response.code == 403 -> "Current password is incorrect."
             !response.isSuccessful -> "Failed to change password (${response.code})"

@@ -10,19 +10,27 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -45,10 +53,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cwoc.app.data.local.dao.SyncMetadataDao
@@ -176,6 +188,7 @@ private fun CwocApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -192,11 +205,13 @@ private fun CwocApp(
     // User display name from AuthRepository
     val userDisplayName by authRepository.displayName.collectAsState()
     val currentUserId by authRepository.userId.collectAsState()
+    val authUsername by authRepository.username.collectAsState()
+    val userProfileImageUrl by authRepository.profileImageUrl.collectAsState()
 
     // Settings for profile menu (username) and view order
     val settingsFlow = remember { settingsRepository.settings }
     val currentSettings by settingsFlow.collectAsState(initial = null)
-    val currentUsername = currentSettings?.username
+    val currentUsername = authUsername ?: currentSettings?.username
     val viewOrder = currentSettings?.viewOrder
 
     // Ordered visible tabs based on view_order setting (used for tab row, swipe, and views panel)
@@ -206,6 +221,36 @@ private fun CwocApp(
 
     // Track selected C CAPTN tab
     var selectedTab by remember { mutableStateOf(CCaptnTab.Tasks) }
+    // Track whether we've already applied the landing view from settings
+    var landingViewApplied by remember { mutableStateOf(false) }
+
+    // Apply landing view from settings on first load
+    LaunchedEffect(currentSettings?.landingView, currentSettings?.defaultView) {
+        if (!landingViewApplied && currentSettings != null) {
+            val landingView = currentSettings?.landingView ?: currentSettings?.defaultView ?: "Calendar"
+            val targetTab = when (landingView) {
+                "Omni" -> CCaptnTab.Omni
+                "Calendar" -> CCaptnTab.Calendar
+                "Checklists" -> CCaptnTab.Checklists
+                "Alarms" -> CCaptnTab.Alarms
+                "Projects" -> CCaptnTab.Projects
+                "Tasks" -> CCaptnTab.Tasks
+                "Notes" -> CCaptnTab.Notes
+                "Email" -> CCaptnTab.Email
+                "Indicators" -> CCaptnTab.Indicators
+                else -> CCaptnTab.Calendar
+            }
+            if (targetTab != selectedTab) {
+                selectedTab = targetTab
+                navController.navigate(targetTab.route) {
+                    popUpTo(navController.graph.startDestinationId) {
+                        inclusive = true
+                    }
+                }
+            }
+            landingViewApplied = true
+        }
+    }
 
     // Views panel state (right-swipe panel)
     var viewsPanelOpen by remember { mutableStateOf(false) }
@@ -241,6 +286,10 @@ private fun CwocApp(
     LaunchedEffect(Unit) {
         if (authRepository.isAuthenticated()) {
             authRepository.fetchUserProfile()
+            // Also refresh from prefs after a short delay — sync may have updated
+            // the profile image URL in SharedPreferences from its own getMe() call
+            kotlinx.coroutines.delay(3000)
+            authRepository.refreshProfileFromPrefs()
         }
     }
 
@@ -260,6 +309,13 @@ private fun CwocApp(
                 }
                 navigateTo == "weather" -> {
                     navController.navigate(Screen.Weather.route)
+                }
+                navigateTo == "notifications" -> {
+                    navController.navigate(Screen.Notifications.route)
+                }
+                navigateTo.startsWith("profile/") -> {
+                    val uid = navigateTo.removePrefix("profile/")
+                    navController.navigate(Screen.ContactEditor.createProfileRoute(uid))
                 }
                 navigateTo.startsWith("calendar/") -> {
                     navController.navigate(Screen.Calendar.route)
@@ -307,8 +363,25 @@ private fun CwocApp(
     val showNavChrome = currentRoute != null && currentRoute in cCaptnRoutes
 
     CwocTheme {
-        // Single NavHost — chrome is conditionally shown based on current route
-        if (showNavChrome) {
+        if (currentRoute == null && isAuthenticated) {
+            // Show CWOC logo on parchment while nav resolves
+            ParchmentBackground {
+                Image(
+                    painter = painterResource(id = R.drawable.cwoc_logo),
+                    contentDescription = "CWOC",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxSize(0.5f),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        } else if (showNavChrome) {
+            // Dismiss keyboard whenever the drawer opens (covers swipe gesture too)
+            LaunchedEffect(drawerState.currentValue) {
+                if (drawerState.currentValue == DrawerValue.Open) {
+                    focusManager.clearFocus()
+                }
+            }
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 gesturesEnabled = !viewsPanelOpen,
@@ -335,6 +408,13 @@ private fun CwocApp(
                             scope.launch { drawerState.close() }
                         },
                         sidebarState = sidebarState,
+                        enabledPeriods = remember(currentSettings?.enabledPeriods) {
+                            com.cwoc.app.domain.settings.PeriodFilterUtil.filterEnabledPeriods(
+                                com.cwoc.app.domain.settings.PeriodFilterUtil.DISPLAY_ORDER,
+                                currentSettings?.enabledPeriods
+                            )
+                        },
+                        customDaysCount = currentSettings?.customDaysCount?.toIntOrNull() ?: 7,
                         emailFolder = sidebarState.emailFolder,
                         onEmailFolderChange = { sidebarStateViewModel.setEmailFolder(it) },
                         onTodayClick = { sidebarStateViewModel.goToToday() },
@@ -442,6 +522,7 @@ private fun CwocApp(
                         )
                     },
                     topBar = {
+                        Box {
                         TopAppBar(
                             modifier = Modifier
                                 .pointerInput(selectedTab, orderedTabs) {
@@ -474,103 +555,156 @@ private fun CwocApp(
                                         }
                                     }
                                 },
-                            title = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // "Omni" is tappable — navigates directly to Omni view
-                                    Text(
-                                        text = "Omni",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.clickable {
-                                            selectedTab = CCaptnTab.Omni
-                                            navController.navigate(Screen.OmniView.route) {
-                                                popUpTo(navController.graph.startDestinationId) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    )
-                                    Text(
-                                        text = " Chits",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            },
+                            title = { },
                             navigationIcon = {
-                                IconButton(onClick = {
-                                    scope.launch {
-                                        viewsPanelOpen = false
-                                        drawerState.open()
+                                // Hamburger + logo matching mobile web: [☰] [Logo]
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    // Hamburger button (brown bg, cream text, extreme left)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(Color(0xFF8B5A2B), RoundedCornerShape(4.dp))
+                                            .border(1.dp, Color(0xFF5A3F2A), RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                scope.launch {
+                                                    viewsPanelOpen = false
+                                                    drawerState.open()
+                                                }
+                                                focusManager.clearFocus()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "☰",
+                                            color = Color(0xFFFFF8E1),
+                                            fontSize = 16.sp,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        )
                                     }
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Open navigation drawer"
+                                    // Omni logo (circular)
+                                    Image(
+                                        painter = painterResource(id = R.drawable.cwoc_logo),
+                                        contentDescription = "C.W.'s Omni Chits Logo",
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .border(1.dp, Color(0xFF5A3F2A), CircleShape)
+                                            .clickable {
+                                                scope.launch {
+                                                    viewsPanelOpen = false
+                                                    drawerState.open()
+                                                }
+                                                focusManager.clearFocus()
+                                            },
+                                        contentScale = ContentScale.Crop
                                     )
                                 }
                             },
                             actions = {
-                                // Profile menu (avatar + dropdown with logout/switch user/view profile/notifications)
-                                val profilePrefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
-                                ProfileMenu(
-                                    username = currentUsername,
-                                    displayName = userDisplayName,
-                                    profileImageUrl = currentUserId?.let { "/api/contacts/$it/image" },
-                                    serverUrl = profilePrefs.getString("server_url", "")?.trimEnd('/') ?: "",
-                                    authToken = profilePrefs.getString("auth_token", "") ?: "",
-                                    onLogout = {
-                                        authRepository.clearToken()
-                                        navController.navigate(Screen.Login.route) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
-                                    },
-                                    onSwitchUser = {
-                                        authRepository.clearToken()
-                                        navController.navigate(Screen.Login.route) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
-                                    },
-                                    onViewProfile = {
-                                        val uid = currentUserId
-                                        if (uid != null) {
-                                            navController.navigate(Screen.ContactEditor.createProfileRoute(uid))
-                                        }
-                                    },
-                                    onViewNotifications = {
-                                        navController.navigate(Screen.Notifications.route)
-                                    },
-                                    notificationCount = profileNotifCount,
-                                    notifications = profileNotifications,
-                                    onAcceptNotification = { id -> profileMenuViewModel.acceptNotification(id) },
-                                    onDeclineNotification = { id -> profileMenuViewModel.declineNotification(id) },
-                                    onDismissNotification = { id -> profileMenuViewModel.dismissNotification(id) },
-                                    onSnoozeNotification = { id -> profileMenuViewModel.snoozeNotification(id) },
-                                    onNavigateToChit = { chitId ->
-                                        navController.navigate(Screen.Editor.createRoute(chitId))
-                                    }
-                                )
-
-                                // Views button — shows current tab name, opens views panel
-                                androidx.compose.material3.TextButton(
-                                    onClick = {
-                                        scope.launch { drawerState.close() }
-                                        viewsPanelOpen = true
-                                    }
+                                // Right side: [view icon circle] [☰ square] — no text
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(end = 4.dp)
                                 ) {
-                                    Text(
-                                        text = "☰ ${selectedTab.label}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    // View icon (circular, matching logo style)
+                                    if (selectedTab.drawableResId != null) {
+                                        Image(
+                                            painter = painterResource(id = selectedTab.drawableResId!!),
+                                            contentDescription = selectedTab.label,
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(CircleShape)
+                                                .border(1.dp, Color(0xFF5A3F2A), CircleShape)
+                                                .clickable {
+                                                    scope.launch { drawerState.close() }
+                                                    viewsPanelOpen = true
+                                                    focusManager.clearFocus()
+                                                }
+                                        )
+                                    }
+                                    // Hamburger button (exact match of left hamburger)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .background(Color(0xFF8B5A2B), RoundedCornerShape(4.dp))
+                                            .border(1.dp, Color(0xFF5A3F2A), RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                scope.launch { drawerState.close() }
+                                                viewsPanelOpen = true
+                                                focusManager.clearFocus()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "☰",
+                                            color = Color(0xFFFFF8E1),
+                                            fontSize = 16.sp,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.size(8.dp))
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = CwocHeaderBg
                             )
                         )
+                        // Profile avatar overlay — centered horizontally, aligned with content row
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize(),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .height(64.dp),  // Standard TopAppBar content height
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ProfileMenu(
+                                username = currentUsername,
+                                displayName = userDisplayName,
+                                profileImageUrl = userProfileImageUrl,
+                                serverUrl = authRepository.getLastServerUrl()?.trimEnd('/') ?: "",
+                                authToken = authRepository.getToken() ?: "",
+                                onLogout = {
+                                    authRepository.clearToken()
+                                    navController.navigate(Screen.Login.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                },
+                                onSwitchUser = {
+                                    authRepository.clearToken()
+                                    navController.navigate(Screen.Login.route) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                },
+                                onViewProfile = {
+                                    val uid = currentUserId
+                                    if (uid != null) {
+                                        navController.navigate(Screen.ContactEditor.createProfileRoute(uid))
+                                    }
+                                },
+                                onViewNotifications = {
+                                    navController.navigate(Screen.Notifications.route)
+                                },
+                                notificationCount = profileNotifCount,
+                                notifications = profileNotifications,
+                                onAcceptNotification = { id -> profileMenuViewModel.acceptNotification(id) },
+                                onDeclineNotification = { id -> profileMenuViewModel.declineNotification(id) },
+                                onDismissNotification = { id -> profileMenuViewModel.dismissNotification(id) },
+                                onSnoozeNotification = { id -> profileMenuViewModel.snoozeNotification(id) },
+                                onNavigateToChit = { chitId ->
+                                    navController.navigate(Screen.Editor.createRoute(chitId))
+                                }
+                            )
+                            }
+                        }
+                        }
                     }
                 ) { innerPadding ->
                     // Pull-to-refresh wrapping the entire content area (tab row + views)
@@ -602,6 +736,7 @@ private fun CwocApp(
                                 onOpenPanel = {
                                     if (drawerState.currentValue == DrawerValue.Closed) {
                                         viewsPanelOpen = true
+                                        focusManager.clearFocus()
                                     }
                                 }
                             ) {
@@ -796,11 +931,17 @@ private fun CwocApp(
                             "days" to alarmData.days,
                             "enabled" to true
                         )
-                        standaloneAlertRepository.create(
+                        val result = standaloneAlertRepository.create(
                             type = "alarm",
                             name = alarmData.name.ifBlank { null },
                             data = data
                         )
+                        result.onFailure { e ->
+                            android.util.Log.e("CWOC_QUICK", "Quick alarm create FAILED: ${e.message}")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Alarm failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                     showQuickAlertSheet = false
                 },
@@ -811,11 +952,17 @@ private fun CwocApp(
                             "totalSeconds" to totalSeconds,
                             "loop" to timerData.loop
                         )
-                        standaloneAlertRepository.create(
+                        val result = standaloneAlertRepository.create(
                             type = "timer",
                             name = timerData.name.ifBlank { null },
                             data = data
                         )
+                        result.onFailure { e ->
+                            android.util.Log.e("CWOC_QUICK", "Quick timer create FAILED: ${e.message}")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                android.widget.Toast.makeText(context, "Timer failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                     showQuickAlertSheet = false
                 },

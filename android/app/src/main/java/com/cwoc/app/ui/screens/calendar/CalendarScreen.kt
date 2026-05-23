@@ -47,6 +47,9 @@ import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.util.DateUtils
 import com.cwoc.app.ui.viewmodel.SidebarStateViewModel
+import com.cwoc.app.ui.viewmodel.FilterSortViewModel
+import com.cwoc.app.domain.filter.FilterEngine
+import com.cwoc.app.domain.filter.FilterState
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import com.cwoc.app.ui.theme.CwocDialogDefaults
@@ -64,9 +67,17 @@ fun CalendarScreen(
     onNavigateToEditor: (String) -> Unit = {},
     onNavigateToNewChitWithPrefill: (start: String, end: String) -> Unit = { _, _ -> },
     sidebarStateViewModel: SidebarStateViewModel? = null,
+    filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
+
+    // Apply all display filters (habits, complete, declined, snoozed, email, etc.)
+    // This matches the web's filter pipeline applied before calendar rendering.
+    val filteredEvents = remember(uiState.events, filterState) {
+        FilterEngine.applyFilters(uiState.events, filterState)
+    }
     var quickEditChit by remember { mutableStateOf<ChitEntity?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -183,7 +194,7 @@ fun CalendarScreen(
                     )
                 }
             }
-            uiState.events.isEmpty() -> {
+            filteredEvents.isEmpty() -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -208,11 +219,13 @@ fun CalendarScreen(
                     CalendarViewMode.DAY -> {
                         // C1: Time grid instead of flat list
                         DayTimeGrid(
-                            events = uiState.events,
+                            events = filteredEvents,
                             date = uiState.selectedDate,
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.dayScrollToHour,
                             snapMinutes = uiState.calendarSnap,
+                            hourStart = uiState.allViewStartHour,
+                            hourEnd = uiState.allViewEndHour,
                             onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
                             onEventLongPress = { event -> quickEditChit = event },
                             onEventDragEnd = handleDragEnd,
@@ -226,12 +239,28 @@ fun CalendarScreen(
                     }
                     CalendarViewMode.WEEK -> {
                         // C1 sub-item 2: Week time grid with 7 columns
+                        // Adjust weekStartDate to the configured week start day
+                        val startDow = when (uiState.weekStartDay.toIntOrNull()) {
+                            0 -> java.time.DayOfWeek.SUNDAY
+                            1 -> java.time.DayOfWeek.MONDAY
+                            2 -> java.time.DayOfWeek.TUESDAY
+                            3 -> java.time.DayOfWeek.WEDNESDAY
+                            4 -> java.time.DayOfWeek.THURSDAY
+                            5 -> java.time.DayOfWeek.FRIDAY
+                            6 -> java.time.DayOfWeek.SATURDAY
+                            else -> java.time.DayOfWeek.SUNDAY
+                        }
+                        val adjustedWeekStart = uiState.selectedDate.with(
+                            java.time.temporal.TemporalAdjusters.previousOrSame(startDow)
+                        )
                         WeekTimeGrid(
-                            events = uiState.events,
-                            weekStartDate = uiState.selectedDate,
+                            events = filteredEvents,
+                            weekStartDate = adjustedWeekStart,
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.dayScrollToHour,
                             snapMinutes = uiState.calendarSnap,
+                            hourStart = uiState.allViewStartHour,
+                            hourEnd = uiState.allViewEndHour,
                             onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
                             onEventDragEnd = handleDragEnd,
                             onEmptySlotTap = { tappedTime ->
@@ -244,9 +273,9 @@ fun CalendarScreen(
                     }
                     CalendarViewMode.MONTH -> {
                         MonthView(
-                            events = uiState.events,
+                            events = filteredEvents,
                             selectedDate = uiState.selectedDate,
-                            weekStartDay = "sunday",
+                            weekStartDay = uiState.weekStartDay,
                             monthMode = uiState.monthMode,
                             onDayTap = { date ->
                                 viewModel.setDate(date)
@@ -265,9 +294,9 @@ fun CalendarScreen(
                     }
                     CalendarViewMode.YEAR -> {
                         YearView(
-                            events = uiState.events,
+                            events = filteredEvents,
                             selectedDate = uiState.selectedDate,
-                            weekStartDay = "sunday",
+                            weekStartDay = uiState.weekStartDay,
                             onMonthTap = { date ->
                                 viewModel.setDate(date)
                                 viewModel.setViewMode(CalendarViewMode.MONTH)
@@ -280,18 +309,20 @@ fun CalendarScreen(
                     }
                     CalendarViewMode.ITINERARY -> {
                         ItineraryView(
-                            events = uiState.events,
+                            events = filteredEvents,
                             onEventTap = { chitId -> onNavigateToEditor(resolveChitId(chitId)) }
                         )
                     }
                     CalendarViewMode.X_DAY -> {
                         // X-Day view: same as week time grid but with configurable day count
                         WeekTimeGrid(
-                            events = uiState.events,
+                            events = filteredEvents,
                             weekStartDate = uiState.selectedDate,
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.dayScrollToHour,
                             snapMinutes = uiState.calendarSnap,
+                            hourStart = uiState.allViewStartHour,
+                            hourEnd = uiState.allViewEndHour,
                             dayCount = uiState.xDayCount,
                             onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
                             onEventDragEnd = handleDragEnd,
@@ -303,15 +334,30 @@ fun CalendarScreen(
                         )
                     }
                     CalendarViewMode.WORK_HOURS -> {
-                        // Work Hours view — Week view filtered to work hours only
+                        // Work Hours view — Week view filtered to work hours and work days only
+                        // Adjust weekStartDate to the configured week start day
+                        val workStartDow = when (uiState.weekStartDay.toIntOrNull()) {
+                            0 -> java.time.DayOfWeek.SUNDAY
+                            1 -> java.time.DayOfWeek.MONDAY
+                            2 -> java.time.DayOfWeek.TUESDAY
+                            3 -> java.time.DayOfWeek.WEDNESDAY
+                            4 -> java.time.DayOfWeek.THURSDAY
+                            5 -> java.time.DayOfWeek.FRIDAY
+                            6 -> java.time.DayOfWeek.SATURDAY
+                            else -> java.time.DayOfWeek.SUNDAY
+                        }
+                        val adjustedWorkWeekStart = uiState.selectedDate.with(
+                            java.time.temporal.TemporalAdjusters.previousOrSame(workStartDow)
+                        )
                         WeekTimeGrid(
-                            events = uiState.events,
-                            weekStartDate = uiState.selectedDate,
+                            events = filteredEvents,
+                            weekStartDate = adjustedWorkWeekStart,
                             timeFormat = uiState.timeFormat,
                             scrollToHour = uiState.workStartHour,
                             snapMinutes = uiState.calendarSnap,
                             hourStart = uiState.workStartHour,
                             hourEnd = uiState.workEndHour,
+                            workDaysFilter = uiState.workDays,
                             onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
                             onEventDragEnd = handleDragEnd,
                             onEmptySlotTap = { tappedTime ->

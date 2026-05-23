@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -32,9 +33,13 @@ import kotlin.math.roundToInt
  * When the user long-presses and drags a card, it visually lifts and moves with the finger.
  * On drop, the onReorder callback is invoked with the from/to indices.
  *
+ * If the user long-presses but does NOT drag (holds still), the onLongPressItem callback
+ * is invoked — this opens the action menu, matching mobile web behavior.
+ *
  * @param items The list of items to display
  * @param key A function to extract a stable key from each item
  * @param onReorder Callback with (fromIndex, toIndex) when a drag completes
+ * @param onLongPressItem Callback when long-press completes without drag (action menu)
  * @param enabled Whether drag-to-reorder is enabled (only when sort is "manual")
  * @param itemContent The composable content for each item
  */
@@ -44,6 +49,7 @@ fun <T> ReorderableLazyColumn(
     items: List<T>,
     key: (T) -> Any,
     onReorder: (fromIndex: Int, toIndex: Int) -> Unit,
+    onLongPressItem: ((T) -> Unit)? = null,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -54,6 +60,7 @@ fun <T> ReorderableLazyColumn(
     var draggedIndex by remember { mutableIntStateOf(-1) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
     var targetIndex by remember { mutableIntStateOf(-1) }
+    var didDrag by remember { mutableStateOf(false) }
 
     LazyColumn(
         state = listState,
@@ -84,10 +91,12 @@ fun <T> ReorderableLazyColumn(
                                     onDragStart = {
                                         draggedIndex = index
                                         dragOffsetY = 0f
+                                        didDrag = false
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         dragOffsetY += dragAmount.y
+                                        didDrag = true
 
                                         // Calculate target index based on drag offset
                                         val itemHeight = size.height.toFloat()
@@ -97,17 +106,26 @@ fun <T> ReorderableLazyColumn(
                                         }
                                     },
                                     onDragEnd = {
-                                        if (draggedIndex >= 0 && targetIndex >= 0 && draggedIndex != targetIndex) {
+                                        if (didDrag && draggedIndex >= 0 && targetIndex >= 0 && draggedIndex != targetIndex) {
                                             onReorder(draggedIndex, targetIndex)
+                                        } else if (!didDrag && draggedIndex >= 0) {
+                                            // Long press without drag → action menu
+                                            onLongPressItem?.invoke(items[draggedIndex])
                                         }
                                         draggedIndex = -1
                                         dragOffsetY = 0f
                                         targetIndex = -1
+                                        didDrag = false
                                     },
                                     onDragCancel = {
+                                        if (!didDrag && draggedIndex >= 0) {
+                                            // Long press cancelled without drag → action menu
+                                            onLongPressItem?.invoke(items[draggedIndex])
+                                        }
                                         draggedIndex = -1
                                         dragOffsetY = 0f
                                         targetIndex = -1
+                                        didDrag = false
                                     }
                                 )
                             }

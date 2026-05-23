@@ -83,7 +83,11 @@ object WidgetDataProvider {
                 .map { chit ->
                     val time = chit.startDatetime?.let {
                         try {
-                            val dt = LocalDateTime.parse(it)
+                            // Strip timezone offset before parsing
+                            var s = it.trimEnd()
+                            if (s.endsWith("Z", ignoreCase = true)) s = s.dropLast(1)
+                            else s = s.replace(Regex("[+-]\\d{2}:\\d{2}$"), "")
+                            val dt = LocalDateTime.parse(s)
                             dt.format(DateTimeFormatter.ofPattern("h:mm a"))
                         } catch (_: Exception) { null }
                     }
@@ -606,10 +610,18 @@ object WidgetDataProvider {
 
     /**
      * Formats a datetime string as a short date (e.g., "Jan 15").
+     * Strips timezone offset/suffix before parsing.
      */
     private fun formatShortDate(dateTimeStr: String): String? {
         return try {
-            val dt = LocalDateTime.parse(dateTimeStr)
+            // Strip timezone offset (Z, +HH:MM, -HH:MM) before parsing
+            var s = dateTimeStr.trimEnd()
+            if (s.endsWith("Z", ignoreCase = true)) {
+                s = s.dropLast(1)
+            } else {
+                s = s.replace(Regex("[+-]\\d{2}:\\d{2}$"), "")
+            }
+            val dt = LocalDateTime.parse(s)
             dt.format(DateTimeFormatter.ofPattern("MMM d"))
         } catch (_: Exception) {
             null

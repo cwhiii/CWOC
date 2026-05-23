@@ -197,6 +197,7 @@ fun SettingsDto.toEntity(syncedAt: String, gson: Gson): SettingsEntity {
         defaultShowHabitsOnCalendar = default_show_habits_on_calendar,
         defaultTimezone = default_timezone,
         defaultView = default_view,
+        landingView = default_view,
         viewOrder = view_order.toJsonString(gson),
         syncVersion = sync_version,
         lastSyncedAt = syncedAt,

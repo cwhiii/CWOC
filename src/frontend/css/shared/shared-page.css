@@ -47,7 +47,7 @@
 
 /* ── Base Body ──────────────────────────────────────────────────────────── */
 body {
-    background-image: url("/static/parchment.jpg");
+    background-image: url("/static/images/parchment.jpg");
     background-size: cover;
     background-attachment: fixed;
     font-family: 'Lora', Georgia, serif;
@@ -483,7 +483,7 @@ input[type="color"] {
     position: fixed;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: #fdf6e3;
     border: 3px solid #6b4226;
     border-radius: 12px;
@@ -661,7 +661,7 @@ input[type="color"] {
 .cwoc-alert-overlay.active { opacity: 1; }
 
 .cwoc-alert-modal {
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: #fff8e1;
     border: 3px solid #8b4513;
     border-radius: 12px;
@@ -2220,7 +2220,7 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
 }
 
 #addToBundleModalOverlay .modal-content {
-  background: url("/static/parchment.jpg") center/cover;
+  background: url("/static/images/parchment.jpg") center/cover;
   background-color: #fffaf0;
   border: 2px solid #6b4e31;
   border-radius: 12px;

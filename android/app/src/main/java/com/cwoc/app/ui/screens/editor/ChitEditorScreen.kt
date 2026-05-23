@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -105,6 +106,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -143,6 +145,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
+import com.cwoc.app.ui.theme.CwocAgedBrownDark
 import com.cwoc.app.ui.theme.CwocBackground
 import com.cwoc.app.ui.theme.CwocOutline
 import com.cwoc.app.ui.theme.CwocPrimary
@@ -152,7 +155,7 @@ import androidx.compose.material3.Button
  * Full-screen editor for creating and editing chits.
  * Phase 2 remediation: all 43 audit gaps addressed.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ChitEditorScreen(
     chitId: String,
@@ -186,6 +189,7 @@ fun ChitEditorScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(formState.id, isLoading) {
         if (!isLoading && !formState.isNew && chitRepository != null) {
@@ -302,24 +306,41 @@ fun ChitEditorScreen(
     }
 
     // Build actions for the sidebar
-    val sidebarActions = remember(isDirty, isPinned, isArchived, formState.showOnCalendar) {
+    val sidebarActions = remember(isDirty, isPinned, isArchived, formState.showOnCalendar, formState.notification, formState.isNew) {
         buildList {
+            // ─── Navigation group ───
+            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                label = "← Exit",
+                onClick = { viewModel.onBackPressed() }
+            ))
             if (isDirty) {
-                add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
-                    label = "📌 Save & Stay",
-                    onClick = { viewModel.saveAndStay() },
-                    isHighlighted = true
-                ))
                 add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
                     label = "🚪 Save & Exit",
                     onClick = { viewModel.save() },
                     isHighlighted = true
                 ))
+                add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                    label = "📌 Save & Stay",
+                    onClick = { viewModel.saveAndStay() },
+                    isHighlighted = true
+                ))
             }
+
+            // ─── Separator ───
             add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
-                label = if (formState.showOnCalendar == false) "Show in Calendar" else "Hide in Calendar",
-                icon = "🗓️",
+                label = "",
+                onClick = {},
+                isSeparator = true
+            ))
+
+            // ─── All options (flattened, no duplicates) ───
+            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                label = if (formState.showOnCalendar == false) "🗓️ Show in Calendar" else "🗓️ Hide in Calendar",
                 onClick = { viewModel.updateForm(formState.copy(showOnCalendar = !(formState.showOnCalendar ?: true))) }
+            ))
+            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                label = if (formState.notification == true) "🔕 Remove Reminder" else "🔔 Mark as Reminder",
+                onClick = { viewModel.updateForm(formState.copy(notification = !(formState.notification ?: false))) }
             ))
             add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
                 label = "🧮 Calculator",
@@ -332,10 +353,6 @@ fun ChitEditorScreen(
             add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
                 label = "😴 Snooze",
                 onClick = { showSnoozeDialog = true }
-            ))
-            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
-                label = "⚙️ Options",
-                onClick = { showOptionsMenu = true }
             ))
             if (!formState.isNew) {
                 add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
@@ -361,81 +378,34 @@ fun ChitEditorScreen(
                     }
                 ))
                 add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                    label = "📋 Duplicate",
+                    onClick = { viewModel.duplicateChit() }
+                ))
+                add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                    label = "📤 Share",
+                    onClick = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, formState.title)
+                            putExtra(Intent.EXTRA_TEXT, buildShareText(formState))
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Chit"))
+                    }
+                ))
+                add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
+                    label = "✉️ Make Email",
+                    onClick = { viewModel.updateForm(formState.copy(emailStatus = "draft")) }
+                ))
+                add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
                     label = "🗑️ Delete",
                     onClick = { showDeleteConfirm = true },
                     isDanger = true
                 ))
             }
-            add(com.cwoc.app.ui.screens.editor.zones.ActionItem(
-                label = "✕ Exit",
-                onClick = { viewModel.onBackPressed() }
-            ))
         }
     }
 
-    // Options menu (shown as dialog when triggered from sidebar)
-    if (showOptionsMenu) {
-        AlertDialog(
-            onDismissRequest = { showOptionsMenu = false },
-            modifier = CwocDialogDefaults.borderModifier,
-            containerColor = CwocDialogDefaults.containerColor,
-            title = { Text("Options", style = CwocDialogDefaults.titleStyle) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    // Hide in Calendar toggle
-                    TextButton(onClick = {
-                        showOptionsMenu = false
-                        viewModel.updateForm(formState.copy(showOnCalendar = !(formState.showOnCalendar ?: true)))
-                    }) {
-                        Text(if (formState.showOnCalendar == false) "Show in Calendar" else "Hide in Calendar")
-                    }
-                    // Reminder toggle
-                    TextButton(onClick = {
-                        showOptionsMenu = false
-                        viewModel.updateForm(formState.copy(notification = !(formState.notification ?: false)))
-                    }) {
-                        Text(if (formState.notification == true) "Remove Reminder" else "Mark as Reminder")
-                    }
-                    if (!formState.isNew) {
-                        // Archive/Unarchive
-                        TextButton(onClick = {
-                            showOptionsMenu = false
-                            chitRepository?.let { repo ->
-                                coroutineScope.launch {
-                                    if (isArchived) { repo.unarchive(formState.id); isArchived = false }
-                                    else { repo.archive(formState.id); isArchived = true }
-                                }
-                            }
-                        }) { Text(if (isArchived) "📦 Unarchive" else "📦 Archive") }
-                        // Duplicate
-                        TextButton(onClick = { showOptionsMenu = false; viewModel.duplicateChit() }) { Text("Duplicate") }
-                        // Share
-                        TextButton(onClick = {
-                            showOptionsMenu = false
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, formState.title)
-                                putExtra(Intent.EXTRA_TEXT, buildShareText(formState))
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Chit"))
-                        }) { Text("Share") }
-                        // Make Email
-                        TextButton(onClick = { showOptionsMenu = false; viewModel.updateForm(formState.copy(emailStatus = "draft")) }) { Text("Make Email") }
-                        // QR Code
-                        TextButton(onClick = { showOptionsMenu = false; showQrDialog = true }) { Text("📱 QR Code") }
-                        // Delete
-                        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-                        TextButton(onClick = { showOptionsMenu = false; showDeleteConfirm = true }, colors = CwocDialogDefaults.dangerButtonColors()) {
-                            Text("🗑️ Delete", color = Color(0xFFB22222))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showOptionsMenu = false }) { Text("Close") }
-            }
-        )
-    }
+    // Options menu removed — all options are now directly in the actions sidebar
 
     // ─── Main Layout: Nav Header + Zone Content + Sidebars ──────────────
     Box(modifier = Modifier.fillMaxSize()) {
@@ -446,20 +416,24 @@ fun ChitEditorScreen(
         } else {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 // Sticky nav header with swipe for prev/next zone (matching web)
+                // Uses a consumed flag to ensure only ONE zone change per swipe gesture
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .pointerInput(Unit) {
                             var startX = 0f
                             var startTime = 0L
+                            var consumed = false
                             detectHorizontalDragGestures(
                                 onDragStart = { offset ->
                                     startX = offset.x
                                     startTime = System.currentTimeMillis()
+                                    consumed = false
                                 },
-                                onDragEnd = {},
-                                onDragCancel = {},
+                                onDragEnd = { consumed = false },
+                                onDragCancel = { consumed = false },
                                 onHorizontalDrag = { change, _ ->
+                                    if (consumed) return@detectHorizontalDragGestures
                                     val elapsed = System.currentTimeMillis() - startTime
                                     val totalDrag = change.position.x - startX
                                     if (elapsed < 500 && kotlin.math.abs(totalDrag) > 80) {
@@ -468,7 +442,7 @@ fun ChitEditorScreen(
                                         } else {
                                             zoneState.prevZone()
                                         }
-                                        startX = change.position.x // reset
+                                        consumed = true
                                     }
                                 }
                             )
@@ -483,8 +457,10 @@ fun ChitEditorScreen(
                         hasUnsavedChanges = isDirty,
                         repeatEnabled = !formState.recurrenceRule.isNullOrBlank(),
                         habitActive = formState.habit,
-                        onActionsClick = { zoneState.showActionsSidebar = true },
-                        onZoneListClick = { zoneState.showZoneList = true }
+                        isOverviewZone = zoneState.currentZone.id == "titleZone",
+                        onTitleChange = { viewModel.updateForm(formState.copy(title = it)) },
+                        onActionsClick = { zoneState.showActionsSidebar = true; focusManager.clearFocus() },
+                        onZoneListClick = { zoneState.showZoneList = true; focusManager.clearFocus() }
                     )
                 }
 
@@ -511,9 +487,11 @@ fun ChitEditorScreen(
                                     if (elapsed < 500 && kotlin.math.abs(totalDrag) > 100) {
                                         if (totalDrag < 0 && !zoneState.showZoneList && !zoneState.showActionsSidebar) {
                                             zoneState.showZoneList = true
+                                            focusManager.clearFocus()
                                             startX = change.position.x // reset to prevent re-trigger
                                         } else if (totalDrag > 0 && !zoneState.showActionsSidebar && !zoneState.showZoneList) {
                                             zoneState.showActionsSidebar = true
+                                            focusManager.clearFocus()
                                             startX = change.position.x
                                         }
                                     }
@@ -564,7 +542,7 @@ fun ChitEditorScreen(
                         // Render the current zone's content
                         when (zoneState.currentZone.id) {
                             "titleZone" -> {
-                                // Title input — the ONE place the title appears
+                                // Pin button row (title is now in the nav header)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -587,23 +565,217 @@ fun ChitEditorScreen(
                                             fontSize = 18.sp
                                         )
                                     }
-                                    OutlinedTextField(
-                                        value = formState.title,
-                                        onValueChange = { viewModel.updateForm(formState.copy(title = it)) },
-                                        label = { Text("Title") },
-                                        singleLine = true,
-                                        modifier = Modifier.weight(1f),
-                                        colors = CwocInputDefaults.outlinedColors()
+                                    Text(
+                                        text = if (isPinned) "Pinned" else "Not pinned",
+                                        color = CwocAgedBrownDark.copy(alpha = 0.6f),
+                                        fontSize = 13.sp
                                     )
                                 }
                                 TitleMetadataRow(formState = formState)
-                                // Overview summary rows (dates, status, tags, etc.)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                val overviewRows = remember(formState) { buildOverviewRows(formState, sourceTab) }
-                                com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
-                                    rows = overviewRows,
-                                    onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) }
-                                )
+
+                                if (formState.isNew && sourceTab != null) {
+                                    // New chit: embed the relevant zone content inline
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    when (sourceTab) {
+                                        "Calendar" -> {
+                                            DateZone(
+                                                startDatetime = formState.startDatetime,
+                                                endDatetime = formState.endDatetime,
+                                                dueDatetime = formState.dueDatetime,
+                                                pointInTime = formState.pointInTime,
+                                                perpetual = formState.perpetual,
+                                                allDay = formState.allDay,
+                                                timezone = formState.timezone,
+                                                onStartDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(startDatetime = it)) },
+                                                onEndDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(endDatetime = it)) },
+                                                onDueDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(dueDatetime = it)) },
+                                                onPointInTimeChange = { viewModel.updateForm(viewModel.formState.value.copy(pointInTime = it)) },
+                                                onPerpetualChange = { viewModel.updateForm(viewModel.formState.value.copy(perpetual = it)) },
+                                                onAllDayChange = { viewModel.updateForm(viewModel.formState.value.copy(allDay = it)) },
+                                                onTimezoneChange = { viewModel.updateForm(viewModel.formState.value.copy(timezone = it)) },
+                                                status = formState.status,
+                                                onStatusChange = { viewModel.updateForm(viewModel.formState.value.copy(status = it)) },
+                                                recurrenceRule = formState.recurrenceRule,
+                                                onRecurrenceRuleChanged = { viewModel.updateForm(viewModel.formState.value.copy(recurrenceRule = it)) },
+                                                recurrenceExceptions = formState.recurrenceExceptions,
+                                                suggestedTimezone = suggestedTimezone,
+                                                habitActive = formState.habit,
+                                                habitResetPeriod = formState.habitResetPeriod,
+                                                onHabitResetPeriodChange = { viewModel.updateForm(viewModel.formState.value.copy(habitResetPeriod = it)) },
+                                                isNewChit = formState.isNew,
+                                                timeFormat = editorSettings.timeFormat,
+                                                calendarSnap = editorSettings.calendarSnap,
+                                                defaultTimezone = editorSettings.defaultTimezone,
+                                                defaultNotifications = editorSettings.defaultNotifications,
+                                                alertsJson = formState.alerts,
+                                                onAlertsChanged = { viewModel.updateForm(viewModel.formState.value.copy(alerts = it)) },
+                                                highlightDueDate = false
+                                            )
+                                        }
+                                        "Tasks" -> {
+                                            // Status
+                                            DropdownField(
+                                                label = "Status",
+                                                value = formState.status,
+                                                options = listOf("ToDo", "In Progress", "Blocked", "Complete", "Rejected"),
+                                                onValueChange = { viewModel.updateForm(formState.copy(status = it)) }
+                                            )
+                                            // Priority
+                                            DropdownField(
+                                                label = "Priority",
+                                                value = formState.priority,
+                                                options = listOf("High", "Medium", "Low"),
+                                                onValueChange = { viewModel.updateForm(formState.copy(priority = it)) }
+                                            )
+                                            // Severity
+                                            DropdownField(
+                                                label = "Severity",
+                                                value = formState.severity,
+                                                options = listOf("Critical", "Major", "Normal", "Minor"),
+                                                onValueChange = { viewModel.updateForm(formState.copy(severity = it)) }
+                                            )
+                                            // Assignee
+                                            DropdownField(
+                                                label = "Assignee",
+                                                value = formState.assignedTo,
+                                                options = editorSettings.sharedUsers,
+                                                onValueChange = { newAssignee ->
+                                                    val updatedPeople = if (newAssignee != null && newAssignee.isNotBlank() && !formState.people.contains(newAssignee)) {
+                                                        formState.people + newAssignee
+                                                    } else {
+                                                        formState.people
+                                                    }
+                                                    viewModel.updateForm(formState.copy(assignedTo = newAssignee, people = updatedPeople))
+                                                }
+                                            )
+                                            // Auto-Complete & Habit toggles
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("Auto-Complete", style = MaterialTheme.typography.labelSmall)
+                                                    androidx.compose.material3.Switch(
+                                                        checked = formState.autoCompleteChecklist ?: false,
+                                                        onCheckedChange = { viewModel.updateForm(formState.copy(autoCompleteChecklist = it)) },
+                                                        modifier = Modifier.height(24.dp)
+                                                    )
+                                                }
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text("Habit", style = MaterialTheme.typography.labelSmall)
+                                                    androidx.compose.material3.Switch(
+                                                        checked = formState.habit,
+                                                        onCheckedChange = { viewModel.updateForm(formState.copy(habit = it)) },
+                                                        modifier = Modifier.height(24.dp)
+                                                    )
+                                                }
+                                            }
+                                            // Prerequisites
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            PrerequisitesZone(
+                                                prerequisites = formState.prerequisites,
+                                                onPrerequisitesChange = { viewModel.updateForm(formState.copy(prerequisites = it)) }
+                                            )
+                                        }
+                                        "Notes" -> {
+                                            OutlinedTextField(
+                                                value = formState.note,
+                                                onValueChange = { viewModel.updateForm(formState.copy(note = it)) },
+                                                label = { Text("Notes") },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(200.dp)
+                                                    .focusRequester(notesFocusRequester),
+                                                colors = CwocInputDefaults.outlinedColors(),
+                                                maxLines = 10
+                                            )
+                                        }
+                                        "Checklists" -> {
+                                            ChecklistZoneV2(
+                                                checklistJson = formState.checklist,
+                                                chitId = chitId,
+                                                isNewChit = formState.isNew,
+                                                autoSaveEnabled = formState.checklistAutosave == "enabled",
+                                                onChecklistChange = { viewModel.updateForm(formState.copy(checklist = it)) },
+                                                onStatusChange = { viewModel.updateForm(formState.copy(status = it)) },
+                                                noteText = formState.note,
+                                                onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
+                                                autoCompleteEnabled = formState.autoCompleteChecklist == true,
+                                                currentStatus = formState.status,
+                                                externalFocusRequester = checklistFocusRequester
+                                            )
+                                        }
+                                        "Alarms" -> {
+                                            AlertsZone(
+                                                alertsJson = formState.alerts,
+                                                onAlertsChanged = { viewModel.updateForm(formState.copy(alerts = it)) },
+                                                timeFormat = editorSettings.timeFormat,
+                                                calendarSnap = editorSettings.calendarSnap
+                                            )
+                                        }
+                                        "Projects" -> {
+                                            // Projects zone
+                                            LaunchedEffect(formState.childChits) {
+                                                viewModel.loadChildChitSummaries(formState.childChits)
+                                            }
+                                            val childChitSummaries by viewModel.childChitSummaries.collectAsState()
+                                            ProjectsZone(
+                                                isProjectMaster = formState.isProjectMaster,
+                                                childChits = formState.childChits,
+                                                childChitSummaries = childChitSummaries,
+                                                onProjectMasterChange = { viewModel.updateForm(formState.copy(isProjectMaster = it)) },
+                                                onChildChitsChange = { viewModel.updateForm(formState.copy(childChits = it)) },
+                                                onChildStatusChange = { childId, newStatus ->
+                                                    viewModel.updateChildChitStatus(childId, newStatus)
+                                                }
+                                            )
+                                            // Checklist zone (Projects shows both)
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            ChecklistZoneV2(
+                                                checklistJson = formState.checklist,
+                                                chitId = chitId,
+                                                isNewChit = formState.isNew,
+                                                autoSaveEnabled = formState.checklistAutosave == "enabled",
+                                                onChecklistChange = { viewModel.updateForm(formState.copy(checklist = it)) },
+                                                onStatusChange = { viewModel.updateForm(formState.copy(status = it)) },
+                                                noteText = formState.note,
+                                                onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
+                                                autoCompleteEnabled = formState.autoCompleteChecklist == true,
+                                                currentStatus = formState.status,
+                                                externalFocusRequester = checklistFocusRequester
+                                            )
+                                        }
+                                        "Indicators" -> {
+                                            val indicatorObjects by viewModel.indicatorObjects.collectAsState()
+                                            HealthIndicatorsZone(
+                                                healthData = formState.healthData,
+                                                onHealthDataChange = { viewModel.updateForm(formState.copy(healthData = it)) },
+                                                indicatorObjects = indicatorObjects
+                                            )
+                                        }
+                                        "Email" -> {
+                                            // Email zone content handled by the dedicated emailSection zone
+                                            // Navigate there instead
+                                            LaunchedEffect(Unit) {
+                                                zoneState.navigateToZoneId("emailSection")
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Existing chit (or new with no sourceTab): show overview summary rows
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    val overviewRows = remember(formState) { buildOverviewRows(formState, sourceTab) }
+                                    com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
+                                        rows = overviewRows,
+                                        onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) }
+                                    )
+                                }
                             }
 
                             "datesSection" -> {
@@ -615,29 +787,29 @@ fun ChitEditorScreen(
                                     perpetual = formState.perpetual,
                                     allDay = formState.allDay,
                                     timezone = formState.timezone,
-                                    onStartDatetimeChange = { viewModel.updateForm(formState.copy(startDatetime = it)) },
-                                    onEndDatetimeChange = { viewModel.updateForm(formState.copy(endDatetime = it)) },
-                                    onDueDatetimeChange = { viewModel.updateForm(formState.copy(dueDatetime = it)) },
-                                    onPointInTimeChange = { viewModel.updateForm(formState.copy(pointInTime = it)) },
-                                    onPerpetualChange = { viewModel.updateForm(formState.copy(perpetual = it)) },
-                                    onAllDayChange = { viewModel.updateForm(formState.copy(allDay = it)) },
-                                    onTimezoneChange = { viewModel.updateForm(formState.copy(timezone = it)) },
+                                    onStartDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(startDatetime = it)) },
+                                    onEndDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(endDatetime = it)) },
+                                    onDueDatetimeChange = { viewModel.updateForm(viewModel.formState.value.copy(dueDatetime = it)) },
+                                    onPointInTimeChange = { viewModel.updateForm(viewModel.formState.value.copy(pointInTime = it)) },
+                                    onPerpetualChange = { viewModel.updateForm(viewModel.formState.value.copy(perpetual = it)) },
+                                    onAllDayChange = { viewModel.updateForm(viewModel.formState.value.copy(allDay = it)) },
+                                    onTimezoneChange = { viewModel.updateForm(viewModel.formState.value.copy(timezone = it)) },
                                     status = formState.status,
-                                    onStatusChange = { viewModel.updateForm(formState.copy(status = it)) },
+                                    onStatusChange = { viewModel.updateForm(viewModel.formState.value.copy(status = it)) },
                                     recurrenceRule = formState.recurrenceRule,
-                                    onRecurrenceRuleChanged = { viewModel.updateForm(formState.copy(recurrenceRule = it)) },
+                                    onRecurrenceRuleChanged = { viewModel.updateForm(viewModel.formState.value.copy(recurrenceRule = it)) },
                                     recurrenceExceptions = formState.recurrenceExceptions,
                                     suggestedTimezone = suggestedTimezone,
                                     habitActive = formState.habit,
                                     habitResetPeriod = formState.habitResetPeriod,
-                                    onHabitResetPeriodChange = { viewModel.updateForm(formState.copy(habitResetPeriod = it)) },
+                                    onHabitResetPeriodChange = { viewModel.updateForm(viewModel.formState.value.copy(habitResetPeriod = it)) },
                                     isNewChit = formState.isNew,
                                     timeFormat = editorSettings.timeFormat,
                                     calendarSnap = editorSettings.calendarSnap,
                                     defaultTimezone = editorSettings.defaultTimezone,
                                     defaultNotifications = editorSettings.defaultNotifications,
                                     alertsJson = formState.alerts,
-                                    onAlertsChanged = { viewModel.updateForm(formState.copy(alerts = it)) },
+                                    onAlertsChanged = { viewModel.updateForm(viewModel.formState.value.copy(alerts = it)) },
                                     highlightDueDate = (sourceTab == "Tasks" && formState.isNew)
                                 )
                             }
@@ -2123,6 +2295,7 @@ private fun LocationZone(
  * Formatting buttons wrap the currently selected text (matching web behavior exactly).
  * Heading buttons are stacked in a dropdown (tap "H" to show H1/H2/H3 options).
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun NotesZone(
     note: String,
@@ -2166,45 +2339,62 @@ private fun NotesZone(
         redoStack = emptyList()
     }
 
-    /** Wrap formatting (bold, italic, strikethrough, code). No selection = no-op (matches web). */
+    /** Wrap formatting (bold, italic, strikethrough, code). If no selection, inserts at cursor. */
     fun applyWrapFormat(delimiter: String) {
         val start = textFieldValue.selection.min
         val end = textFieldValue.selection.max
         val text = textFieldValue.text
-        if (start == end) return
         pushUndo(text)
-        val before = text.substring(0, start)
-        val selected = text.substring(start, end)
-        val after = text.substring(end)
-        val newText = "$before$delimiter$selected$delimiter$after"
-        val newEnd = start + delimiter.length + selected.length + delimiter.length
-        textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, newEnd))
-        onNoteChange(newText)
+        if (start == end) {
+            // No selection — insert delimiter pair at cursor
+            val before = text.substring(0, start)
+            val after = text.substring(start)
+            val newText = "$before$delimiter$delimiter$after"
+            val cursorPos = start + delimiter.length
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(cursorPos))
+            onNoteChange(newText)
+        } else {
+            val before = text.substring(0, start)
+            val selected = text.substring(start, end)
+            val after = text.substring(end)
+            val newText = "$before$delimiter$selected$delimiter$after"
+            val newEnd = start + delimiter.length + selected.length + delimiter.length
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, newEnd))
+            onNoteChange(newText)
+        }
     }
 
-    /** Link formatting. No selection = no-op. URL detection matches web. */
+    /** Link formatting. If no selection, inserts [text](url) at cursor. */
     fun applyLinkFormat() {
         val start = textFieldValue.selection.min
         val end = textFieldValue.selection.max
         val text = textFieldValue.text
-        if (start == end) return
         pushUndo(text)
-        val before = text.substring(0, start)
-        val selected = text.substring(start, end)
-        val after = text.substring(end)
-        val isUrl = selected.trim().let { it.startsWith("http://") || it.startsWith("https://") }
-        val newText: String
-        val newSel: TextRange
-        if (isUrl) {
-            newText = "${before}[link text](${selected.trim()})$after"
-            newSel = TextRange(start + 1, start + 1 + "link text".length)
+        if (start == end) {
+            // No selection — insert template at cursor
+            val before = text.substring(0, start)
+            val after = text.substring(start)
+            val newText = "${before}[text](url)$after"
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start + 1, start + 5))
+            onNoteChange(newText)
         } else {
-            newText = "${before}[$selected](url)$after"
-            val urlPos = start + 1 + selected.length + 2
-            newSel = TextRange(urlPos, urlPos + 3)
+            val before = text.substring(0, start)
+            val selected = text.substring(start, end)
+            val after = text.substring(end)
+            val isUrl = selected.trim().let { it.startsWith("http://") || it.startsWith("https://") }
+            val newText: String
+            val newSel: TextRange
+            if (isUrl) {
+                newText = "${before}[link text](${selected.trim()})$after"
+                newSel = TextRange(start + 1, start + 1 + "link text".length)
+            } else {
+                newText = "${before}[$selected](url)$after"
+                val urlPos = start + 1 + selected.length + 2
+                newSel = TextRange(urlPos, urlPos + 3)
+            }
+            textFieldValue = TextFieldValue(text = newText, selection = newSel)
+            onNoteChange(newText)
         }
-        textFieldValue = TextFieldValue(text = newText, selection = newSel)
-        onNoteChange(newText)
     }
 
     /** Heading: strips existing prefix, applies new level. Works with or without selection. */
@@ -2255,20 +2445,31 @@ private fun NotesZone(
         }
     }
 
-    /** Blockquote: only acts when text is selected (matches web). */
+    /** Blockquote: prefixes selected lines with "> ", or current line if no selection. */
     fun applyBlockquoteFormat() {
         val start = textFieldValue.selection.min
         val end = textFieldValue.selection.max
         val text = textFieldValue.text
-        if (start == end) return
         pushUndo(text)
-        val before = text.substring(0, start)
-        val selected = text.substring(start, end)
-        val after = text.substring(end)
-        val quoted = selected.split('\n').joinToString("\n") { "> $it" }
-        val newText = "$before$quoted$after"
-        textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + quoted.length))
-        onNoteChange(newText)
+        if (start == end) {
+            // No selection — prefix current line
+            val lineStart = text.lastIndexOf('\n', start - 1) + 1
+            val lineEnd = text.indexOf('\n', start).let { if (it == -1) text.length else it }
+            val lineText = text.substring(lineStart, lineEnd)
+            val replacement = "> $lineText"
+            val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
+            val newCursor = lineStart + replacement.length
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
+            onNoteChange(newText)
+        } else {
+            val before = text.substring(0, start)
+            val selected = text.substring(start, end)
+            val after = text.substring(end)
+            val quoted = selected.split('\n').joinToString("\n") { "> $it" }
+            val newText = "$before$quoted$after"
+            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + quoted.length))
+            onNoteChange(newText)
+        }
     }
 
     /** Horizontal rule: inserts at cursor position. */
@@ -2283,53 +2484,24 @@ private fun NotesZone(
         onNoteChange(newText)
     }
 
-    Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier = modifier) {
         // ── Content area (scrollable, takes remaining space) ──
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
         if (showPreview) {
-            // Preview mode: Data + Edit toggle header + rendered markdown
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box {
-                    IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(18.dp))
+            // Preview mode: tap anywhere to enter edit mode
+            MarkdownRenderer(
+                markdown = note.ifBlank { "_Tap to edit_" },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        showPreview = false
+                        textFieldValue = TextFieldValue(text = note, selection = TextRange(0))
+                        try { focusRequester.requestFocus() } catch (_: Exception) {}
                     }
-                    DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
-                        DropdownMenuItem(text = { Text("📋 Copy to clipboard") }, onClick = {
-                            showDataMenu = false
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Note", note))
-                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
-                        }, enabled = note.isNotBlank())
-                        DropdownMenuItem(text = { Text("⬇️ Download as file") }, onClick = {
-                            showDataMenu = false
-                            try {
-                                val fileName = "note_${System.currentTimeMillis()}.md"
-                                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-                                java.io.File(downloadsDir, fileName).writeText(note)
-                                android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
-                        }, enabled = note.isNotBlank())
-                        DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
-                        if (onMoveToChecklist != null) {
-                            DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
-                                showDataMenu = false
-                                val lines = note.lines().filter { it.isNotBlank() }
-                                if (lines.isNotEmpty()) { onMoveToChecklist(lines); onNoteChange("") }
-                            }, enabled = note.isNotBlank())
-                        }
-                        DropdownMenuItem(text = { Text("🔗 Share") }, onClick = {
-                            showDataMenu = false
-                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, note) }, "Share Note"))
-                        }, enabled = note.isNotBlank())
-                    }
-                }
-                IconButton(onClick = { showPreview = false }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(18.dp))
-                }
-            }
-            MarkdownRenderer(markdown = note, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
         } else {
-            // Full-width text input using TextFieldValue for selection tracking
+            // Edit mode: full-width text input, no horizontal margins
             OutlinedTextField(
                 value = textFieldValue,
                 onValueChange = { newValue ->
@@ -2342,28 +2514,23 @@ private fun NotesZone(
                             textFieldValue = TextFieldValue(text = processedValue, selection = TextRange(processedValue.length))
                         }
                         onNoteChange(processedValue)
-                        // J5: Detect [[ for chit link autocomplete
                         val lastBrackets = processedValue.lastIndexOf("[[")
                         if (lastBrackets >= 0) {
                             val afterBrackets = processedValue.substring(lastBrackets + 2)
-                            if (!afterBrackets.contains("]]")) {
-                                showChitLinkPicker = true
-                                chitLinkQuery = afterBrackets
-                            } else {
-                                showChitLinkPicker = false
-                            }
-                        } else {
-                            showChitLinkPicker = false
-                        }
+                            if (!afterBrackets.contains("]]")) { showChitLinkPicker = true; chitLinkQuery = afterBrackets }
+                            else { showChitLinkPicker = false }
+                        } else { showChitLinkPicker = false }
                     }
                 },
-                placeholder = { Text("Note") },
-                minLines = 5,
+                placeholder = { Text("Tap to start writing...") },
+                minLines = 8,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 0.dp)
                     .focusRequester(focusRequester)
-                    .onFocusChanged { isNotesFocused = it.isFocused },
-                colors = CwocInputDefaults.outlinedColors()
+                    .onFocusChanged { focused -> isNotesFocused = focused.isFocused },
+                colors = CwocInputDefaults.outlinedColors(),
+                shape = RoundedCornerShape(0.dp)
             )
 
             // J5: Chit link autocomplete with suggestions dropdown
@@ -2421,47 +2588,135 @@ private fun NotesZone(
         }
         } // end scrollable content Column
 
-        // ── Format toolbar pinned above keyboard via imePadding ──
-        if (!showPreview) {
+        // ── Toolbar (always visible — full in edit mode, minimal in preview mode) ──
+        if (showPreview) {
+            // Preview mode: Data + Edit buttons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .background(androidx.compose.ui.graphics.Color(0xFFF5F0E8))
+                    .padding(horizontal = 2.dp, vertical = 0.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box {
+                    IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(42.dp)) {
+                        Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(23.dp))
+                    }
+                    DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                        DropdownMenuItem(text = { Text("📋 Copy to clipboard") }, onClick = {
+                            showDataMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Note", note))
+                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("⬇️ Download as file") }, onClick = {
+                            showDataMenu = false
+                            try {
+                                val fileName = "note_${System.currentTimeMillis()}.md"
+                                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                                java.io.File(downloadsDir, fileName).writeText(note)
+                                android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
+                        if (onMoveToChecklist != null) {
+                            DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
+                                showDataMenu = false
+                                val lines = note.lines().filter { it.isNotBlank() }
+                                if (lines.isNotEmpty()) { onMoveToChecklist(lines); onNoteChange("") }
+                            }, enabled = note.isNotBlank())
+                        }
+                        DropdownMenuItem(text = { Text("🔗 Share") }, onClick = {
+                            showDataMenu = false
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, note) }, "Share Note"))
+                        }, enabled = note.isNotBlank())
+                    }
+                }
+                IconButton(onClick = { showPreview = false }, modifier = Modifier.size(42.dp)) {
+                    Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(23.dp))
+                }
+            }
+        } else {
+            var showBlockDropdown by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .imePadding()
                     .background(androidx.compose.ui.graphics.Color(0xFFF5F0E8))
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(horizontal = 2.dp, vertical = 0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(42.dp)) {
-                    Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(23.dp))
+                // Data menu (works in edit mode)
+                Box {
+                    IconButton(onClick = { showDataMenu = !showDataMenu }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { showDataMenu = !showDataMenu }, onLongClick = { android.widget.Toast.makeText(context, "Data actions", android.widget.Toast.LENGTH_SHORT).show() })) {
+                        Icon(Icons.Default.MoreVert, "Data", modifier = Modifier.size(23.dp))
+                    }
+                    DropdownMenu(expanded = showDataMenu, onDismissRequest = { showDataMenu = false }) {
+                        DropdownMenuItem(text = { Text("📋 Copy to clipboard") }, onClick = {
+                            showDataMenu = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Note", note))
+                            android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("⬇️ Download as file") }, onClick = {
+                            showDataMenu = false
+                            try {
+                                val fileName = "note_${System.currentTimeMillis()}.md"
+                                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                                java.io.File(downloadsDir, fileName).writeText(note)
+                                android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                        }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
+                        if (onMoveToChecklist != null) {
+                            DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
+                                showDataMenu = false
+                                val lines = note.lines().filter { it.isNotBlank() }
+                                if (lines.isNotEmpty()) { onMoveToChecklist(lines); onNoteChange("") }
+                            }, enabled = note.isNotBlank())
+                        }
+                        DropdownMenuItem(text = { Text("🔗 Share") }, onClick = {
+                            showDataMenu = false
+                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, note) }, "Share Note"))
+                        }, enabled = note.isNotBlank())
+                    }
                 }
-                IconButton(onClick = { showPreview = !showPreview }, modifier = Modifier.size(42.dp)) {
+                IconButton(onClick = { showPreview = true }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { showPreview = true }, onLongClick = { android.widget.Toast.makeText(context, "Preview", android.widget.Toast.LENGTH_SHORT).show() })) {
                     Icon(Icons.Default.Visibility, "Preview", modifier = Modifier.size(23.dp))
                 }
-                IconButton(onClick = { if (undoStack.isNotEmpty()) { redoStack = redoStack + note; val prev = undoStack.last(); undoStack = undoStack.dropLast(1); onNoteChange(prev) } }, enabled = undoStack.isNotEmpty(), modifier = Modifier.size(42.dp)) {
+                IconButton(onClick = { if (undoStack.isNotEmpty()) { redoStack = redoStack + note; val prev = undoStack.last(); undoStack = undoStack.dropLast(1); onNoteChange(prev) } }, enabled = undoStack.isNotEmpty(), modifier = Modifier.size(42.dp).combinedClickable(onClick = {}, onLongClick = { android.widget.Toast.makeText(context, "Undo", android.widget.Toast.LENGTH_SHORT).show() })) {
                     Icon(Icons.Default.Undo, "Undo", modifier = Modifier.size(23.dp))
                 }
-                IconButton(onClick = { if (redoStack.isNotEmpty()) { undoStack = undoStack + note; val next = redoStack.last(); redoStack = redoStack.dropLast(1); onNoteChange(next) } }, enabled = redoStack.isNotEmpty(), modifier = Modifier.size(42.dp)) {
+                IconButton(onClick = { if (redoStack.isNotEmpty()) { undoStack = undoStack + note; val next = redoStack.last(); redoStack = redoStack.dropLast(1); onNoteChange(next) } }, enabled = redoStack.isNotEmpty(), modifier = Modifier.size(42.dp).combinedClickable(onClick = {}, onLongClick = { android.widget.Toast.makeText(context, "Redo", android.widget.Toast.LENGTH_SHORT).show() })) {
                     Icon(Icons.Default.Redo, "Redo", modifier = Modifier.size(23.dp))
                 }
                 Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    IconButton(onClick = { applyWrapFormat("**") }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatBold, "Bold", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyWrapFormat("_") }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatItalic, "Italic", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyWrapFormat("~~") }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatStrikethrough, "S", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyLinkFormat() }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.Link, "Link", modifier = Modifier.size(23.dp)) }
+                    IconButton(onClick = { applyWrapFormat("**") }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyWrapFormat("**") }, onLongClick = { android.widget.Toast.makeText(context, "Bold", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatBold, "Bold", modifier = Modifier.size(23.dp)) }
+                    IconButton(onClick = { applyWrapFormat("_") }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyWrapFormat("_") }, onLongClick = { android.widget.Toast.makeText(context, "Italic", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatItalic, "Italic", modifier = Modifier.size(23.dp)) }
+                    IconButton(onClick = { applyWrapFormat("~~") }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyWrapFormat("~~") }, onLongClick = { android.widget.Toast.makeText(context, "Strikethrough", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatStrikethrough, "S", modifier = Modifier.size(23.dp)) }
+                    IconButton(onClick = { applyLinkFormat() }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyLinkFormat() }, onLongClick = { android.widget.Toast.makeText(context, "Link", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.Link, "Link", modifier = Modifier.size(23.dp)) }
+                    // Heading dropdown
                     Box {
-                        IconButton(onClick = { showHeadingDropdown = true }, modifier = Modifier.size(42.dp)) { Text("H▾", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) }
+                        IconButton(onClick = { showHeadingDropdown = true }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { showHeadingDropdown = true }, onLongClick = { android.widget.Toast.makeText(context, "Heading", android.widget.Toast.LENGTH_SHORT).show() })) { Text("H▾", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)) }
                         DropdownMenu(expanded = showHeadingDropdown, onDismissRequest = { showHeadingDropdown = false }) {
                             DropdownMenuItem(text = { Text("H1", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(1); showHeadingDropdown = false })
                             DropdownMenuItem(text = { Text("H2", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(2); showHeadingDropdown = false })
                             DropdownMenuItem(text = { Text("H3", fontWeight = FontWeight.Bold) }, onClick = { applyHeadingFormat(3); showHeadingDropdown = false })
                         }
                     }
-                    IconButton(onClick = { applyLinePrefixFormat("- ") }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatListBulleted, "Bullet", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyLinePrefixFormat("1. ", numbered = true) }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatListNumbered, "Num", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyBlockquoteFormat() }, modifier = Modifier.size(42.dp)) { Icon(Icons.Default.FormatQuote, "Quote", modifier = Modifier.size(23.dp)) }
-                    IconButton(onClick = { applyWrapFormat("`") }, modifier = Modifier.size(42.dp)) { Text("{ }", style = MaterialTheme.typography.labelMedium) }
-                    IconButton(onClick = { applyHorizontalRule() }, modifier = Modifier.size(42.dp)) { Text("—", style = MaterialTheme.typography.labelMedium) }
+                    IconButton(onClick = { applyLinePrefixFormat("- ") }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyLinePrefixFormat("- ") }, onLongClick = { android.widget.Toast.makeText(context, "Bullet List", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatListBulleted, "Bullet", modifier = Modifier.size(23.dp)) }
+                    IconButton(onClick = { applyLinePrefixFormat("1. ", numbered = true) }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { applyLinePrefixFormat("1. ", numbered = true) }, onLongClick = { android.widget.Toast.makeText(context, "Numbered List", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatListNumbered, "Num", modifier = Modifier.size(23.dp)) }
+                    // Block dropdown (Blockquote + Code + HR)
+                    Box {
+                        IconButton(onClick = { showBlockDropdown = true }, modifier = Modifier.size(42.dp).combinedClickable(onClick = { showBlockDropdown = true }, onLongClick = { android.widget.Toast.makeText(context, "Block formatting", android.widget.Toast.LENGTH_SHORT).show() })) { Icon(Icons.Default.FormatQuote, "Block", modifier = Modifier.size(23.dp)) }
+                        DropdownMenu(expanded = showBlockDropdown, onDismissRequest = { showBlockDropdown = false }) {
+                            DropdownMenuItem(text = { Text("❝ Blockquote") }, onClick = { applyBlockquoteFormat(); showBlockDropdown = false })
+                            DropdownMenuItem(text = { Text("⟨⟩ Inline Code") }, onClick = { applyWrapFormat("`"); showBlockDropdown = false })
+                            DropdownMenuItem(text = { Text("— Horizontal Rule") }, onClick = { applyHorizontalRule(); showBlockDropdown = false })
+                        }
+                    }
                 }
             }
         }

@@ -2917,7 +2917,7 @@ function _buildNestedChitThreadItem(entry) {
   // Nest icon + title row
   var titleRow = document.createElement('div');
   titleRow.className = 'email-thread-sender';
-  titleRow.innerHTML = '<img src="/static/nest-eggs.svg" class="email-nest-icon" style="height:1.2em;vertical-align:middle;" alt="" /> ';
+  titleRow.innerHTML = '<img src="/static/images/nest-eggs.svg" class="email-nest-icon" style="height:1.2em;vertical-align:middle;" alt="" /> ';
   var titleSpan = document.createElement('span');
   titleSpan.textContent = entry.title || '(Untitled)';
   titleRow.appendChild(titleSpan);

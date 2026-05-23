@@ -38,8 +38,8 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.cwoc.app.data.remote.TrustedHttpClient
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import androidx.compose.material3.Button
 import com.cwoc.app.ui.theme.CwocInputDefaults
@@ -287,7 +287,7 @@ private suspend fun fetchWeatherData(
 ): Pair<WeatherModalData?, String?> = withContext(Dispatchers.IO) {
     try {
         // Use the server's weather/forecasts endpoint or geocode + Open-Meteo directly
-        val client = OkHttpClient()
+        val client = TrustedHttpClient.instance
 
         // First geocode the address via the server proxy
         val geoUrl = "$serverUrl/api/geocode?q=${java.net.URLEncoder.encode(address, "UTF-8")}"

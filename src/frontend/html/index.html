@@ -4,7 +4,7 @@
         <link
             rel="icon"
             type="image/x-icon"
-            href="/static/cwod_logo-favicon.png"
+            href="/static/images/cwod_logo-favicon.png"
         />
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -309,7 +309,7 @@
             <div class="header">
                 <button class="mobile-hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
                 <img
-                    src="/static/cwod_logo.png"
+                    src="/static/images/cwod_logo.png"
                     alt="C.W.'s Omni Chits Logo"
                     title="C.W.'s Omni Chits — Click to toggle sidebar"
                     class="logo"
@@ -319,31 +319,31 @@
 
                 <div class="tabs" id="cwoc-tabs">
                     <div class="tab" onclick="filterChits('Calendar')" title="Calendar">
-                        <img src="/static/calendar.png" /><span class="tab-label"> <u>C</u>alendar</span>
+                        <img src="/static/images/calendar.png" /><span class="tab-label"> <u>C</u>alendar</span>
                     </div>
                     <div class="tab" onclick="filterChits('Checklists')" title="Checklists">
-                        <img src="/static/checklists.png" /><span class="tab-label"> <u>C</u>hecklists</span>
+                        <img src="/static/images/checklists.png" /><span class="tab-label"> <u>C</u>hecklists</span>
                     </div>
                     <div class="tab" onclick="filterChits('Tasks')" title="Tasks">
-                        <img src="/static/tasks.png" /><span class="tab-label"> <u>T</u>asks</span>
+                        <img src="/static/images/tasks.png" /><span class="tab-label"> <u>T</u>asks</span>
                     </div>
                     <div class="tab" onclick="filterChits('Projects')" title="Projects">
-                        <img src="/static/projects.png" /><span class="tab-label"> <u>P</u>rojects</span>
+                        <img src="/static/images/projects.png" /><span class="tab-label"> <u>P</u>rojects</span>
                     </div>
                     <div class="tab" onclick="filterChits('Notes')" title="Notes">
-                        <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
+                        <img src="/static/images/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
                     </div>
                     <div class="tab" onclick="filterChits('Notebook')" title="Notebook (Notes + Checklists)" style="display:none;">
                         <i class="fas fa-book" style="font-size:1.6em;line-height:1;color:#6b4e31;margin-right:4px;"></i><span class="tab-label">Note<u>b</u>ook</span>
                     </div>
                     <div class="tab" onclick="filterChits('Email')" title="Email">
-                        <img src="/static/email.png" /><span class="tab-label"> <u>E</u>mail</span><span id="email-unread-badge" class="email-unread-badge" style="display:none;"></span>
+                        <img src="/static/images/email.png" /><span class="tab-label"> <u>E</u>mail</span><span id="email-unread-badge" class="email-unread-badge" style="display:none;"></span>
                     </div>
                     <div class="tab" onclick="filterChits('Indicators')" title="Health Indicators">
-                        <img src="/static/Indicators.png" /><span class="tab-label"> <u>I</u>ndicators</span>
+                        <img src="/static/images/Indicators.png" /><span class="tab-label"> <u>I</u>ndicators</span>
                     </div>
                     <div class="tab" onclick="filterChits('Alarms')" title="Alerts">
-                        <img src="/static/alerts.png" /><span class="tab-label"> <u>A</u>lerts</span>
+                        <img src="/static/images/alerts.png" /><span class="tab-label"> <u>A</u>lerts</span>
                     </div>
                     <div class="tab" onclick="filterChits('Search')" title="Global Search">
                         <i class="fas fa-search" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i>
@@ -353,7 +353,7 @@
                 <!-- Profile menu (rightmost element in top bar) -->
                 <div class="cwoc-profile-menu" id="cwoc-profile-menu">
                     <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); _cwocToggleProfileMenu();">
-                        <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                        <img src="/static/images/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
                     </button>
                 </div>
             </div>
@@ -469,7 +469,7 @@
         </script>
         <!-- FAB: New Chit (click = create, right-click = Quick Alert) -->
         <button id="cwoc-fab" class="cwoc-fab" title="New Chit (right-click for Quick Alert)" aria-label="Create new chit">
-            <i class="fa-solid fa-plus"></i>
+            <img src="/static/images/create_new.png" alt="Create" class="cwoc-fab-icon" />
         </button>
 
         <script src="/pwa/pwa-register.js"></script>

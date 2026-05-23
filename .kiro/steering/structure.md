@@ -107,7 +107,13 @@ src/
       editor/
         editor.css         # Chit-specific editor styles
 
-  static/                  # Images and assets (logos, icons, parchment background, audio)
+  static/                  # Static assets served at /static/
+    images/              # All active images (logos, tab icons, parchment background)
+    sounds/              # Audio files (alarm.mp3, timer.mp3)
+    archive/             # Unused images kept for reference
+    fonts/               # Self-hosted Lora variable font
+    tracking/            # Smart-link provider SVG icons
+    vendor/              # Vendored JS/CSS libraries (Flatpickr, Font Awesome, etc.)
 
 data/                      # SQLite database files
 

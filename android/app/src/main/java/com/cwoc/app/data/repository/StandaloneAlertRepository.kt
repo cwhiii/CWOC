@@ -65,11 +65,37 @@ class StandaloneAlertRepository @Inject constructor(
             if (response.isSuccessful) {
                 val dto = response.body()!!
                 standaloneAlertDao.insert(dto.toEntity())
+                // Log success to client-log
+                try {
+                    apiService.postClientLog(com.cwoc.app.data.remote.dto.ClientLogRequest(
+                        message = "[STANDALONE_ALERT] create SUCCESS: type=$type, id=${dto.id}",
+                        level = "info",
+                        source = "android-standalone-alerts"
+                    ))
+                } catch (_: Exception) {}
                 Result.success(dto)
             } else {
-                Result.failure(Exception("Create failed: ${response.code()} ${response.message()}"))
+                val errBody = try { response.errorBody()?.string() } catch (_: Exception) { null }
+                val msg = "Create failed: ${response.code()} ${response.message()} body=$errBody"
+                // Log failure to client-log
+                try {
+                    apiService.postClientLog(com.cwoc.app.data.remote.dto.ClientLogRequest(
+                        message = "[STANDALONE_ALERT] create FAILED: type=$type, $msg",
+                        level = "error",
+                        source = "android-standalone-alerts"
+                    ))
+                } catch (_: Exception) {}
+                Result.failure(Exception(msg))
             }
         } catch (e: Exception) {
+            // Log exception to client-log
+            try {
+                apiService.postClientLog(com.cwoc.app.data.remote.dto.ClientLogRequest(
+                    message = "[STANDALONE_ALERT] create EXCEPTION: type=$type, ${e.javaClass.simpleName}: ${e.message}",
+                    level = "error",
+                    source = "android-standalone-alerts"
+                ))
+            } catch (_: Exception) {}
             Result.failure(e)
         }
     }

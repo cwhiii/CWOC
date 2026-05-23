@@ -127,7 +127,7 @@ fun ViewsPanel(
                         ViewsPanelItem(
                             label = tab.label,
                             icon = tab.icon,
-                            drawableResId = if (tab == CCaptnTab.Omni) R.drawable.cwoc_logo else null,
+                            drawableResId = tab.drawableResId,
                             isSelected = isSelected,
                             onClick = {
                                 onNavigate(tab.route)
@@ -137,23 +137,6 @@ fun ViewsPanel(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Close button at bottom
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = Color(0xFF8B5A2B), thickness = 1.dp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "⇤ Hide",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = CwocZoneHeaderBrown,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(onClick = onDismiss)
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
                 }
             }
         }

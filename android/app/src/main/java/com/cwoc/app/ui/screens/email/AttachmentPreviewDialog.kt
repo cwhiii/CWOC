@@ -63,7 +63,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
+import com.cwoc.app.data.remote.TrustedHttpClient
 import okhttp3.Request
 import java.io.File
 
@@ -316,7 +316,7 @@ private fun TextPreviewContent(
                 return@LaunchedEffect
             }
             textContent = withContext(Dispatchers.IO) {
-                val client = OkHttpClient()
+                val client = TrustedHttpClient.instance
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $authToken")
@@ -406,7 +406,7 @@ private fun PdfPreviewContent(
                 return@LaunchedEffect
             }
             val file = withContext(Dispatchers.IO) {
-                val client = OkHttpClient()
+                val client = TrustedHttpClient.instance
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $authToken")

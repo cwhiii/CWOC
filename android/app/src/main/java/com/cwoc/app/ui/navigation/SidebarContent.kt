@@ -1,6 +1,7 @@
 package com.cwoc.app.ui.navigation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -38,11 +41,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cwoc.app.R
 import com.cwoc.app.ui.components.CollapsibleSection
 import com.cwoc.app.ui.components.SidebarCompactButton
 import com.cwoc.app.ui.theme.CwocDialogDefaults
@@ -78,6 +85,8 @@ fun SidebarContent(
     onUnreadAtTopChange: (Boolean) -> Unit = {},
     onCheckMail: () -> Unit = {},
     sidebarState: SidebarState = SidebarState(),
+    enabledPeriods: List<String> = listOf("Itinerary", "Day", "Work", "Week", "SevenDay", "Month", "Year"),
+    customDaysCount: Int = 7,
     onTodayClick: () -> Unit = {},
     onPrevPeriod: () -> Unit = {},
     onNextPeriod: () -> Unit = {},
@@ -113,40 +122,30 @@ fun SidebarContent(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ─── 1. Close Button ─────────────────────────────────────────
-            Button(
-                onClick = onClose,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BrownBackground,
-                    contentColor = ParchmentText
-                ),
-                shape = RoundedCornerShape(4.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            // ─── Sidebar header: logo + "Omni Chits" ────────────────────
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
             ) {
-                Text("⇤ Hide Sidebar", fontSize = 14.sp)
+                Image(
+                    painter = painterResource(id = R.drawable.cwoc_logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, Color(0xFF5A3F2A), CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                Text(
+                    text = "Omni Chits",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF4A2C2A)
+                )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ─── 2. Create Chit Button ───────────────────────────────────
-            Button(
-                onClick = {
-                    onNewChit()
-                    onClose()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BrownBackground,
-                    contentColor = ParchmentText
-                ),
-                shape = RoundedCornerShape(4.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text("✚ New Chit", fontSize = 14.sp)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = Color(0xFF6B4E31).copy(alpha = 0.3f), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(12.dp))
 
             // ─── 3. Email Controls (conditional) ─────────────────────────
             if (selectedTab == CCaptnTab.Email) {
@@ -191,57 +190,68 @@ fun SidebarContent(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // ─── 4. Date Navigation (always visible) ─────────────────────
-            Button(
-                onClick = onTodayClick,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = BrownBackground, contentColor = ParchmentText),
-                shape = RoundedCornerShape(4.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) { Text("📅 Today", fontSize = 14.sp) }
+            // ─── 4. Date Navigation (Calendar tab only) ─────────────────
+            if (selectedTab == CCaptnTab.Calendar) {
+                Button(
+                    onClick = onTodayClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrownBackground, contentColor = ParchmentText),
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) { Text("📅 Today", fontSize = 14.sp) }
 
-            Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedButton(
-                    onClick = onPrevPeriod,
-                    border = BorderStroke(1.dp, BorderBrown),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(4.dp)
-                ) { Text("◄", fontSize = 14.sp, color = HeaderBrown) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = onPrevPeriod,
+                        border = BorderStroke(1.dp, BorderBrown),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) { Text("◄", fontSize = 14.sp, color = HeaderBrown) }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = sidebarState.yearDisplay, fontSize = 11.sp, color = HeaderBrown.copy(alpha = 0.7f))
-                    Text(text = sidebarState.dateRangeDisplay, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = HeaderBrown)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = sidebarState.yearDisplay, fontSize = 11.sp, color = HeaderBrown.copy(alpha = 0.7f))
+                        Text(text = sidebarState.dateRangeDisplay, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = HeaderBrown)
+                    }
+
+                    OutlinedButton(
+                        onClick = onNextPeriod,
+                        border = BorderStroke(1.dp, BorderBrown),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) { Text("►", fontSize = 14.sp, color = HeaderBrown) }
                 }
 
-                OutlinedButton(
-                    onClick = onNextPeriod,
-                    border = BorderStroke(1.dp, BorderBrown),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(4.dp)
-                ) { Text("►", fontSize = 14.sp, color = HeaderBrown) }
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(8.dp))
+            // ─── 5. Order (Sort) — hidden on Calendar, Email, Indicators (matches web) ───
+            if (selectedTab != CCaptnTab.Calendar && selectedTab != CCaptnTab.Email && selectedTab != CCaptnTab.Indicators) {
+                sortContent()
 
-            // ─── 5. Order (Sort) ─────────────────────────────────────────
-            sortContent()
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(8.dp))
+            // ─── 6. Time Period Dropdown (Calendar tab only) ───────────
+            if (selectedTab == CCaptnTab.Calendar) {
+                TimePeriodDropdown(
+                    currentPeriod = sidebarState.currentPeriod,
+                    onPeriodChange = onPeriodChange,
+                    enabledPeriods = enabledPeriods,
+                    customDaysCount = customDaysCount
+                )
 
-            // ─── 6. Time Period Dropdown ─────────────────────────────────
-            TimePeriodDropdown(currentPeriod = sidebarState.currentPeriod, onPeriodChange = onPeriodChange)
-
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             // ─── 7. Calendar Options (Calendar tab + Month period) ────────
             if (selectedTab == CCaptnTab.Calendar && sidebarState.currentPeriod == "Month") {
@@ -320,28 +330,30 @@ fun SidebarContent(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // ─── 12. Filters ──────────────────────────────────────────────
-            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(8.dp))
-            CollapsibleSection(
-                title = "🔍 Filters",
-                initiallyExpanded = false,
-                headerExtra = {
-                    if (filterActiveCount > 0) {
-                        com.cwoc.app.ui.navigation.filter.FilterHeaderButtons(
-                            showClear = true,
-                            showDefaults = false,
-                            onClear = onClearFilters,
-                            onDefaults = {}
-                        )
+            // ─── 12. Filters — hidden on Indicators (matches web) ──────
+            if (selectedTab != CCaptnTab.Indicators) {
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                CollapsibleSection(
+                    title = "🔍 Filters",
+                    initiallyExpanded = false,
+                    headerExtra = {
+                        if (filterActiveCount > 0) {
+                            com.cwoc.app.ui.navigation.filter.FilterHeaderButtons(
+                                showClear = true,
+                                showDefaults = false,
+                                onClear = onClearFilters,
+                                onDefaults = {}
+                            )
+                        }
                     }
+                ) {
+                    filterContent()
                 }
-            ) {
-                filterContent()
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(8.dp))
 
             // ─── 13. Quick Access Buttons ─────────────────────────────────
             Button(
@@ -451,10 +463,17 @@ private fun ViewModeButton(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimePeriodDropdown(currentPeriod: String, onPeriodChange: (String) -> Unit) {
+private fun TimePeriodDropdown(
+    currentPeriod: String,
+    onPeriodChange: (String) -> Unit,
+    enabledPeriods: List<String> = listOf("Itinerary", "Day", "Work", "Week", "SevenDay", "Month", "Year"),
+    customDaysCount: Int = 7
+) {
     var expanded by remember { mutableStateOf(false) }
-    val periods = listOf("Itinerary" to "Itinerary", "Day" to "Day", "Work" to "Work Hours", "Week" to "Week", "SevenDay" to "X Days", "Month" to "Month", "Year" to "Year")
-    val currentLabel = periods.firstOrNull { it.first == currentPeriod }?.second ?: currentPeriod
+    val allPeriods = listOf("Itinerary" to "Itinerary", "Day" to "Day", "Work" to "Work Hours", "Week" to "Week", "SevenDay" to "${customDaysCount} Days", "Month" to "Month", "Year" to "Year")
+    // Filter to only show enabled periods
+    val periods = allPeriods.filter { (value, _) -> value in enabledPeriods }
+    val currentLabel = periods.firstOrNull { it.first == currentPeriod }?.second ?: allPeriods.firstOrNull { it.first == currentPeriod }?.second ?: currentPeriod
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(text = "Time Period", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))

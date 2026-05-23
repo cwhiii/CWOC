@@ -16,15 +16,15 @@ var _hiddenViews = [];
 
 /** View metadata for rendering tab buttons */
 var _viewMeta = {
-  Calendar:    { icon: 'img', src: '/static/calendar.png', label: '<u>C</u>alendar' },
-  Checklists:  { icon: 'img', src: '/static/checklists.png', label: '<u>C</u>hecklists' },
-  Tasks:       { icon: 'img', src: '/static/tasks.png', label: '<u>T</u>asks' },
-  Projects:    { icon: 'img', src: '/static/projects.png', label: '<u>P</u>rojects' },
-  Notes:       { icon: 'img', src: '/static/notes.png', label: '<u>N</u>otes' },
+  Calendar:    { icon: 'img', src: '/static/images/calendar.png', label: '<u>C</u>alendar' },
+  Checklists:  { icon: 'img', src: '/static/images/checklists.png', label: '<u>C</u>hecklists' },
+  Tasks:       { icon: 'img', src: '/static/images/tasks.png', label: '<u>T</u>asks' },
+  Projects:    { icon: 'img', src: '/static/images/projects.png', label: '<u>P</u>rojects' },
+  Notes:       { icon: 'img', src: '/static/images/notes.png', label: '<u>N</u>otes' },
   Notebook:    { icon: 'fa', cls: 'fas fa-book', label: 'Note<u>b</u>ook' },
   Email:       { icon: 'fa', cls: 'fas fa-envelope', label: '<u>E</u>mail' },
   Indicators:  { icon: 'fa', cls: 'fas fa-heartbeat', label: '<u>I</u>ndicators' },
-  Alarms:      { icon: 'img', src: '/static/alerts.png', label: '<u>A</u>lerts' },
+  Alarms:      { icon: 'img', src: '/static/images/alerts.png', label: '<u>A</u>lerts' },
 };
 
 /** Open the Arrange Views modal */

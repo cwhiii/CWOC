@@ -649,7 +649,7 @@ input.error {
 }
 
 .modal-overlay .modal-contentFull {
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: var(--parchment-light);
     border: 2px solid var(--aged-brown-medium);
     border-radius: 10px;
@@ -697,7 +697,7 @@ input.error {
 }
 
 .modal-overlay .modal-body {
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: var(--parchment-light);
 }
 
@@ -4215,7 +4215,7 @@ input.location {
 }
 
 .cwoc-people-expand-content {
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: var(--parchment-light, #fff8e1);
     width: 92vw;
     max-width: 92vw;
@@ -4343,7 +4343,7 @@ input.location {
     position: sticky;
     top: 48px;
     z-index: 1;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: var(--parchment-light, #fff8e1);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -4616,7 +4616,7 @@ input.location {
     top: 0;
     z-index: 2;
     padding: 0 0 12px 0;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: var(--parchment-light, #fff8e1);
 }
 
@@ -5679,32 +5679,74 @@ input.location {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: #f5e6d3;
     border-bottom: 2px solid #c4a882;
-    padding: 8px 12px;
+    padding: 4px 8px;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 4px;
     font-family: 'Lora', Georgia, serif;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.mobile-zone-nav-header .mobile-zone-nav-prev,
+/* ── Nav buttons (left hamburger) ──────────────────────────────────────── */
+.mobile-zone-nav-header .mobile-zone-nav-prev {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border: 1px solid #5a3f2a;
+    border-radius: 4px;
+    padding: 0;
+    margin: 0 4px;
+    font-size: 1.2em;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+/* ── Omni logo in editor mobile header ────────────────────────────────── */
+.mobile-zone-nav-header .mobile-zone-nav-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #5a3f2a;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ── Right button: matches dashboard Views button pattern ─────────────── */
 .mobile-zone-nav-header .mobile-zone-nav-next {
     background: #8b5a2b;
     color: #fff8e1;
     border: 1px solid #5a3f2a;
     border-radius: 3px;
-    padding: 6px 10px;
+    padding: 4px 8px;
+    min-height: 36px;
     font-size: 1em;
     cursor: pointer;
-    min-width: 36px;
-    min-height: 36px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 5px;
     font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+.mobile-zone-nav-header .mobile-zone-nav-next-label {
+    font-size: 1em;
+    white-space: nowrap;
+}
+.mobile-zone-nav-header .mobile-zone-nav-next-hamburger {
+    font-size: 1em;
+    margin-left: 2px;
 }
 
 .mobile-zone-nav-header .mobile-zone-nav-prev:active,
@@ -5733,6 +5775,31 @@ input.location {
     opacity: 0.7;
     font-weight: normal;
     font-size: 0.9em;
+}
+
+/* Editable title input in nav header (shown on Overview zone) */
+.mobile-zone-nav-header .mobile-zone-nav-chit-title-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid currentColor;
+    background: rgba(255, 255, 255, 0.15);
+    color: inherit;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    outline: none;
+    min-width: 0;
+}
+.mobile-zone-nav-header .mobile-zone-nav-chit-title-input::placeholder {
+    color: inherit;
+    opacity: 0.5;
+    font-style: italic;
+}
+.mobile-zone-nav-header .mobile-zone-nav-chit-title-input:focus {
+    background: rgba(255, 255, 255, 0.25);
+    border-bottom-color: currentColor;
 }
 
 .mobile-zone-nav-header .mobile-zone-nav-zone-name {
@@ -5771,7 +5838,7 @@ input.location {
     left: -300px;
     width: 280px;
     height: 100%;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: #faebd7;
     border-right: 2px solid #8b4513;
     z-index: 2001;
@@ -5847,23 +5914,7 @@ input.location {
 
 .mobile-actions-sidebar-close,
 .mobile-actions-sidebar-close:disabled {
-    display: block;
-    width: 100%;
-    margin-bottom: 0;
-    padding: 8px;
-    text-align: center;
-    font-weight: bold;
-    font-family: 'Lora', Georgia, serif;
-    background: #a0522d !important;
-    color: #fff8e1 !important;
-    border: 1px solid #4a2c2a !important;
-    border-radius: 4px;
-    cursor: pointer !important;
-    min-height: 44px;
-    font-size: 1em;
-    overflow: hidden;
-    opacity: 1 !important;
-    pointer-events: auto !important;
+    display: none;
 }
 
 .mobile-actions-sidebar-close:active {
@@ -5879,6 +5930,19 @@ input.location {
 }
 .mobile-actions-sidebar-btn.mobile-actions-save-btn:active {
     background: #5a3f2a;
+}
+
+/* Separator in actions sidebar */
+.mobile-actions-sidebar-separator {
+    border: none;
+    border-top: 1px solid #c9b896;
+    margin: 8px 12px;
+}
+
+/* Delete button in actions sidebar */
+.mobile-actions-sidebar-btn.mobile-actions-delete-btn {
+    color: #8b0000;
+    border-color: #c44;
 }
 
 /* ── Unsaved changes dot on mobile zone header ☰ button ───────────────────── */
@@ -5924,7 +5988,7 @@ input.location {
     right: -260px;
     width: 240px;
     height: 100%;
-    background: url("/static/parchment.jpg") center/cover;
+    background: url("/static/images/parchment.jpg") center/cover;
     background-color: #faebd7;
     border-left: 2px solid #8b4513;
     z-index: 2001;
@@ -6005,22 +6069,7 @@ input.location {
 
 .mobile-zone-list-close,
 .mobile-zone-list-close:disabled {
-    display: block;
-    width: 100%;
-    margin-top: 8px;
-    padding: 8px;
-    text-align: center;
-    font-weight: bold;
-    font-family: 'Lora', Georgia, serif;
-    background: #a0522d !important;
-    color: #fff8e1 !important;
-    border: 1px solid #4a2c2a !important;
-    border-radius: 4px;
-    cursor: pointer !important;
-    min-height: 44px;
-    overflow: hidden;
-    opacity: 1 !important;
-    pointer-events: auto !important;
+    display: none;
 }
 
 /* ── Mobile Zone Mode Body Adjustments ────────────────────────────────────── */

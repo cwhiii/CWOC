@@ -372,7 +372,8 @@ private fun AdministrationSection(
 
     CollapsibleSection(
         title = "🔧 Administration",
-        sectionId = "administration"
+        sectionId = "administration",
+        defaultExpanded = false
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Manage Users button — Validates: Requirement 22.1
@@ -560,7 +561,7 @@ private fun KioskSection(
     CollapsibleSection(
         title = "🖥️ Kiosk",
         sectionId = "admin_kiosk",
-        defaultExpanded = true
+        defaultExpanded = false
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -773,7 +774,8 @@ private fun DataManagementSection(
 
     CollapsibleSection(
         title = "💾 Data Management",
-        sectionId = "admin_data_management"
+        sectionId = "admin_data_management",
+        defaultExpanded = false
     ) {
             Column(
                 modifier = Modifier.padding(start = 8.dp),

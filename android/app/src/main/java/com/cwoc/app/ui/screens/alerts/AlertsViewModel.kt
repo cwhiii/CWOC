@@ -98,6 +98,13 @@ class AlertsViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    // --- Error state (for debugging standalone alert creation) ---
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    fun clearError() { _errorMessage.value = null }
+
     // --- Notification error state (for showing error toasts in UI) ---
 
     private val _notificationError = MutableStateFlow<String?>(null)
@@ -501,7 +508,14 @@ class AlertsViewModel @Inject constructor(
                 "days" to listOf(dayAbbreviation),
                 "enabled" to true
             )
-            standaloneAlertRepository.create(type = "alarm", name = "", data = data)
+            val result = standaloneAlertRepository.create(type = "alarm", name = "", data = data)
+            result.onFailure { e ->
+                android.util.Log.e("CWOC_ALERTS", "createAlarm FAILED: ${e.message}", e)
+                _errorMessage.value = "Create alarm failed: ${e.message}"
+            }
+            result.onSuccess {
+                android.util.Log.d("CWOC_ALERTS", "createAlarm SUCCESS: id=${it.id}")
+            }
         }
     }
 
@@ -519,7 +533,14 @@ class AlertsViewModel @Inject constructor(
                 "totalSeconds" to 0,
                 "loop" to false
             )
-            standaloneAlertRepository.create(type = "timer", name = "", data = data)
+            val result = standaloneAlertRepository.create(type = "timer", name = "", data = data)
+            result.onFailure { e ->
+                android.util.Log.e("CWOC_ALERTS", "createTimer FAILED: ${e.message}", e)
+                _errorMessage.value = "Create timer failed: ${e.message}"
+            }
+            result.onSuccess {
+                android.util.Log.d("CWOC_ALERTS", "createTimer SUCCESS: id=${it.id}")
+            }
         }
     }
 

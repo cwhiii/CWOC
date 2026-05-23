@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.remote.BundleDto
 import com.cwoc.app.domain.email.DateGroup
 import com.cwoc.app.ui.components.UndoToast
+import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 
 /**
  * Email client screen — displays email inbox with folder navigation, threading,
@@ -71,7 +72,8 @@ fun EmailScreen(
     modifier: Modifier = Modifier,
     viewModel: EmailViewModel = hiltViewModel(),
     bundleViewModel: BundleViewModel = hiltViewModel(),
-    sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel? = null
+    sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel? = null,
+    filterSortViewModel: FilterSortViewModel? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val senderImageUrls by viewModel.senderImageUrls.collectAsState()

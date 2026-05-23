@@ -53,7 +53,7 @@ function displayTasksView(chitsToDisplay) {
     if (chit.status === "Complete" || chit.status === "Rejected") chitElement.classList.add("completed-task");
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
-    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true, skipMapIcon: true }));
+    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true, skipMapIcon: true, hideDates: true }));
 
     // Status + note preview in a row
     const controls = document.createElement("div");
@@ -237,7 +237,7 @@ function displayAssignedToMeView(chitsToDisplay) {
     if (chit.status === 'Complete' || chit.status === 'Rejected') chitElement.classList.add('completed-task');
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add('declined-chit');
 
-    chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true, skipMapIcon: true }));
+    chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true, skipMapIcon: true, hideDates: true }));
 
     // Status + note preview in a row
     var controls = document.createElement('div');

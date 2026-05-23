@@ -11,6 +11,13 @@ When the user says "app," "the app," or "in the app," they ALWAYS mean the **And
 # TERMINOLOGY: "mobile" = Mobile Web Browser ONLY
 When the user says "mobile," "on mobile," or "the mobile version," they ALWAYS mean the **mobile web browser** (the same frontend code rendered on a phone/tablet browser). Never the Android app. "Mobile" refers to responsive/mobile-browser behavior of the web frontend. If the user means the Android app, they will say "app," "the app," or "Android."
 
+# NEVER ASK FOR LOGCAT — USE THE APP'S CLIENT LOG
+The user runs the app on a physical phone with no USB debugging. There is NO logcat access. The app has a built-in client logging system (`/api/client-log`) and a clipboard-paste diagnostic on startup. When debugging the app:
+- Write diagnostic info to the client log via `SyncEngine.reportLog()` or the `/api/client-log` endpoint
+- Use the clipboard diagnostic report (written on app launch by `CwocApplication`)
+- Use `fetch-logs.sh` to pull `/api/client-log` and `/api/server-log` into `.kiro/` files
+- **NEVER** tell the user to run `adb logcat` or check Android Studio logs. They cannot.
+
 # ABSOLUTE RULE: COMPLETE IMPLEMENTATION — NO PARTIAL FEATURES
 **This is the single most important rule in this project. It overrides all other considerations.**
 

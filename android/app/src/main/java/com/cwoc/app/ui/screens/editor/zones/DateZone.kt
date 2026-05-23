@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
@@ -41,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -362,8 +360,7 @@ fun DateZone(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .selectable(
-                                    selected = (mode == currentMode),
+                                .clickable(
                                     enabled = !(mode == DateMode.NONE && habitActive),
                                     onClick = {
                                         applyDateMode(
@@ -393,8 +390,7 @@ fun DateZone(
                                                 onAppliedModesUpdate = { defaultNotifsApplied = it }
                                             )
                                         }
-                                    },
-                                    role = Role.RadioButton
+                                    }
                                 ),
                             verticalAlignment = Alignment.Top
                         ) {

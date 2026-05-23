@@ -1,5 +1,6 @@
 package com.cwoc.app.data.sync
 
+import android.content.SharedPreferences
 import android.util.Log
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
@@ -8,10 +9,13 @@ import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.mapper.toPushDto
 import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.TrustedHttpClient
 import com.cwoc.app.data.remote.dto.ContactPushResultDto
 import com.cwoc.app.data.remote.dto.SettingsPushResultDto
 import com.cwoc.app.data.remote.dto.SyncPushRequestDto
 import com.google.gson.Gson
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.time.Instant
 import javax.inject.Inject
 
@@ -69,7 +73,6 @@ interface SyncPushEngine {
  * relying on the PushSyncWorker to retry on reconnect.
  */
 class SyncPushEngineImpl @Inject constructor(
-    private val apiService: CwocApiService,
     private val chitDao: ChitDao,
     private val contactDao: ContactDao,
     private val settingsDao: SettingsDao,
@@ -77,8 +80,41 @@ class SyncPushEngineImpl @Inject constructor(
     private val syncMetadataDao: SyncMetadataDao,
     private val syncStateManager: SyncStateManager,
     private val settingsConflictResolver: SettingsConflictResolver,
-    private val gson: Gson
+    private val gson: Gson,
+    private val prefs: SharedPreferences
 ) : SyncPushEngine {
+
+    /**
+     * Build a fresh API service using the stored server URL and auth token.
+     * This ensures we always use the correct URL (not the stale Hilt singleton).
+     * Returns null if server_url or device_token is missing.
+     */
+    private fun buildApiService(): CwocApiService? {
+        val serverUrl = prefs.getString("server_url", null)
+        val token = prefs.getString("device_token", null)
+
+        if (serverUrl.isNullOrBlank() || token.isNullOrBlank()) {
+            Log.e(TAG, "Cannot push: serverUrl=$serverUrl, token=${if (token != null) "present" else "null"}")
+            return null
+        }
+
+        val client = TrustedHttpClient.instance.newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("Authorization", "Bearer $token")
+                    .build()
+                chain.proceed(request)
+            }
+            .build()
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl(serverUrl.trimEnd('/') + "/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        return retrofit.create(CwocApiService::class.java)
+    }
 
     override suspend fun pushSingle(chitId: String): PushResult {
         val entity = chitDao.getById(chitId)
@@ -114,6 +150,13 @@ class SyncPushEngineImpl @Inject constructor(
         )
 
         try {
+            val apiService = buildApiService()
+            if (apiService == null) {
+                Log.e(TAG, "Push failed: no server URL or token configured")
+                syncStateManager.setIdle()
+                return PushResult.NetworkError("Not authenticated — no server URL or token")
+            }
+
             val response = apiService.pushChanges(request)
 
             if (!response.isSuccessful) {
@@ -336,6 +379,13 @@ class SyncPushEngineImpl @Inject constructor(
         )
 
         try {
+            val apiService = buildApiService()
+            if (apiService == null) {
+                Log.e(TAG, "Push failed: no server URL or token configured")
+                syncStateManager.setIdle()
+                return PushResult.NetworkError("Not authenticated — no server URL or token")
+            }
+
             val response = apiService.pushChanges(request)
 
             if (!response.isSuccessful) {

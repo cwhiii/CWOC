@@ -97,7 +97,7 @@ interface ChitDao {
     @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND alerts IS NOT NULL AND alerts != '' AND alerts != '[]'")
     fun getAlertChits(): Flow<List<ChitEntity>>
 
-    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND healthData IS NOT NULL AND healthData != '' AND healthData != '[]'")
+    @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND healthData IS NOT NULL AND healthData != '' AND healthData != '[]' AND healthData != '{}' AND healthData != 'null'")
     fun getIndicatorChits(): Flow<List<ChitEntity>>
 
     @Query("SELECT * FROM chits WHERE deleted = 0 AND archived = 0 AND location IS NOT NULL AND location != ''")

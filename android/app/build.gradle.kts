@@ -13,8 +13,8 @@ android {
         applicationId = "com.cwoc.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "m20260522.0813"
+        versionCode = 6
+        versionName = "m20260522.1942"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

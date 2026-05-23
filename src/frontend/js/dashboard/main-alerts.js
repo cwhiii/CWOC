@@ -75,7 +75,7 @@ function _globalFmtTime(time24) {
 
 function _globalPlayAlarm() {
   if (!_globalAlarmAudio) {
-    _globalAlarmAudio = new Audio("/static/alarm.mp3");
+    _globalAlarmAudio = new Audio("/static/sounds/alarm.mp3");
   }
   _globalAlarmAudio.loop = true;
   cwocPlayAudio(_globalAlarmAudio, { loop: true });
@@ -91,7 +91,7 @@ function _globalStopAlarm() {
 }
 
 function _globalPlayTimer() {
-  if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/timer.mp3");
+  if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/sounds/timer.mp3");
   _globalTimerAudio.loop = true;
   cwocPlayAudio(_globalTimerAudio, { loop: true });
 }
@@ -363,7 +363,7 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
     : '/?tab=Alarms&view=independent';
   var opts = {
     body: body,
-    icon: "/static/cwod_logo-favicon.png",
+    icon: "/static/images/cwod_logo-favicon.png",
     tag: 'cwoc-alert-' + (chitId || 'independent'),
     renotify: true,
     requireInteraction: true,

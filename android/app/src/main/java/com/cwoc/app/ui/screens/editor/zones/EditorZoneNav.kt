@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -40,7 +41,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
@@ -128,6 +131,8 @@ val ZONE_PREFILL_MAP = mapOf(
  * Sticky navigation header for the zone-at-a-time editor.
  * Shows: [☰ Actions] [Chit Title] [counter] [☰ Zone Name]
  *
+ * The title is displayed in all zones. When on the Overview zone, the title
+ * is editable directly in the header (replacing the separate title field).
  * The nav bar background changes to the chit's color when set.
  */
 @Composable
@@ -140,6 +145,8 @@ fun EditorZoneNavHeader(
     hasUnsavedChanges: Boolean,
     repeatEnabled: Boolean = false,
     habitActive: Boolean = false,
+    isOverviewZone: Boolean = false,
+    onTitleChange: ((String) -> Unit)? = null,
     onActionsClick: () -> Unit,
     onZoneListClick: () -> Unit
 ) {
@@ -176,34 +183,48 @@ fun EditorZoneNavHeader(
             }
         }
 
-        // Spacer to push zone counter and right hamburger to the right
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Recurrence/Habit icon in title accessories
-        if (habitActive) {
-            Text(
-                text = "🎯",
-                fontSize = 18.sp, // ~1.1em
+        // Center: Chit title (always editable in the nav header)
+        if (onTitleChange != null) {
+            BasicTextField(
+                value = chitTitle,
+                onValueChange = onTitleChange,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = contentColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                cursorBrush = SolidColor(contentColor),
                 modifier = Modifier
-                    .alpha(0.7f)
-                    .semantics { contentDescription = "Habit" }
+                    .weight(1f)
+                    .background(
+                        contentColor.copy(alpha = 0.1f),
+                        RoundedCornerShape(4.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                decorationBox = { innerTextField ->
+                    if (chitTitle.isEmpty()) {
+                        Text(
+                            "Enter title",
+                            color = contentColor.copy(alpha = 0.5f),
+                            fontSize = 14.sp,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
+                    innerTextField()
+                }
             )
-        } else if (repeatEnabled) {
+        } else {
             Text(
-                text = "🔁",
-                fontSize = 18.sp, // ~1.1em
-                modifier = Modifier
-                    .alpha(0.7f)
-                    .semantics { contentDescription = "Recurring chit" }
+                text = chitTitle.ifBlank { "New Chit" },
+                color = contentColor.copy(alpha = 0.85f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
         }
-
-        // Counter
-        Text(
-            text = "${currentZoneIndex + 1}/$totalZones",
-            color = contentColor.copy(alpha = 0.7f),
-            fontSize = 12.sp
-        )
 
         // Right hamburger — Zone name
         Box(
@@ -353,19 +374,6 @@ fun ZoneListPanel(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-
-                // Close button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(CwocAgedBrownLight)
-                        .clickable(onClick = onDismiss)
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("⇤ Close", color = Color(0xFFFFF8E1), fontWeight = FontWeight.Bold)
-                }
             }
         }
     }
@@ -381,7 +389,8 @@ data class ActionItem(
     val icon: String = "",
     val onClick: () -> Unit,
     val isHighlighted: Boolean = false,
-    val isDanger: Boolean = false
+    val isDanger: Boolean = false,
+    val isSeparator: Boolean = false
 )
 
 /**
@@ -423,19 +432,6 @@ fun ActionsSidebar(
                     .statusBarsPadding()
                     .padding(12.dp)
             ) {
-                // Close button at top
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(CwocAgedBrownLight)
-                        .clickable(onClick = onDismiss)
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("⇤ Close", color = Color(0xFFFFF8E1), fontWeight = FontWeight.Bold)
-                }
-
                 Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider(color = CwocGoldDivider)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -448,6 +444,13 @@ fun ActionsSidebar(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     actions.forEach { action ->
+                        if (action.isSeparator) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(color = CwocGoldDivider, thickness = 1.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            return@forEach
+                        }
+
                         val bgColor = when {
                             action.isHighlighted -> CwocPrimary
                             else -> Color(0xFFFDF5E6)

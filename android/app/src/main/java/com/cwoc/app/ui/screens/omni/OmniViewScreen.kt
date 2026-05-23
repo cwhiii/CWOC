@@ -40,8 +40,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
+import com.cwoc.app.domain.filter.FilterEngine
+import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.util.DateUtils
+import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
@@ -112,25 +115,37 @@ private fun sectionLabel(type: OmniSectionType): String = when (type) {
 fun OmniViewScreen(
     onNavigateToEditor: (String) -> Unit,
     onNavigateToWeather: () -> Unit = {},
-    viewModel: OmniViewViewModel = hiltViewModel()
+    viewModel: OmniViewViewModel = hiltViewModel(),
+    filterSortViewModel: FilterSortViewModel? = null
 ) {
     val sections by viewModel.sections.collectAsState()
-    val chronoAnchored by viewModel.chronoAnchored.collectAsState()
-    val reminders by viewModel.reminders.collectAsState()
-    val onDeck by viewModel.onDeck.collectAsState()
-    val soon by viewModel.soon.collectAsState()
-    val pinnedNotes by viewModel.pinnedNotes.collectAsState()
-    val pinnedChecklists by viewModel.pinnedChecklists.collectAsState()
+    val rawChronoAnchored by viewModel.chronoAnchored.collectAsState()
+    val rawReminders by viewModel.reminders.collectAsState()
+    val rawOnDeck by viewModel.onDeck.collectAsState()
+    val rawSoon by viewModel.soon.collectAsState()
+    val rawPinnedNotes by viewModel.pinnedNotes.collectAsState()
+    val rawPinnedChecklists by viewModel.pinnedChecklists.collectAsState()
     val hstItems by viewModel.hstItems.collectAsState()
     val weatherData by viewModel.weatherData.collectAsState()
-    val emailChits by viewModel.emailChits.collectAsState()
-    val pinnedAll by viewModel.pinnedAll.collectAsState()
+    val rawEmailChits by viewModel.emailChits.collectAsState()
+    val rawPinnedAll by viewModel.pinnedAll.collectAsState()
     val emailExpanded by viewModel.emailExpanded.collectAsState()
     val emailPageSize by viewModel.emailPageSize.collectAsState()
     val hasEmailConfigured by viewModel.hasEmailConfigured.collectAsState()
     val hstMode by viewModel.hstMode.collectAsState()
     val hstClockMode by viewModel.hstClockMode.collectAsState()
     val colorMode by viewModel.colorMode.collectAsState()
+
+    // Apply sidebar filters to all chit lists
+    val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
+    val chronoAnchored = remember(rawChronoAnchored, filterState) { FilterEngine.applyFilters(rawChronoAnchored, filterState) }
+    val reminders = remember(rawReminders, filterState) { FilterEngine.applyFilters(rawReminders, filterState) }
+    val onDeck = remember(rawOnDeck, filterState) { FilterEngine.applyFilters(rawOnDeck, filterState) }
+    val soon = remember(rawSoon, filterState) { FilterEngine.applyFilters(rawSoon, filterState) }
+    val pinnedNotes = remember(rawPinnedNotes, filterState) { FilterEngine.applyFilters(rawPinnedNotes, filterState) }
+    val pinnedChecklists = remember(rawPinnedChecklists, filterState) { FilterEngine.applyFilters(rawPinnedChecklists, filterState) }
+    val emailChits = remember(rawEmailChits, filterState) { FilterEngine.applyFilters(rawEmailChits, filterState) }
+    val pinnedAll = remember(rawPinnedAll, filterState) { FilterEngine.applyFilters(rawPinnedAll, filterState) }
 
     val visibleSections = sections
         .filter { it.visible }

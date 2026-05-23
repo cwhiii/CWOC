@@ -82,6 +82,60 @@ function _indAttachModeToggleListener() {
   });
 }
 
+/**
+ * Set Indicators view mode from the sidebar buttons.
+ * Updates sidebar button active states, syncs the content-area pill toggle,
+ * persists to localStorage, and re-renders.
+ */
+function _indSetSidebarMode(mode) {
+  _indInitViewMode();
+  if (window._indViewMode === mode) return;
+
+  window._indViewMode = mode;
+  try { localStorage.setItem(_IND_VIEW_MODE_KEY, mode); } catch (ex) {}
+
+  // Update sidebar button active states
+  document.querySelectorAll('._ind-mode-btn').forEach(function(btn) {
+    if (btn.dataset.mode === mode) {
+      btn.style.background = 'ivory';
+      btn.style.color = '#3b1f0a';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+    }
+  });
+
+  // Sync the content-area pill toggle if it exists
+  var pill = document.getElementById('ind-mode-pill');
+  if (pill) {
+    var hidden = document.getElementById('ind-mode-toggle');
+    if (hidden) hidden.value = mode;
+    pill.querySelectorAll('span[data-val]').forEach(function(s) {
+      s.classList.toggle('active', s.dataset.val === mode);
+    });
+  }
+
+  displayIndicatorsView();
+}
+
+/**
+ * Sync sidebar Indicators mode buttons to current _indViewMode.
+ * Called when switching to the Indicators tab.
+ */
+function _indSyncSidebarModeButtons() {
+  _indInitViewMode();
+  var mode = window._indViewMode || 'charts';
+  document.querySelectorAll('._ind-mode-btn').forEach(function(btn) {
+    if (btn.dataset.mode === mode) {
+      btn.style.background = 'ivory';
+      btn.style.color = '#3b1f0a';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+    }
+  });
+}
+
 async function displayIndicatorsView() {
   var chitList = document.getElementById('chit-list');
   if (!chitList) return;

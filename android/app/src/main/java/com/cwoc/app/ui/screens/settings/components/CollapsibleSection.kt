@@ -59,13 +59,7 @@ fun CollapsibleSection(
 
     // Read persisted state, defaulting to defaultExpanded if no saved value exists
     var expanded by remember {
-        val key = "$KEY_PREFIX$sectionId"
-        val savedState = if (prefs.contains(key)) {
-            prefs.getBoolean(key, defaultExpanded)
-        } else {
-            defaultExpanded
-        }
-        mutableStateOf(savedState)
+        mutableStateOf(false)
     }
 
     // Animate chevron rotation: 0° = collapsed (▶), -90° = expanded (▼)

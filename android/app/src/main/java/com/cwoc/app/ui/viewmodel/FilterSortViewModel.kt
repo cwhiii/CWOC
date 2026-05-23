@@ -40,6 +40,63 @@ class FilterSortViewModel @Inject constructor(
     /** The currently active tab route, used for per-tab sort persistence. */
     private var currentTabRoute: String? = null
 
+    companion object {
+        /**
+         * Maps web sort field names (as stored on the server) to Android SortField enum names.
+         * The server stores lowercase short names set by the web frontend.
+         */
+        private val WEB_FIELD_TO_ENUM: Map<String, SortField> = mapOf(
+            "title" to SortField.TITLE,
+            "due" to SortField.DUE_DATE,
+            "start" to SortField.START_DATE,
+            "updated" to SortField.MODIFIED_DATE,
+            "created" to SortField.CREATED_DATE,
+            "status" to SortField.STATUS,
+            "manual" to SortField.MANUAL,
+            "random" to SortField.RANDOM,
+            "upcoming" to SortField.UPCOMING,
+            "priority" to SortField.PRIORITY
+        )
+
+        /**
+         * Maps Android SortField enum names back to web field names for server persistence.
+         */
+        private val ENUM_TO_WEB_FIELD: Map<SortField, String> = mapOf(
+            SortField.TITLE to "title",
+            SortField.DUE_DATE to "due",
+            SortField.START_DATE to "start",
+            SortField.MODIFIED_DATE to "updated",
+            SortField.CREATED_DATE to "created",
+            SortField.STATUS to "status",
+            SortField.MANUAL to "manual",
+            SortField.RANDOM to "random",
+            SortField.UPCOMING to "upcoming",
+            SortField.PRIORITY to "priority"
+        )
+
+        /**
+         * Maps Android route names to web tab names (capitalized, as stored on server).
+         */
+        private val ROUTE_TO_WEB_TAB: Map<String, String> = mapOf(
+            "calendar" to "Calendar",
+            "checklists" to "Checklists",
+            "alarms" to "Alarms",
+            "projects" to "Projects",
+            "tasks" to "Tasks",
+            "notes" to "Notes",
+            "notebook" to "Notebook",
+            "indicators" to "Indicators",
+            "email" to "Email",
+            "omni" to "Omni"
+        )
+
+        /**
+         * Maps web tab names (from server) to Android route names.
+         */
+        private val WEB_TAB_TO_ROUTE: Map<String, String> = ROUTE_TO_WEB_TAB.entries
+            .associate { (route, webTab) -> webTab to route }
+    }
+
     init {
         // Load sort orders and preferences from server on init (cross-device sync)
         viewModelScope.launch {
@@ -48,8 +105,10 @@ class FilterSortViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     val serverOrders = response.body() ?: emptyMap()
                     val editor = sharedPreferences.edit()
-                    serverOrders.forEach { (tab, ids) ->
-                        editor.putString("manual_order_$tab", com.google.gson.Gson().toJson(ids))
+                    serverOrders.forEach { (webTab, ids) ->
+                        // Convert web tab name to Android route for local storage
+                        val route = WEB_TAB_TO_ROUTE[webTab] ?: webTab.lowercase()
+                        editor.putString("manual_order_$route", com.google.gson.Gson().toJson(ids))
                     }
                     editor.apply()
                 }
@@ -59,13 +118,25 @@ class FilterSortViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     val serverPrefs = response.body() ?: emptyMap()
                     val editor = sharedPreferences.edit()
-                    serverPrefs.forEach { (tab, pref) ->
+                    serverPrefs.forEach { (webTab, pref) ->
+                        // Convert web tab name to Android route for local storage
+                        val route = WEB_TAB_TO_ROUTE[webTab] ?: webTab.lowercase()
                         val field = pref["field"]
                         val dir = pref["dir"]
-                        if (field != null) editor.putString("sort_field_$tab", field.uppercase())
-                        if (dir != null) editor.putString("sort_direction_$tab", dir.uppercase())
+                        if (field != null) {
+                            // Convert web field name to Android enum name
+                            val sortField = WEB_FIELD_TO_ENUM[field.lowercase()]
+                            if (sortField != null) {
+                                editor.putString("sort_field_$route", sortField.name)
+                            }
+                        }
+                        if (dir != null) editor.putString("sort_direction_$route", dir.uppercase())
                     }
                     editor.apply()
+                    // Re-emit sort state for the current tab now that server data is loaded
+                    currentTabRoute?.let { tab ->
+                        _sortState.value = loadSortPreference(tab)
+                    }
                 }
             } catch (_: Exception) { /* Best-effort */ }
         }
@@ -123,10 +194,11 @@ class FilterSortViewModel @Inject constructor(
         val manualSort = SortState(field = SortField.MANUAL, direction = SortDirection.ASC)
         _sortState.value = manualSort
         persistSortPreference(tab, manualSort)
-        // Persist to backend API for cross-device sync
+        // Persist to backend API for cross-device sync using web-compatible tab name
+        val webTab = ROUTE_TO_WEB_TAB[tab] ?: tab.replaceFirstChar { it.uppercase() }
         viewModelScope.launch {
             try {
-                apiService.get().saveSortOrder(tab, mapOf("ids" to ids))
+                apiService.get().saveSortOrder(webTab, mapOf("ids" to ids))
             } catch (_: Exception) { /* Best-effort — local order is already saved */ }
         }
     }
@@ -160,12 +232,14 @@ class FilterSortViewModel @Inject constructor(
             .putString("sort_field_$tabRoute", sort.field.name)
             .putString("sort_direction_$tabRoute", sort.direction.name)
             .apply()
-        // Persist to backend
+        // Persist to backend using web-compatible tab and field names
+        val webTab = ROUTE_TO_WEB_TAB[tabRoute] ?: tabRoute.replaceFirstChar { it.uppercase() }
+        val webField = ENUM_TO_WEB_FIELD[sort.field] ?: sort.field.name.lowercase()
         viewModelScope.launch {
             try {
                 apiService.get().saveSortPreference(
-                    tabRoute,
-                    mapOf("field" to (sort.field.name.lowercase()), "dir" to sort.direction.name.lowercase())
+                    webTab,
+                    mapOf("field" to webField, "dir" to sort.direction.name.lowercase())
                 )
             } catch (_: Exception) { /* Best-effort */ }
         }
