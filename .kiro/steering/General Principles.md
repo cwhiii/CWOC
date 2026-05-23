@@ -2,9 +2,6 @@
 inclusion: always
 ---
 
-# SPEC TASK LISTS — ALWAYS IDENTIFY THE SPEC
-When starting work on a spec task list, **always state the full name of the spec at the top** of your response before doing any work. This makes it immediately clear which spec is being worked on in the conversation.
-
 # TERMINOLOGY: "app" = Android App ONLY
 When the user says "app," "the app," or "in the app," they ALWAYS mean the **Android mobile app** (Kotlin code under `android/`). Never the web version. Never the whole application. "App" is exclusively the Android app. If the user means the web version, they will say "web," "browser," "frontend," or "site."
 
@@ -17,6 +14,10 @@ The user runs the app on a physical phone with no USB debugging. There is NO log
 - Use the clipboard diagnostic report (written on app launch by `CwocApplication`)
 - Use `fetch-logs.sh` to pull `/api/client-log` and `/api/server-log` into `.kiro/` files
 - **NEVER** tell the user to run `adb logcat` or check Android Studio logs. They cannot.
+
+# SPEC TASK LISTS — ALWAYS IDENTIFY THE SPEC
+When starting work on a spec task list, **always state the full name of the spec at the top** of your response before doing any work. This makes it immediately clear which spec is being worked on in the conversation.
+
 
 # ABSOLUTE RULE: COMPLETE IMPLEMENTATION — NO PARTIAL FEATURES
 **This is the single most important rule in this project. It overrides all other considerations.**
@@ -260,7 +261,7 @@ Ensure that any time you change or add a feature that has or should have, docume
 ## Versioning
 
 Version numbering is: 
-sYYYYMMDD.HHMM for the server (in src/VERSION), mYYYYMMDD.HHMM for mobile (versionName in android/app/build.gradle.kts). Time is in format HHMM.
+sYYYYMMDD-HHMM for the server (in src/VERSION), mYYYYMMDD-HHMM for mobile (versionName in android/app/build.gradle.kts). Time is in format HHMM.
 
 As the last step of any change, call the real time and use that to update the version number every time you make changes.
 

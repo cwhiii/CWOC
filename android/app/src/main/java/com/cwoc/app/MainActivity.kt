@@ -254,10 +254,14 @@ private fun CwocApp(
             }
             if (targetTab != selectedTab) {
                 selectedTab = targetTab
-                navController.navigate(targetTab.route) {
-                    popUpTo(navController.graph.startDestinationId) {
-                        inclusive = true
+                try {
+                    navController.navigate(targetTab.route) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            inclusive = true
+                        }
                     }
+                } catch (_: IllegalStateException) {
+                    // Nav graph not ready yet — will apply on next recomposition
                 }
             }
             landingViewApplied = true

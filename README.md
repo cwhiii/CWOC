@@ -57,6 +57,10 @@ Lightweight enough to run on minimal hardware like a Raspberry Pi Zero 2 W, thou
 **Minimum Functional Specs:**
 - 1 vCPU, 256MB RAM, 2GB disk — will run, but expect slower response times under concurrent use
 
+## Android App
+
+A native Android app is available at `install/cwoc_android_app.apk`. This is a full-featured Kotlin/Compose client with offline support, bidirectional sync, and push notifications — not a browser wrapper. See the [Install as App](src/help/install-app.md) help doc for installation instructions.
+
 ## Documentation
 
 - [Full README & Feature List](./documents/README.md)

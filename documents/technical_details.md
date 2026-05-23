@@ -266,6 +266,7 @@ data/                      # SQLite database files (app.db), email encryption ke
 
 install/
   configurinator.sh        # Server provisioning script (full install or upgrade)
+  cwoc_android_app.apk     # Native Android app (sideload to phone)
 
 documentation/
   overview.md              # Project overview and architecture documentation

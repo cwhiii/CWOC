@@ -14,6 +14,10 @@ curl -sSL https://your-release-url/configurinator.sh | sudo bash
 
 That's it. Open `https://your-server-ip` in a browser. For technical details, local development setup, and service management, see [technical_details.md](technical_details.md).
 
+### Android App
+
+A native Android app is included at `install/cwoc_android_app.apk`. This is a full Kotlin/Compose client with offline support, bidirectional sync, and push notifications. To install, download the APK to your phone from your CWOC server and sideload it (enable "Install from unknown sources" in Android settings if prompted). The app connects to your server URL on first launch.
+
 ## The C CAPTN E Views
 
 Chits are organized into seven views called **C CAPTN E**:

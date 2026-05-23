@@ -1,5 +1,6 @@
 # Install as App
 
+- [Native Android App (Recommended)](#native-android-app-recommended)
 - [Trusting the Server Certificate](#trusting-the-server-certificate)
 - [Installing on Desktop (Chrome, Edge)](#installing-on-desktop-chrome-edge)
 - [Installing on Android — Firefox](#installing-on-android-firefox)
@@ -9,7 +10,22 @@
 - [Offline](#offline)
 
 
-CWOC is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it runs in its own window without browser chrome, just like a native app.
+CWOC is available as a native Android app and as a Progressive Web App (PWA). The native app is recommended for Android users — it provides offline sync, push notifications, and a full native experience. The PWA option works on all platforms and runs in its own window without browser chrome.
+
+## Native Android App (Recommended)
+
+A native Android app is available for sideloading. This is a full Kotlin/Compose client — not a browser wrapper — with offline support, bidirectional sync, and push notifications.
+
+1. On your Android device, open your browser and navigate to your CWOC server's install directory: `https://your-server-ip/static/install/cwoc_android_app.apk` (or download it from the `install/` folder in your CWOC deployment).
+2. Open the downloaded APK file. If prompted, enable **"Install from unknown sources"** for your browser in Android Settings → Apps → Special access → Install unknown apps.
+3. Tap **Install** and open the app.
+4. On first launch, enter your CWOC server URL (e.g., `https://192.168.1.111`) and sign in with your username and password.
+
+The app syncs automatically in the background. Changes made on the app appear on the web and vice versa.
+
+## PWA (Browser Install)
+
+The sections below cover installing CWOC as a Progressive Web App from your browser. This works on all platforms (desktop, Android, iOS) but does not have the full offline sync capabilities of the native Android app.
 
 ## Trusting the Server Certificate
 
