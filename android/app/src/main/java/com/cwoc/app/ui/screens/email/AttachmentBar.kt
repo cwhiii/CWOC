@@ -52,6 +52,7 @@ import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocOutline
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import okhttp3.OkHttpClient
 
 /**
  * Attachment bar composable for the email compose/view zone.
@@ -73,6 +74,7 @@ fun AttachmentBar(
     attachmentsJson: String?,
     serverUrl: String,
     authToken: String = "",
+    okHttpClient: OkHttpClient,
     modifier: Modifier = Modifier
 ) {
     val attachments = remember(attachmentsJson) {
@@ -128,6 +130,7 @@ fun AttachmentBar(
             attachment = previewAttachment!!,
             serverUrl = serverUrl,
             authToken = authToken,
+            okHttpClient = okHttpClient,
             onDismiss = { previewAttachment = null },
             onOpenExternal = {
                 val url = buildAttachmentUrl(previewAttachment!!.url, serverUrl)

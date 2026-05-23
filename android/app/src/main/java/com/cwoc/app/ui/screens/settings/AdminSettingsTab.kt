@@ -74,6 +74,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import okhttp3.OkHttpClient
 import org.json.JSONArray
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
@@ -100,7 +101,8 @@ fun AdminSettingsTab(
     settingsViewModel: SettingsViewModel? = null,
     apiService: CwocApiService? = null,
     authToken: String = "",
-    isAdmin: Boolean = true
+    isAdmin: Boolean = true,
+    okHttpClient: OkHttpClient? = null
 ) {
     val uiState by debugViewModel.uiState.collectAsState()
     val clipboardManager = LocalClipboardManager.current
@@ -290,7 +292,8 @@ fun AdminSettingsTab(
             serverUrl = settingsState.serverUrl,
             authToken = authToken,
             isAdmin = isAdmin,
-            timeFormat = settingsState.timeFormat
+            timeFormat = settingsState.timeFormat,
+            okHttpClient = okHttpClient
         )
     }
 }
@@ -2281,7 +2284,8 @@ private fun VersionUpdatesSection(
     serverUrl: String,
     authToken: String,
     isAdmin: Boolean,
-    timeFormat: String = "12hour"
+    timeFormat: String = "12hour",
+    okHttpClient: OkHttpClient? = null
 ) {
     var expanded by remember { mutableStateOf(true) }
     var showReleaseNotes by remember { mutableStateOf(false) }
@@ -2550,10 +2554,11 @@ private fun VersionUpdatesSection(
     }
 
     // --- Release Notes Dialog (Req 28.8) ---
-    if (showReleaseNotes) {
+    if (showReleaseNotes && okHttpClient != null) {
         ReleaseNotesDialog(
             serverUrl = serverUrl.ifEmpty { "http://192.168.1.111:3333" },
             authToken = authToken,
+            okHttpClient = okHttpClient,
             onDismiss = { showReleaseNotes = false }
         )
     }

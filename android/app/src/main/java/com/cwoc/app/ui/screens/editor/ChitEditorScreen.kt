@@ -1000,6 +1000,7 @@ fun ChitEditorScreen(
                                     onAttachmentsChange = { viewModel.updateForm(formState.copy(attachments = it)) },
                                     serverUrl = serverUrl,
                                     authToken = authToken,
+                                    okHttpClient = viewModel.okHttpClient,
                                     isNewChit = formState.isNew,
                                     onCommitAttachments = { callback ->
                                         if (callback != null) viewModel.registerOnSaveCallback(callback)

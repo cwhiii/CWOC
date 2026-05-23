@@ -22,7 +22,7 @@ router = APIRouter()
 
 # Log file path — same /app/data/ directory as the database
 CLIENT_LOG_PATH = "/app/data/client-log.txt"
-MAX_RETURN_LINES = 200
+MAX_RETURN_LINES = 500
 MAX_FILE_LINES = 5000  # Rotate when file exceeds this many lines
 
 
@@ -83,7 +83,7 @@ async def get_server_log():
     """Return the last 200 lines from the cwoc systemd service journal."""
     try:
         result = subprocess.run(
-            ["journalctl", "-u", "cwoc", "--no-pager", "-n", "200"],
+            ["journalctl", "-u", "cwoc", "--no-pager", "-n", "500"],
             capture_output=True,
             text=True,
             timeout=10

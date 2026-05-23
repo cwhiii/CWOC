@@ -76,8 +76,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.cwoc.app.data.remote.TrustedHttpClient
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -368,7 +368,8 @@ fun ContactEditorScreen(
                     contactId = formState.id,
                     isNew = formState.isNew,
                     readOnly = isReadOnly,
-                    isProfileMode = viewModel.isProfileMode
+                    isProfileMode = viewModel.isProfileMode,
+                    okHttpClient = viewModel.okHttpClient
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -439,7 +440,7 @@ fun ContactEditorScreen(
 
                 // ─── Profile-Only: Password Change Zone ─────────────────────────
                 if (isProfileMode && !isReadOnly) {
-                    PasswordChangeZone()
+                    PasswordChangeZone(okHttpClient = viewModel.okHttpClient)
                     HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                 }
 
@@ -563,7 +564,8 @@ private fun ContactProfileImageSection(
     contactId: String,
     isNew: Boolean,
     readOnly: Boolean,
-    isProfileMode: Boolean = false
+    isProfileMode: Boolean = false,
+    okHttpClient: OkHttpClient
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -590,7 +592,7 @@ private fun ContactProfileImageSection(
     ) { uri: android.net.Uri? ->
         if (uri != null && !isNew) {
             coroutineScope.launch {
-                uploadContactImage(context, uri, contactId, serverUrl, authToken)
+                uploadContactImage(context, uri, contactId, serverUrl, authToken, okHttpClient)
                 imageRefreshKey = System.currentTimeMillis()
             }
         }
@@ -602,7 +604,7 @@ private fun ContactProfileImageSection(
     ) { bitmap: android.graphics.Bitmap? ->
         if (bitmap != null && !isNew) {
             coroutineScope.launch {
-                uploadContactBitmap(bitmap, contactId, serverUrl, authToken)
+                uploadContactBitmap(bitmap, contactId, serverUrl, authToken, okHttpClient)
                 imageRefreshKey = System.currentTimeMillis()
             }
         }
@@ -703,7 +705,7 @@ private fun ContactProfileImageSection(
                         TextButton(onClick = {
                             showImageOptions = false
                             coroutineScope.launch {
-                                deleteContactImage(contactId, serverUrl, authToken)
+                                deleteContactImage(contactId, serverUrl, authToken, okHttpClient)
                                 imageRefreshKey = System.currentTimeMillis()
                             }
                         }, colors = CwocDialogDefaults.dangerButtonColors()) {
@@ -735,7 +737,8 @@ private suspend fun uploadContactImage(
     uri: android.net.Uri,
     contactId: String,
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    okHttpClient: OkHttpClient
 ) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     try {
         val contentResolver = context.contentResolver
@@ -756,7 +759,7 @@ private suspend fun uploadContactImage(
             .post(multipartBody)
             .build()
 
-        TrustedHttpClient.instance.newCall(request).execute()
+        okHttpClient.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
@@ -764,7 +767,8 @@ private suspend fun uploadContactBitmap(
     bitmap: android.graphics.Bitmap,
     contactId: String,
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    okHttpClient: OkHttpClient
 ) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     try {
         val stream = java.io.ByteArrayOutputStream()
@@ -783,14 +787,15 @@ private suspend fun uploadContactBitmap(
             .post(multipartBody)
             .build()
 
-        TrustedHttpClient.instance.newCall(request).execute()
+        okHttpClient.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
 private suspend fun deleteContactImage(
     contactId: String,
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    okHttpClient: OkHttpClient
 ) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     try {
         val request = okhttp3.Request.Builder()
@@ -799,7 +804,7 @@ private suspend fun deleteContactImage(
             .delete()
             .build()
 
-        TrustedHttpClient.instance.newCall(request).execute()
+        okHttpClient.newCall(request).execute()
     } catch (_: Exception) {}
 }
 
@@ -1647,7 +1652,7 @@ private fun serializeDateEntries(entries: List<DateEntry>): String {
  * Matches the web's "Change Password" zone with current/new/confirm fields.
  */
 @Composable
-private fun PasswordChangeZone() {
+private fun PasswordChangeZone(okHttpClient: OkHttpClient) {
     var isExpanded by remember { mutableStateOf(false) }
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -1711,7 +1716,7 @@ private fun PasswordChangeZone() {
                     return@TextButton
                 }
                 coroutineScope.launch {
-                    val result = changePassword(context, currentPassword, newPassword)
+                    val result = changePassword(context, currentPassword, newPassword, okHttpClient)
                     if (result == null) {
                         message = "Password changed successfully."
                         isError = false
@@ -1737,7 +1742,8 @@ private fun PasswordChangeZone() {
 private suspend fun changePassword(
     context: android.content.Context,
     currentPassword: String,
-    newPassword: String
+    newPassword: String,
+    okHttpClient: OkHttpClient
 ): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     try {
         val prefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
@@ -1752,7 +1758,7 @@ private suspend fun changePassword(
             .put(requestBody)
             .build()
 
-        val response = TrustedHttpClient.instance.newCall(request).execute()
+        val response = okHttpClient.newCall(request).execute()
         when {
             response.code == 403 -> "Current password is incorrect."
             !response.isSuccessful -> "Failed to change password (${response.code})"

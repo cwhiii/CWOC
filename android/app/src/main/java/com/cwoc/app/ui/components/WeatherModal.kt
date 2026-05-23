@@ -1,6 +1,5 @@
 package com.cwoc.app.ui.components
 
-import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +37,8 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import com.cwoc.app.data.remote.TrustedHttpClient
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import androidx.compose.material3.Button
 import com.cwoc.app.ui.theme.CwocInputDefaults
@@ -62,6 +61,7 @@ fun WeatherModal(
     savedLocations: String?,
     serverUrl: String,
     authToken: String,
+    okHttpClient: OkHttpClient,
     onDismiss: () -> Unit,
     onFullForecast: () -> Unit
 ) {
@@ -92,7 +92,7 @@ fun WeatherModal(
         isLoading = true
         errorMsg = null
         coroutineScope.launch {
-            val result = fetchWeatherData(serverUrl, authToken, address)
+            val result = fetchWeatherData(serverUrl, authToken, address, okHttpClient)
             weatherData = result.first
             errorMsg = result.second
             isLoading = false
@@ -283,11 +283,11 @@ private fun weatherCodeToDescription(code: Int): String = when (code) {
 private suspend fun fetchWeatherData(
     serverUrl: String,
     authToken: String,
-    address: String
+    address: String,
+    client: OkHttpClient
 ): Pair<WeatherModalData?, String?> = withContext(Dispatchers.IO) {
     try {
         // Use the server's weather/forecasts endpoint or geocode + Open-Meteo directly
-        val client = TrustedHttpClient.instance
 
         // First geocode the address via the server proxy
         val geoUrl = "$serverUrl/api/geocode?q=${java.net.URLEncoder.encode(address, "UTF-8")}"

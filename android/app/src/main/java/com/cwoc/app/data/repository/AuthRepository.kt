@@ -90,8 +90,9 @@ class AuthRepository @Inject constructor(
      * @return [AuthResult] indicating success or the type of failure
      */
     suspend fun login(serverUrl: String, username: String, password: String): AuthResult {
-        // Persist the server URL for future use
-        prefs.edit().putString("server_url", serverUrl).apply()
+        // Persist the server URL for future use (dynamic URL interceptor reads this)
+        val urlSaved = prefs.edit().putString("server_url", serverUrl).commit()
+        android.util.Log.d("CWOC_LOGIN", "server_url commit result: $urlSaved")
 
         return try {
             val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
@@ -101,43 +102,26 @@ class AuthRepository @Inject constructor(
                 device_name = deviceName
             )
 
-            // Build a one-off Retrofit instance with the user-provided URL
-            // (the singleton Retrofit was created at app startup with the old/default URL)
-            val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
-                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
-                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
-                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-            })
-            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
-            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
-
-            val loginClient = okhttp3.OkHttpClient.Builder()
-                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
-                .hostnameVerifier { _, _ -> true }
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-
-            val loginRetrofit = retrofit2.Retrofit.Builder()
-                .baseUrl(serverUrl.trimEnd('/') + "/")
-                .client(loginClient)
-                .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
-                .build()
-
-            val loginApi = loginRetrofit.create(com.cwoc.app.data.remote.CwocApiService::class.java)
+            // Use the Hilt-injected apiService directly.
+            // AuthInterceptor already skips adding Bearer token for /api/auth/device-token.
+            // Dynamic URL interceptor reads server_url from prefs (persisted above).
             android.util.Log.d("CWOC_LOGIN", "Attempting login to: ${serverUrl.trimEnd('/')}/api/auth/device-token")
             android.util.Log.d("CWOC_LOGIN", "Username: $username, Device: $deviceName")
-            val response = loginApi.authenticate(request)
+            val response = apiService.authenticate(request)
             android.util.Log.d("CWOC_LOGIN", "Response code: ${response.code()}")
 
             when {
                 response.isSuccessful -> {
                     val body = response.body()
                     if (body != null) {
-                        prefs.edit()
+                        val tokenSaved = prefs.edit()
                             .putString("device_token", body.token)
                             .putString("user_username", username)
-                            .apply()
+                            .commit()
+                        android.util.Log.d("CWOC_LOGIN", "token+username commit result: $tokenSaved")
+                        // Verify the write by reading back
+                        val readBack = prefs.getString("device_token", null)
+                        android.util.Log.d("CWOC_LOGIN", "Read-back device_token: ${if (readBack != null) "${readBack.take(8)}...(${readBack.length})" else "NULL"}")
                         _username.value = username
                         AuthResult.Success
                     } else {
@@ -215,9 +199,9 @@ class AuthRepository @Inject constructor(
      * Fetch the current user's profile from /api/auth/me and cache display name + user ID.
      * Called after login and on app startup when authenticated.
      *
-     * Builds a fresh Retrofit instance using the stored server URL to avoid the stale
-     * singleton base URL issue (the singleton is created at app startup and may point
-     * to localhost if the user hadn't logged in yet at that time).
+     * Uses the Hilt-injected apiService — the dynamic URL interceptor reads server_url
+     * from SharedPreferences and rewrites the request host/port/scheme automatically.
+     * AuthInterceptor adds the Bearer token.
      */
     suspend fun fetchUserProfile() {
         try {
@@ -229,36 +213,7 @@ class AuthRepository @Inject constructor(
                 return
             }
 
-            // Build a fresh API service with the correct base URL
-            val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
-                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
-                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
-                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-            })
-            val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
-            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
-
-            val client = okhttp3.OkHttpClient.Builder()
-                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
-                .hostnameVerifier { _, _ -> true }
-                .addInterceptor { chain ->
-                    val request = chain.request().newBuilder()
-                        .header("Authorization", "Bearer $token")
-                        .build()
-                    chain.proceed(request)
-                }
-                .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-
-            val retrofit = retrofit2.Retrofit.Builder()
-                .baseUrl(serverUrl.trimEnd('/') + "/")
-                .client(client)
-                .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
-                .build()
-
-            val freshApi = retrofit.create(com.cwoc.app.data.remote.CwocApiService::class.java)
-            val response = freshApi.getMe()
+            val response = apiService.getMe()
 
             if (response.isSuccessful) {
                 val profile = response.body()

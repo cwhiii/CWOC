@@ -41,8 +41,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocPrimary
+import okhttp3.OkHttpClient
 import okhttp3.Request
-import com.cwoc.app.data.remote.TrustedHttpClient
 
 /**
  * Data class representing a single day's release notes.
@@ -62,6 +62,7 @@ data class ReleaseNoteEntry(
  *
  * @param serverUrl The base server URL
  * @param authToken The auth token for API calls
+ * @param okHttpClient The OkHttpClient instance (Hilt-provided) for API calls
  * @param onDismiss Callback when the sheet is dismissed
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +70,7 @@ data class ReleaseNoteEntry(
 fun ReleaseNotesDialog(
     serverUrl: String,
     authToken: String,
+    okHttpClient: OkHttpClient,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -81,7 +83,7 @@ fun ReleaseNotesDialog(
     // Fetch release notes on first composition
     LaunchedEffect(Unit) {
         coroutineScope.launch {
-            val result = fetchReleaseNotes(serverUrl, authToken)
+            val result = fetchReleaseNotes(serverUrl, authToken, okHttpClient)
             if (result != null) {
                 notes = result
                 errorMessage = null
@@ -224,7 +226,8 @@ fun ReleaseNotesDialog(
  */
 private suspend fun fetchReleaseNotes(
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    client: OkHttpClient
 ): List<ReleaseNoteEntry>? = withContext(Dispatchers.IO) {
     try {
         val request = Request.Builder()
@@ -233,7 +236,6 @@ private suspend fun fetchReleaseNotes(
             .get()
             .build()
 
-        val client = TrustedHttpClient.instance
         val response = client.newCall(request).execute()
 
         if (response.isSuccessful) {

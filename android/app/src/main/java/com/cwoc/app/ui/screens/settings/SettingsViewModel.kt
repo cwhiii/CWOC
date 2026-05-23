@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 /**
@@ -212,7 +213,8 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val syncRepository: SyncRepository,
     private val prefs: SharedPreferences,
-    private val apiService: CwocApiService
+    private val apiService: CwocApiService,
+    val okHttpClient: OkHttpClient
 ) : ViewModel() {
 
     /** Exposed for composables that need direct API access (e.g., UpgradeModal, Version section). */

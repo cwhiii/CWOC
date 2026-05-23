@@ -69,7 +69,8 @@ class SyncPushEnginePropertyTest {
             syncStateManager = fakeSyncStateManager,
             settingsConflictResolver = fakeSettingsConflictResolver,
             gson = gson,
-            prefs = FakePushSharedPreferences()
+            prefs = FakePushSharedPreferences(),
+            apiService = fakeApiService
         )
     }
 

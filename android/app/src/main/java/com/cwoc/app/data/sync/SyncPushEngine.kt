@@ -9,13 +9,11 @@ import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.mapper.toPushDto
 import com.cwoc.app.data.remote.CwocApiService
-import com.cwoc.app.data.remote.TrustedHttpClient
 import com.cwoc.app.data.remote.dto.ContactPushResultDto
 import com.cwoc.app.data.remote.dto.SettingsPushResultDto
 import com.cwoc.app.data.remote.dto.SyncPushRequestDto
+import com.cwoc.app.data.remote.dto.ClientLogRequest
 import com.google.gson.Gson
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import java.time.Instant
 import javax.inject.Inject
 
@@ -81,50 +79,25 @@ class SyncPushEngineImpl @Inject constructor(
     private val syncStateManager: SyncStateManager,
     private val settingsConflictResolver: SettingsConflictResolver,
     private val gson: Gson,
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val apiService: CwocApiService
 ) : SyncPushEngine {
 
-    /**
-     * Build a fresh API service using the stored server URL and auth token.
-     * This ensures we always use the correct URL (not the stale Hilt singleton).
-     * Returns null if server_url or device_token is missing.
-     */
-    private fun buildApiService(): CwocApiService? {
-        val serverUrl = prefs.getString("server_url", null)
-        val token = prefs.getString("device_token", null)
-
-        if (serverUrl.isNullOrBlank() || token.isNullOrBlank()) {
-            Log.e(TAG, "Cannot push: serverUrl=$serverUrl, token=${if (token != null) "present" else "null"}")
-            return null
-        }
-
-        val client = TrustedHttpClient.instance.newBuilder()
-            .addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-                chain.proceed(request)
-            }
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl(serverUrl.trimEnd('/') + "/")
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-        return retrofit.create(CwocApiService::class.java)
-    }
-
     override suspend fun pushSingle(chitId: String): PushResult {
+        reportPushLog("pushSingle called: chitId=$chitId")
         val entity = chitDao.getById(chitId)
-            ?: return PushResult.NetworkError("Chit not found: $chitId")
+        if (entity == null) {
+            reportPushLog("pushSingle FAILED: chit not found: $chitId", "error")
+            return PushResult.NetworkError("Chit not found: $chitId")
+        }
 
         if (!entity.isDirty) {
             Log.d(TAG, "pushSingle($chitId): not dirty, skipping")
+            reportPushLog("pushSingle skipped: not dirty, chitId=$chitId")
             return PushResult.Success(entity.syncVersion)
         }
 
+        reportPushLog("pushSingle proceeding: isDirty=true, chitId=$chitId, title=${entity.title?.take(30)}")
         return pushChitEntities(listOf(entity))
     }
 
@@ -136,10 +109,12 @@ class SyncPushEngineImpl @Inject constructor(
 
         if (dirtyChits.isEmpty() && dirtyContacts.isEmpty() && dirtySettings == null) {
             Log.d(TAG, "pushAll: no dirty records")
+            reportPushLog("pushAll: no dirty records")
             return PushResult.Success(0)
         }
 
         Log.d(TAG, "pushAll: pushing ${dirtyChits.size} chit(s), ${dirtyContacts.size} contact(s), settings=${dirtySettings != null}")
+        reportPushLog("pushAll: ${dirtyChits.size} chit(s), ${dirtyContacts.size} contact(s), settings=${dirtySettings != null}")
 
         syncStateManager.setSyncing()
 
@@ -150,17 +125,11 @@ class SyncPushEngineImpl @Inject constructor(
         )
 
         try {
-            val apiService = buildApiService()
-            if (apiService == null) {
-                Log.e(TAG, "Push failed: no server URL or token configured")
-                syncStateManager.setIdle()
-                return PushResult.NetworkError("Not authenticated — no server URL or token")
-            }
-
             val response = apiService.pushChanges(request)
 
             if (!response.isSuccessful) {
                 Log.e(TAG, "Push failed: HTTP ${response.code()} ${response.message()}")
+                reportPushLog("pushAll HTTP FAIL: ${response.code()} ${response.message()}", "error")
                 syncStateManager.setIdle()
                 return PushResult.NetworkError("HTTP ${response.code()}")
             }
@@ -373,23 +342,18 @@ class SyncPushEngineImpl @Inject constructor(
      */
     private suspend fun pushChitEntities(entities: List<ChitEntity>): PushResult {
         syncStateManager.setSyncing()
+        reportPushLog("pushChitEntities: ${entities.size} entities")
 
         val request = SyncPushRequestDto(
             chits = entities.map { it.toPushDto() }
         )
 
         try {
-            val apiService = buildApiService()
-            if (apiService == null) {
-                Log.e(TAG, "Push failed: no server URL or token configured")
-                syncStateManager.setIdle()
-                return PushResult.NetworkError("Not authenticated — no server URL or token")
-            }
-
             val response = apiService.pushChanges(request)
 
             if (!response.isSuccessful) {
                 Log.e(TAG, "Push failed: HTTP ${response.code()} ${response.message()}")
+                reportPushLog("pushChitEntities HTTP FAIL: ${response.code()} ${response.message()}", "error")
                 syncStateManager.setIdle()
                 return PushResult.NetworkError("HTTP ${response.code()}")
             }
@@ -456,6 +420,7 @@ class SyncPushEngineImpl @Inject constructor(
             syncStateManager.setIdle()
 
             Log.d(TAG, "Push complete: successes=$successes, failures=$failures, server_version=${body.server_version}")
+            reportPushLog("pushChitEntities SUCCESS: successes=$successes, failures=$failures, server_version=${body.server_version}")
 
             return if (failures == 0) {
                 PushResult.Success(body.server_version)
@@ -465,8 +430,27 @@ class SyncPushEngineImpl @Inject constructor(
 
         } catch (e: Exception) {
             Log.e(TAG, "Push exception: ${e.javaClass.simpleName}: ${e.message}", e)
+            reportPushLog("pushChitEntities EXCEPTION: ${e.javaClass.simpleName}: ${e.message}", "error")
             syncStateManager.setIdle()
             return PushResult.NetworkError(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Report a log entry to the server's client-log endpoint for remote diagnostics.
+     * Fire-and-forget — failures are silently logged locally.
+     */
+    private suspend fun reportPushLog(message: String, level: String = "info") {
+        try {
+            val request = ClientLogRequest(
+                message = message,
+                level = level,
+                source = "android-push",
+                timestamp = Instant.now().toString()
+            )
+            apiService.postClientLog(request)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to report push log: ${e.message}")
         }
     }
 }

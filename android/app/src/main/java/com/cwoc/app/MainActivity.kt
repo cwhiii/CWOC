@@ -68,6 +68,7 @@ import com.cwoc.app.data.repository.AuthEvent
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.sync.SyncEngine
+import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncWorker
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.ui.components.NewChitFab
@@ -93,6 +94,7 @@ import com.cwoc.app.ui.viewmodel.ProfileMenuViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import okhttp3.OkHttpClient
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -121,6 +123,12 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository
+
+    @Inject
+    lateinit var syncPushEngine: SyncPushEngine
+
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
 
     private val filterSortViewModel: FilterSortViewModel by viewModels()
     private val notificationBadgeViewModel: NotificationBadgeViewModel by viewModels()
@@ -161,7 +169,9 @@ class MainActivity : ComponentActivity() {
                 syncEngine = syncEngine,
                 syncMetadataDao = syncMetadataDao,
                 contactRepository = contactRepository,
-                standaloneAlertRepository = standaloneAlertRepository
+                standaloneAlertRepository = standaloneAlertRepository,
+                syncPushEngine = syncPushEngine,
+                okHttpClient = okHttpClient
             )
         }
     }
@@ -181,7 +191,9 @@ private fun CwocApp(
     syncEngine: SyncEngine,
     syncMetadataDao: SyncMetadataDao,
     contactRepository: com.cwoc.app.data.repository.ContactRepository,
-    standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository
+    standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository,
+    syncPushEngine: SyncPushEngine,
+    okHttpClient: OkHttpClient
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -712,6 +724,12 @@ private fun CwocApp(
                     if (pullToRefreshState.isRefreshing) {
                         LaunchedEffect(true) {
                             try {
+                                // Push dirty records first (best-effort, don't block pull)
+                                try {
+                                    syncPushEngine.pushAll()
+                                } catch (e: Exception) {
+                                    android.util.Log.e("CWOC_PTR", "pushAll failed: ${e.message}", e)
+                                }
                                 val metadata = syncMetadataDao.getMetadata()
                                 val since = metadata?.highWaterMark ?: 0
                                 syncEngine.performSync(since)
@@ -819,6 +837,7 @@ private fun CwocApp(
                 savedLocations = currentSettings?.savedLocations,
                 serverUrl = serverUrl.trimEnd('/'),
                 authToken = authToken,
+                okHttpClient = okHttpClient,
                 onDismiss = { showWeatherDialog = false },
                 onFullForecast = {
                     showWeatherDialog = false

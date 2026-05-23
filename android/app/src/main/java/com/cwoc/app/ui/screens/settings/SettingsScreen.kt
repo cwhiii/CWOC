@@ -330,7 +330,8 @@ fun SettingsScreen(
                             onNavigateToTrash = onNavigateToTrash,
                             onNavigateToCustomObjects = onNavigateToCustomObjects,
                             onNavigateToKiosk = onNavigateToKiosk,
-                            settingsViewModel = settingsViewModel
+                            settingsViewModel = settingsViewModel,
+                            okHttpClient = settingsViewModel.okHttpClient
                         )
                     }
                 }

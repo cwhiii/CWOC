@@ -85,7 +85,7 @@ class ContactEditorViewModel @Inject constructor(
     private val dirtyTracker: DirtyTracker,
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
-    private val okHttpClient: OkHttpClient,
+    val okHttpClient: OkHttpClient,
     private val prefs: SharedPreferences,
     private val gson: Gson,
     savedStateHandle: SavedStateHandle

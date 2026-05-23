@@ -132,6 +132,14 @@
     color: #4a2c2a;
 }
 
+/* ── Sidebar desktop/mobile visibility ────────────────────────────────────── */
+.sidebar-mobile-only { display: none; }
+.sidebar-desktop-only { display: block; }
+@media (max-width: 768px) {
+    .sidebar-mobile-only { display: flex; }
+    .sidebar-desktop-only { display: none; }
+}
+
 /* ── Sidebar sections ─────────────────────────────────────────────────────── */
 .sidebar-section {
     margin-bottom: 12px;

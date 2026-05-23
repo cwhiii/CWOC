@@ -59,6 +59,7 @@ class ChitEditorViewModel @Inject constructor(
     private val apiService: CwocApiService,
     private val settingsRepository: SettingsRepository,
     private val notificationScheduler: NotificationScheduler,
+    val okHttpClient: okhttp3.OkHttpClient,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -690,11 +691,10 @@ class ChitEditorViewModel @Inject constructor(
             // Mark dirty with changed fields
             dirtyTracker.markDirty(entity.id, changedFields)
 
-            // Optimistic push if online (fire-and-forget, non-blocking)
-            if (connectivityMonitor.isOnline.value) {
-                viewModelScope.launch {
-                    syncPushEngine.pushSingle(entity.id)
-                }
+            // Push immediately (fire-and-forget, non-blocking)
+            // Always attempt — if offline, dirty state is preserved for retry
+            viewModelScope.launch {
+                syncPushEngine.pushSingle(entity.id)
             }
 
             // Update savedState so isDirty resets to false after save
@@ -743,10 +743,9 @@ class ChitEditorViewModel @Inject constructor(
             notificationScheduler.scheduleAlarms(entity)
             dirtyTracker.markDirty(entity.id, changedFields)
 
-            if (connectivityMonitor.isOnline.value) {
-                viewModelScope.launch {
-                    syncPushEngine.pushSingle(entity.id)
-                }
+            // Push immediately (fire-and-forget, non-blocking)
+            viewModelScope.launch {
+                syncPushEngine.pushSingle(entity.id)
             }
 
             _savedState.value = form

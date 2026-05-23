@@ -59,6 +59,7 @@ import com.cwoc.app.domain.email.TextSelection
 import kotlinx.coroutines.delay
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
+import okhttp3.OkHttpClient
 
 // ─── Theme Colors ───────────────────────────────────────────────────────────────
 
@@ -144,6 +145,9 @@ fun EmailComposeZone(
     // ─── Settings for SendLaterModal ─────────────────────────────────────────
     is24Hour: Boolean = true,
     calendarSnap: Int = 5,
+
+    // ─── HTTP client for attachment previews ──────────────────────────────────
+    okHttpClient: OkHttpClient,
 
     modifier: Modifier = Modifier
 ) {
@@ -424,7 +428,8 @@ fun EmailComposeZone(
         AttachmentBar(
             attachmentsJson = attachmentsJson,
             serverUrl = serverUrl,
-            authToken = authToken
+            authToken = authToken,
+            okHttpClient = okHttpClient
         )
 
         Spacer(modifier = Modifier.height(4.dp))

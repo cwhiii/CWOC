@@ -63,7 +63,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.cwoc.app.data.remote.TrustedHttpClient
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 
@@ -87,6 +87,7 @@ fun AttachmentPreviewDialog(
     attachment: AttachmentBarItem,
     serverUrl: String,
     authToken: String,
+    okHttpClient: OkHttpClient,
     onDismiss: () -> Unit,
     onOpenExternal: () -> Unit
 ) {
@@ -121,6 +122,7 @@ fun AttachmentPreviewDialog(
                     attachment = attachment,
                     serverUrl = serverUrl,
                     authToken = authToken,
+                    okHttpClient = okHttpClient,
                     onOpenExternal = onOpenExternal
                 )
             }
@@ -198,6 +200,7 @@ private fun AttachmentPreviewContent(
     attachment: AttachmentBarItem,
     serverUrl: String,
     authToken: String,
+    okHttpClient: OkHttpClient,
     onOpenExternal: () -> Unit
 ) {
     val contentType = attachment.contentType?.lowercase() ?: ""
@@ -214,14 +217,16 @@ private fun AttachmentPreviewContent(
             TextPreviewContent(
                 attachment = attachment,
                 serverUrl = serverUrl,
-                authToken = authToken
+                authToken = authToken,
+                okHttpClient = okHttpClient
             )
         }
         contentType == "application/pdf" -> {
             PdfPreviewContent(
                 attachment = attachment,
                 serverUrl = serverUrl,
-                authToken = authToken
+                authToken = authToken,
+                okHttpClient = okHttpClient
             )
         }
         else -> {
@@ -299,7 +304,8 @@ private fun ImagePreviewContent(
 private fun TextPreviewContent(
     attachment: AttachmentBarItem,
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    okHttpClient: OkHttpClient
 ) {
     var textContent by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -316,13 +322,12 @@ private fun TextPreviewContent(
                 return@LaunchedEffect
             }
             textContent = withContext(Dispatchers.IO) {
-                val client = TrustedHttpClient.instance
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $authToken")
                     .get()
                     .build()
-                val response = client.newCall(request).execute()
+                val response = okHttpClient.newCall(request).execute()
                 if (response.isSuccessful) {
                     response.body?.string()
                 } else {
@@ -384,7 +389,8 @@ private fun TextPreviewContent(
 private fun PdfPreviewContent(
     attachment: AttachmentBarItem,
     serverUrl: String,
-    authToken: String
+    authToken: String,
+    okHttpClient: OkHttpClient
 ) {
     val context = LocalContext.current
     var pdfBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -406,13 +412,12 @@ private fun PdfPreviewContent(
                 return@LaunchedEffect
             }
             val file = withContext(Dispatchers.IO) {
-                val client = TrustedHttpClient.instance
                 val request = Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer $authToken")
                     .get()
                     .build()
-                val response = client.newCall(request).execute()
+                val response = okHttpClient.newCall(request).execute()
                 if (!response.isSuccessful) {
                     throw Exception("HTTP ${response.code}")
                 }

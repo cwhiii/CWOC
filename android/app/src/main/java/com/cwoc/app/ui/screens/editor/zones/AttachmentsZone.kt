@@ -91,6 +91,7 @@ fun AttachmentsZone(
     onAttachmentsChange: (String?) -> Unit,
     serverUrl: String,
     authToken: String,
+    okHttpClient: OkHttpClient,
     isNewChit: Boolean = false,
     onCommitAttachments: ((suspend () -> Unit)?) -> Unit = {},
     onRollbackAttachments: ((suspend () -> Unit)?) -> Unit = {},
@@ -111,8 +112,8 @@ fun AttachmentsZone(
         parseAttachments(attachmentsJson)
     }
 
-    // Shared OkHttpClient (reused across calls — trusts self-signed cert)
-    val httpClient = remember { com.cwoc.app.data.remote.TrustedHttpClient.instance }
+    // Shared OkHttpClient (Hilt-provided via caller)
+    val httpClient = okHttpClient
 
     // Register commit/rollback callbacks with the parent editor
     // Commit: delete pending-delete files from server

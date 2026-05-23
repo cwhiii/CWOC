@@ -58,8 +58,16 @@ function _cwocInjectSidebar() {
   /* ── Scrollable area ─────────────────────────────────────────────────── */
   html += '<div class="sidebar-scroll">';
 
-  /* Sidebar header: logo + "Omni Chits" */
-  html += '<div class="sidebar-header">';
+  /* 1. Create Chit (desktop) */
+  html += '<div class="sidebar-section sidebar-desktop-only" id="section-create" style="margin-top:0;">';
+  html += '  <button class="create-chit action-button" id="sidebar-create-btn">';
+  html += '    <img src="/static/images/create_new.png" alt="" />';
+  html += '    Create Chit';
+  html += '  </button>';
+  html += '</div>';
+
+  /* Sidebar header: logo + "Omni Chits" (mobile only — FAB handles creation) */
+  html += '<div class="sidebar-header sidebar-mobile-only">';
   html += '  <img src="/static/images/cwod_logo.png" alt="" class="sidebar-header-logo" />';
   html += '  <span class="sidebar-header-title">Omni Chits</span>';
   html += '</div>';
@@ -483,6 +491,16 @@ function _cwocInitSidebar(context) {
   }
 
   /* ── Wire button onclick handlers ────────────────────────────────────── */
+
+  var createBtn = document.getElementById('sidebar-create-btn');
+  if (createBtn) {
+    createBtn.onclick = function() { _cb('onCreateChit')(); };
+    createBtn.onauxclick = function() { window.open('/frontend/html/editor.html', '_blank'); };
+    createBtn.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (typeof _openQuickAlertModal === 'function') _openQuickAlertModal();
+    });
+  }
 
   /* Wire email sidebar Check Mail button */
   var checkMailBtn = document.getElementById('sidebar-check-mail-btn');

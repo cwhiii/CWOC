@@ -14,19 +14,10 @@ import com.cwoc.app.notification.NotificationScheduler
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import java.io.IOException
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
 import java.time.Instant
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
 
 private const val TAG = "CWOC_SYNC"
 
@@ -39,51 +30,9 @@ class SyncEngine @Inject constructor(
     private val edgeCaseHandler: EdgeCaseHandler,
     private val notificationScheduler: NotificationScheduler,
     private val gson: Gson,
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val apiService: CwocApiService
 ) {
-
-    /**
-     * Build a fresh API service using the stored server URL and auth token.
-     * This ensures we always use the correct URL (not the stale singleton).
-     */
-    private fun buildApiService(): CwocApiService? {
-        val serverUrl = prefs.getString("server_url", null)
-        val token = prefs.getString("device_token", null)
-
-        if (serverUrl.isNullOrBlank() || token.isNullOrBlank()) {
-            Log.e(TAG, "Cannot sync: serverUrl=$serverUrl, token=${if (token != null) "present" else "null"}")
-            return null
-        }
-
-        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
-        })
-        val sslContext = SSLContext.getInstance("TLS")
-        sslContext.init(null, trustAllCerts, SecureRandom())
-
-        val client = OkHttpClient.Builder()
-            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
-            .hostnameVerifier { _, _ -> true }
-            .addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-                chain.proceed(request)
-            }
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
-
-        val retrofit = Retrofit.Builder()
-            .baseUrl(serverUrl.trimEnd('/') + "/")
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-
-        return retrofit.create(CwocApiService::class.java)
-    }
 
     suspend fun performSync(since: Int = 0): SyncResult {
         Log.d(TAG, "Starting sync with since=$since")
@@ -93,9 +42,11 @@ class SyncEngine @Inject constructor(
             syncMetadataDao.upsert(SyncMetadataEntity())
         }
 
-        val apiService = buildApiService()
-        if (apiService == null) {
-            Log.e(TAG, "Cannot build API service — no server URL or token")
+        // Verify credentials are present before attempting sync
+        val serverUrl = prefs.getString("server_url", null)
+        val token = prefs.getString("device_token", null)
+        if (serverUrl.isNullOrBlank() || token.isNullOrBlank()) {
+            Log.e(TAG, "Cannot sync: serverUrl=$serverUrl, token=${if (token != null) "present" else "null"}")
             reportLog("Sync aborted: no server URL or token configured", "error")
             return SyncResult.Error(0, "Not authenticated")
         }
@@ -283,7 +234,6 @@ class SyncEngine @Inject constructor(
      */
     suspend fun reportLog(message: String, level: String = "info") {
         try {
-            val apiService = buildApiService() ?: return
             withContext(Dispatchers.IO) {
                 val request = ClientLogRequest(
                     message = message,
