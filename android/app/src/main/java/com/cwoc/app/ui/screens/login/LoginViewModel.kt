@@ -6,6 +6,7 @@ import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.AuthResult
 import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.sync.SyncEngine
+import com.cwoc.app.data.sync.SyncOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,8 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val syncEngine: SyncEngine
+    private val syncEngine: SyncEngine,
+    private val syncOrchestrator: SyncOrchestrator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -154,6 +156,8 @@ class LoginViewModel @Inject constructor(
                         android.util.Log.e("CWOC_LOGIN", "Sync crashed: ${e.javaClass.simpleName}: ${e.message}", e)
                         // Non-fatal — sync will retry later
                     }
+                    // Connect WebSocket for real-time updates now that credentials are stored
+                    syncOrchestrator.connectAfterLogin()
                     // Always navigate to main screen after successful auth
                     _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
                 }

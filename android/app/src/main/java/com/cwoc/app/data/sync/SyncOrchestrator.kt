@@ -96,6 +96,16 @@ class SyncOrchestrator @Inject constructor(
     }
 
     /**
+     * Called after successful login to establish the WebSocket connection.
+     * At startup, credentials aren't available yet so the initial connect fails.
+     * This ensures the WebSocket connects once credentials are stored.
+     */
+    fun connectAfterLogin() {
+        Log.d(TAG, "Post-login — connecting WebSocket")
+        webSocketClient.connect()
+    }
+
+    /**
      * Handle incoming WebSocket messages.
      * On "change" type messages, trigger an incremental pull to fetch server updates.
      */
