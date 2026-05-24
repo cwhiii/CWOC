@@ -136,7 +136,8 @@ fun OmniViewScreen(
     val hstClockMode by viewModel.hstClockMode.collectAsState()
     val colorMode by viewModel.colorMode.collectAsState()
 
-    // Apply sidebar filters to all chit lists
+    // Apply sidebar filters to all chit lists EXCEPT email
+    // (Web: emails bypass sidebar filters — they use the global chits array)
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
     val chronoAnchored = remember(rawChronoAnchored, filterState) { FilterEngine.applyFilters(rawChronoAnchored, filterState) }
     val reminders = remember(rawReminders, filterState) { FilterEngine.applyFilters(rawReminders, filterState) }
@@ -144,7 +145,7 @@ fun OmniViewScreen(
     val soon = remember(rawSoon, filterState) { FilterEngine.applyFilters(rawSoon, filterState) }
     val pinnedNotes = remember(rawPinnedNotes, filterState) { FilterEngine.applyFilters(rawPinnedNotes, filterState) }
     val pinnedChecklists = remember(rawPinnedChecklists, filterState) { FilterEngine.applyFilters(rawPinnedChecklists, filterState) }
-    val emailChits = remember(rawEmailChits, filterState) { FilterEngine.applyFilters(rawEmailChits, filterState) }
+    val emailChits = rawEmailChits // Emails bypass sidebar filters (matches web behavior)
     val pinnedAll = remember(rawPinnedAll, filterState) { FilterEngine.applyFilters(rawPinnedAll, filterState) }
 
     val visibleSections = sections

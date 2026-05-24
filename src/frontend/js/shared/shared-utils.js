@@ -74,6 +74,78 @@ function _invalidateSettingsCache() {
   window._cwocSettings = undefined;
 }
 
+// ── Network Health Circuit Breaker ───────────────────────────────────────────
+// Tracks server reachability. Polling functions should check cwocIsServerReachable()
+// before making requests. This prevents hundreds of failed fetches flooding the
+// console and browser when the server is temporarily down.
+
+var _cwocNetFailCount = 0;
+var _cwocNetOffline = false;
+var _cwocNetProbeTimer = null;
+var _cwocNetBackoffMs = 5000; // starts at 5s, doubles up to 60s
+
+/**
+ * Returns true if the server appears reachable. Polling functions should
+ * skip their fetch if this returns false.
+ */
+function cwocIsServerReachable() {
+  return !_cwocNetOffline;
+}
+
+/**
+ * Call this on any successful fetch to reset the circuit breaker.
+ */
+function cwocNetSuccess() {
+  if (_cwocNetOffline) {
+    console.log('[CWOC Net] Server is back online');
+  }
+  _cwocNetFailCount = 0;
+  _cwocNetOffline = false;
+  _cwocNetBackoffMs = 5000;
+  if (_cwocNetProbeTimer) {
+    clearTimeout(_cwocNetProbeTimer);
+    _cwocNetProbeTimer = null;
+  }
+}
+
+/**
+ * Call this on any network fetch failure. After 3 consecutive failures,
+ * enters offline mode and starts probing with exponential backoff.
+ */
+function cwocNetFail() {
+  _cwocNetFailCount++;
+  if (_cwocNetFailCount >= 3 && !_cwocNetOffline) {
+    _cwocNetOffline = true;
+    console.warn('[CWOC Net] Server unreachable after ' + _cwocNetFailCount + ' failures — pausing polling');
+    _cwocNetStartProbe();
+  }
+}
+
+/** Probe the server periodically to detect recovery. */
+function _cwocNetStartProbe() {
+  if (_cwocNetProbeTimer) return;
+  console.log('[CWOC Net] Will probe server in ' + (_cwocNetBackoffMs / 1000) + 's');
+  _cwocNetProbeTimer = setTimeout(function() {
+    _cwocNetProbeTimer = null;
+    console.log('[CWOC Net] Probing server...');
+    fetch('/api/health', { method: 'GET', cache: 'no-store' })
+      .then(function(r) {
+        if (r.ok) {
+          cwocNetSuccess();
+          // Trigger a refresh now that we're back
+          if (typeof fetchChits === 'function') fetchChits();
+        } else {
+          _cwocNetBackoffMs = Math.min(_cwocNetBackoffMs * 2, 60000);
+          _cwocNetStartProbe();
+        }
+      })
+      .catch(function() {
+        _cwocNetBackoffMs = Math.min(_cwocNetBackoffMs * 2, 60000);
+        _cwocNetStartProbe();
+      });
+  }, _cwocNetBackoffMs);
+}
+
 // ── Timezone Detection ───────────────────────────────────────────────────────
 // Resolves the user's current IANA timezone using a defined precedence chain.
 // Used by dashboard, calendar, editor, and any component that needs local time.

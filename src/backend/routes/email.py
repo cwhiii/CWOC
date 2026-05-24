@@ -307,14 +307,20 @@ def _connect_imap(account: dict) -> imaplib.IMAP4_SSL:
     port = int(account.get("imap_port", 993))
     security = account.get("imap_security", "ssl")
 
+    # Set a socket-level timeout (60s) to prevent hanging on unresponsive servers
+    import socket
+    _IMAP_TIMEOUT = 60
+
     if security == "starttls":
         imap = imaplib.IMAP4(host, port)
+        imap.socket().settimeout(_IMAP_TIMEOUT)
         imap.starttls()
     elif security == "none":
         imap = imaplib.IMAP4(host, port)
+        imap.socket().settimeout(_IMAP_TIMEOUT)
     else:
         # Default: SSL/TLS
-        imap = imaplib.IMAP4_SSL(host, port)
+        imap = imaplib.IMAP4_SSL(host, port, timeout=_IMAP_TIMEOUT)
 
     # Decrypt the stored password (or use plaintext if provided directly)
     password = account.get("password")
@@ -350,33 +356,51 @@ def _get_last_sync_date(cursor, owner_id: str) -> str:
     return fallback.strftime("%d-%b-%Y")
 
 
-def _fetch_new_messages(imap, since_date: str) -> list:
-    """Fetch messages from IMAP that are newer than *since_date*.
+def _fetch_new_messages(imap, since_date: str, max_fetch: int = 50, offset: int = 0) -> list:
+    """Fetch messages from IMAP.
 
     Args:
         imap: An authenticated ``imaplib.IMAP4_SSL`` with a mailbox selected.
-        since_date: IMAP date string (``"DD-Mon-YYYY"``).
+        since_date: IMAP date string (unused — kept for API compat).
+        max_fetch: Maximum number of messages to fetch in this batch.
+        offset: Number of newest messages to skip (for paging).
 
     Returns:
         A list of ``(raw_bytes, flags_bytes)`` tuples — one per message.
-        ``flags_bytes`` contains the IMAP FLAGS response so the caller can
-        check the ``\\Seen`` flag.
     """
-    status, data = imap.search(None, f'SINCE {since_date}')
+    # Use UID SEARCH ALL to get all messages — Gmail's SINCE search returns
+    # stale results. UIDs are stable. Don't close/re-select as that corrupts
+    # subsequent fetches.
+    _fetch_log = []
+    _fetch_log.append(f"Starting UID SEARCH ALL")
+    status, data = imap.uid('search', None, "ALL")
+    _fetch_log.append(f"UID SEARCH ALL: status={status}, data_len={len(data) if data else 0}, data[0]_len={len(data[0]) if data and data[0] else 0}")
     if status != "OK" or not data or not data[0]:
+        _fetch_log.append("SEARCH returned nothing, returning empty")
+        # Store log in module-level var for sync-status to read
+        global _last_fetch_log
+        _last_fetch_log = _fetch_log
         return []
 
     # Reverse UIDs so newest messages are fetched first
-    # (ensures max_pull limit doesn't cut off the latest messages)
     uids = data[0].split()
+    _fetch_log.append(f"Total UIDs from SEARCH: {len(uids)}")
+    _fetch_log.append(f"First 3 UIDs: {uids[:3]}, Last 3 UIDs: {uids[-3:]}")
     uids.reverse()
+
+    # Limit to max_fetch messages starting from offset (newest first)
+    uids = uids[offset:offset + max_fetch]
+    _fetch_log.append(f"After reverse+slice (offset={offset}, max={max_fetch}): fetching {len(uids)} UIDs")
+
     messages = []
-    for uid in uids:
-        # Fetch both the full message and its flags
-        # Use BODY.PEEK[] instead of RFC822 to avoid setting the \Seen flag
-        status, msg_data = imap.fetch(uid, "(BODY.PEEK[] FLAGS)")
+    fetch_errors = 0
+    for i, uid in enumerate(uids):
+        # Fetch using UID command for stability
+        status, msg_data = imap.uid('fetch', uid, "(BODY.PEEK[] FLAGS)")
         if status != "OK" or not msg_data:
-            logger.warning("Failed to fetch message UID %s", uid)
+            fetch_errors += 1
+            if i < 3:
+                _fetch_log.append(f"  UID {uid}: FETCH FAILED status={status}")
             continue
 
         raw_bytes = None
@@ -396,8 +420,20 @@ def _fetch_new_messages(imap, since_date: str) -> list:
 
         if raw_bytes:
             messages.append((raw_bytes, flags_bytes))
+            if i < 3:
+                _fetch_log.append(f"  UID {uid}: OK, {len(raw_bytes)} bytes, starts_with={raw_bytes[:60]}")
+        else:
+            fetch_errors += 1
+            if i < 3:
+                _fetch_log.append(f"  UID {uid}: raw_bytes is None, msg_data={repr(msg_data)[:200]}")
 
+    _fetch_log.append(f"Done: {len(messages)} messages fetched, {fetch_errors} errors")
+    _last_fetch_log = _fetch_log
     return messages
+
+
+# Module-level var to store fetch debug log
+_last_fetch_log = []
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -776,6 +812,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
     proxy.end_datetime = None
     proxy.checklist = None
     proxy.alarm = None
+    proxy.notification = None
     proxy.tags = []
     proxy.status = None
     proxy.habit = False
@@ -1330,7 +1367,93 @@ from src.backend.db import DB_PATH, deserialize_json_field
 
 email_router = APIRouter()
 
+# Track whether a sync is currently running per user
+_email_sync_running = {}
+_email_sync_progress = {}  # Track sync progress for diagnostics
 
+
+@email_router.get("/api/email/sync-debug")
+def email_sync_debug():
+    """Return the exhaustive sync debug log from the last sync run."""
+    import json as _j
+    try:
+        with open("/tmp/cwoc_sync_debug.json", "r") as f:
+            return _j.load(f)
+    except FileNotFoundError:
+        return {"error": "No sync debug log found. Run a sync first."}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@email_router.get("/api/email/sync-status")
+def email_sync_status(request: Request):
+    """Check if an email sync is currently running for this user."""
+    user_id = request.state.user_id
+    is_running = _email_sync_running.get(user_id, False)
+    progress = _email_sync_progress.get(user_id, {})
+    return {"syncing": is_running, **progress}
+
+
+@email_router.get("/api/email/diagnostic")
+def email_diagnostic(request: Request):
+    """Diagnostic endpoint: report email sync state and DB counts."""
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Count inbox emails (non-deleted)
+        cursor.execute(
+            "SELECT COUNT(*) FROM chits WHERE owner_id = ? AND email_message_id IS NOT NULL AND email_folder = 'inbox' AND (deleted = 0 OR deleted IS NULL)",
+            (user_id,),
+        )
+        inbox_count = cursor.fetchone()[0]
+
+        # Live IMAP: fetch 1 newest message and show raw bytes
+        imap_raw_preview = None
+        imap_error = None
+        imap_msg_data_repr = None
+        try:
+            accounts = _get_all_email_accounts(cursor, user_id)
+            if accounts:
+                account = accounts[0]
+                if account.get("password_encrypted"):
+                    account["password"] = _decrypt_password(account["password_encrypted"])
+                imap = _connect_imap(account)
+                # UID search for all
+                status, data = imap.uid('search', None, "ALL")
+                if status == "OK" and data and data[0]:
+                    uids = data[0].split()
+                    newest_uid = uids[-1]  # highest UID = newest
+                    # Fetch it
+                    status2, msg_data = imap.uid('fetch', newest_uid, "(BODY.PEEK[] FLAGS)")
+                    # Show the raw structure of msg_data
+                    imap_msg_data_repr = repr(msg_data)[:500]
+                    # Extract raw_bytes the same way _fetch_new_messages does
+                    for part in msg_data:
+                        if isinstance(part, tuple):
+                            raw = part[1]
+                            if isinstance(raw, bytes):
+                                imap_raw_preview = raw[:500].decode("utf-8", errors="replace")
+                            break
+                imap.logout()
+        except Exception as e:
+            imap_error = str(e)
+
+        return {
+            "inbox_count": inbox_count,
+            "imap_raw_preview": imap_raw_preview,
+            "imap_msg_data_repr": imap_msg_data_repr,
+            "imap_error": imap_error,
+            "sync_running": _email_sync_running.get(user_id, False),
+            "sync_progress": _email_sync_progress.get(user_id, {}),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if conn:
+            conn.close()
 def _get_email_account(cursor, user_id: str, account_id: str = None) -> dict:
     """Load and return an email account config for the given user.
 
@@ -1462,6 +1585,7 @@ def _sync_deletions(imap, cursor, owner_id: str, account_id: str) -> int:
     if not local_emails:
         return 0
 
+    logger.info("Deletion sync: checking %d local inbox emails against IMAP", len(local_emails))
     now = datetime.now(timezone.utc).isoformat()
     deleted_count = 0
 
@@ -1508,11 +1632,60 @@ def _sync_deletions(imap, cursor, owner_id: str, account_id: str) -> int:
 
 @email_router.post("/api/email/sync")
 def email_sync(request: Request):
-    """Fetch new messages from all configured IMAP servers.
+    """Kick off email sync in a background thread and return immediately.
 
-    Returns ``{"new_count": int, "accounts_synced": int, "errors": list}``.
+    Returns ``{"status": "syncing"}`` immediately. The actual sync runs in the
+    background. The frontend will see new chits appear on the next fetchChits
+    poll or WebSocket broadcast.
     """
     user_id = request.state.user_id
+
+    # Check if a sync is already running for this user
+    if _email_sync_running.get(user_id):
+        return {"status": "already_syncing"}
+
+    # Validate that accounts exist before spawning the thread
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    accounts = _get_all_email_accounts(cursor, user_id)
+    conn.close()
+    if not accounts:
+        raise HTTPException(
+            status_code=400,
+            detail="No email accounts configured. Go to Settings → Email to set up your email.",
+        )
+
+    # Run the actual sync in a background thread
+    threading.Thread(
+        target=_email_sync_worker,
+        args=(user_id,),
+        daemon=True,
+    ).start()
+
+    return {"status": "syncing", "accounts": len(accounts)}
+
+
+def _email_sync_worker(user_id: str):
+    """Background worker that performs the actual IMAP sync.
+
+    Runs in a daemon thread so it doesn't block the request/response cycle.
+    """
+    _email_sync_running[user_id] = True
+    _email_sync_progress[user_id] = {"stage": "starting"}
+    logger.info("[Email Sync] Background sync started for user %s", user_id)
+
+    try:
+        _do_email_sync(user_id)
+    except Exception as e:
+        logger.error("[Email Sync] Background sync failed for user %s: %s", user_id, e)
+        _email_sync_progress[user_id] = {"stage": "error", "error": str(e)}
+    finally:
+        _email_sync_running[user_id] = False
+        logger.info("[Email Sync] Background sync finished for user %s", user_id)
+
+
+def _do_email_sync(user_id: str):
+    """The actual email sync logic, extracted from the old synchronous endpoint."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -1520,10 +1693,8 @@ def email_sync(request: Request):
 
         accounts = _get_all_email_accounts(cursor, user_id)
         if not accounts:
-            raise HTTPException(
-                status_code=400,
-                detail="No email accounts configured. Go to Settings → Email to set up your email.",
-            )
+            logger.warning("[Email Sync] No accounts configured for user %s", user_id)
+            return
 
         # Get shared sync settings from the first account (they share config)
         shared_max_pull = int(accounts[0].get("max_pull", 50) or 50)
@@ -1565,64 +1736,110 @@ def email_sync(request: Request):
 
                 # Determine sync window
                 since_date = _get_last_sync_date(cursor, user_id)
+                _email_sync_progress[user_id] = {"stage": "fetching", "account": account_email, "since": since_date}
 
-                # Fetch new messages
-                try:
-                    messages = _fetch_new_messages(imap, since_date)
-                    logger.info(f"[Sync] {account_email}: SINCE={since_date}, found {len(messages)} messages from IMAP")
-                except Exception as e:
-                    sync_errors.append(f"{account_email}: Error fetching messages — {str(e)}")
-                    continue
-
-                # Parse and store all new messages in batches of max_pull
-                # Commits after each batch so progress is saved
+                # Fetch and process messages in pages until caught up.
+                # Each page fetches max_pull newest messages starting from an offset.
+                # Stops when a full page is all duplicates (we've caught up).
+                page_offset = 0
                 new_count = 0
                 skipped_dupes = 0
                 batch_size = shared_max_pull
                 batch_num = 0
-                for raw_bytes, flags_bytes in messages:
+                total_fetched = 0
+                caught_up = False
+
+                while not caught_up:
+                    _email_sync_progress[user_id] = {"stage": "fetching", "account": account_email, "page": page_offset // shared_max_pull + 1, "new_so_far": new_count}
                     try:
-                        parsed = _parse_email_message(raw_bytes)
-
-                        # Check IMAP SEEN flag to set email_read
-                        if flags_bytes and b"\\Seen" in flags_bytes:
-                            parsed["email_read"] = True
-                        else:
-                            parsed["email_read"] = False
-
-                        chit_id = _create_email_chit(cursor, parsed, user_id, account_id=account_id, account_nickname=account.get("nickname"))
-                        if chit_id:
-                            new_count += 1
-                            subj = parsed.get("email_subject", "(No Subject)")
-                            sender = parsed.get("email_from", "Unknown")
-                            logger.info(f"[Sync] New email: {subj} from {sender}")
-                            all_email_summaries.append(f"{subj} — {sender}")
-                            all_email_chits.append({"id": chit_id, **parsed, "owner_id": user_id})
-                            # Commit in batches to save progress
-                            if new_count % batch_size == 0:
-                                conn.commit()
-                                batch_num += 1
-                                logger.info(f"[Sync] {account_email}: batch {batch_num} committed ({new_count} new so far)")
-                        else:
-                            skipped_dupes += 1
+                        messages = _fetch_new_messages(imap, since_date, max_fetch=shared_max_pull, offset=page_offset)
+                        logger.info(f"[Sync] {account_email}: page {page_offset // shared_max_pull + 1}, fetched {len(messages)} messages (offset={page_offset})")
                     except Exception as e:
-                        logger.warning("Failed to parse/store email message: %s", e)
-                        continue
+                        sync_errors.append(f"{account_email}: Error fetching messages — {str(e)}")
+                        break
 
-                # Final commit for any remaining messages after the last batch
+                    if not messages:
+                        # No more messages to fetch
+                        break
+
+                    total_fetched += len(messages)
+                    page_new = 0
+                    page_dupes = 0
+
+                    _email_sync_progress[user_id] = {"stage": "processing", "account": account_email, "imap_found": total_fetched, "page": page_offset // shared_max_pull + 1, "new_so_far": new_count}
+
+                    for raw_bytes, flags_bytes in messages:
+                        try:
+                            parsed = _parse_email_message(raw_bytes)
+
+                            # Check IMAP SEEN flag to set email_read
+                            if flags_bytes and b"\\Seen" in flags_bytes:
+                                parsed["email_read"] = True
+                            else:
+                                parsed["email_read"] = False
+
+                            chit_id = _create_email_chit(cursor, parsed, user_id, account_id=account_id, account_nickname=account.get("nickname"))
+                            if chit_id:
+                                new_count += 1
+                                page_new += 1
+                                subj = parsed.get("email_subject", "(No Subject)")
+                                sender = parsed.get("email_from", "Unknown")
+                                logger.info(f"[Sync] New email: {subj} from {sender}")
+                                all_email_summaries.append(f"{subj} — {sender}")
+                                all_email_chits.append({"id": chit_id, **parsed, "owner_id": user_id})
+                                if new_count % batch_size == 0:
+                                    conn.commit()
+                                    batch_num += 1
+                            else:
+                                skipped_dupes += 1
+                                page_dupes += 1
+
+                            # Update progress
+                            _email_sync_progress[user_id] = {
+                                "stage": "processing",
+                                "account": account_email,
+                                "total_fetched": total_fetched,
+                                "processed": new_count + skipped_dupes,
+                                "new": new_count,
+                                "dupes": skipped_dupes,
+                                "page": page_offset // shared_max_pull + 1,
+                            }
+                        except Exception as e:
+                            logger.warning("Failed to parse/store email message: %s", e)
+                            continue
+
+                    # Commit after each page
+                    conn.commit()
+
+                    # If this entire page was duplicates, we've caught up — stop paging
+                    if page_new == 0 and page_dupes > 0:
+                        caught_up = True
+                        logger.info(f"[Sync] {account_email}: caught up (page was all duplicates)")
+                    else:
+                        # Move to next page (older messages)
+                        page_offset += shared_max_pull
+
+                # Final commit
                 conn.commit()
                 total_new += new_count
                 nickname = account.get("nickname", account_email)
                 sync_details.append({
                     "account": nickname,
-                    "imap_found": len(messages),
+                    "imap_found": total_fetched,
                     "new": new_count,
                     "skipped_dupes": skipped_dupes,
                     "since": since_date
                 })
-                logger.info(f"[Sync] {nickname}: {new_count} new, {skipped_dupes} duplicates skipped (SINCE {since_date}, {len(messages)} from IMAP)")
+                logger.info(f"[Sync] {nickname}: {new_count} new, {skipped_dupes} duplicates skipped ({total_fetched} fetched from IMAP)")
 
                 # ── Deletion sync: detect emails removed from IMAP ────────
+                _email_sync_progress[user_id] = {
+                    "stage": "deletion_sync",
+                    "account": account_email,
+                    "new_so_far": total_new,
+                    "total_fetched": total_fetched,
+                    "dupes": skipped_dupes,
+                }
                 try:
                     acct_deleted = _sync_deletions(imap, cursor, user_id, account_id)
                     total_deleted += acct_deleted
@@ -1824,13 +2041,14 @@ def email_sync(request: Request):
             result["imported"] = all_email_summaries[:20]
         if sync_details:
             result["details"] = sync_details
-        return result
 
-    except HTTPException:
-        raise
+        _email_sync_progress[user_id] = {"stage": "done", "new_count": total_new, "deleted_count": total_deleted, "accounts_synced": accounts_synced, "details": sync_details, "errors": sync_errors, "fetch_log": _last_fetch_log}
+        logger.info("[Email Sync] Complete: %d new, %d deleted, %d accounts", total_new, total_deleted, accounts_synced)
+        if sync_errors:
+            logger.warning("[Email Sync] Errors: %s", sync_errors)
+
     except Exception as e:
-        logger.error("Email sync error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
+        logger.error("[Email Sync] Error: %s", e)
     finally:
         if conn:
             conn.close()

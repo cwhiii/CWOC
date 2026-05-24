@@ -655,7 +655,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /attachments` | `attachments_page()` | Serve `attachments.html` (all attachments grid) |
 | `GET /api/geocode` | `geocode_proxy(q)` | Geocoding proxy to OpenStreetMap Nominatim |
 | `POST /api/sync/send` | `sync_send_message(body)` | Post a sync message |
-| `GET /api/sync/poll` | `sync_poll(after)` | Poll for sync messages after a given ID |
+| `GET /api/sync/poll` | `sync_poll(after)` | Poll for sync messages after a given ID; returns `missed: true` if messages were evicted, `last_id` for catch-up tracking |
 | `WS /ws/sync` | `websocket_sync(ws)` | WebSocket for real-time sync |
 | `GET /api/health-data` | `get_health_data(since, until)` | Return health data points from chits |
 | `GET /api/instance-id` | `get_instance_id()` | Get the instance UUID |
@@ -677,7 +677,8 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 
 | Symbol | Description |
 |--------|-------------|
-| `_SyncHub` | Class managing WebSocket connections and message broadcasting |
+| `_SyncHub` | Class managing WebSocket connections and message broadcasting (includes `__sync_id` in payloads) |
+| `_ws_ping_loop(ws)` | Async coroutine — sends `{"type": "__ping"}` every 30s, closes connection if no pong within 10s |
 | `_sync_geocode_fetch(url)` | Synchronous HTTP GET for geocoding |
 
 ### 1.25 `src/backend/routes/auth.py` — Authentication Routes
@@ -1740,12 +1741,20 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_loadBundlesForModal(selectEl)` | Load bundles into the bundle selection dropdown from cached settings or API |
 | `_populateBundleSelect(selectEl, bundles)` | Populate the bundle select dropdown with bundle options, filtering out "Everything Else" |
 | `_executeAddToBundle(chit, overlay)` | Execute the "Add to Bundle" action by creating a new rule and triggering reclassification |
-| `initSyncWebSocket()` | Initialize WebSocket sync connection (with HTTP polling fallback) |
-| `_startSyncPolling()` | Start HTTP polling fallback for sync |
-| `_pollSync()` | Execute a single sync poll request |
-| `_dispatchSyncMessage(msg)` | Dispatch a sync message to registered handlers |
-| `syncSend(type, data)` | Send a sync message via WebSocket or HTTP POST fallback |
-| `syncOn(type, callback)` | Register a handler for a sync message type |
+| `_syncInit()` | Entry point for visibility-aware sync — checks Visibility API, connects WS, registers visibility listener |
+| `_syncConnect()` | Open WebSocket, respond to `__ping` with `__pong`, track `__sync_id` for catch-up |
+| `_syncOnHidden()` | Close WS with code 1000, stop polling, optionally start slow hidden poll |
+| `_syncOnVisible()` | Clear hidden flag, catch-up sync, reconnect WS, reconcile alarms |
+| `_syncCatchUp()` | Fetch `/api/sync/poll?after=lastId`, dispatch missed messages, handle `missed` flag |
+| `_syncFullRefresh()` | Trigger full data reload via `_handleRemoteDataChange` when messages were missed |
+| `_syncStartPolling(interval)` | Start HTTP polling at given interval (30s visible fallback) |
+| `_syncStopPolling()` | Clear poll timer |
+| `_syncReconcileAlarms()` | Call `_sharedCheckAlarms()` immediately on tab return to fire missed alarms |
+| `_syncShowDisconnected()` | Show fixed-position "Sync disconnected" indicator after 3 consecutive poll failures |
+| `_syncHideDisconnected()` | Remove the disconnected indicator |
+| `syncSend(type, data)` | Send a sync message via WebSocket or HTTP POST fallback (unchanged API) |
+| `syncOn(type, callback)` | Register a handler for a sync message type (unchanged API) |
+| `_dispatchSyncMessage(msg)` | Dispatch a sync message to registered handlers, strip `__sync_id` before dispatch |
 | `_pageHasUnsavedChanges()` | Check if the current page has unsaved changes (works across all page types) |
 | `_showAutoRefreshBanner()` | Show a banner warning that data was updated on another device |
 | `_handleRemoteDataChange(type)` | Handle a remote data change — auto-reload or show warning if unsaved |

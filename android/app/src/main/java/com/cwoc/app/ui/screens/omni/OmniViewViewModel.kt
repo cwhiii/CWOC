@@ -6,6 +6,7 @@ import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.domain.omni.OmniDeduplicationEngine
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -345,42 +346,61 @@ class OmniViewViewModel @Inject constructor(
     }
 
     /**
-     * Observes all non-deleted chits and filters them into the appropriate sections.
+     * Observes all non-deleted chits and runs the deduplication engine
+     * (identical logic to web's _omniDeduplicateChits) to assign each chit
+     * to exactly one section.
      */
     private fun observeChits() {
         viewModelScope.launch {
             chitRepository.getAllNonDeleted().collect { allChits ->
                 val now = Instant.now()
-                val today = LocalDate.now()
                 val zone = ZoneId.systemDefault()
 
-                // Filter out archived and snoozed chits
+                // Filter out archived and snoozed chits (equivalent to web's filteredChits)
                 val activeChits = allChits.filter { chit ->
                     !chit.archived && !isSnoozed(chit, now)
                 }
 
-                _chronoAnchored.value = filterChronoAnchored(activeChits, today, zone)
-                _reminders.value = filterReminders(activeChits, now)
-                _onDeck.value = filterOnDeck(activeChits)
-                _soon.value = filterSoon(activeChits, today, zone)
-                _pinnedNotes.value = filterPinnedNotes(activeChits)
-                _pinnedChecklists.value = filterPinnedChecklists(activeChits)
+                // Get weekStartDay from settings for habit period calculation
+                val weekStartDay = try {
+                    settingsRepository.get()?.weekStartDay
+                } catch (_: Exception) {
+                    null
+                }
+
+                // Run the deduplication engine — identical logic to web's _omniDeduplicateChits
+                val deduped = OmniDeduplicationEngine.deduplicate(
+                    filteredChits = activeChits,
+                    allChits = allChits,
+                    weekStartDay = weekStartDay
+                )
+
+                _reminders.value = deduped.reminders
+                _emailChits.value = deduped.email
+                _chronoAnchored.value = deduped.chrono
+                _onDeck.value = deduped.onDeck
+                _soon.value = deduped.soon
+                _pinnedNotes.value = deduped.pinnedNotes
+                _pinnedChecklists.value = deduped.pinnedChecklists
+
+                // HST items use their own filter (visual timeline, not a content section)
                 _hstItems.value = filterHstItems(activeChits, now, zone)
-                _emailChits.value = filterEmailChits(allChits)
+
+                // Pinned All is a combined view (not part of deduplication)
                 _pinnedAll.value = filterPinnedAll(activeChits)
             }
         }
     }
 
     /**
-     * HST Items: chits with startDatetime in the next 24 hours, positioned on timeline.
+     * HST Items: chits with startDatetime today, positioned on the 24-hour timeline.
+     * This is a visual overlay, not a content section — it doesn't participate in deduplication.
      */
     private fun filterHstItems(
         chits: List<ChitEntity>,
         now: Instant,
         zone: ZoneId
     ): List<HstItem> {
-        val next24h = now.plus(24, ChronoUnit.HOURS)
         val todayStart = LocalDate.now().atStartOfDay(zone).toInstant()
         val todayEnd = todayStart.plus(24, ChronoUnit.HOURS)
 
@@ -412,126 +432,12 @@ class OmniViewViewModel @Inject constructor(
     }
 
     /**
-     * Email: chits with emailMessageId, in Inbox, unread, sorted by date desc.
-     */
-    private fun filterEmailChits(chits: List<ChitEntity>): List<ChitEntity> {
-        return chits.filter { chit ->
-            !chit.deleted &&
-                !chit.emailMessageId.isNullOrBlank() &&
-                chit.emailRead != true &&
-                (chit.emailFolder?.contains("Inbox", ignoreCase = true) == true ||
-                    chit.tags?.any { it.equals("Inbox", ignoreCase = true) } == true)
-        }.sortedByDescending { it.emailDate ?: it.createdDatetime }
-    }
-
-    /**
      * Pinned All: all pinned chits regardless of type, sorted by modified date.
+     * This is a combined view section, not part of the deduplication algorithm.
      */
     private fun filterPinnedAll(chits: List<ChitEntity>): List<ChitEntity> {
         return chits.filter { it.pinned }
             .sortedByDescending { it.modifiedDatetime }
-    }
-
-    /**
-     * Chrono Anchored: today's timed events (has startDatetime today, not all-day).
-     */
-    private fun filterChronoAnchored(
-        chits: List<ChitEntity>,
-        today: LocalDate,
-        zone: ZoneId
-    ): List<ChitEntity> {
-        return chits.filter { chit ->
-            val startDt = chit.startDatetime ?: return@filter false
-            if (chit.allDay) return@filter false
-            val chitDate = parseToLocalDate(startDt, zone) ?: return@filter false
-            chitDate == today
-        }.sortedBy { it.startDatetime }
-    }
-
-    /**
-     * Reminders: chits with notification=true that are for today or pinned.
-     * Matches web logic: notification=true, status != Complete, not archived,
-     * and either point_in_time is today OR pinned=true.
-     */
-    private fun filterReminders(
-        chits: List<ChitEntity>,
-        now: Instant
-    ): List<ChitEntity> {
-        val today = LocalDate.now()
-        val zone = ZoneId.systemDefault()
-
-        return chits.filter { chit ->
-            // Must have notification flag set
-            if (chit.notification != true) return@filter false
-            // Must not be complete
-            if (chit.status == "Complete") return@filter false
-
-            // Show if pinned (regardless of date)
-            if (chit.pinned) return@filter true
-
-            // Show if point_in_time is today
-            val pit = chit.pointInTime
-            if (!pit.isNullOrBlank()) {
-                val pitDate = parseToLocalDate(pit, zone)
-                if (pitDate != null && pitDate == today) return@filter true
-            }
-
-            false
-        }.sortedBy { it.pointInTime ?: it.startDatetime ?: it.dueDatetime }
-    }
-
-    /**
-     * On Deck: next 5 tasks by due date (status != Complete).
-     */
-    private fun filterOnDeck(chits: List<ChitEntity>): List<ChitEntity> {
-        return chits.filter { chit ->
-            chit.status != null &&
-                chit.status != "Complete" &&
-                chit.dueDatetime != null
-        }
-            .sortedBy { it.dueDatetime }
-            .take(5)
-    }
-
-    /**
-     * Soon: tasks due within 7 days (status != Complete).
-     */
-    private fun filterSoon(
-        chits: List<ChitEntity>,
-        today: LocalDate,
-        zone: ZoneId
-    ): List<ChitEntity> {
-        val sevenDaysFromNow = today.plusDays(7)
-
-        return chits.filter { chit ->
-            if (chit.status == null || chit.status == "Complete") return@filter false
-            val dueDt = chit.dueDatetime ?: return@filter false
-            val dueDate = parseToLocalDate(dueDt, zone) ?: return@filter false
-            dueDate.isAfter(today) && !dueDate.isAfter(sevenDaysFromNow)
-        }.sortedBy { it.dueDatetime }
-    }
-
-    /**
-     * Pinned Notes: pinned=true, has note content, no checklist.
-     */
-    private fun filterPinnedNotes(chits: List<ChitEntity>): List<ChitEntity> {
-        return chits.filter { chit ->
-            chit.pinned &&
-                !chit.note.isNullOrBlank() &&
-                (chit.checklist.isNullOrBlank() || chit.checklist == "[]" || chit.checklist == "null")
-        }.sortedByDescending { it.modifiedDatetime }
-    }
-
-    /**
-     * Pinned Checklists: pinned=true, has checklist content.
-     */
-    private fun filterPinnedChecklists(chits: List<ChitEntity>): List<ChitEntity> {
-        return chits.filter { chit ->
-            chit.pinned &&
-                !chit.checklist.isNullOrBlank() &&
-                chit.checklist != "[]" &&
-                chit.checklist != "null"
-        }.sortedByDescending { it.modifiedDatetime }
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -637,7 +543,7 @@ class OmniViewViewModel @Inject constructor(
             OmniSectionType.HST_TEMP_STRIP -> "hst_temp_strip"
             OmniSectionType.CHRONO_ANCHORED -> "chrono"
             OmniSectionType.REMINDERS -> "reminders"
-            OmniSectionType.ON_DECK -> "on_deck"
+            OmniSectionType.ON_DECK -> "ondeck"
             OmniSectionType.SOON -> "soon"
             OmniSectionType.EMAIL -> "email"
             OmniSectionType.PINNED_NOTES -> "pinned_notes"
@@ -652,7 +558,7 @@ class OmniViewViewModel @Inject constructor(
             "hst_temp_strip" -> OmniSectionType.HST_TEMP_STRIP
             "chrono" -> OmniSectionType.CHRONO_ANCHORED
             "reminders" -> OmniSectionType.REMINDERS
-            "on_deck" -> OmniSectionType.ON_DECK
+            "ondeck", "on_deck" -> OmniSectionType.ON_DECK
             "soon" -> OmniSectionType.SOON
             "email" -> OmniSectionType.EMAIL
             "pinned_notes" -> OmniSectionType.PINNED_NOTES

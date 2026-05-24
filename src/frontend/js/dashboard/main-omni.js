@@ -2093,13 +2093,13 @@ function _renderOmniEmail(contentEl, allEmailChits) {
         return;
     }
 
-    // Build the set of Omni bundle tag names for fast lookup
+    // Build the set of Omni bundle tag IDs for fast lookup
     var omniBundleTags = omniBundles.map(function(b) {
-        return 'CWOC_System/Bundle/' + b.name;
+        return 'CWOC_System/BundleID/' + b.id;
     });
-    // Check if any Omni-enabled bundle is the catch-all (non-removable / "Everything Else")
+    // Check if any Omni-enabled bundle is the catch-all
     var hasCatchAll = omniBundles.some(function(b) {
-        return b.removable === 0 || b.removable === false || b.removable === '0' || b.name === 'Everything Else';
+        return b.is_catch_all;
     });
     console.log('[OmniEmail] omniBundleTags:', JSON.stringify(omniBundleTags), 'hasCatchAll:', hasCatchAll);
 
@@ -2125,7 +2125,7 @@ function _renderOmniEmail(contentEl, allEmailChits) {
         if (hasCatchAll) {
             var hasAnyBundleTag = tags.some(function(t) {
                 var tagName = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
-                return tagName.indexOf('CWOC_System/Bundle/') === 0;
+                return tagName.indexOf('CWOC_System/BundleID/') === 0;
             });
             if (!hasAnyBundleTag) return true;
         }

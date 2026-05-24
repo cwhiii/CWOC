@@ -234,6 +234,11 @@ async def get_weather_forecasts(request: Request):
 # Sync Hub (WebSocket + HTTP polling fallback)
 # ═══════════════════════════════════════════════════════════════════════════
 
+# ── Sync constants ──
+SYNC_PING_INTERVAL = 30   # seconds between pings
+SYNC_PONG_TIMEOUT = 10    # seconds to wait for pong response
+_SYNC_MESSAGE_TTL = 300   # 5 minutes message retention
+
 # ── HTTP polling sync queue ──
 _sync_messages = []  # list of { id: int, data: dict, ts: float }
 _sync_next_id = 1
@@ -255,20 +260,42 @@ class _SyncHub:
             self.connections.remove(ws)
         logger.info(f"WS client disconnected ({len(self.connections)} total)")
 
-    async def broadcast(self, message: dict, exclude: WebSocket = None):
-        """Send a JSON message to all connected clients except the sender."""
+    async def broadcast(self, message: dict, msg_id: int = None, exclude: WebSocket = None):
+        """Send a JSON message to all connected clients except the sender.
+
+        If msg_id is provided, includes __sync_id in the payload so clients
+        can track the last received message ID for catch-up sync.
+        """
+        payload = message
+        if msg_id is not None:
+            payload = {**message, "__sync_id": msg_id}
         dead = []
         for ws in self.connections:
             if ws is exclude:
                 continue
             try:
-                await ws.send_json(message)
+                await ws.send_json(payload)
             except Exception:
                 dead.append(ws)
         for ws in dead:
             self.disconnect(ws)
 
 _sync_hub = _SyncHub()
+
+
+async def _ws_ping_loop(ws: WebSocket):
+    """Send {"type": "__ping"} every SYNC_PING_INTERVAL seconds.
+
+    If the client does not respond with a __pong within SYNC_PONG_TIMEOUT,
+    the connection is considered dead and will be closed by the caller.
+    """
+    try:
+        while True:
+            await asyncio.sleep(SYNC_PING_INTERVAL)
+            await ws.send_json({"type": "__ping"})
+    except Exception:
+        # Connection closed or send failed — let the main loop handle cleanup
+        pass
 
 
 @router.post("/api/sync/send")
@@ -281,36 +308,76 @@ async def sync_send_message(body: dict):
     # Trim old messages
     if len(_sync_messages) > _sync_max_messages:
         _sync_messages[:] = _sync_messages[-_sync_max_messages:]
-    # Also broadcast to WebSocket clients
-    await _sync_hub.broadcast(body)
+    # Also broadcast to WebSocket clients (include msg_id for __sync_id tracking)
+    await _sync_hub.broadcast(body, msg_id=msg["id"])
     return {"ok": True, "id": msg["id"]}
 
 
 @router.get("/api/sync/poll")
 def sync_poll(after: int = Query(0)):
-    """Get sync messages after the given ID."""
+    """Get sync messages after the given ID.
+
+    Performs time-based eviction (removes messages older than 5 min),
+    returns missed: true when the requested after ID is older than the
+    oldest message in the queue, and returns last_id: 0 when queue is empty.
+    """
+    # Time-based eviction: remove messages older than _SYNC_MESSAGE_TTL
+    now = time.time()
+    _sync_messages[:] = [m for m in _sync_messages if (now - m["ts"]) < _SYNC_MESSAGE_TTL]
+
+    # Empty queue
+    if not _sync_messages:
+        return {"messages": [], "last_id": 0}
+
+    # Check if requested position is older than our oldest retained message
+    oldest_id = _sync_messages[0]["id"]
+    missed = after > 0 and after < oldest_id
+
     results = [m["data"] for m in _sync_messages if m["id"] > after]
-    last_id = _sync_messages[-1]["id"] if _sync_messages else after
-    return {"messages": results, "last_id": last_id}
+    last_id = _sync_messages[-1]["id"]
+
+    response = {"messages": results, "last_id": last_id}
+    if missed:
+        response["missed"] = True
+    return response
 
 
 @router.websocket("/ws/sync")
 async def websocket_sync(ws: WebSocket):
     global _sync_next_id
     await _sync_hub.connect(ws)
+    ping_task = asyncio.create_task(_ws_ping_loop(ws))
     try:
         while True:
-            data = await ws.receive_json()
-            # Also add to polling queue
+            # Use wait_for to detect unresponsive clients (ping interval + pong timeout)
+            try:
+                data = await asyncio.wait_for(
+                    ws.receive_json(),
+                    timeout=SYNC_PING_INTERVAL + SYNC_PONG_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                # Client did not send anything within the timeout window — close connection
+                logger.info("WS client timed out (no pong), closing connection")
+                await ws.close(code=1001)
+                break
+
+            # Filter out __pong responses (client responding to our __ping)
+            if isinstance(data, dict) and data.get("type") == "__pong":
+                continue
+
+            # Regular sync message — add to polling queue and broadcast
             msg = {"id": _sync_next_id, "data": data, "ts": time.time()}
             _sync_next_id += 1
             _sync_messages.append(msg)
             if len(_sync_messages) > _sync_max_messages:
                 _sync_messages[:] = _sync_messages[-_sync_max_messages:]
-            await _sync_hub.broadcast(data, exclude=ws)
+            await _sync_hub.broadcast(data, msg_id=msg["id"], exclude=ws)
     except WebSocketDisconnect:
-        _sync_hub.disconnect(ws)
+        pass
     except Exception:
+        pass
+    finally:
+        ping_task.cancel()
         _sync_hub.disconnect(ws)
 
 

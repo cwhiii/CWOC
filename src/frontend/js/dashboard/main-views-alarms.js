@@ -39,12 +39,17 @@ function _setAlarmsMode(mode) {
 }
 
 async function _fetchIndependentAlerts() {
+  if (!cwocIsServerReachable()) return;
   try {
     const resp = await fetch('/api/standalone-alerts');
     if (!resp.ok) throw new Error('Failed to fetch independent alerts');
+    cwocNetSuccess();
     _independentAlerts = await resp.json();
   } catch (e) {
-    console.error('Error fetching independent alerts:', e);
+    cwocNetFail();
+    if (e.message && e.message.indexOf('NetworkError') === -1) {
+      console.error('Error fetching independent alerts:', e);
+    }
     _independentAlerts = [];
   }
 }

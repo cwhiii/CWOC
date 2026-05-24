@@ -2259,10 +2259,44 @@ function _renderContactAutocomplete(options) {
         dropdown.innerHTML = '';
     }
 
+    // Get user's own email accounts as autocomplete options (shown at top)
+    function getUserEmailOptions(query) {
+        var settings = window._cwocSettings || {};
+        var accounts = settings.email_accounts || [];
+        var q = (query || '').toLowerCase();
+        var results = [];
+
+        for (var i = 0; i < accounts.length; i++) {
+            var acct = accounts[i];
+            if (!acct || !acct.email) continue;
+            var email = acct.email.trim();
+            var label = (acct.nickname && acct.nickname.trim()) ? acct.nickname.trim() : (acct.display_name || '');
+            var displayText = label ? label + ' <' + email + '> (My Account)' : email + ' (My Account)';
+
+            // Match against email or label
+            if (!q || email.toLowerCase().indexOf(q) !== -1 || displayText.toLowerCase().indexOf(q) !== -1) {
+                results.push({
+                    displayText: displayText,
+                    storeValue: email
+                });
+            }
+        }
+
+        return results;
+    }
+
     // Filter contacts client-side based on mode and query
     function filterContacts(contacts, query) {
         var q = query.toLowerCase();
         var results = [];
+
+        // In email mode, prepend user's own email accounts
+        if (mode === 'email') {
+            var userEmails = getUserEmailOptions(q);
+            for (var u = 0; u < userEmails.length && results.length < 10; u++) {
+                results.push(userEmails[u]);
+            }
+        }
 
         for (var i = 0; i < contacts.length && results.length < 10; i++) {
             var contact = contacts[i];
@@ -2276,6 +2310,9 @@ function _renderContactAutocomplete(options) {
                 for (var j = 0; j < emails.length && results.length < 10; j++) {
                     var emailVal = (emails[j].value || '').trim();
                     if (!emailVal) continue;
+                    // Skip if this email is already in results (from user accounts)
+                    var isDupe = results.some(function(r) { return r.storeValue === emailVal; });
+                    if (isDupe) continue;
                     var emailMatches = emailVal.toLowerCase().indexOf(q) !== -1;
                     if (nameMatches || emailMatches) {
                         results.push({
@@ -2334,8 +2371,13 @@ function _renderContactAutocomplete(options) {
         try {
             var resp = await fetch('/api/contacts?q=' + encodeURIComponent(query));
             if (!resp.ok) {
-                // API error: silently dismiss dropdown
-                dismissDropdown();
+                // API error: show user emails only if available
+                if (mode === 'email') {
+                    var userOnly = getUserEmailOptions(query);
+                    showResults(userOnly);
+                } else {
+                    dismissDropdown();
+                }
                 return;
             }
             var contacts = await resp.json();
@@ -2348,18 +2390,40 @@ function _renderContactAutocomplete(options) {
             var filtered = filterContacts(contacts, query);
             showResults(filtered);
         } catch (e) {
-            // Network error: silently dismiss dropdown, allow manual entry
-            dismissDropdown();
+            // Network error: show user emails if available
+            if (mode === 'email') {
+                var userOnly = getUserEmailOptions(query);
+                showResults(userOnly);
+            } else {
+                dismissDropdown();
+            }
         }
     }
 
-    // Input event: trigger search when >= 2 chars
+    // Show user email accounts on focus (even before typing 2 chars)
+    input.onfocus = function() {
+        if (mode === 'email' && this.value.length < 2) {
+            var userEmails = getUserEmailOptions(this.value);
+            if (userEmails.length > 0) {
+                showResults(userEmails);
+            }
+        }
+    };
+
+    // Input event: trigger search when >= 2 chars, show user emails otherwise
     input.oninput = function() {
         var val = this.value;
         onChange(val);
 
         if (val.length >= 2) {
             fetchAndShow(val);
+        } else if (mode === 'email') {
+            var userEmails = getUserEmailOptions(val);
+            if (userEmails.length > 0) {
+                showResults(userEmails);
+            } else {
+                dismissDropdown();
+            }
         } else {
             dismissDropdown();
         }
@@ -3448,14 +3512,9 @@ async function saveRule(andExit) {
         confirm_before_apply: document.getElementById('rule-confirm').checked
     };
 
-    // For bundle rules: auto-add the "add_tag" action with the bundle tag
+    // For bundle rules: auto-add the "add_tag" action with the bundle ID tag
     if (window._isBundleRule && window._ruleBundleId) {
-        // Get bundle name from the rule name ("Bundle: X" → X)
-        var ruleName = payload.name || '';
-        var bundleName = ruleName.replace(/^Bundle:\s*/, '');
-        if (bundleName) {
-            payload.actions = [{ type: 'add_tag', params: { tag: 'CWOC_System/Bundle/' + bundleName } }];
-        }
+        payload.actions = [{ type: 'add_tag', params: { tag: 'CWOC_System/BundleID/' + window._ruleBundleId } }];
     }
 
     // Schedule config

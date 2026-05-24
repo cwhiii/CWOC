@@ -165,6 +165,19 @@ if [[ "$RESTART" == true ]]; then
             exit 1
         fi
     '
+    START_RC=$?
+
+    if [[ $START_RC -ne 0 ]]; then
+        echo ""
+        echo "══════════════════════════════════════════════════"
+        echo "  ❌ DEPLOY FAILED — SERVICE DID NOT START"
+        echo "══════════════════════════════════════════════════"
+        echo "   The code was deployed but the service crashed."
+        echo "   Check the logs above for the error."
+        echo "--------------------------------------------------"
+        echo "💀 Failed — $(date)"
+        exit 1
+    fi
 
     # ── Disable upgrade page — restore normal 502 ──
     echo ""
@@ -278,4 +291,6 @@ NTFYEOF
 fi
 
 echo "--------------------------------------------------"
+PUSHED_VERSION=$(ssh -o ConnectTimeout=5 "$SERVER" 'cat /app/src/VERSION 2>/dev/null || echo "unknown"')
 echo "🎉 Done — $(date)"
+echo "   📦 Deployed version: $PUSHED_VERSION"

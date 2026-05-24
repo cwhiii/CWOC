@@ -84,6 +84,9 @@ val CONDITION_OPERATORS = listOf(
 /** Operators that don't require a value input */
 private val NO_VALUE_OPERATORS = setOf("is_empty", "is_not_empty")
 
+/** Email address fields that should show the email account dropdown */
+private val EMAIL_ADDRESS_FIELDS = setOf("email_from", "email_to", "email_cc", "email_bcc")
+
 // ─── Main Entry Point ───────────────────────────────────────────────────────────
 
 /**
@@ -93,18 +96,21 @@ private val NO_VALUE_OPERATORS = setOf("is_empty", "is_not_empty")
  * @param root The root condition group
  * @param onTreeChange Callback when the tree is modified
  * @param availableFields List of fields available for condition leaves
+ * @param emailAccountEmails List of user's configured email addresses (shown in email field dropdowns)
  */
 @Composable
 fun ConditionTreeBuilder(
     root: ConditionNode.Group,
     onTreeChange: (ConditionNode.Group) -> Unit,
-    availableFields: List<FieldOption>
+    availableFields: List<FieldOption>,
+    emailAccountEmails: List<String> = emptyList()
 ) {
     ConditionGroupView(
         group = root,
         depth = 0,
         isRoot = true,
         availableFields = availableFields,
+        emailAccountEmails = emailAccountEmails,
         onGroupChange = { updatedGroup -> onTreeChange(updatedGroup) },
         onRemove = {} // Root cannot be removed
     )
@@ -121,6 +127,7 @@ private fun ConditionGroupView(
     depth: Int,
     isRoot: Boolean,
     availableFields: List<FieldOption>,
+    emailAccountEmails: List<String>,
     onGroupChange: (ConditionNode.Group) -> Unit,
     onRemove: () -> Unit
 ) {
@@ -196,6 +203,7 @@ private fun ConditionGroupView(
                             depth = depth + 1,
                             isRoot = false,
                             availableFields = availableFields,
+                            emailAccountEmails = emailAccountEmails,
                             onGroupChange = { updatedChild ->
                                 val newChildren = group.children.toMutableList()
                                 newChildren[index] = updatedChild
@@ -212,6 +220,7 @@ private fun ConditionGroupView(
                         ConditionLeafView(
                             leaf = child,
                             availableFields = availableFields,
+                            emailAccountEmails = emailAccountEmails,
                             onLeafChange = { updatedLeaf ->
                                 val newChildren = group.children.toMutableList()
                                 newChildren[index] = updatedLeaf
@@ -282,6 +291,7 @@ private fun ConditionGroupView(
 private fun ConditionLeafView(
     leaf: ConditionNode.Leaf,
     availableFields: List<FieldOption>,
+    emailAccountEmails: List<String>,
     onLeafChange: (ConditionNode.Leaf) -> Unit,
     onRemove: () -> Unit
 ) {
@@ -323,21 +333,33 @@ private fun ConditionLeafView(
             modifier = Modifier.weight(1f)
         )
 
-        // Value text field (hidden for is_empty/is_not_empty)
+        // Value input (hidden for is_empty/is_not_empty)
         if (leaf.operator !in NO_VALUE_OPERATORS) {
-            OutlinedTextField(
-                value = leaf.value,
-                onValueChange = { newValue ->
-                    onLeafChange(leaf.copy(value = newValue))
-                },
-                placeholder = { Text("Value", fontSize = 12.sp) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp),
-                colors = CwocInputDefaults.outlinedColors()
-            )
+            if (leaf.field in EMAIL_ADDRESS_FIELDS && emailAccountEmails.isNotEmpty()) {
+                // Email address field: show dropdown with user's email accounts
+                EmailAccountValueDropdown(
+                    currentValue = leaf.value,
+                    emailOptions = emailAccountEmails,
+                    onValueChange = { newValue ->
+                        onLeafChange(leaf.copy(value = newValue))
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                OutlinedTextField(
+                    value = leaf.value,
+                    onValueChange = { newValue ->
+                        onLeafChange(leaf.copy(value = newValue))
+                    },
+                    placeholder = { Text("Value", fontSize = 12.sp) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    colors = CwocInputDefaults.outlinedColors()
+                )
+            }
         }
 
         // Remove button (×)
@@ -460,6 +482,60 @@ private fun CompactDropdown(
                     text = { Text(label, fontSize = 13.sp) },
                     onClick = {
                         onValueChange(value)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// ─── Email Account Value Dropdown ───────────────────────────────────────────────
+
+/**
+ * Editable dropdown for email address fields in condition leaves.
+ * Shows the user's configured email accounts as quick-select options,
+ * but also allows typing a custom email address.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmailAccountValueDropdown(
+    currentValue: String,
+    emailOptions: List<String>,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = currentValue,
+            onValueChange = { newValue ->
+                onValueChange(newValue)
+            },
+            placeholder = { Text("Email address", fontSize = 12.sp) },
+            textStyle = MaterialTheme.typography.bodySmall,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            emailOptions.forEach { email ->
+                DropdownMenuItem(
+                    text = { Text(email, fontSize = 13.sp) },
+                    onClick = {
+                        onValueChange(email)
                         expanded = false
                     }
                 )

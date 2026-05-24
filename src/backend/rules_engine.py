@@ -501,6 +501,11 @@ def evaluate_leaf(
     if operator == "regex_match":
         return _regex_match_with_timeout(str(value), str(field_value))
 
+    # ── Wildcard operator (glob-style: * matches any characters) ─
+    if operator == "wildcard":
+        import fnmatch
+        return fnmatch.fnmatch(field_str, value_str)
+
     # ── Weather condition operators ──────────────────────────────
     if operator.startswith("weather_"):
         # Weather operators: current weather or forecast window checks

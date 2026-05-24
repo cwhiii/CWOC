@@ -218,7 +218,7 @@ var _smartLinkDetectors = [
         category: 'Hotel',
         name: 'Wyndham',
         icon: '/static/tracking/hotel.svg',
-        keywords: [/\b(wyndham|days\s*inn|super\s*8|ramada|la\s*quinta|wingate|baymont|microtel|hawthorn|trademark|tryp|dolce)\b/i],
+        keywords: [/\b(wyndham|days\s*inn|super\s*8|ramada|la\s*quinta|wingate|baymont|microtel|hawthorn|tryp|dolce)\b/i],
         regex: /\b(\d{8,12})\b/,
         url: 'https://www.wyndhamhotels.com/wyndham-rewards/member/reservations',
         label: 'Manage',

@@ -222,7 +222,7 @@ object SmartLinkDetector {
         Detector(
             category = "Hotel",
             name = "Wyndham",
-            keywords = listOf(Regex("\\b(wyndham|days\\s*inn|super\\s*8|ramada|la\\s*quinta|wingate|baymont|microtel|hawthorn|trademark|tryp|dolce)\\b", RegexOption.IGNORE_CASE)),
+            keywords = listOf(Regex("\\b(wyndham|days\\s*inn|super\\s*8|ramada|la\\s*quinta|wingate|baymont|microtel|hawthorn|tryp|dolce)\\b", RegexOption.IGNORE_CASE)),
             regex = Regex("\\b(\\d{8,12})\\b"),
             url = "https://www.wyndhamhotels.com/wyndham-rewards/member/reservations",
             label = "Manage",

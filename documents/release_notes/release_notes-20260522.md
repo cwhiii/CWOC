@@ -1,3 +1,6 @@
+- Major Android app parity push: settings format fixes, indicators view rewrite, projects view rework, calendar settings, editor nav/title improvements, mobile header redesign
+- Cross-platform sort sync fix and static asset reorganization
+
 ## m20260522.1749
 
 Keyboard now auto-dismisses when opening either sidebar (left drawer or right views panel) in the Android app — covers button taps and swipe gestures in both the main views and the chit editor.

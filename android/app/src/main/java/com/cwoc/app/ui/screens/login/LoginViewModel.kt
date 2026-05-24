@@ -1,13 +1,18 @@
 package com.cwoc.app.ui.screens.login
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.AuthResult
 import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.sync.SyncEngine
+import com.cwoc.app.data.sync.SyncForegroundService
 import com.cwoc.app.data.sync.SyncOrchestrator
+import com.cwoc.app.util.BatteryOptimizationHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +27,7 @@ data class LoginUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val loginSuccess: Boolean = false,
+    val showBatteryOptimizationPrompt: Boolean = false,
     val instanceName: String? = null,
     val welcomeMessage: String? = null
 )
@@ -30,7 +36,9 @@ data class LoginUiState(
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val syncEngine: SyncEngine,
-    private val syncOrchestrator: SyncOrchestrator
+    private val syncOrchestrator: SyncOrchestrator,
+    private val prefs: SharedPreferences,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -156,10 +164,18 @@ class LoginViewModel @Inject constructor(
                         android.util.Log.e("CWOC_LOGIN", "Sync crashed: ${e.javaClass.simpleName}: ${e.message}", e)
                         // Non-fatal — sync will retry later
                     }
+                    // Start the foreground service for persistent WebSocket connection
+                    try {
+                        SyncForegroundService.start(appContext)
+                    } catch (e: Exception) {
+                        android.util.Log.e("CWOC_LOGIN", "Failed to start SyncForegroundService: ${e.message}", e)
+                    }
                     // Connect WebSocket for real-time updates now that credentials are stored
                     syncOrchestrator.connectAfterLogin()
+                    // Check if battery optimization prompt should be shown
+                    val shouldShowBatteryPrompt = BatteryOptimizationHelper.shouldShowPrompt(appContext, prefs)
                     // Always navigate to main screen after successful auth
-                    _uiState.update { it.copy(isLoading = false, loginSuccess = true) }
+                    _uiState.update { it.copy(isLoading = false, loginSuccess = true, showBatteryOptimizationPrompt = shouldShowBatteryPrompt) }
                 }
                 is AuthResult.InvalidCredentials -> {
                     syncEngine.reportLog("Login failed: invalid credentials for user=${state.username}", "error")
@@ -184,5 +200,24 @@ class LoginViewModel @Inject constructor(
     private fun isValidServerUrl(url: String): Boolean {
         if (url.isBlank()) return false
         return url.startsWith("http://") || url.startsWith("https://")
+    }
+
+    /**
+     * Called when the user accepts the battery optimization prompt.
+     * Launches the system intent to request Doze exemption and records the prompt as shown.
+     */
+    fun onBatteryOptimizationAccepted() {
+        BatteryOptimizationHelper.requestExemption(appContext)
+        BatteryOptimizationHelper.recordPromptShown(prefs)
+        _uiState.update { it.copy(showBatteryOptimizationPrompt = false) }
+    }
+
+    /**
+     * Called when the user dismisses the battery optimization prompt.
+     * Records the prompt as shown so it never appears again.
+     */
+    fun onBatteryOptimizationDismissed() {
+        BatteryOptimizationHelper.recordPromptShown(prefs)
+        _uiState.update { it.copy(showBatteryOptimizationPrompt = false) }
     }
 }

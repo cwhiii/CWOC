@@ -8,8 +8,12 @@ import com.cwoc.app.widget.refresh.WidgetUpdateWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,7 +41,26 @@ class SyncOrchestrator @Inject constructor(
     private val syncMetadataDao: SyncMetadataDao
 ) {
 
+    companion object {
+        /** Message types that trigger a sync pull from the server. */
+        val SYNC_TRIGGER_TYPES = setOf(
+            "chits_changed",
+            "settings_changed",
+            "contacts_changed",
+            "change",
+            "changes_available"
+        )
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // Sync coalescing state — ensures at most one sync runs at a time with one queued follow-up
+    private val syncMutex = Mutex()
+    private var syncInProgress = false
+    private var syncQueued = false
+
+    // Retry state — single retry after 5 seconds on sync failure
+    private var retryJob: Job? = null
 
     /**
      * Start the orchestrator. Should be called once at app startup.
@@ -60,6 +83,18 @@ class SyncOrchestrator @Inject constructor(
         scope.launch {
             webSocketClient.messages.collect { message ->
                 handleWebSocketMessage(message)
+            }
+        }
+
+        // Collect WebSocket connection state — trigger catch-up sync on reconnection (false→true)
+        scope.launch {
+            var wasConnected = false
+            webSocketClient.isConnected.collect { connected ->
+                if (!wasConnected && connected) {
+                    Log.d(TAG, "WebSocket reconnected — triggering catch-up sync")
+                    triggerCatchUpSync()
+                }
+                wasConnected = connected
             }
         }
 
@@ -106,26 +141,136 @@ class SyncOrchestrator @Inject constructor(
     }
 
     /**
+     * Stop the orchestrator. Cancels any pending retry job.
+     * Called when the service stops.
+     */
+    fun stop() {
+        Log.d(TAG, "SyncOrchestrator stopping — cancelling retry job")
+        retryJob?.cancel()
+        retryJob = null
+    }
+
+    /**
      * Handle incoming WebSocket messages.
-     * On "change" type messages, trigger an incremental pull to fetch server updates.
+     * Recognized message types trigger an incremental pull with coalescing:
+     * - If no sync is in progress, start one immediately
+     * - If a sync is already running, queue a single follow-up (coalescing multiple messages)
+     * - After the current sync completes, execute the queued follow-up if present
+     * Unrecognized types are logged at debug level and ignored.
      */
     private suspend fun handleWebSocketMessage(message: WebSocketMessage) {
         Log.d(TAG, "WebSocket message received: type=${message.type}, entity=${message.entity}, id=${message.id}")
 
-        when (message.type) {
-            "change", "changes_available" -> {
-                Log.d(TAG, "Change notification — triggering incremental pull")
-                val metadata = syncMetadataDao.getMetadata()
-                val since = metadata?.highWaterMark ?: 0
-                val result = syncEngine.performSync(since)
-                if (result is SyncResult.Success) {
-                    Log.d(TAG, "Sync pull complete — refreshing widgets")
-                    WidgetUpdateWorker.refreshNow(context)
+        if (message.type !in SYNC_TRIGGER_TYPES) {
+            Log.d(TAG, "Unrecognized WebSocket message type: ${message.type} — ignoring")
+            return
+        }
+
+        syncMutex.withLock {
+            if (syncInProgress) {
+                Log.d(TAG, "Sync already in progress — queuing follow-up sync")
+                syncQueued = true
+                return
+            }
+            syncInProgress = true
+        }
+
+        Log.d(TAG, "Change notification — triggering incremental pull")
+        performSyncAndHandleQueue()
+    }
+
+    /**
+     * Performs a sync, then checks if another sync was queued during execution.
+     * If queued, resets the flag and performs one more sync.
+     * After all syncs complete, sets syncInProgress = false.
+     * If a sync fails, schedules a single retry after 5 seconds.
+     */
+    private suspend fun performSyncAndHandleQueue() {
+        try {
+            val result = executeSyncPull()
+
+            // If sync failed, schedule a single retry after 5 seconds
+            if (result !is SyncResult.Success) {
+                Log.d(TAG, "Sync failed — scheduling single retry in 5 seconds")
+                scheduleRetry()
+            }
+
+            // Check if a follow-up sync was queued while we were syncing
+            val shouldRunFollowUp = syncMutex.withLock {
+                if (syncQueued) {
+                    syncQueued = false
+                    true
+                } else {
+                    false
                 }
             }
-            else -> {
-                Log.d(TAG, "Ignoring WebSocket message of type: ${message.type}")
+
+            if (shouldRunFollowUp) {
+                Log.d(TAG, "Executing queued follow-up sync")
+                val followUpResult = executeSyncPull()
+                if (followUpResult !is SyncResult.Success) {
+                    Log.d(TAG, "Follow-up sync failed — scheduling single retry in 5 seconds")
+                    scheduleRetry()
+                }
+            }
+        } finally {
+            syncMutex.withLock {
+                syncInProgress = false
             }
         }
+    }
+
+    /**
+     * Schedules a single retry of executeSyncPull() after 5 seconds.
+     * If the retry also fails, does nothing further (waits for next message).
+     * Cancels any previously scheduled retry before scheduling a new one.
+     */
+    private fun scheduleRetry() {
+        retryJob?.cancel()
+        retryJob = scope.launch {
+            delay(5_000L)
+            Log.d(TAG, "Executing retry sync after 5-second delay")
+            val retryResult = executeSyncPull()
+            if (retryResult !is SyncResult.Success) {
+                Log.d(TAG, "Retry sync also failed — waiting for next message")
+            } else {
+                Log.d(TAG, "Retry sync succeeded")
+            }
+        }
+    }
+
+    /**
+     * Triggers an immediate catch-up sync when the WebSocket reconnects (false→true transition).
+     * Uses the same coalescing logic to avoid concurrent syncs.
+     */
+    private fun triggerCatchUpSync() {
+        scope.launch {
+            syncMutex.withLock {
+                if (syncInProgress) {
+                    Log.d(TAG, "Catch-up sync: sync already in progress — queuing follow-up")
+                    syncQueued = true
+                    return@launch
+                }
+                syncInProgress = true
+            }
+
+            Log.d(TAG, "Catch-up sync — triggering incremental pull after reconnection")
+            performSyncAndHandleQueue()
+        }
+    }
+
+    /**
+     * Executes a single sync pull using the current high water mark.
+     * Returns the SyncResult to allow callers to handle failure.
+     */
+    private suspend fun executeSyncPull(): SyncResult {
+        val metadata = syncMetadataDao.getMetadata()
+        val since = metadata?.highWaterMark ?: 0
+        val result = syncEngine.performSync(since)
+        if (result is SyncResult.Success) {
+            Log.d(TAG, "Sync pull complete — refreshing widgets")
+            WidgetUpdateWorker.refreshNow(context)
+        }
+        return result
     }
 }

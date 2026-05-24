@@ -1,15 +1,18 @@
 package com.cwoc.app.di
 
+import android.content.Context
 import android.content.SharedPreferences
 import com.cwoc.app.data.remote.AuthInterceptor
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.remote.TokenAuthenticator
 import com.cwoc.app.data.repository.AuthEventEmitter
 import com.cwoc.app.data.repository.AuthRepository
+import com.cwoc.app.data.sync.SyncForegroundService
 import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -59,9 +62,12 @@ object NetworkModule {
     @Singleton
     fun provideTokenAuthenticator(
         prefs: SharedPreferences,
-        authEventEmitter: dagger.Lazy<AuthEventEmitter>
+        authEventEmitter: dagger.Lazy<AuthEventEmitter>,
+        @ApplicationContext context: Context
     ): TokenAuthenticator {
         return TokenAuthenticator(prefs) {
+            // Stop the sync foreground service on token revocation
+            SyncForegroundService.stop(context)
             // Wire the callback to emit token revocation event
             authEventEmitter.get().emitTokenRevokedSync()
         }

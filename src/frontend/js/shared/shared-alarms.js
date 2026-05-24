@@ -501,6 +501,10 @@ function _sharedBrowserNotif(title, body, chitId) {
 
 // ── The alarm checker — runs every second on every page ──
 function _sharedCheckAlarms() {
+  // Only the leader tab should fire alarms. Follower tabs receive alarm events
+  // via BroadcastChannel from the leader (no duplicate ringing).
+  if (typeof cwocTabSyncIsLeader === 'function' && !cwocTabSyncIsLeader()) return;
+
   var now = new Date();
   var hh = String(now.getHours()).padStart(2, '0');
   var mm = String(now.getMinutes()).padStart(2, '0');
@@ -526,6 +530,9 @@ function _sharedCheckAlarms() {
       _sharedShowAlertModal({ icon: '🔔', title: chit.title || 'Alarm', subtitle: _sharedFmtTime(alert.time) + (alert.name ? ' — ' + alert.name : ''), chitId: chit.id, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
       _sharedBrowserNotif('🔔 Alarm: ' + (chit.title || 'Alarm'), _sharedFmtTime(alert.time), chit.id);
       syncSend('alarm_fired', { title: chit.title, subtitle: _sharedFmtTime(alert.time), chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
+      if (typeof cwocTabSyncAlarmFired === 'function') {
+        cwocTabSyncAlarmFired({ title: chit.title || 'Alarm', subtitle: _sharedFmtTime(alert.time) + (alert.name ? ' — ' + alert.name : ''), chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
+      }
     });
   });
 
@@ -546,6 +553,9 @@ function _sharedCheckAlarms() {
     _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(ad.time), onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
     _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(ad.time));
     syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(ad.time), snoozeKey: snoozeKey, triggerKey: key });
+    if (typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: name, subtitle: _sharedFmtTime(ad.time), snoozeKey: snoozeKey, triggerKey: key });
+    }
   });
 
   // Check expired snoozes
@@ -570,6 +580,9 @@ function _sharedCheckAlarms() {
     _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: refireKey });
     _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(time));
     syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+    if (typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+    }
   });
 
   // Cleanup old keys
@@ -585,8 +598,15 @@ function _initSharedAlarmSync() {
   syncOn('alarm_fired', function(msg) {
     if (msg.triggerKey && window._sharedAlarmTriggered.has(msg.triggerKey)) return;
     if (msg.triggerKey) window._sharedAlarmTriggered.add(msg.triggerKey);
-    _sharedPlayAlarm();
+    // Only the leader tab plays sound for cross-device sync messages
+    if (typeof cwocTabSyncIsLeader === 'function' && cwocTabSyncIsLeader()) {
+      _sharedPlayAlarm();
+    }
     _sharedShowAlertModal({ icon: '🔔', title: msg.title || 'Alarm', subtitle: msg.subtitle || '', chitId: msg.chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: msg.snoozeKey, triggerKey: msg.triggerKey });
+    // If leader, broadcast to other local tabs (they show modal, no sound)
+    if (typeof cwocTabSyncIsLeader === 'function' && cwocTabSyncIsLeader() && typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: msg.title || 'Alarm', subtitle: msg.subtitle || '', chitId: msg.chitId, snoozeKey: msg.snoozeKey, triggerKey: msg.triggerKey });
+    }
   });
 
   syncOn('alert_dismissed', function(msg) {

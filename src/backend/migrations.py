@@ -3504,3 +3504,262 @@ def migrate_add_sync_version():
     finally:
         if conn:
             conn.close()
+
+
+# ── Fix "Evertything Else" bundle name typo ──────────────────────────────
+
+def migrate_fix_everything_else_typo():
+    """Fix the typo 'Evertything Else' → 'Everything Else' in bundles table.
+    Also renames any corresponding tags on chits.
+    Additionally adds is_catch_all column to bundles table for proper identification."""
+    from datetime import datetime
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── Add is_catch_all column if missing ───────────────────────────
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(bundles)").fetchall()]
+        if "is_catch_all" not in cols:
+            cursor.execute("ALTER TABLE bundles ADD COLUMN is_catch_all BOOLEAN DEFAULT 0")
+            logger.info("Added is_catch_all column to bundles table")
+
+        # ── Fix the typo and set is_catch_all on the correct bundle ──────
+        # First fix the typo variant
+        cursor.execute("SELECT id, owner_id FROM bundles WHERE name = 'Evertything Else'")
+        typo_rows = cursor.fetchall()
+        for bundle_id, owner_id in typo_rows:
+            cursor.execute(
+                "UPDATE bundles SET name = 'Everything Else', is_catch_all = 1, modified_datetime = ? WHERE id = ?",
+                (datetime.utcnow().isoformat(), bundle_id),
+            )
+            # Fix any tags on chits that reference the typo
+            old_tag = "CWOC_System/Bundle/Evertything Else"
+            new_tag = "CWOC_System/Bundle/Everything Else"
+            cursor.execute(
+                "SELECT id, tags FROM chits WHERE owner_id = ? AND tags LIKE ?",
+                (owner_id, f'%{old_tag}%'),
+            )
+            for chit_id, tags_raw in cursor.fetchall():
+                tags = deserialize_json_field(tags_raw) or []
+                tags = [new_tag if t == old_tag else t for t in tags]
+                cursor.execute(
+                    "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",
+                    (serialize_json_field(tags), datetime.utcnow().isoformat(), chit_id),
+                )
+
+        # Now set is_catch_all on correctly-named "Everything Else" bundles too
+        cursor.execute(
+            "UPDATE bundles SET is_catch_all = 1 WHERE name = 'Everything Else' AND is_catch_all = 0"
+        )
+
+        conn.commit()
+        if typo_rows:
+            logger.info(f"Fixed 'Evertything Else' typo in {len(typo_rows)} bundle(s)")
+        logger.info("is_catch_all flag set on all 'Everything Else' bundles")
+    except Exception as e:
+        logger.error(f"Error in migrate_fix_everything_else_typo: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+
+
+# ── Deduplicate Auto-Bundles & Convert to ID-Based Tags: migration ───────
+
+def migrate_dedup_auto_bundles():
+    """Remove duplicate auto-bundles, reset to canonical defaults, and convert
+    ALL bundle tags from name-based (CWOC_System/Bundle/{name}) to ID-based
+    (CWOC_System/BundleID/{id}).
+
+    After this migration, bundle names are purely cosmetic — renaming a bundle
+    never requires updating any chit tags.
+    """
+    from datetime import datetime
+
+    CANONICAL = {
+        "junk": ("🗑️ Junk", "Emails with unsubscribe links (marketing, newsletters, junk)", "#8b4513"),
+        "receipts": ("🧾 Receipts", "Order confirmations, invoices, payment receipts", "#6b8e23"),
+        "finance": ("🏦 Finance", "Banking, bills, statements, financial alerts", "#2e5090"),
+        "calendar": ("🗓️ Calendar Invites", "Calendar invitations and event updates", "#8b008b"),
+    }
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT DISTINCT owner_id FROM bundles")
+        owners = [row[0] for row in cursor.fetchall()]
+
+        total_removed = 0
+        total_converted = 0
+
+        for owner_id in owners:
+            # ── 1. Dedup non-removable auto-bundles and reset to canonical ──
+            cursor.execute(
+                "SELECT id, name, description, created_datetime FROM bundles "
+                "WHERE owner_id = ? AND removable = 0 AND (is_catch_all = 0 OR is_catch_all IS NULL) "
+                "ORDER BY created_datetime ASC",
+                (owner_id,),
+            )
+            auto_rows = cursor.fetchall()
+
+            categories = {}
+            for row in auto_rows:
+                bid, name, desc, created = row
+                desc_lower = (desc or "").lower()
+                cat = None
+                if "unsubscribe" in desc_lower or "junk" in desc_lower or "newsletter" in desc_lower or "clutter" in desc_lower:
+                    cat = "junk"
+                elif "receipt" in desc_lower or "order confirmation" in desc_lower:
+                    cat = "receipts"
+                elif "banking" in desc_lower or "bills" in desc_lower or "financial" in desc_lower:
+                    cat = "finance"
+                elif "calendar" in desc_lower or "invitation" in desc_lower:
+                    cat = "calendar"
+                if cat:
+                    if cat not in categories:
+                        categories[cat] = []
+                    categories[cat].append(row)
+
+            for cat, rows in categories.items():
+                if len(rows) > 1:
+                    keep = rows[0]
+                    for dup_id, _, _, _ in rows[1:]:
+                        cursor.execute("DELETE FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?", (dup_id, owner_id))
+                        cursor.execute("DELETE FROM bundles WHERE id = ?", (dup_id,))
+                        total_removed += 1
+                else:
+                    keep = rows[0]
+
+                keep_id = keep[0]
+                canonical_name, canonical_desc, canonical_color = CANONICAL[cat]
+                cursor.execute(
+                    "UPDATE bundles SET name = ?, description = ?, color = ?, modified_datetime = ? WHERE id = ?",
+                    (canonical_name, canonical_desc, canonical_color, datetime.utcnow().isoformat(), keep_id),
+                )
+
+            # ── 2. Reset catch-all ──
+            cursor.execute(
+                "SELECT id FROM bundles WHERE owner_id = ? AND is_catch_all = 1", (owner_id,)
+            )
+            catch_all = cursor.fetchone()
+            if catch_all:
+                cursor.execute(
+                    "UPDATE bundles SET name = ?, description = ?, color = ?, modified_datetime = ? WHERE id = ?",
+                    ("📬 Everything Else", "Emails not matched by any other bundle", None, datetime.utcnow().isoformat(), catch_all[0]),
+                )
+
+            # ── 3. Reset "From Contacts" ──
+            cursor.execute(
+                "SELECT id FROM bundles WHERE owner_id = ? AND removable = 1 AND is_default = 1 "
+                "AND description LIKE '%contacts%'", (owner_id,)
+            )
+            fc_row = cursor.fetchone()
+            if fc_row:
+                cursor.execute(
+                    "UPDATE bundles SET name = ?, description = ?, color = ?, modified_datetime = ? WHERE id = ?",
+                    ("👤 From Contacts", "Emails from people in your contacts list", "#4a7c59", datetime.utcnow().isoformat(), fc_row[0]),
+                )
+
+            # ── 4. Convert ALL name-based tags to ID-based tags ──
+            cursor.execute("SELECT id, name FROM bundles WHERE owner_id = ?", (owner_id,))
+            name_to_id = {}
+            for bid, bname in cursor.fetchall():
+                name_to_id[bname] = bid
+
+            # Also map historical names to current bundle IDs
+            # (handles tags that reference old names before the rename above)
+            for cat, rows in categories.items():
+                if rows:
+                    keep_id = rows[0][0]
+                    # Map all known historical names for this category
+                    historical = {
+                        "junk": ["Junk", "Newsletters", "Clutter", "🗑️ Junk", "🗑️ Clutter"],
+                        "receipts": ["Receipts", "🧾 Receipts"],
+                        "finance": ["Finance", "🏦 Finance"],
+                        "calendar": ["Calendar Invites", "🗓️ Calendar Invites"],
+                    }
+                    for hist_name in historical.get(cat, []):
+                        if hist_name not in name_to_id:
+                            name_to_id[hist_name] = keep_id
+
+            # Map catch-all historical names
+            if catch_all:
+                for hist_name in ["Everything Else", "Evertything Else", "📬 Everything Else"]:
+                    if hist_name not in name_to_id:
+                        name_to_id[hist_name] = catch_all[0]
+
+            # Map From Contacts historical names
+            if fc_row:
+                for hist_name in ["From Contacts", "👤 From Contacts"]:
+                    if hist_name not in name_to_id:
+                        name_to_id[hist_name] = fc_row[0]
+
+            # Find all chits with old-style bundle tags
+            cursor.execute(
+                "SELECT id, tags FROM chits WHERE owner_id = ? AND tags LIKE '%CWOC_System/Bundle/%'",
+                (owner_id,),
+            )
+            chit_rows = cursor.fetchall()
+
+            for chit_id, tags_raw in chit_rows:
+                tags = deserialize_json_field(tags_raw) or []
+                new_tags = []
+                changed = False
+                for t in tags:
+                    if isinstance(t, str) and t.startswith("CWOC_System/Bundle/"):
+                        old_name = t[len("CWOC_System/Bundle/"):]
+                        bid = name_to_id.get(old_name)
+                        if bid:
+                            new_tag = f"CWOC_System/BundleID/{bid}"
+                            if new_tag not in new_tags:
+                                new_tags.append(new_tag)
+                        changed = True
+                    else:
+                        new_tags.append(t)
+                if changed:
+                    cursor.execute(
+                        "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",
+                        (serialize_json_field(new_tags), datetime.utcnow().isoformat(), chit_id),
+                    )
+                    total_converted += 1
+
+            # ── 5. Update rule actions to use ID-based tags ──
+            cursor.execute(
+                "SELECT r.id, r.actions FROM rules r "
+                "JOIN bundle_rules br ON br.rule_id = r.id "
+                "WHERE br.owner_id = ?",
+                (owner_id,),
+            )
+            rule_rows = cursor.fetchall()
+            for rule_id, actions_raw in rule_rows:
+                actions = deserialize_json_field(actions_raw) or []
+                updated = False
+                for action in actions:
+                    if action.get("type") == "add_tag":
+                        tag = action.get("params", {}).get("tag", "")
+                        if tag.startswith("CWOC_System/Bundle/"):
+                            old_name = tag[len("CWOC_System/Bundle/"):]
+                            bid = name_to_id.get(old_name)
+                            if bid:
+                                action["params"]["tag"] = f"CWOC_System/BundleID/{bid}"
+                                updated = True
+                if updated:
+                    cursor.execute(
+                        "UPDATE rules SET actions = ?, modified_datetime = ? WHERE id = ?",
+                        (serialize_json_field(actions), datetime.utcnow().isoformat(), rule_id),
+                    )
+
+        conn.commit()
+        if total_removed > 0:
+            logger.info(f"Dedup auto-bundles: removed {total_removed} duplicate(s)")
+        if total_converted > 0:
+            logger.info(f"Converted {total_converted} chit(s) from name-based to ID-based bundle tags")
+    except Exception as e:
+        logger.error(f"Error in migrate_dedup_auto_bundles: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

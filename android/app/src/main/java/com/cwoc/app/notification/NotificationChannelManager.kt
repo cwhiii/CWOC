@@ -22,6 +22,7 @@ class NotificationChannelManager @Inject constructor(
         const val CHANNEL_ID_ALARMS = "cwoc_alarms"
         const val CHANNEL_ID_REMINDERS = "cwoc_reminders"
         const val CHANNEL_ID_TIMERS = "cwoc_timers"
+        const val CHANNEL_ID_SYNC_SERVICE = "cwoc_sync_service"
     }
 
     /**
@@ -72,8 +73,18 @@ class NotificationChannelManager @Inject constructor(
             setSound(defaultAlarmSound, alarmAudioAttributes)
         }
 
+        // Sync Service channel — silent, minimal visual presence
+        val syncServiceChannel = NotificationChannel(
+            CHANNEL_ID_SYNC_SERVICE,
+            "Sync Service",
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            description = "Persistent notification for the background sync connection"
+            setShowBadge(false)
+        }
+
         notificationManager.createNotificationChannels(
-            listOf(alarmsChannel, remindersChannel, timersChannel)
+            listOf(alarmsChannel, remindersChannel, timersChannel, syncServiceChannel)
         )
     }
 }

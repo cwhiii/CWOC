@@ -68,6 +68,7 @@ import com.cwoc.app.data.repository.AuthEvent
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.sync.SyncEngine
+import com.cwoc.app.data.sync.SyncForegroundService
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncWorker
 import com.cwoc.app.data.repository.SettingsRepository
@@ -380,16 +381,32 @@ private fun CwocApp(
 
     CwocTheme {
         if (currentRoute == null && isAuthenticated) {
-            // Show CWOC logo on parchment while nav resolves
-            ParchmentBackground {
-                Image(
-                    painter = painterResource(id = R.drawable.cwoc_logo),
-                    contentDescription = "CWOC",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .fillMaxSize(0.5f),
-                    contentScale = ContentScale.Fit
+            // Show CWOC logo on parchment while nav resolves.
+            // IMPORTANT: We must ALSO render the NavHost (off-screen / behind the splash)
+            // so that it composes and populates currentRoute. Without this, currentRoute
+            // stays null forever and the app is stuck on the splash screen.
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Render NavGraph invisibly so it resolves the start destination
+                CwocNavGraph(
+                    navController = navController,
+                    isAuthenticated = isAuthenticated,
+                    filterSortViewModel = filterSortViewModel,
+                    chitRepository = chitRepository,
+                    sidebarStateViewModel = sidebarStateViewModel,
+                    settingsRepository = settingsRepository,
+                    onQuickAlert = { showQuickAlertSheet = true }
                 )
+                // Splash overlay on top
+                ParchmentBackground {
+                    Image(
+                        painter = painterResource(id = R.drawable.cwoc_logo),
+                        contentDescription = "CWOC",
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxSize(0.5f),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             }
         } else if (showNavChrome) {
             // Dismiss keyboard whenever the drawer opens (covers swipe gesture too)
@@ -681,6 +698,7 @@ private fun CwocApp(
                                     .height(64.dp),  // Standard TopAppBar content height
                                 contentAlignment = Alignment.Center
                             ) {
+                                val appContext = context.applicationContext
                                 ProfileMenu(
                                 username = currentUsername,
                                 displayName = userDisplayName,
@@ -689,12 +707,14 @@ private fun CwocApp(
                                 authToken = authRepository.getToken() ?: "",
                                 onLogout = {
                                     authRepository.clearToken()
+                                    SyncForegroundService.stop(appContext)
                                     navController.navigate(Screen.Login.route) {
                                         popUpTo(0) { inclusive = true }
                                     }
                                 },
                                 onSwitchUser = {
                                     authRepository.clearToken()
+                                    SyncForegroundService.stop(appContext)
                                     navController.navigate(Screen.Login.route) {
                                         popUpTo(0) { inclusive = true }
                                     }

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.cwoc.app.data.sync.SyncForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -201,6 +202,8 @@ fun TopBarProfileAvatar(
                 text = { Text("🔄 Switch User") },
                 onClick = {
                     expanded = false
+                    // Stop the sync foreground service before clearing credentials
+                    SyncForegroundService.stop(context)
                     // Clear token and restart to login
                     securePrefs?.edit()
                         ?.remove("device_token")
@@ -234,6 +237,8 @@ fun TopBarProfileAvatar(
                 text = { Text("🚪 Logout") },
                 onClick = {
                     expanded = false
+                    // Stop the sync foreground service before clearing credentials
+                    SyncForegroundService.stop(context)
                     securePrefs?.edit()
                         ?.remove("device_token")
                         ?.remove("user_display_name")

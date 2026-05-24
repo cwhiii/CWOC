@@ -134,36 +134,57 @@ function _refreshBundleTabCounts() {
     var tabs = document.querySelectorAll('.bundle-tab');
     if (!tabs.length) return;
     var countMode = (window._cwocSettings || {}).bundles_show_count || 'both';
-    if (countMode === 'none') return;
     var allInbox = _getAllInboxEmailChits();
 
     tabs.forEach(function(tab) {
         var bundleName = tab.dataset.bundleName;
-        if (!bundleName) return;
+        var bundleId = tab.dataset.bundleId;
+        if (!bundleId) return;
 
         // Remove existing badge
         var existingBadge = tab.querySelector('.bundle-unread-badge');
         if (existingBadge) existingBadge.remove();
 
-        var unreadCount = _getBundleUnreadCount(bundleName, allInbox);
-        var totalCount = _filterByBundle(allInbox, bundleName).length;
+        var totalCount = _filterByBundle(allInbox, bundleId).length;
 
-        var badgeText = '';
-        if (countMode === 'both') {
-            badgeText = unreadCount + '/' + totalCount;
-        } else if (countMode === 'total') {
-            badgeText = '' + totalCount;
-        } else if (countMode === 'unread') {
-            badgeText = '' + unreadCount;
-        }
+        // Handle empty/non-empty state
+        var labelSpan = tab.querySelector('span');
+        if (totalCount === 0) {
+            tab.classList.add('bundle-tab-empty');
+            var firstChar = Array.from(bundleName.replace(/^\s+/, ''))[0] || '?';
+            if (labelSpan) labelSpan.textContent = firstChar + '∅';
+            tab.title = bundleName + ' (empty)';
+        } else {
+            tab.classList.remove('bundle-tab-empty');
+            if (labelSpan && labelSpan.textContent.length <= 2) {
+                // Restore full name if it was collapsed
+                labelSpan.textContent = bundleName;
+            }
+            tab.title = bundleName + ' (' + totalCount + ' item' + (totalCount !== 1 ? 's' : '') + ')';
 
-        if (badgeText) {
-            var badge = document.createElement('span');
-            badge.className = 'bundle-unread-badge';
-            badge.textContent = badgeText;
-            tab.appendChild(badge);
+            if (countMode !== 'none') {
+                var unreadCount = _getBundleUnreadCount(bundleName, allInbox);
+                var badgeText = '';
+                if (countMode === 'both') {
+                    badgeText = unreadCount + '/' + totalCount;
+                } else if (countMode === 'total') {
+                    badgeText = '' + totalCount;
+                } else if (countMode === 'unread') {
+                    badgeText = '' + unreadCount;
+                }
+
+                if (badgeText) {
+                    var badge = document.createElement('span');
+                    badge.className = 'bundle-unread-badge';
+                    badge.textContent = badgeText;
+                    tab.appendChild(badge);
+                }
+            }
         }
     });
+
+    // Re-check overflow after count changes
+    _checkBundleOverflow();
 }
 
 /* ── Filtering ────────────────────────────────────────────────────────────── */
@@ -177,17 +198,15 @@ function _refreshBundleTabCounts() {
 function _filterByBundle(chits, activeBundle) {
     if (!activeBundle) return chits;
 
-    // "Everything Else" is the catch-all — returns emails with NO bundle tag
-    // Match by name OR by checking if it's the non-removable bundle
-    var isEverythingElse = (activeBundle === 'Everything Else');
-    if (!isEverythingElse && _emailBundlesData) {
-        var matchedBundle = _emailBundlesData.find(function(b) { return b.name === activeBundle; });
-        if (matchedBundle && (matchedBundle.removable === 0 || matchedBundle.removable === false || matchedBundle.removable === '0')) {
-            isEverythingElse = true;
-        }
+    // Determine if this is the catch-all bundle using the is_catch_all flag
+    // activeBundle is now a bundle ID
+    var isCatchAll = false;
+    if (_emailBundlesData) {
+        var matchedBundle = _emailBundlesData.find(function(b) { return b.id === activeBundle; });
+        if (matchedBundle && matchedBundle.is_catch_all) isCatchAll = true;
     }
 
-    if (isEverythingElse) {
+    if (isCatchAll) {
         return chits.filter(function(c) {
             var tags = c.tags || [];
             if (typeof tags === 'string') {
@@ -195,12 +214,12 @@ function _filterByBundle(chits, activeBundle) {
             }
             return !tags.some(function(t) {
                 var name = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
-                return name.indexOf('CWOC_System/Bundle/') === 0;
+                return name.indexOf('CWOC_System/BundleID/') === 0;
             });
         });
     }
 
-    var bundleTag = 'CWOC_System/Bundle/' + activeBundle;
+    var bundleTag = 'CWOC_System/BundleID/' + activeBundle;
     return chits.filter(function(c) {
         var tags = c.tags || [];
         if (typeof tags === 'string') {
@@ -220,16 +239,19 @@ function _filterByBundle(chits, activeBundle) {
  * @returns {number}
  */
 function _getBundleUnreadCount(bundleName, emailChits) {
-    // Check if this is the catch-all bundle (by name or by removable flag)
-    var isEverythingElse = (bundleName === 'Everything Else');
-    if (!isEverythingElse && _emailBundlesData) {
+    // Determine if this is the catch-all bundle using the is_catch_all flag
+    // Look up by name to find the bundle, then use its ID for tag matching
+    var isCatchAll = false;
+    var bundleId = null;
+    if (_emailBundlesData) {
         var matchedBundle = _emailBundlesData.find(function(b) { return b.name === bundleName; });
-        if (matchedBundle && (matchedBundle.removable === 0 || matchedBundle.removable === false || matchedBundle.removable === '0')) {
-            isEverythingElse = true;
+        if (matchedBundle) {
+            bundleId = matchedBundle.id;
+            if (matchedBundle.is_catch_all) isCatchAll = true;
         }
     }
 
-    if (isEverythingElse) {
+    if (isCatchAll) {
         return emailChits.filter(function(c) {
             var tags = c.tags || [];
             if (typeof tags === 'string') {
@@ -237,13 +259,14 @@ function _getBundleUnreadCount(bundleName, emailChits) {
             }
             var hasBundleTag = tags.some(function(t) {
                 var name = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
-                return name.indexOf('CWOC_System/Bundle/') === 0;
+                return name.indexOf('CWOC_System/BundleID/') === 0;
             });
             return !hasBundleTag && !c.email_read;
         }).length;
     }
 
-    var bundleTag = 'CWOC_System/Bundle/' + bundleName;
+    if (!bundleId) return 0;
+    var bundleTag = 'CWOC_System/BundleID/' + bundleId;
     return emailChits.filter(function(c) {
         var tags = c.tags || [];
         if (typeof tags === 'string') {
@@ -409,7 +432,7 @@ function _renderBundleTabs(container, bundles, emailChits) {
 
     // Validate active bundle still exists
     if (_emailActiveBundle && bundles && bundles.length > 0) {
-        var exists = bundles.some(function(b) { return b.name === _emailActiveBundle; });
+        var exists = bundles.some(function(b) { return b.id === _emailActiveBundle; });
         if (!exists) {
             _emailActiveBundle = null;
             try { localStorage.removeItem('cwoc_email_active_bundle'); } catch(e) {}
@@ -424,8 +447,8 @@ function _renderBundleTabs(container, bundles, emailChits) {
         var enabledBundles = bundles.filter(function(b) { return b.display_order !== -1; });
         var sortedBundles = enabledBundles.slice().sort(function(a, b) {
             if (!isMultiPlacementSort) {
-                if (a.name === 'Everything Else') return 1;
-                if (b.name === 'Everything Else') return -1;
+                if (a.is_catch_all) return 1;
+                if (b.is_catch_all) return -1;
             }
             return (a.display_order || 0) - (b.display_order || 0);
         });
@@ -435,8 +458,9 @@ function _renderBundleTabs(container, bundles, emailChits) {
             tab.className = 'bundle-tab';
             tab.dataset.bundleName = bundle.name;
             tab.dataset.bundleId = bundle.id || '';
+            if (bundle.is_catch_all) tab.dataset.catchAll = '1';
 
-            if (_emailActiveBundle === bundle.name) {
+            if (_emailActiveBundle === bundle.id) {
                 tab.classList.add('active');
             }
 
@@ -452,11 +476,6 @@ function _renderBundleTabs(container, bundles, emailChits) {
                 }
             }
 
-            // Tooltip with description
-            if (bundle.description) {
-                tab.title = bundle.description;
-            }
-
             // Tab label
             var labelSpan = document.createElement('span');
             labelSpan.textContent = bundle.name;
@@ -465,17 +484,19 @@ function _renderBundleTabs(container, bundles, emailChits) {
             // Count badge (unread, total, both, or none — based on setting)
             var countMode = (window._cwocSettings || {}).bundles_show_count || 'both';
             var allInbox = _getAllInboxEmailChits();
+            var bundleTotalCount = _filterByBundle(allInbox, bundle.id).length;
             console.log('[Bundles] COUNT for "' + bundle.name + '": countMode=' + countMode + ', allInbox.length=' + allInbox.length + ', removable=' + bundle.removable);
             var badgeText = '';
+            var unreadCount = 0;
+
             if (countMode !== 'none') {
-                var unreadCount = _getBundleUnreadCount(bundle.name, allInbox);
-                var totalCount = _filterByBundle(allInbox, bundle.name).length;
-                console.log('[Bundles]   unread=' + unreadCount + ', total=' + totalCount);
+                unreadCount = _getBundleUnreadCount(bundle.name, allInbox);
+                console.log('[Bundles]   unread=' + unreadCount + ', total=' + bundleTotalCount);
 
                 if (countMode === 'both') {
-                    badgeText = unreadCount + '/' + totalCount;
+                    badgeText = unreadCount + '/' + bundleTotalCount;
                 } else if (countMode === 'total') {
-                    badgeText = '' + totalCount;
+                    badgeText = '' + bundleTotalCount;
                 } else if (countMode === 'unread') {
                     badgeText = '' + unreadCount;
                 }
@@ -484,7 +505,16 @@ function _renderBundleTabs(container, bundles, emailChits) {
                 console.log('[Bundles]   countMode is none, skipping badge');
             }
 
-            if (badgeText) {
+            // Tooltip with full name + description
+            tab.title = bundle.name + (bundle.description ? ' — ' + bundle.description : '');
+            if (bundleTotalCount !== undefined) tab.title += ' (' + bundleTotalCount + ' item' + (bundleTotalCount !== 1 ? 's' : '') + ')';
+
+            // Collapse empty bundles to narrow bar with first char + ∅
+            if (bundleTotalCount === 0 && unreadCount === 0) {
+                tab.classList.add('bundle-tab-empty');
+                var firstChar = Array.from(bundle.name.replace(/^\s+/, ''))[0] || '?';
+                labelSpan.textContent = firstChar + '∅';
+            } else if (badgeText) {
                 var badge = document.createElement('span');
                 badge.className = 'bundle-unread-badge';
                 badge.textContent = badgeText;
@@ -499,13 +529,13 @@ function _renderBundleTabs(container, bundles, emailChits) {
                     _openBundleModal(bundle);
                     return;
                 }
-                _setActiveBundle(bundle.name);
+                _setActiveBundle(bundle.id);
             });
 
             // Always-on drag-and-drop
-            // "Everything Else" is only draggable when multi-placement is enabled
+            // Catch-all bundle is only draggable when multi-placement is enabled
             var isMultiPlacementDrag = (window._cwocSettings || {}).bundles_multi_placement === '1';
-            if (bundle.name !== 'Everything Else' || isMultiPlacementDrag) {
+            if (!bundle.is_catch_all || isMultiPlacementDrag) {
                 tab.setAttribute('draggable', 'true');
                 tab.addEventListener('dragstart', _bundleReorderDragStart);
                 tab.addEventListener('dragend', _bundleReorderDragEnd);
@@ -545,16 +575,57 @@ function _renderBundleTabs(container, bundles, emailChits) {
         }
     });
     container.appendChild(addBtn);
+
+    // After rendering, check if bundles need to switch to scroll mode
+    // Use requestAnimationFrame to ensure layout is computed
+    requestAnimationFrame(function() {
+        _checkBundleOverflow(container);
+        // Initialize drop targets for email drag-drop
+        if (typeof _initBundleDropTargets === 'function') _initBundleDropTargets();
+    });
 }
 
-/* ── Active Bundle Management ─────────────────────────────────────────────── */
+/**
+ * Check if bundle tabs are too narrow and switch to scroll mode if needed.
+ * On desktop: bundles shrink to fit, only scrolling when they'd be < ~38px wide.
+ * On mobile (≤600px): CSS forces scroll mode directly.
+ */
+function _checkBundleOverflow(row) {
+    if (!row) row = document.getElementById('bundleTabsRow');
+    if (!row) return;
+
+    // On mobile, CSS handles it
+    if (window.innerWidth <= 600) return;
+
+    var allTabs = Array.from(row.querySelectorAll('.bundle-tab'));
+    var nonEmptyTabs = allTabs.filter(function(t) { return !t.classList.contains('bundle-tab-empty'); });
+    if (nonEmptyTabs.length === 0) return;
+
+    // Reset to shrink mode
+    row.classList.remove('bundle-scroll-mode');
+    void row.offsetWidth;
+
+    // Check average width of non-empty tabs
+    var rowWidth = row.clientWidth;
+    // Subtract space for empty tabs (2em ≈ 32px each) and the + button (~40px)
+    var emptyCount = allTabs.length - nonEmptyTabs.length;
+    var addBtn = row.querySelector('.bundle-add-btn');
+    var addBtnWidth = addBtn ? addBtn.offsetWidth + 8 : 40;
+    var available = rowWidth - (emptyCount * 32) - addBtnWidth;
+    var avgWidth = available / nonEmptyTabs.length;
+
+    if (avgWidth < 38) {
+        // Too narrow — switch to scroll mode with full titles
+        row.classList.add('bundle-scroll-mode');
+    }
+}
 
 /**
  * Set the active bundle and re-render the email view.
  * @param {string|null} bundleName — bundle name or null to clear
  */
-function _setActiveBundle(bundleName) {
-    _emailActiveBundle = bundleName;
+function _setActiveBundle(bundleId) {
+    _emailActiveBundle = bundleId;
 
     // Persist to localStorage
     _persistActiveBundle();
@@ -585,7 +656,7 @@ function _persistActiveBundle() {
 function _updateBundleTabActiveStates() {
     var tabs = document.querySelectorAll('.bundle-tab');
     tabs.forEach(function(tab) {
-        if (tab.dataset.bundleName === _emailActiveBundle) {
+        if (tab.dataset.bundleId === _emailActiveBundle) {
             tab.classList.add('active');
         } else {
             tab.classList.remove('active');
@@ -1071,7 +1142,7 @@ function _showBundleContextMenu(bundle, x, y) {
     var menu = document.createElement('div');
     menu.className = 'bundle-context-menu';
 
-    var isEverythingElse = (bundle.name === 'Everything Else');
+    var isEverythingElse = !!bundle.is_catch_all;
     var isAutoBundle = (bundle.removable === 0 || bundle.removable === false || bundle.removable === '0') && !isEverythingElse;
 
     // Edit option (always shown)
@@ -1351,8 +1422,8 @@ function _enableBundleReorder() {
     var draggedTab = null;
 
     tabs.forEach(function(tab) {
-        // Don't allow dragging "Everything Else" (always last)
-        if (tab.dataset.bundleName === 'Everything Else') return;
+        // Don't allow dragging the catch-all bundle (always last)
+        if (tab.dataset.catchAll === '1') return;
 
         tab.setAttribute('draggable', 'true');
 
@@ -1362,9 +1433,9 @@ function _enableBundleReorder() {
         tab.addEventListener('drop', _bundleReorderDrop);
     });
 
-    // Also allow dropping on "Everything Else" tab (to place before it)
+    // Also allow dropping on the catch-all tab (to place before it)
     tabs.forEach(function(tab) {
-        if (tab.dataset.bundleName === 'Everything Else') {
+        if (tab.dataset.catchAll === '1') {
             tab.addEventListener('dragover', _bundleReorderDragOver);
             tab.addEventListener('drop', _bundleReorderDrop);
         }
@@ -1437,7 +1508,7 @@ function _bundleReorderDrop(e) {
     var row = document.getElementById('bundleTabsRow');
     if (!row) return;
 
-    // Collect current tab order (excluding "Everything Else" and "+" button)
+    // Collect current tab order (excluding "+" button)
     var allTabs = Array.from(row.querySelectorAll('.bundle-tab'));
     var bundleNames = allTabs.map(function(t) { return t.dataset.bundleName; });
 

@@ -11,9 +11,11 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import com.cwoc.app.data.sync.AppLifecycleObserver
 import com.cwoc.app.data.sync.SyncOrchestrator
 import com.cwoc.app.notification.NotificationChannelManager
 import com.cwoc.app.notification.NotificationScheduler
+import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,9 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class CwocApplication : Application(), Configuration.Provider, ImageLoaderFactory {
+
+    @Inject
+    lateinit var appLifecycleObserver: AppLifecycleObserver
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -123,6 +128,15 @@ class CwocApplication : Application(), Configuration.Provider, ImageLoaderFactor
             }
         } catch (e: Exception) {
             Log.e("CWOC_APP", "Failed to launch rescheduleAll: ${e.message}", e)
+        }
+
+        // Register AppLifecycleObserver to ensure SyncForegroundService is running
+        // whenever the app comes to the foreground (recovery from system kill)
+        try {
+            Log.d("CWOC_APP", "Application onCreate — registering AppLifecycleObserver")
+            ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
+        } catch (e: Exception) {
+            Log.e("CWOC_APP", "Failed to register AppLifecycleObserver: ${e.message}", e)
         }
     }
 

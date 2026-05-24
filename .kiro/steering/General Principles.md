@@ -2,11 +2,36 @@
 inclusion: always
 ---
 
+# #1 ABSOLUTE RULE: DO THE TASK I ASSIGN. PERIOD.
+**You do NOT decide what is a priority. You do NOT decide to defer, postpone, or skip a task I give you. You do NOT unilaterally declare something a "follow-up task" or "separate change."**
+
+When I say "do X," you do X. Right now. Not later. Not "after this other thing." Not "as a follow-up." NOW.
+
+- If I ask you to add a feature, you add it in the current set of changes.
+- If I ask you to change something, you change it immediately.
+- You do not get to decide that something "can wait" or "should be separate."
+- The ONLY acceptable reason to not do a task immediately is if you genuinely cannot (missing information, ambiguous requirement). In that case, ASK — don't defer.
+
+**"I'll add that as a follow-up task"** = job left undone = unacceptable. Never say this. Never do this.
+
+# NEVER ASSUME: 
+Do not assume you know what platform I'm talking about on the explicitly say one of the phrases directly linked to a platform. Web or app or mobile. Etc..
+
 # TERMINOLOGY: "app" = Android App ONLY
 When the user says "app," "the app," or "in the app," they ALWAYS mean the **Android mobile app** (Kotlin code under `android/`). Never the web version. Never the whole application. "App" is exclusively the Android app. If the user means the web version, they will say "web," "browser," "frontend," or "site."
 
 # TERMINOLOGY: "mobile" = Mobile Web Browser ONLY
 When the user says "mobile," "on mobile," or "the mobile version," they ALWAYS mean the **mobile web browser** (the same frontend code rendered on a phone/tablet browser). Never the Android app. "Mobile" refers to responsive/mobile-browser behavior of the web frontend. If the user means the Android app, they will say "app," "the app," or "Android."
+
+# DEBUGGING: LOGS FIRST, ALWAYS
+**When investigating any bug or unexpected behavior, get logs IMMEDIATELY.** Do not spend time guessing, theorizing, or tracing through code speculatively. Logs tell you what's actually happening. Guessing wastes time and context.
+
+**Debugging priority order:**
+1. **Get logs.** Ask the user to run `bash fetch-logs.sh` (or hit the log endpoints directly) so you can see what actually happened. If the sandbox can't reach the server, ask the user to fetch them.
+2. **Read the logs.** Look at what the server/client actually did — errors, counts, flow.
+3. **Only then** trace through code to understand WHY the logs show what they show.
+
+**Never guess to solve a problem unless you've exhausted every other option.** If logs are available, use them. If they're not available, ask for them. Don't pick through code building theories when the answer is sitting in a log file.
 
 # NEVER ASK FOR LOGCAT — USE THE APP'S CLIENT LOG
 The user runs the app on a physical phone with no USB debugging. There is NO logcat access. The app has a built-in client logging system (`/api/client-log`) and a clipboard-paste diagnostic on startup. When debugging the app:
@@ -261,18 +286,25 @@ Ensure that any time you change or add a feature that has or should have, docume
 ## Versioning
 
 Version numbering is: 
-sYYYYMMDD-HHMM for the server (in src/VERSION), mYYYYMMDD-HHMM for mobile (versionName in android/app/build.gradle.kts). Time is in format HHMM.
+`cwoc_server-YYYYMMDD_HHMM` for the server (in src/VERSION), `cwoc_app-YYYYMMDD_HHMM` for mobile (versionName in android/app/build.gradle.kts). Time is in format HHMM.
 
 As the last step of any change, call the real time and use that to update the version number every time you make changes.
 
-NEVER guess the time! always run date "+%Y%m%d.%H%M", and use the returned value. 
+NEVER guess the time! always run date "+%Y%m%d_%H%M", and use the returned value. Prefix with `cwoc_server-` or `cwoc_app-` as appropriate.
 
-ALSO: only do this ONCE at the VERY END of any set of work/tasks. Not multiple times throught the task.
+ALSO: only do this ONCE at the VERY END of any set of work/tasks. Not multiple times throughout the task.
 
 **Which version to bump:** At the end of every set of changes, ALWAYS tell the user which version(s) need updating:
 - Server-only changes → bump src/VERSION
 - Mobile-only changes → bump versionName in android/app/build.gradle.kts (and increment versionCode if it's a release)
 - Changes to both → bump both
+
+**LATEST file:** After bumping version(s), update `/LATEST` in the project root. It contains two lines:
+```
+cwoc_server-YYYYMMDD_HHMM
+cwoc_app-YYYYMMDD_HHMM
+```
+Only update the line(s) for the platform(s) that changed. The other line stays at its previous value.
 
 ## The Mega Index
 There is an index. It contains a complete map of where every function is, and what it does. If this is helpful, use it for finding where to do work. Anytime you change something that would impact this, make sure you update the index. But only at the end of the task.
@@ -283,7 +315,7 @@ CWOC is broken up into a bunch of code files. Each one is very tight and directe
 ## Release Notes
 Release notes are collated into **daily files** named `release_notes-YYYYMMDD.md` in `documents/release_notes/`.
 
-**Format:** Each entry within a daily file uses a `## YYYYMMDD.HHMM` header (the version number), followed by a brief description. Entries are ordered reverse-chronologically (newest at top).
+**Format:** Each entry within a daily file uses a `## cwoc_server-YYYYMMDD_HHMM` header (the version number), followed by a brief description. Entries are ordered reverse-chronologically (newest at top).
 
 **When completing a version:**
 1. Determine today's date. If `release_notes-YYYYMMDD.md` already exists for today, prepend the new entry at the top.

@@ -35,7 +35,7 @@ import javax.inject.Inject
 // ─── Profile Data Model ─────────────────────────────────────────────────────────
 
 data class UserProfile(
-    val id: String? = null,
+    @SerializedName("user_id") val id: String? = null,
     val username: String? = null,
     @SerializedName("display_name") val displayName: String? = null,
     val email: String? = null,
@@ -65,9 +65,9 @@ data class UserProfile(
  *   - any other value → edit mode (loads existing entity from Room)
  *
  * Profile mode:
- *   - When userId is provided, fetches user profile from /api/auth/users/{userId}/profile
+ *   - When userId is provided, fetches user profile from /api/auth/user-profile/{userId}
  *   - Read-only for other users' profiles, editable for self
- *   - Save calls PUT /api/auth/users/{userId}/profile
+ *   - Save calls PUT /api/auth/profile (updates the authenticated user's own profile)
  *
  * On save (contact mode):
  *   - Detects changed fields via detectContactChangedFields()
@@ -229,7 +229,7 @@ class ContactEditorViewModel @Inject constructor(
                 val serverUrl = prefs.getString("server_url", null)
                 if (serverUrl.isNullOrBlank()) return@withContext null
 
-                val url = serverUrl.trimEnd('/') + "/api/auth/users/$userId/profile"
+                val url = serverUrl.trimEnd('/') + "/api/auth/user-profile/$userId"
                 val request = Request.Builder().url(url).get().build()
                 val response = okHttpClient.newCall(request).execute()
 
@@ -287,7 +287,7 @@ class ContactEditorViewModel @Inject constructor(
                 )
 
                 val json = gson.toJson(profileData)
-                val url = serverUrl.trimEnd('/') + "/api/auth/users/$userId/profile"
+                val url = serverUrl.trimEnd('/') + "/api/auth/profile"
                 val requestBody = json.toRequestBody("application/json".toMediaType())
                 val request = Request.Builder().url(url).put(requestBody).build()
                 val response = okHttpClient.newCall(request).execute()

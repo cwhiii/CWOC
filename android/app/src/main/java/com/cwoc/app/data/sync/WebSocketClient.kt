@@ -24,6 +24,15 @@ import javax.inject.Inject
 private const val TAG = "CWOC_WS"
 
 /**
+ * Connection state for the WebSocket, observed by SyncForegroundService for notification updates.
+ */
+enum class WebSocketConnectionState {
+    CONNECTED,
+    RECONNECTING,
+    DISCONNECTED
+}
+
+/**
  * Message received from the WebSocket server.
  * The server sends JSON like: {"type": "change", "entity": "chit", "id": "..."}
  */
@@ -47,22 +56,31 @@ interface WebSocketClient {
     /** Current connection state as a hot observable. */
     val isConnected: StateFlow<Boolean>
 
+    /** Connection state for notification updates (CONNECTED, RECONNECTING, DISCONNECTED). */
+    val connectionState: StateFlow<WebSocketConnectionState>
+
     /** Establish a WebSocket connection to /ws/sync. */
     fun connect()
 
     /** Gracefully disconnect the WebSocket (close code 1000). */
     fun disconnect()
+
+    /** Reset backoff delay, reconnect attempts, and reconnecting flag. Called on connectivity restore. */
+    fun resetBackoff()
 }
 
 /**
  * Implementation of [WebSocketClient] using OkHttp's WebSocket API.
  *
  * Features:
- * - Exponential backoff reconnect on connection failure (2s, 4s, 8s, 16s, 32s, 60s cap)
+ * - Exponential backoff reconnect on connection failure (1s, 2s, 4s, 8s, 16s, 30s cap)
+ * - Maximum 10 consecutive reconnection attempts before stopping
  * - Resets backoff on successful connection
  * - Graceful disconnect with close code 1000
- * - Auto-reconnect on unexpected close (unless explicitly disconnected)
+ * - Auto-reconnect on unexpected close (unless explicitly disconnected or permanently disabled)
+ * - Detects 401 auth failure and permanently disables reconnection
  * - Emits parsed WebSocketMessage objects on the messages Flow
+ * - Emits WebSocketConnectionState for notification updates
  *
  * Takes OkHttpClient and SharedPreferences as constructor parameters for Hilt injection.
  */
@@ -75,6 +93,9 @@ class WebSocketClientImpl @Inject constructor(
 
     private val _isConnected = MutableStateFlow(false)
     override val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _connectionState = MutableStateFlow(WebSocketConnectionState.DISCONNECTED)
+    override val connectionState: StateFlow<WebSocketConnectionState> = _connectionState.asStateFlow()
 
     private val _messages = MutableSharedFlow<WebSocketMessage>(extraBufferCapacity = 64)
     override val messages: Flow<WebSocketMessage> = _messages.asSharedFlow()
@@ -91,17 +112,37 @@ class WebSocketClientImpl @Inject constructor(
     /** Whether a reconnect attempt is currently scheduled/in-progress. */
     private var reconnecting = false
 
+    /** Number of consecutive reconnection attempts. Resets on successful connection. */
+    private var reconnectAttempts: Int = 0
+
+    /** Set to true on 401 auth failure — permanently stops reconnection. */
+    private var permanentlyDisabled: Boolean = false
+
     companion object {
-        private const val INITIAL_BACKOFF_MS = 2_000L
-        private const val MAX_BACKOFF_MS = 60_000L
+        private const val INITIAL_BACKOFF_MS = 1_000L
+        private const val MAX_BACKOFF_MS = 30_000L
+        private const val MAX_RECONNECT_ATTEMPTS = 10
         private const val NORMAL_CLOSE_CODE = 1000
         private const val NORMAL_CLOSE_REASON = "Client disconnect"
     }
 
     override fun connect() {
+        val token = prefs.getString("device_token", null)
+        if (token.isNullOrBlank()) {
+            Log.w(TAG, "Cannot connect WebSocket: no device_token configured")
+            return
+        }
+
+        // If already connected or a connection attempt is in progress, skip
+        if (webSocket != null) {
+            Log.d(TAG, "WebSocket already active (connected or connecting) — skipping duplicate connect()")
+            return
+        }
         intentionalDisconnect = false
         currentBackoffMs = INITIAL_BACKOFF_MS
         reconnecting = false
+        reconnectAttempts = 0
+        permanentlyDisabled = false
         establishConnection()
     }
 
@@ -111,7 +152,15 @@ class WebSocketClientImpl @Inject constructor(
         webSocket?.close(NORMAL_CLOSE_CODE, NORMAL_CLOSE_REASON)
         webSocket = null
         _isConnected.value = false
+        _connectionState.value = WebSocketConnectionState.DISCONNECTED
         Log.d(TAG, "Disconnected gracefully (code $NORMAL_CLOSE_CODE)")
+    }
+
+    override fun resetBackoff() {
+        currentBackoffMs = INITIAL_BACKOFF_MS
+        reconnectAttempts = 0
+        reconnecting = false
+        Log.d(TAG, "Backoff reset: delay=${INITIAL_BACKOFF_MS}ms, attempts=0")
     }
 
     /**
@@ -151,7 +200,9 @@ class WebSocketClientImpl @Inject constructor(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket connected to $url")
                 _isConnected.value = true
+                _connectionState.value = WebSocketConnectionState.CONNECTED
                 currentBackoffMs = INITIAL_BACKOFF_MS // Reset backoff on success
+                reconnectAttempts = 0
                 reconnecting = false
             }
 
@@ -176,6 +227,8 @@ class WebSocketClientImpl @Inject constructor(
                 // Auto-reconnect on unexpected close (unless user explicitly disconnected)
                 if (!intentionalDisconnect) {
                     scheduleReconnect()
+                } else {
+                    _connectionState.value = WebSocketConnectionState.DISCONNECTED
                 }
             }
 
@@ -184,9 +237,19 @@ class WebSocketClientImpl @Inject constructor(
                 _isConnected.value = false
                 this@WebSocketClientImpl.webSocket = null
 
+                // Detect 401 auth failure — permanently disable reconnection
+                if (response?.code == 401) {
+                    Log.e(TAG, "WebSocket 401 authentication failure — permanently disabling reconnection")
+                    permanentlyDisabled = true
+                    _connectionState.value = WebSocketConnectionState.DISCONNECTED
+                    return
+                }
+
                 // Auto-reconnect on failure (unless user explicitly disconnected)
                 if (!intentionalDisconnect) {
                     scheduleReconnect()
+                } else {
+                    _connectionState.value = WebSocketConnectionState.DISCONNECTED
                 }
             }
         })
@@ -194,14 +257,24 @@ class WebSocketClientImpl @Inject constructor(
 
     /**
      * Schedules a reconnect attempt with exponential backoff.
-     * Backoff sequence: 2s, 4s, 8s, 16s, 32s, 60s (capped).
+     * Backoff sequence: 1s, 2s, 4s, 8s, 16s, 30s (capped).
+     * Stops after MAX_RECONNECT_ATTEMPTS (10) consecutive failures or if permanently disabled.
      */
     private fun scheduleReconnect() {
-        if (reconnecting || intentionalDisconnect) return
+        if (reconnecting || intentionalDisconnect || permanentlyDisabled) return
+
+        reconnectAttempts++
+        if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+            Log.w(TAG, "Max reconnect attempts ($MAX_RECONNECT_ATTEMPTS) reached — stopping automatic reconnection")
+            _connectionState.value = WebSocketConnectionState.DISCONNECTED
+            return
+        }
+
         reconnecting = true
+        _connectionState.value = WebSocketConnectionState.RECONNECTING
 
         val delayMs = currentBackoffMs
-        Log.d(TAG, "Scheduling reconnect in ${delayMs}ms")
+        Log.d(TAG, "Scheduling reconnect in ${delayMs}ms (attempt $reconnectAttempts/$MAX_RECONNECT_ATTEMPTS)")
 
         scope.launch {
             delay(delayMs)
@@ -209,7 +282,7 @@ class WebSocketClientImpl @Inject constructor(
             // Double the backoff for next attempt, capped at MAX_BACKOFF_MS
             currentBackoffMs = (currentBackoffMs * 2).coerceAtMost(MAX_BACKOFF_MS)
 
-            if (!intentionalDisconnect) {
+            if (!intentionalDisconnect && !permanentlyDisabled) {
                 reconnecting = false
                 establishConnection()
             } else {

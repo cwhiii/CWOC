@@ -79,16 +79,24 @@ async def get_client_log():
 
 
 @router.get("/api/server-log")
-async def get_server_log():
-    """Return the last 200 lines from the cwoc systemd service journal."""
+async def get_server_log(grep: str = None):
+    """Return the last lines from the cwoc systemd service journal.
+
+    Optional query param `grep` filters lines (case-insensitive substring match).
+    When grep is provided, fetches more lines (5000) to find relevant entries.
+    """
     try:
+        n_lines = "5000" if grep else "500"
         result = subprocess.run(
-            ["journalctl", "-u", "cwoc", "--no-pager", "-n", "500"],
+            ["journalctl", "-u", "cwoc", "--no-pager", "-n", n_lines],
             capture_output=True,
             text=True,
             timeout=10
         )
         lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        if grep:
+            grep_lower = grep.lower()
+            lines = [l for l in lines if grep_lower in l.lower()]
         return {"lines": lines, "count": len(lines)}
 
     except FileNotFoundError:

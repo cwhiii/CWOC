@@ -916,20 +916,20 @@ function _executeAddToBundle(chit, overlay) {
     
     // Immediately move THIS email to the target bundle (instant feedback)
     // Strip old bundle tags and add the new one
-    var bundleName = result.bundle_name;
-    if (bundleName && chit.id) {
+    var bundleId = result.bundle_id;
+    if (bundleId && chit.id) {
       fetch('/api/chit/' + encodeURIComponent(chit.id))
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(fullChit) {
           if (!fullChit) return;
           var tags = fullChit.tags || [];
           if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
-          // Strip all existing bundle tags
+          // Strip all existing bundle tags (both old name-based and new ID-based)
           tags = tags.filter(function(t) {
-            return !(typeof t === 'string' && t.indexOf('CWOC_System/Bundle/') === 0);
+            return !(typeof t === 'string' && (t.indexOf('CWOC_System/Bundle/') === 0 || t.indexOf('CWOC_System/BundleID/') === 0));
           });
-          // Add the new bundle tag
-          tags.push('CWOC_System/Bundle/' + bundleName);
+          // Add the new bundle tag (by ID)
+          tags.push('CWOC_System/BundleID/' + bundleId);
           fullChit.tags = tags;
           // Serialize email array fields back to strings for PUT
           ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
@@ -2276,102 +2276,293 @@ if (typeof document !== 'undefined') {
 }
 
 
-// ── Sync Client (WebSocket primary, HTTP polling fallback) ───────────────────
-// Provides cross-device real-time sync for alarms, timers, dismiss/snooze state.
+// ── Sync Client (Visibility-Aware Lifecycle) ─────────────────────────────────
+// WebSocket primary, HTTP polling fallback. Disconnects when tab is hidden to
+// conserve battery. Reconnects with catch-up sync when tab becomes visible.
 
 window._cwocSyncWs = null;
-window._cwocSyncHandlers = {}; // type -> [callback, ...]
-window._cwocSyncReconnectDelay = 1000;
-window._cwocSyncMode = 'none'; // 'ws' | 'poll' | 'none'
-window._cwocSyncPollId = 0; // last seen poll message ID
-window._cwocSyncPollTimer = null;
-window._cwocSyncRetries = 0; // track reconnect attempts
-window._cwocSyncMaxRetries = 3; // max retries before falling back to polling
-window._cwocSyncWasConnected = false; // track if WS ever connected this session
+window._cwocSyncHandlers = {};          // type -> [callback, ...] (unchanged)
+window._cwocSyncMode = 'none';          // 'ws' | 'poll' | 'hidden' | 'none'
+window._cwocSyncPollId = 0;             // last seen message ID (used for catch-up)
+window._cwocSyncPollTimer = null;       // setTimeout ID for polling
+window._cwocSyncRetries = 0;            // WS reconnect attempt counter
+window._cwocSyncMaxRetries = 3;         // max retries before polling fallback
+window._cwocSyncHiddenByVisibility = false; // true if WS was closed due to tab hide
+window._cwocSyncPollFailCount = 0;      // consecutive poll failures
+window._cwocSyncHiddenPollInterval = 0; // 0 = no polling when hidden (configurable)
+window._cwocSyncHasVisibilityAPI = (typeof document !== 'undefined' && typeof document.visibilityState !== 'undefined');
 
-function initSyncWebSocket() {
-  if (window._cwocSyncMode === 'poll') return; // already fell back to polling
+/**
+ * Entry point. Checks Visibility API, connects WS, registers visibility listener.
+ */
+function _syncInit() {
+  if (!window._cwocSyncHasVisibilityAPI) {
+    console.warn('[Sync] Page Visibility API unavailable — visibility-based battery optimization is disabled');
+  }
+  _syncConnect();
+  if (window._cwocSyncHasVisibilityAPI) {
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') {
+        _syncOnHidden();
+      } else if (document.visibilityState === 'visible') {
+        _syncOnVisible();
+      }
+    });
+  }
+}
+
+/**
+ * Open WebSocket connection. Responds to __ping with __pong, tracks __sync_id.
+ */
+function _syncConnect() {
   if (window._cwocSyncWs && window._cwocSyncWs.readyState <= 1) return;
+  if (window._cwocSyncHiddenByVisibility) return; // don't connect while hidden
 
   var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   var url = proto + '//' + window.location.host + '/ws/sync';
-  console.debug('CWOC Sync: trying WebSocket', url);
+  console.debug('[Sync] Connecting WebSocket:', url);
 
   try {
     var ws = new WebSocket(url);
     window._cwocSyncWs = ws;
 
     ws.onopen = function() {
-      console.log('CWOC Sync: WebSocket connected');
+      console.log('[Sync] WebSocket connected');
       window._cwocSyncMode = 'ws';
-      window._cwocSyncWasConnected = true;
       window._cwocSyncRetries = 0;
-      window._cwocSyncReconnectDelay = 1000;
-      // Stop polling if it was running
-      if (window._cwocSyncPollTimer) { clearInterval(window._cwocSyncPollTimer); window._cwocSyncPollTimer = null; }
+      window._cwocSyncPollFailCount = 0;
+      _syncStopPolling();
+      _syncHideDisconnected();
     };
 
     ws.onmessage = function(event) {
       try {
         var msg = JSON.parse(event.data);
+        // Respond to server ping with pong
+        if (msg.type === '__ping') {
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: '__pong' }));
+          }
+          return;
+        }
+        // Track __sync_id for catch-up sync
+        if (msg.__sync_id && msg.__sync_id > window._cwocSyncPollId) {
+          window._cwocSyncPollId = msg.__sync_id;
+        }
         _dispatchSyncMessage(msg);
-      } catch (e) { console.error('Sync WS parse error:', e); }
+      } catch (e) { console.error('[Sync] WS parse error:', e); }
     };
 
     ws.onclose = function() {
       window._cwocSyncWs = null;
-      if (window._cwocSyncMode === 'ws' || window._cwocSyncWasConnected) {
-        // Was connected (or previously connected) — try to reconnect
-        window._cwocSyncMode = 'none';
-        window._cwocSyncRetries++;
-        if (window._cwocSyncRetries <= window._cwocSyncMaxRetries) {
-          console.debug('CWOC Sync: WebSocket disconnected, reconnecting (attempt ' + window._cwocSyncRetries + '/' + window._cwocSyncMaxRetries + ')');
-          setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
-          window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
-        } else {
-          console.debug('CWOC Sync: WebSocket reconnect failed after ' + window._cwocSyncMaxRetries + ' attempts, falling back to HTTP polling');
-          _startSyncPolling();
-        }
+      // If closed because tab was hidden, just set mode and return
+      if (window._cwocSyncHiddenByVisibility) {
+        window._cwocSyncMode = 'hidden';
+        return;
+      }
+      // Otherwise retry up to 3 times, then fall back to 30s polling
+      window._cwocSyncMode = 'none';
+      window._cwocSyncRetries++;
+      if (window._cwocSyncRetries <= window._cwocSyncMaxRetries) {
+        console.debug('[Sync] WebSocket disconnected, reconnecting (attempt ' + window._cwocSyncRetries + '/' + window._cwocSyncMaxRetries + ')');
+        setTimeout(_syncConnect, 2000);
       } else {
-        // Never connected this session — fall back to polling
-        console.debug('CWOC Sync: WebSocket failed, falling back to HTTP polling');
-        _startSyncPolling();
+        console.debug('[Sync] WebSocket reconnect failed after ' + window._cwocSyncMaxRetries + ' attempts, falling back to HTTP polling');
+        _syncStartPolling(30000);
       }
     };
 
     ws.onerror = function() { /* onclose handles it */ };
   } catch (e) {
-    console.debug('CWOC Sync: WebSocket not available, using HTTP polling');
-    _startSyncPolling();
+    console.debug('[Sync] WebSocket not available, using HTTP polling');
+    _syncStartPolling(30000);
   }
 }
 
-function _startSyncPolling() {
-  if (window._cwocSyncPollTimer) return; // already polling
-  window._cwocSyncMode = 'poll';
-  // Get initial poll ID
-  fetch('/api/sync/poll?after=0').then(function(r) { return r.json(); }).then(function(d) {
-    window._cwocSyncPollId = d.last_id || 0;
-  }).catch(function() {});
-  // Poll every 2 seconds
-  window._cwocSyncPollTimer = setInterval(_pollSync, 2000);
-  console.debug('CWOC Sync: HTTP polling started');
+/**
+ * Handle tab becoming hidden. Close WS, stop polling, optionally start hidden poll.
+ */
+function _syncOnHidden() {
+  window._cwocSyncHiddenByVisibility = true;
+  // Close WS with normal closure code so onclose doesn't trigger reconnect
+  if (window._cwocSyncWs && window._cwocSyncWs.readyState <= 1) {
+    window._cwocSyncWs.close(1000, 'tab hidden');
+  }
+  _syncStopPolling();
+  // Optionally start hidden polling if configured
+  if (window._cwocSyncHiddenPollInterval > 0) {
+    var interval = Math.max(60000, Math.min(window._cwocSyncHiddenPollInterval, 3600000));
+    _syncStartPolling(interval);
+  }
 }
 
-function _pollSync() {
+/**
+ * Handle tab becoming visible. Reconnect, catch up, reconcile alarms.
+ */
+function _syncOnVisible() {
+  window._cwocSyncHiddenByVisibility = false;
+  window._cwocSyncRetries = 0;
+  _syncStopPolling();
+  _syncCatchUp();
+  _syncConnect();
+  _syncReconcileAlarms();
+}
+
+/**
+ * Fetch missed messages from /api/sync/poll?after=lastId.
+ * Advances the poll ID and dispatches any queued messages to handlers.
+ * If missed flag is set (long absence, messages evicted), triggers a soft refresh
+ * by dispatching all data-change events — no hard page reload.
+ */
+function _syncCatchUp() {
   fetch('/api/sync/poll?after=' + window._cwocSyncPollId)
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(function(d) {
-      if (d.last_id) window._cwocSyncPollId = d.last_id;
+      // Always advance the poll ID so we don't re-fetch these messages
+      if (d.last_id && d.last_id > window._cwocSyncPollId) {
+        window._cwocSyncPollId = d.last_id;
+      }
+      if (d.missed) {
+        console.debug('[Sync] Missed messages detected — triggering soft refresh');
+        _syncFullRefresh();
+        return;
+      }
+      // Dispatch queued messages to handlers (dashboard does soft re-render,
+      // other pages only reload if the change is relevant to them)
       if (d.messages && d.messages.length > 0) {
-        d.messages.forEach(function(msg) { _dispatchSyncMessage(msg); });
+        d.messages.forEach(function(msg) {
+          _dispatchSyncMessage(msg);
+        });
       }
     })
-    .catch(function() {});
+    .catch(function(e) {
+      console.warn('[Sync] Catch-up failed, retrying once:', e);
+      setTimeout(function() {
+        fetch('/api/sync/poll?after=' + window._cwocSyncPollId)
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function(d) {
+            if (d.last_id && d.last_id > window._cwocSyncPollId) {
+              window._cwocSyncPollId = d.last_id;
+            }
+            if (d.missed) {
+              _syncFullRefresh();
+              return;
+            }
+            if (d.messages && d.messages.length > 0) {
+              d.messages.forEach(function(msg) {
+                _dispatchSyncMessage(msg);
+              });
+            }
+          })
+          .catch(function() {
+            console.warn('[Sync] Catch-up retry failed — skipping (will sync on next real-time message)');
+          });
+      }, 1000);
+    });
 }
 
+/**
+ * Trigger soft data reload by dispatching all data-change events.
+ * Each page's syncOn handlers will re-fetch their own data without a hard reload.
+ * The dashboard does soft re-renders (fetchChits, etc.). Other pages only reload
+ * if the change is actually relevant to them (e.g., chit changes on the editor).
+ */
+function _syncFullRefresh() {
+  console.debug('[Sync] Full refresh — dispatching data-change events');
+  _dispatchSyncMessage({ type: 'chits_changed' });
+  _dispatchSyncMessage({ type: 'settings_changed' });
+  _dispatchSyncMessage({ type: 'contacts_changed' });
+}
+
+/**
+ * Check if we're on the dashboard page.
+ */
+function _syncIsDashboard() {
+  var p = window.location.pathname;
+  return p === '/' || p === '/frontend/html/index.html' || p.endsWith('/index.html');
+}
+
+/**
+ * Start HTTP polling at the given interval using setTimeout chain.
+ */
+function _syncStartPolling(interval) {
+  if (window._cwocSyncPollTimer) return; // already polling
+  window._cwocSyncMode = 'poll';
+  console.debug('[Sync] HTTP polling started (' + (interval / 1000) + 's interval)');
+
+  function _poll() {
+    fetch('/api/sync/poll?after=' + window._cwocSyncPollId)
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(d) {
+        window._cwocSyncPollFailCount = 0;
+        _syncHideDisconnected();
+        if (d.last_id && d.last_id > window._cwocSyncPollId) {
+          window._cwocSyncPollId = d.last_id;
+        }
+        if (d.missed) {
+          _syncFullRefresh();
+        } else if (d.messages && d.messages.length > 0) {
+          d.messages.forEach(function(msg) {
+            if (msg.__sync_id && msg.__sync_id > window._cwocSyncPollId) {
+              window._cwocSyncPollId = msg.__sync_id;
+            }
+            _dispatchSyncMessage(msg);
+          });
+        }
+      })
+      .catch(function() {
+        window._cwocSyncPollFailCount++;
+        console.warn('[Sync] Poll failed (' + window._cwocSyncPollFailCount + ' consecutive)');
+        if (window._cwocSyncPollFailCount >= 3) {
+          _syncShowDisconnected();
+        }
+      })
+      .finally(function() {
+        // Schedule next poll only if still in poll mode
+        if (window._cwocSyncMode === 'poll') {
+          window._cwocSyncPollTimer = setTimeout(_poll, interval);
+        }
+      });
+  }
+
+  window._cwocSyncPollTimer = setTimeout(_poll, interval);
+}
+
+/**
+ * Stop HTTP polling. Clears the setTimeout.
+ */
+function _syncStopPolling() {
+  if (window._cwocSyncPollTimer) {
+    clearTimeout(window._cwocSyncPollTimer);
+    window._cwocSyncPollTimer = null;
+  }
+}
+
+/**
+ * Reconcile alarms immediately on tab return.
+ */
+function _syncReconcileAlarms() {
+  if (typeof _sharedCheckAlarms === 'function') {
+    _sharedCheckAlarms();
+  }
+}
+
+/**
+ * Dispatch a sync message to registered handlers.
+ */
 function _dispatchSyncMessage(msg) {
-  var handlers = window._cwocSyncHandlers[msg.type];
+  // Strip internal __sync_id before dispatching to handlers
+  var type = msg.type;
+  var handlers = window._cwocSyncHandlers[type];
   if (handlers) {
     handlers.forEach(function(fn) { fn(msg); });
   }
@@ -2395,7 +2586,7 @@ function syncSend(type, data) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(msg),
-  }).catch(function(e) { console.error('Sync send error:', e); });
+  }).catch(function(e) { console.error('[Sync] Send error:', e); });
 }
 
 /**
@@ -2406,28 +2597,37 @@ function syncOn(type, callback) {
   window._cwocSyncHandlers[type].push(callback);
 }
 
-// Auto-connect on page load
+/**
+ * Show "Sync disconnected" indicator — fixed bottom-right badge.
+ */
+function _syncShowDisconnected() {
+  if (document.getElementById('cwoc-sync-disconnected')) return;
+  var el = document.createElement('div');
+  el.id = 'cwoc-sync-disconnected';
+  el.textContent = '\u26A1 Sync disconnected';
+  el.style.cssText = 'position:fixed;bottom:12px;right:12px;z-index:9999;'
+    + 'background:#fffaf0;color:#6b4e31;border:1px solid #6b4e31;'
+    + 'border-radius:6px;padding:6px 12px;font-family:Lora,serif;'
+    + 'font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,0.15);'
+    + 'pointer-events:none;opacity:0.92;';
+  document.body.appendChild(el);
+}
+
+/**
+ * Hide the disconnected indicator.
+ */
+function _syncHideDisconnected() {
+  var el = document.getElementById('cwoc-sync-disconnected');
+  if (el) el.remove();
+}
+
+// Auto-initialize on page load
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSyncWebSocket);
+    document.addEventListener('DOMContentLoaded', _syncInit);
   } else {
-    initSyncWebSocket();
+    _syncInit();
   }
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') {
-      if (window._cwocSyncMode === 'none') {
-        window._cwocSyncRetries = 0; // reset retries on tab focus
-        initSyncWebSocket();
-      }
-      if (window._cwocSyncMode === 'poll') {
-        // Try upgrading back to WebSocket when tab becomes visible
-        window._cwocSyncRetries = 0;
-        window._cwocSyncWasConnected = false;
-        window._cwocSyncMode = 'none';
-        initSyncWebSocket();
-      }
-    }
-  });
 }
 
 
@@ -2489,24 +2689,55 @@ function _showAutoRefreshBanner() {
 }
 
 /**
- * Handle a remote data change. If the page has unsaved changes, show a warning.
- * Otherwise, refresh the page data silently.
+ * Handle a remote data change. Only act if the change is relevant to the
+ * current page. The dashboard never reloads here — it has its own soft-refresh
+ * handlers. Other pages call their own data-loading function for a soft refresh.
  */
 function _handleRemoteDataChange(type) {
-  var isDashboard = window.location.pathname === '/' ||
-    window.location.pathname === '/frontend/html/index.html' ||
-    window.location.pathname.endsWith('/index.html');
+  var path = window.location.pathname;
+  var isDashboard = path === '/' ||
+    path === '/frontend/html/index.html' ||
+    path.endsWith('/index.html');
 
-  // Dashboard handles chits_changed via its own syncOn handler in main-alerts.js
-  if (isDashboard && type === 'chits') return;
-  // Dashboard doesn't display contacts — no need to reload for contact changes
-  if (isDashboard && type === 'contacts') return;
+  // Dashboard handles all its own sync events via fetchChits() etc — never reload
+  if (isDashboard) return;
 
-  if (_pageHasUnsavedChanges()) {
-    _showAutoRefreshBanner();
-  } else {
-    // No unsaved changes — safe to reload
-    window.location.reload();
+  // Determine if this change type is relevant to the current page
+  // and call the page's soft-refresh function if available
+  if (type === 'chits') {
+    if (path.indexOf('trash') !== -1 && typeof loadTrash === 'function') {
+      loadTrash();
+    } else if (path.indexOf('maps') !== -1 && typeof _fetchAndDisplayChits === 'function') {
+      _fetchAndDisplayChits();
+    } else if (path.indexOf('weather') !== -1 && typeof _wxRefreshData === 'function') {
+      _wxRefreshData();
+    } else if (path.indexOf('editor') !== -1) {
+      // Editor: don't reload — user is actively editing. Show banner if unsaved.
+      if (_pageHasUnsavedChanges()) _showAutoRefreshBanner();
+    }
+  } else if (type === 'settings') {
+    if (path.indexOf('settings') !== -1) {
+      if (_pageHasUnsavedChanges()) {
+        _showAutoRefreshBanner();
+      } else {
+        window.location.reload();
+      }
+    }
+    // Settings changes can affect weather (saved locations) and maps (map settings)
+    if (path.indexOf('weather') !== -1 && typeof _wxRefreshData === 'function') {
+      _wxRefreshData();
+    }
+    if (path.indexOf('maps') !== -1 && typeof _fetchAndDisplayChits === 'function') {
+      _fetchAndDisplayChits();
+    }
+  } else if (type === 'contacts') {
+    if (path.indexOf('people') !== -1 && typeof loadContacts === 'function') {
+      loadContacts();
+    } else if (path.indexOf('maps') !== -1 && typeof _fetchAndDisplayContacts === 'function') {
+      _fetchAndDisplayContacts();
+    } else if (path.indexOf('contact-editor') !== -1) {
+      if (_pageHasUnsavedChanges()) _showAutoRefreshBanner();
+    }
   }
 }
 
@@ -3967,6 +4198,7 @@ function _sharedShowAlertModal(opts) {
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
       syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
       _safeNavigate('/editor?id=' + opts.chitId);
     };
     btnRow.appendChild(openBtn);
@@ -3981,6 +4213,7 @@ function _sharedShowAlertModal(opts) {
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
       syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
       // Set the alarms view mode to independent and navigate to dashboard
       try { localStorage.setItem('cwoc_alarmsViewMode', 'independent'); } catch(e) {}
       _safeNavigate('/?tab=Alarms');
@@ -3997,6 +4230,7 @@ function _sharedShowAlertModal(opts) {
     if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
     if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
     syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+    if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
   };
   btnRow.appendChild(dismissBtn);
   if (opts.showSnooze) {
@@ -4011,6 +4245,7 @@ function _sharedShowAlertModal(opts) {
         _sharedPersistSnooze(opts.snoozeKey, untilTs);
         if (opts.triggerKey) window._sharedAlarmTriggered.delete(opts.triggerKey);
         syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
+        if (typeof cwocTabSyncAlertSnoozed === 'function') cwocTabSyncAlertSnoozed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
       }
       // Re-render alarm containers to show snooze countdown bar
       setTimeout(function() {
@@ -4041,6 +4276,7 @@ function _sharedShowAlertModal(opts) {
       if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
       syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
       return;
     }
     e.preventDefault(); e.stopImmediatePropagation();
@@ -4089,6 +4325,10 @@ function _sharedBrowserNotif(title, body, chitId) {
 
 // ── The alarm checker — runs every second on every page ──
 function _sharedCheckAlarms() {
+  // Only the leader tab should fire alarms. Follower tabs receive alarm events
+  // via BroadcastChannel from the leader (no duplicate ringing).
+  if (typeof cwocTabSyncIsLeader === 'function' && !cwocTabSyncIsLeader()) return;
+
   var now = new Date();
   var hh = String(now.getHours()).padStart(2, '0');
   var mm = String(now.getMinutes()).padStart(2, '0');
@@ -4114,6 +4354,10 @@ function _sharedCheckAlarms() {
       _sharedShowAlertModal({ icon: '🔔', title: chit.title || 'Alarm', subtitle: _sharedFmtTime(alert.time) + (alert.name ? ' — ' + alert.name : ''), chitId: chit.id, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
       _sharedBrowserNotif('🔔 Alarm: ' + (chit.title || 'Alarm'), _sharedFmtTime(alert.time), chit.id);
       syncSend('alarm_fired', { title: chit.title, subtitle: _sharedFmtTime(alert.time), chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
+      // Broadcast to other tabs on this computer (they show modal, no sound)
+      if (typeof cwocTabSyncAlarmFired === 'function') {
+        cwocTabSyncAlarmFired({ title: chit.title || 'Alarm', subtitle: _sharedFmtTime(alert.time) + (alert.name ? ' — ' + alert.name : ''), chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
+      }
     });
   });
 
@@ -4134,6 +4378,10 @@ function _sharedCheckAlarms() {
     _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(ad.time), onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
     _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(ad.time));
     syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(ad.time), snoozeKey: snoozeKey, triggerKey: key });
+    // Broadcast to other tabs on this computer
+    if (typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: name, subtitle: _sharedFmtTime(ad.time), snoozeKey: snoozeKey, triggerKey: key });
+    }
   });
 
   // Check expired snoozes
@@ -4158,6 +4406,10 @@ function _sharedCheckAlarms() {
     _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: refireKey });
     _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(time));
     syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+    // Broadcast to other tabs on this computer
+    if (typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+    }
   });
 
   // Cleanup old keys
@@ -4173,8 +4425,15 @@ function _initSharedAlarmSync() {
   syncOn('alarm_fired', function(msg) {
     if (msg.triggerKey && window._sharedAlarmTriggered.has(msg.triggerKey)) return;
     if (msg.triggerKey) window._sharedAlarmTriggered.add(msg.triggerKey);
-    _sharedPlayAlarm();
+    // Only the leader tab plays sound for cross-device sync messages
+    if (typeof cwocTabSyncIsLeader === 'function' && cwocTabSyncIsLeader()) {
+      _sharedPlayAlarm();
+    }
     _sharedShowAlertModal({ icon: '🔔', title: msg.title || 'Alarm', subtitle: msg.subtitle || '', chitId: msg.chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: msg.snoozeKey, triggerKey: msg.triggerKey });
+    // If leader, broadcast to other local tabs (they show modal, no sound)
+    if (typeof cwocTabSyncIsLeader === 'function' && cwocTabSyncIsLeader() && typeof cwocTabSyncAlarmFired === 'function') {
+      cwocTabSyncAlarmFired({ title: msg.title || 'Alarm', subtitle: msg.subtitle || '', chitId: msg.chitId, snoozeKey: msg.snoozeKey, triggerKey: msg.triggerKey });
+    }
   });
 
   syncOn('alert_dismissed', function(msg) {

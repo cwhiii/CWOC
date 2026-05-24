@@ -459,23 +459,26 @@ class EmailViewModel @Inject constructor(
         }
     }
 
-    /** Moves an email chit to trash (adds "Trash" tag, removes from inbox). */
+    /** Moves an email chit to trash (sets email_folder to trash, removes inbox tag). */
     fun moveToTrash(chitId: String) {
         viewModelScope.launch {
             val entity = chitDao.getById(chitId) ?: return@launch
             val now = Instant.now().toString()
             val currentTags = entity.tags.orEmpty().toMutableList()
-            if (!currentTags.contains("Trash")) {
-                currentTags.add("Trash")
+            // Add system trash tag if not present
+            if (!currentTags.contains("CWOC_System/Email/Trash")) {
+                currentTags.add("CWOC_System/Email/Trash")
             }
-            currentTags.remove("Inbox")
+            // Remove inbox system tag
+            currentTags.remove("CWOC_System/Email/Inbox")
             chitDao.upsert(
                 entity.copy(
                     tags = currentTags,
+                    emailFolder = "trash",
                     modifiedDatetime = now
                 )
             )
-            dirtyTracker.markDirty(chitId, setOf("tags"))
+            dirtyTracker.markDirty(chitId, setOf("tags", "email_folder"))
             triggerPushIfOnline(chitId)
         }
     }
@@ -1020,27 +1023,29 @@ class EmailViewModel @Inject constructor(
     }
 
     /**
-     * Filters email chits by folder logic:
-     * - Inbox: has tag "Inbox" AND not archived AND not deleted
-     * - Sent: has tag "Sent" AND not archived
+     * Filters email chits by folder logic, matching the web frontend's approach:
+     * - Primary check: look for "CWOC_System/Email/{Folder}" tag
+     * - Fallback: check emailFolder field directly
+     * - Inbox: has system tag OR emailFolder == "inbox", AND not archived AND not deleted
+     * - Sent: has system tag OR emailFolder == "sent", AND not archived
      * - Drafts: emailStatus = "draft" AND not archived AND emailSendAt is null
      * - Scheduled: emailStatus = "draft" AND emailSendAt is not null AND not archived
-     * - Trash: has tag "Trash"
+     * - Trash: has system tag OR emailFolder == "trash"
      * - Archived: archived = true
      */
     private fun filterByFolder(chits: List<ChitEntity>, folder: String): List<ChitEntity> {
         return when (folder) {
             "inbox" -> chits.filter { chit ->
-                chit.tags.orEmpty().contains("Inbox") &&
+                (chitHasEmailTag(chit, "Inbox") || chit.emailFolder == "inbox") &&
                     !chit.archived &&
                     !chit.deleted
             }
             "sent" -> chits.filter { chit ->
-                chit.tags.orEmpty().contains("Sent") &&
+                (chitHasEmailTag(chit, "Sent") || chit.emailFolder == "sent") &&
                     !chit.archived
             }
             "drafts" -> chits.filter { chit ->
-                chit.emailStatus == "draft" &&
+                (chitHasEmailTag(chit, "Drafts") || chit.emailStatus == "draft") &&
                     !chit.archived &&
                     chit.emailSendAt == null
             }
@@ -1050,13 +1055,22 @@ class EmailViewModel @Inject constructor(
                     !chit.archived
             }
             "trash" -> chits.filter { chit ->
-                chit.tags.orEmpty().contains("Trash")
+                chitHasEmailTag(chit, "Trash") || chit.emailFolder == "trash"
             }
             "archived" -> chits.filter { chit ->
                 chit.archived
             }
             else -> emptyList()
         }
+    }
+
+    /**
+     * Checks if a chit has the system email folder tag "CWOC_System/Email/{suffix}".
+     * Matches the web frontend's _chitHasTag() logic.
+     */
+    private fun chitHasEmailTag(chit: ChitEntity, tagSuffix: String): Boolean {
+        val target = "CWOC_System/Email/$tagSuffix"
+        return chit.tags.orEmpty().contains(target)
     }
 
     /**

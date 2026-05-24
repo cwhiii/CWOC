@@ -257,6 +257,14 @@ function _emailRenderAccountFilterButtons() {
                 _emailToggleAccountFilter(acct.nickname);
             });
         }
+
+        // Right-click context menu: Edit Connection / Refresh Now
+        btn.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            _emailShowPillContextMenu(e, acct);
+        });
+
         wrap.appendChild(btn);
     });
 }
@@ -274,6 +282,83 @@ function _emailToggleAccountFilter(nickname) {
     _emailRenderAccountFilterButtons();
     // Re-trigger the email view render with the current tab
     if (typeof filterChits === 'function') filterChits('Email');
+}
+
+/**
+ * Show a right-click context menu on an account pill.
+ * Options: Edit Connection, Refresh Now, Copy Error (if error exists).
+ */
+function _emailShowPillContextMenu(e, acct) {
+    // Remove any existing context menu
+    var existing = document.getElementById('cwoc-email-ctx-menu');
+    if (existing) existing.remove();
+
+    var menu = document.createElement('div');
+    menu.id = 'cwoc-email-ctx-menu';
+    menu.style.cssText = 'position:fixed;z-index:10001;background:#fffaf0;border:2px solid #6b4e31;'
+        + 'border-radius:6px;padding:4px 0;box-shadow:0 4px 12px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;font-size:0.9em;min-width:160px;';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    function makeItem(label, onClick) {
+        var item = document.createElement('div');
+        item.textContent = label;
+        item.style.cssText = 'padding:8px 16px;cursor:pointer;white-space:nowrap;';
+        item.addEventListener('mouseenter', function() { item.style.background = '#f0e6d3'; });
+        item.addEventListener('mouseleave', function() { item.style.background = ''; });
+        item.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            menu.remove();
+            onClick();
+        });
+        menu.appendChild(item);
+    }
+
+    makeItem('⚙️ Edit Connection', function() {
+        // Navigate to settings with the account ID so the modal opens
+        var accountId = acct.id || '';
+        window.location.href = '/frontend/html/settings.html#email?account=' + encodeURIComponent(accountId);
+    });
+
+    makeItem('🔄 Refresh Now', function() {
+        delete _emailAccountErrors[acct.nickname];
+        _emailPersistAccountStatus();
+        _emailRenderAccountFilterButtons();
+        _checkMail();
+    });
+
+    // Show Copy Error only if there's a current error
+    var errorMsg = _emailAccountErrors[acct.nickname];
+    if (errorMsg) {
+        makeItem('📋 Copy Error', function() {
+            var fullMsg = acct.nickname + ': ' + errorMsg;
+            navigator.clipboard.writeText(fullMsg).then(function() {
+                cwocToast('Error copied to clipboard', 'success');
+            });
+        });
+    }
+
+    document.body.appendChild(menu);
+
+    // Close on click anywhere else or ESC
+    function closeMenu(ev) {
+        if (!menu.contains(ev.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu, true);
+            document.removeEventListener('keydown', closeMenuEsc, true);
+        }
+    }
+    function closeMenuEsc(ev) {
+        if (ev.key === 'Escape') {
+            menu.remove();
+            document.removeEventListener('click', closeMenu, true);
+            document.removeEventListener('keydown', closeMenuEsc, true);
+        }
+    }
+    setTimeout(function() {
+        document.addEventListener('click', closeMenu, true);
+        document.addEventListener('keydown', closeMenuEsc, true);
+    }, 0);
 }
 
 /**
@@ -307,7 +392,19 @@ function _showAccountErrorDetails(nickname, errorMsg) {
     settingsBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
     settingsBtn.onclick = function(e) {
         e.stopPropagation();
-        window.location.href = '/frontend/html/settings.html#email';
+        // Find the account ID for this nickname to open its specific modal
+        var accounts = (window._cwocSettings || {}).email_accounts || [];
+        var acct = accounts.find(function(a) { return a && a.nickname === nickname; });
+        var errorCount = Object.keys(_emailAccountErrors).length;
+        if (errorCount > 1) {
+            // Multiple broken — open the general email settings
+            window.location.href = '/frontend/html/settings.html#email';
+        } else if (acct && acct.id) {
+            // Single broken — open that specific account's config modal
+            window.location.href = '/frontend/html/settings.html#email?account=' + encodeURIComponent(acct.id);
+        } else {
+            window.location.href = '/frontend/html/settings.html#email';
+        }
     };
     btnRow.appendChild(settingsBtn);
 
@@ -322,6 +419,21 @@ function _showAccountErrorDetails(nickname, errorMsg) {
         });
     };
     btnRow.appendChild(copyBtn);
+
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = '🔄 Retry';
+    retryBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    retryBtn.onclick = function(e) {
+        e.stopPropagation();
+        toast.style.opacity = '0';
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+        // Clear the error for this account and retry
+        delete _emailAccountErrors[nickname];
+        _emailPersistAccountStatus();
+        _emailRenderAccountFilterButtons();
+        _checkMail();
+    };
+    btnRow.appendChild(retryBtn);
 
     var closeBtn = document.createElement('button');
     closeBtn.textContent = '✕ Dismiss';
@@ -375,7 +487,19 @@ function _emailShowErrorWithSettingsLink(errorMsg, hint) {
     settingsBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
     settingsBtn.onclick = function(e) {
         e.stopPropagation();
-        window.location.href = '/frontend/html/settings.html#email';
+        // Smart routing: if one account has errors, open its modal; if multiple, open general email settings
+        var errorKeys = Object.keys(_emailAccountErrors);
+        var accounts = (window._cwocSettings || {}).email_accounts || [];
+        if (errorKeys.length === 1) {
+            var acct = accounts.find(function(a) { return a && a.nickname === errorKeys[0]; });
+            if (acct && acct.id) {
+                window.location.href = '/frontend/html/settings.html#email?account=' + encodeURIComponent(acct.id);
+            } else {
+                window.location.href = '/frontend/html/settings.html#email';
+            }
+        } else {
+            window.location.href = '/frontend/html/settings.html#email';
+        }
     };
     btnRow.appendChild(settingsBtn);
 
@@ -1310,6 +1434,15 @@ function _buildEmailCard(chit, viSettings) {
         });
     })(card, chit);
 
+    // Enable drag-drop to bundle tabs
+    if (typeof _initBundleDragOnCard === 'function') {
+        _initBundleDragOnCard(card, chit);
+    }
+    // Mobile: long-press to move to bundle
+    if (typeof _initBundleLongPressOnCard === 'function') {
+        _initBundleLongPressOnCard(card, chit);
+    }
+
     return card;
 }
 
@@ -1713,6 +1846,7 @@ function _setEmailSubFilter(filter) {
 }
 
 function _checkMail() {
+    if (!cwocIsServerReachable()) return;
     console.debug('[Email] Syncing...');
     cwocToast('Checking mail...', 'info');
     _emailSetPillSpinners(true);
@@ -1720,7 +1854,6 @@ function _checkMail() {
         .then(function(r) {
             var contentType = r.headers.get('content-type') || '';
             if (!contentType.includes('application/json')) {
-                // Server returned non-JSON (proxy timeout, HTML error page, etc.)
                 return r.text().then(function(txt) {
                     console.error('[Email Check Mail] Non-JSON response (' + r.status + '):', txt.substring(0, 200));
                     return { ok: false, status: r.status, data: { detail: 'Server returned a non-JSON response (HTTP ' + r.status + '). This usually means a timeout or server error.' } };
@@ -1729,82 +1862,75 @@ function _checkMail() {
             return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
         })
         .then(function(result) {
-            _emailSetPillSpinners(false);
-            if (result.ok && result.data.new_count !== undefined) {
-                // Build detailed message with per-account info
-                var details = result.data.details || [];
-                var detailParts = details.map(function(d) {
-                    return d.account + ': ' + d.new + ' new' + (d.skipped_dupes ? ', ' + d.skipped_dupes + ' skipped' : '') + ' (checked ' + d.imap_found + ' since ' + d.since + ')';
-                });
-                if (detailParts.length) {
-                    console.debug('[Email Check Mail] ' + detailParts.join(' | '));
-                }
-
-                if (result.data.new_count > 0) {
-                    var noun = result.data.new_count === 1 ? 'email' : 'emails';
-                    var acctNames = details.filter(function(d) { return d.new > 0; }).map(function(d) { return d.account + ' (' + d.new + ')'; });
-                    var toastMsg = '📬 ' + result.data.new_count + ' new ' + noun;
-                    if (acctNames.length) toastMsg += ' — ' + acctNames.join(', ');
-                    cwocToast(toastMsg, 'success', 5000);
-                } else {
-                    var acctSummary = details.map(function(d) { return d.account + ': checked ' + d.imap_found; }).join(', ');
-                    cwocToast('No new emails' + (acctSummary ? ' (' + acctSummary + ')' : ''), 'success');
-                }
-
-                // Store errors on account pills instead of generic toasts
-                if (result.data.errors && result.data.errors.length) {
-                    var accounts = (window._cwocSettings || {}).email_accounts || [];
-                    result.data.errors.forEach(function(e) {
-                        // Parse "email_or_nickname: error message" format
-                        var colonIdx = e.indexOf(':');
-                        if (colonIdx > 0) {
-                            var errAcct = e.substring(0, colonIdx).trim();
-                            var errMsg = e.substring(colonIdx + 1).trim();
-                            // Find the matching account nickname
-                            var matchedNickname = errAcct; // default to what we got
-                            accounts.forEach(function(a) {
-                                if (a && (a.email === errAcct || a.nickname === errAcct)) {
-                                    matchedNickname = a.nickname || a.email;
-                                }
-                            });
-                            _emailAccountErrors[matchedNickname] = errMsg;
-                            _emailAccountLastSync[matchedNickname] = new Date().toISOString();
-                        }
-                    });
-                    _emailPersistAccountStatus();
-                    _emailRenderAccountFilterButtons();
-                }
-
-                // Clear errors for accounts that synced successfully
-                var successDetails = result.data.details || [];
-                var syncTime = new Date().toISOString();
-                successDetails.forEach(function(d) {
-                    if (_emailAccountErrors[d.account]) {
-                        delete _emailAccountErrors[d.account];
-                    }
-                    _emailAccountSuccess[d.account] = true;
-                    _emailAccountLastSync[d.account] = syncTime;
-                });
-                _emailPersistAccountStatus();
-                _emailRenderAccountFilterButtons();
-
-                if (typeof fetchChits === 'function') fetchChits();
+            if (result.ok && (result.data.status === 'syncing' || result.data.status === 'already_syncing')) {
+                // Background sync started — poll for completion then refresh chits
+                console.debug('[Email] Background sync started, polling for completion...');
+                _emailPollSyncStatus();
             } else if (result.status === 400 && result.data.detail && result.data.detail.indexOf('No email account') !== -1) {
+                _emailSetPillSpinners(false);
                 console.warn('[Email Check Mail] No email account configured.');
                 _emailShowErrorWithSettingsLink('No email account configured.', 'Set up an email account in Settings to start syncing.');
-            } else if (result.data.detail) {
+            } else if (result.data && result.data.detail) {
+                _emailSetPillSpinners(false);
                 console.error('[Email Check Mail] Error:', result.data.detail);
                 _emailShowErrorWithSettingsLink(result.data.detail, 'Check your email account settings.');
             } else {
+                _emailSetPillSpinners(false);
                 console.error('[Email Check Mail] Unexpected response:', result.data);
-                cwocToast('Unexpected response from server', 'error');
             }
         })
         .catch(function(err) {
+            cwocNetFail();
             _emailSetPillSpinners(false);
-            console.error('[Email Check Mail] Fetch error:', err);
-            _emailShowErrorWithSettingsLink('Failed to check mail: ' + err.message, 'Verify your email server settings are correct.');
+            if (err.message && err.message.indexOf('NetworkError') === -1) {
+                console.error('[Email Check Mail] Fetch error:', err);
+                _emailShowErrorWithSettingsLink('Failed to check mail: ' + err.message, 'Verify your email server settings are correct.');
+            } else {
+                console.warn('[Email Check Mail] Server unreachable, will retry later');
+            }
         });
+}
+
+/** Poll the sync-status endpoint until sync completes, then refresh chits. */
+function _emailPollSyncStatus() {
+    var attempts = 0;
+    var maxAttempts = 120; // 120 * 3s = 360s max wait (6 minutes)
+    var pollInterval = 3000;
+
+    function poll() {
+        attempts++;
+        if (attempts > maxAttempts) {
+            _emailSetPillSpinners(false);
+            console.warn('[Email] Sync polling timed out after 6 minutes');
+            cwocToast('Email sync is taking longer than expected', 'warning');
+            // Still refresh chits in case some were synced
+            if (typeof fetchChits === 'function') fetchChits();
+            return;
+        }
+
+        fetch('/api/email/sync-status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.syncing) {
+                    // Still running, poll again
+                    setTimeout(poll, pollInterval);
+                } else {
+                    // Done — clear old error state and refresh chits
+                    _emailSetPillSpinners(false);
+                    _emailAccountErrors = {};
+                    _emailPersistAccountStatus();
+                    _emailRenderAccountFilterButtons();
+                    cwocToast('Mail sync complete', 'success');
+                    if (typeof fetchChits === 'function') fetchChits();
+                }
+            })
+            .catch(function() {
+                // Network error during poll — stop polling, let circuit breaker handle it
+                _emailSetPillSpinners(false);
+            });
+    }
+
+    setTimeout(poll, pollInterval);
 }
 
 function _composeEmail() {
@@ -2463,6 +2589,11 @@ function _buildNestedChitCard(chit) {
         if (typeof storePreviousState === 'function') storePreviousState();
         window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(chit.id);
     });
+
+    // Enable drag-drop to bundle tabs
+    if (typeof _initBundleDragOnCard === 'function') {
+        _initBundleDragOnCard(card, chit);
+    }
 
     return card;
 }

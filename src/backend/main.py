@@ -206,6 +206,8 @@ from src.backend.migrations import (
     migrate_add_default_view,
     migrate_add_android_settings_parity,
     migrate_add_sync_version,
+    migrate_fix_everything_else_typo,
+    migrate_dedup_auto_bundles,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -296,6 +298,8 @@ migrate_add_timezone_column()
 migrate_add_default_view()
 migrate_add_android_settings_parity()
 migrate_add_sync_version()
+migrate_fix_everything_else_typo()
+migrate_dedup_auto_bundles()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)

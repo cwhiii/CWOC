@@ -367,7 +367,7 @@ Type=simple
 User=root
 WorkingDirectory=/app
 Environment="PATH=/app/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/app/venv/bin/uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --log-level debug
+ExecStart=/app/venv/bin/uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --workers 2 --log-level debug
 Restart=always
 RestartSec=3
 StandardOutput=journal
@@ -532,6 +532,32 @@ server {
         alias /app/src/static/;
     }
 
+    # Serve frontend files directly (HTML, JS, CSS) — no proxy needed
+    location /frontend/ {
+        alias /app/src/frontend/;
+    }
+
+    # Serve PWA files directly
+    location /pwa/ {
+        alias /app/src/pwa/;
+    }
+
+    # Serve data files (profile pictures, attachments) directly
+    location /data/ {
+        alias /app/data/;
+    }
+
+    # PWA root-level files
+    location = /sw.js {
+        alias /app/src/pwa/sw.js;
+        add_header Content-Type application/javascript;
+        add_header Service-Worker-Allowed /;
+    }
+    location = /manifest.json {
+        alias /app/src/pwa/manifest.json;
+        add_header Content-Type application/json;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:3333;
         proxy_http_version 1.1;
@@ -542,7 +568,7 @@ server {
         proxy_set_header Connection '';
         proxy_buffering off;
         proxy_cache off;
-        proxy_read_timeout 3600s;
+        proxy_read_timeout 120s;
     }
 }
 NGINX_EOF

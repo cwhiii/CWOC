@@ -24,7 +24,7 @@ class EmailBadgeViewModel @Inject constructor(
      * Count of unread inbox emails for the Email tab badge.
      * An email is "unread inbox" when:
      * - It has an emailMessageId (it's an email chit)
-     * - It has the "Inbox" tag
+     * - It has the "CWOC_System/Email/Inbox" tag OR emailFolder == "inbox"
      * - It is not archived
      * - It is not deleted
      * - emailRead is not true (null or false)
@@ -33,7 +33,8 @@ class EmailBadgeViewModel @Inject constructor(
         .map { allChits ->
             allChits.count { chit ->
                 chit.emailMessageId != null &&
-                    chit.tags.orEmpty().contains("Inbox") &&
+                    (chit.tags.orEmpty().contains("CWOC_System/Email/Inbox") ||
+                        chit.emailFolder == "inbox") &&
                     !chit.archived &&
                     chit.emailRead != true
             }

@@ -472,6 +472,66 @@ function _wxUpdateDateDisplay() {
 })();
 
 /**
+ * Soft-refresh the weather page data without a full page reload.
+ * Re-fetches chits and re-renders city rows that depend on chit locations.
+ * This handles the case where a new event is added with a location that
+ * creates a new city row on the weather page.
+ */
+async function _wxRefreshData() {
+  var container = document.getElementById('weather-content');
+  if (!container) return;
+
+  try {
+    // Re-fetch chits to pick up new events with locations
+    var chitResp = await fetch('/api/chits');
+    if (!chitResp.ok) return;
+    var allChits = await chitResp.json();
+    window._wxAllChits = allChits;
+
+    // Load saved locations
+    var locations = await loadSavedLocations();
+    if (!locations || locations.length === 0) return;
+
+    // Apply saved row order
+    var savedOrder = _wxGetSavedRowOrder();
+    if (savedOrder && savedOrder.length > 0) {
+      locations.sort(function (a, b) {
+        var aIdx = savedOrder.indexOf(a.label || '');
+        var bIdx = savedOrder.indexOf(b.label || '');
+        if (aIdx < 0) aIdx = 9999;
+        if (bIdx < 0) bIdx = 9999;
+        return aIdx - bIdx;
+      });
+    }
+
+    // Get week start day from settings
+    var weekStartDay = 0;
+    try {
+      var settings = await getCachedSettings();
+      weekStartDay = parseInt(settings.week_start_day) || 0;
+    } catch (e) { /* default */ }
+
+    // Get dates from existing day blocks (they have data-wx-date)
+    var existingBlocks = container.querySelectorAll('.weather-day-block[data-wx-date]');
+    var dateSet = {};
+    existingBlocks.forEach(function(b) {
+      var d = b.getAttribute('data-wx-date');
+      if (d) dateSet[d] = true;
+    });
+    var dates = Object.keys(dateSet).sort();
+
+    // If we have dates, refresh the city rows (chit-based locations)
+    if (dates.length > 0 && allChits.length > 0) {
+      // Remove existing city rows and re-add with fresh data
+      container.querySelectorAll('.weather-city-row').forEach(function(r) { r.remove(); });
+      _wxAddCityRows(container, allChits, locations, dates, weekStartDay);
+    }
+  } catch (e) {
+    console.warn('[Weather] Soft refresh failed:', e);
+  }
+}
+
+/**
  * Fetch 16-day forecast for a single location.
  * Uses shared weather cache first, falls back to fresh fetch.
  * Returns { ok: true, daily: {...} } or { ok: false, error: string }.

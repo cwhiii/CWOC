@@ -115,7 +115,7 @@ REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checkli
 | Server push + mobile: clean build → update | Yes (`systemctl restart cwoc`) | Clean Build | Update |
 | Server push + mobile: clean build → uninstall + reinstall | Yes (`systemctl restart cwoc`) | Clean Build | Reinstall |
 
-**MANDATORY:** After completing ANY task or set of changes, the LAST thing said MUST be one full row from the table above. No exceptions. Do not abbreviate. Do not paraphrase. Copy the exact row that applies.
+**MANDATORY:** After completing ANY task or set of changes, the LAST thing said MUST be one full row from the table above, followed by the version number(s) that were set. No exceptions. Do not abbreviate. Do not paraphrase. Copy the exact row that applies, then on the next line state the version (e.g., `Version: cwoc_server-20260523_1237`).
 
 ## EncryptedSharedPreferences & Keystore
 The app uses `EncryptedSharedPreferences` with Android Keystore for secure token storage. The Keystore key can become corrupted/invalidated after repeated uninstall/reinstall cycles. The `AppModule.provideEncryptedSharedPreferences()` has a try/catch that handles this by deleting the corrupted prefs file and recreating. If you ever see a crash with `KeyStoreException: Signature/MAC verification failed`, this is the cause — the recovery logic should handle it automatically. If it doesn't, a full uninstall clears the Keystore entry.

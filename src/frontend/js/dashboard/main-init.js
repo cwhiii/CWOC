@@ -540,6 +540,206 @@ function _applySortPrefForCurrentTab() {
   }
 }
 
+/* ── Targeted Sync Updates ───────────────────────────────────────────────── */
+// Instead of re-fetching ALL chits and rebuilding the entire DOM on every sync
+// message, these functions fetch only the changed chit and patch it in place.
+
+/**
+ * Fetch a single chit by ID and patch it into the in-memory chits array.
+ * Only calls displayChits() if the chit data actually changed or is new.
+ * Preserves scroll position to avoid jarring visual jumps.
+ */
+function _syncPatchSingleChit(chitId) {
+  fetch('/api/chit/' + encodeURIComponent(chitId))
+    .then(function(r) {
+      if (r.status === 404) {
+        // Chit was deleted — remove from array and re-render only if it was visible
+        var idx = chits.findIndex(function(c) { return c.id === chitId; });
+        if (idx !== -1) {
+          chits.splice(idx, 1);
+          _syncRemoveChitFromDOM(chitId);
+        }
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(updatedChit) {
+      if (!updatedChit) return;
+
+      // Apply timezone conversion (same as fetchChits does)
+      _syncApplyTimezone(updatedChit);
+
+      // Find existing chit in array
+      var idx = chits.findIndex(function(c) { return c.id === chitId; });
+
+      if (idx === -1) {
+        // New chit — add to array and re-render
+        chits.push(updatedChit);
+        _computePrerequisiteFlags(chits);
+        _syncDisplayChitsPreserved();
+        return;
+      }
+
+      // Existing chit — check if anything actually changed
+      var existing = chits[idx];
+      if (_syncChitUnchanged(existing, updatedChit)) {
+        return; // Nothing changed — don't touch the DOM
+      }
+
+      // Update in-memory array
+      // Preserve client-side flags that aren't in the API response
+      if (existing._shared) updatedChit._shared = true;
+      if (existing._isBirthday) updatedChit._isBirthday = true;
+      chits[idx] = updatedChit;
+      _computePrerequisiteFlags(chits);
+
+      // Re-render with scroll position preserved
+      _syncDisplayChitsPreserved();
+    })
+    .catch(function(e) {
+      console.warn('[Sync] Single-chit patch failed for ' + chitId + ':', e);
+    });
+}
+
+/**
+ * Smart refresh for bulk chits_changed signal.
+ * Fetches all chits but only re-renders if the data actually differs.
+ */
+function _syncSmartRefresh() {
+  fetch('/api/chits')
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(newChits) {
+      if (!Array.isArray(newChits)) return;
+
+      // Quick check: if count differs, definitely changed
+      var ownedChits = chits.filter(function(c) { return !c._shared && !c._isBirthday; });
+      if (newChits.length !== ownedChits.length) {
+        // Data changed — do a full fetchChits to also get shared/birthday chits
+        fetchChits();
+        return;
+      }
+
+      // Check if any chit's modified_datetime differs
+      var existingMap = {};
+      ownedChits.forEach(function(c) { existingMap[c.id] = c.modified_datetime; });
+
+      var hasChanges = newChits.some(function(c) {
+        return !existingMap[c.id] || existingMap[c.id] !== c.modified_datetime;
+      });
+
+      if (hasChanges) {
+        fetchChits();
+      }
+      // If nothing changed, do nothing — no DOM rebuild
+    })
+    .catch(function(e) {
+      console.warn('[Sync] Smart refresh failed:', e);
+    });
+}
+
+/**
+ * Call displayChits() while preserving scroll position.
+ * Saves the scroll position of the chit-list container (or the scrollable
+ * parent) before re-rendering, then restores it after.
+ */
+function _syncDisplayChitsPreserved() {
+  // Find the scrollable container — could be chit-list itself or a parent
+  var listEl = document.getElementById('chit-list');
+  var scrollParent = listEl;
+  // For calendar views, the scrollable element is .week-view inside chit-list
+  var weekView = listEl ? listEl.querySelector('.week-view') : null;
+  if (weekView) scrollParent = weekView;
+
+  var scrollTop = scrollParent ? scrollParent.scrollTop : 0;
+  var scrollLeft = scrollParent ? scrollParent.scrollLeft : 0;
+
+  displayChits();
+
+  // Restore scroll position after DOM rebuild
+  requestAnimationFrame(function() {
+    var restored = document.getElementById('chit-list');
+    var restoredScroll = restored;
+    var restoredWeek = restored ? restored.querySelector('.week-view') : null;
+    if (restoredWeek) restoredScroll = restoredWeek;
+    if (restoredScroll) {
+      restoredScroll.scrollTop = scrollTop;
+      restoredScroll.scrollLeft = scrollLeft;
+    }
+  });
+}
+
+/**
+ * Remove a single chit's DOM element(s) without full re-render.
+ */
+function _syncRemoveChitFromDOM(chitId) {
+  var elements = document.querySelectorAll('[data-chit-id="' + chitId + '"]');
+  if (elements.length > 0) {
+    elements.forEach(function(el) { el.remove(); });
+  } else {
+    // Element not found by selector — might be in a complex view, fall back to re-render
+    displayChits();
+  }
+}
+
+/**
+ * Apply timezone conversion to a single chit (mirrors fetchChits logic).
+ */
+function _syncApplyTimezone(chit) {
+  if (_currentTimezone && typeof getChitDisplayTime === 'function') {
+    if (chit.start_datetime) {
+      var startResult = getChitDisplayTime(chit, 'start_datetime', _currentTimezone);
+      if (startResult) {
+        chit.start_datetime_obj = startResult.date;
+        if (startResult.warning) chit._tzWarning = true;
+      } else {
+        chit.start_datetime_obj = new Date(chit.start_datetime);
+      }
+    }
+    if (chit.end_datetime) {
+      var endResult = getChitDisplayTime(chit, 'end_datetime', _currentTimezone);
+      if (endResult) {
+        chit.end_datetime_obj = endResult.date;
+        if (endResult.warning) chit._tzWarning = true;
+      } else {
+        chit.end_datetime_obj = new Date(chit.end_datetime);
+      }
+    }
+    if (chit.due_datetime) {
+      var dueResult = getChitDisplayTime(chit, 'due_datetime', _currentTimezone);
+      if (dueResult) {
+        chit._due_datetime_obj = dueResult.date;
+        if (dueResult.warning) chit._tzWarning = true;
+      }
+    }
+  } else {
+    if (chit.start_datetime) chit.start_datetime_obj = new Date(chit.start_datetime);
+    if (chit.end_datetime) chit.end_datetime_obj = new Date(chit.end_datetime);
+  }
+}
+
+/**
+ * Compare two chit objects to see if anything user-visible changed.
+ * Returns true if they're effectively the same (no re-render needed).
+ */
+function _syncChitUnchanged(existing, updated) {
+  // Fast path: compare modified_datetime
+  if (existing.modified_datetime !== updated.modified_datetime) return false;
+  // Also check fields that can change without bumping modified_datetime
+  if (existing.status !== updated.status) return false;
+  if (existing.title !== updated.title) return false;
+  if (existing.start_datetime !== updated.start_datetime) return false;
+  if (existing.end_datetime !== updated.end_datetime) return false;
+  if (existing.due_datetime !== updated.due_datetime) return false;
+  if (existing.pinned !== updated.pinned) return false;
+  if (existing.archived !== updated.archived) return false;
+  if (existing.snoozed_until !== updated.snoozed_until) return false;
+  return true;
+}
+
 /* ── Data loading and display orchestration ──────────────────────────────── */
 function fetchChits() {
   console.debug("Fetching chits...");
@@ -580,6 +780,8 @@ function fetchChits() {
       var ownedChits = Array.isArray(results[0]) ? results[0] : [];
       var sharedChits = Array.isArray(results[1]) ? results[1] : [];
       var birthdayChits = Array.isArray(results[2]) ? results[2] : [];
+
+      cwocNetSuccess();
 
       // Mark shared chits with _shared flag and merge into the chits array
       var ownedIds = new Set();
@@ -661,6 +863,7 @@ function fetchChits() {
       if (typeof cwocTabSyncBroadcastChits === 'function') cwocTabSyncBroadcastChits(chits);
     })
     .catch(function(err) {
+      cwocNetFail();
       console.error("Error fetching chits:", err);
       document.getElementById("chit-list").innerHTML =
         '<div class="error-message">' +

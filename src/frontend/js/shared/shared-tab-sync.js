@@ -85,6 +85,25 @@
           _leaderBroadcastCurrent();
         }
         break;
+
+      // ── Alarm coordination messages ──
+      case 'alarm-fired':
+        // Leader tab fired an alarm — follower tabs show modal (no sound)
+        if (msg.tabId === TAB_ID) break; // ignore own broadcast
+        _onAlarmFiredFromLeader(msg);
+        break;
+
+      case 'alert-dismissed':
+        // A tab dismissed an alert — propagate to all other tabs instantly
+        if (msg.tabId === TAB_ID) break;
+        _onAlertDismissedFromTab(msg);
+        break;
+
+      case 'alert-snoozed':
+        // A tab snoozed an alert — propagate to all other tabs instantly
+        if (msg.tabId === TAB_ID) break;
+        _onAlertSnoozedFromTab(msg);
+        break;
     }
   };
 
@@ -365,6 +384,158 @@
       }
     }
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Alarm coordination — only leader rings, dismiss propagates to all tabs
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Called on follower tabs when the leader broadcasts that an alarm fired.
+   * Shows the modal but does NOT play sound (only leader plays sound).
+   */
+  function _onAlarmFiredFromLeader(msg) {
+    // Mark as triggered so local checker doesn't re-fire
+    if (msg.triggerKey) {
+      if (window._sharedAlarmTriggered) window._sharedAlarmTriggered.add(msg.triggerKey);
+    }
+    // Show the modal (no sound) — the shared alarm system's modal function handles this
+    if (typeof _sharedShowAlertModal === 'function') {
+      _sharedShowAlertModal({
+        icon: '🔔',
+        title: msg.title || 'Alarm',
+        subtitle: msg.subtitle || '',
+        chitId: msg.chitId || null,
+        onDismiss: (typeof _sharedStopAlarm === 'function') ? _sharedStopAlarm : null,
+        showSnooze: true,
+        snoozeKey: msg.snoozeKey,
+        triggerKey: msg.triggerKey
+      });
+    }
+    // Browser notification (silent — sound is only on leader)
+    if (typeof _sharedBrowserNotif === 'function') {
+      _sharedBrowserNotif('🔔 ' + (msg.title || 'Alarm'), msg.subtitle || '', msg.chitId);
+    }
+  }
+
+  /**
+   * Called on other tabs when any tab dismisses an alert via BroadcastChannel.
+   * Instantly closes the modal and stops sound without waiting for WebSocket round-trip.
+   */
+  function _onAlertDismissedFromTab(msg) {
+    // Mark as triggered/dismissed locally
+    if (msg.triggerKey && window._sharedAlarmTriggered) window._sharedAlarmTriggered.add(msg.triggerKey);
+    if (msg.snoozeKey && window._sharedAlarmTriggered) window._sharedAlarmTriggered.add(msg.snoozeKey);
+    if (msg.snoozeKey && window._sharedSnoozeRegistry) {
+      delete window._sharedSnoozeRegistry[msg.snoozeKey];
+      if (typeof _snoozeRegistry !== 'undefined') delete _snoozeRegistry[msg.snoozeKey];
+    }
+    // Stop all sounds
+    if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+    if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
+    // Remove matching alert modals
+    document.querySelectorAll('[data-cwoc-alert]').forEach(function(ov) {
+      if (ov._snoozeKey === msg.snoozeKey || ov._triggerKey === msg.triggerKey) {
+        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+        ov.remove();
+      }
+    });
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    // Re-render alarm UI if applicable
+    setTimeout(function() {
+      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+      if (typeof displayChits === 'function' && typeof currentTab !== 'undefined' && currentTab === 'Alarms') displayChits();
+    }, 300);
+  }
+
+  /**
+   * Called on other tabs when any tab snoozes an alert via BroadcastChannel.
+   */
+  function _onAlertSnoozedFromTab(msg) {
+    if (msg.snoozeKey && msg.snoozeUntil && window._sharedSnoozeRegistry) {
+      window._sharedSnoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
+    }
+    if (msg.triggerKey && window._sharedAlarmTriggered) window._sharedAlarmTriggered.delete(msg.triggerKey);
+    // Stop sounds
+    if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+    if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
+    // Remove matching alert modals
+    document.querySelectorAll('[data-cwoc-alert]').forEach(function(ov) {
+      if (ov._snoozeKey === msg.snoozeKey || ov._triggerKey === msg.triggerKey) {
+        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+        ov.remove();
+      }
+    });
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+    // Re-render to show snooze countdown bar
+    setTimeout(function() {
+      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+      if (typeof displayChits === 'function' && typeof currentTab !== 'undefined' && currentTab === 'Alarms') displayChits();
+    }, 400);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Public API — alarm coordination
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Broadcast that an alarm fired (called by leader tab only).
+   * Follower tabs will show the modal without playing sound.
+   */
+  window.cwocTabSyncAlarmFired = function(opts) {
+    if (!channel) return;
+    try {
+      channel.postMessage({
+        type: 'alarm-fired',
+        tabId: TAB_ID,
+        title: opts.title,
+        subtitle: opts.subtitle,
+        chitId: opts.chitId || null,
+        snoozeKey: opts.snoozeKey,
+        triggerKey: opts.triggerKey
+      });
+    } catch (e) {
+      console.error('[TabSync] Alarm broadcast failed:', e);
+    }
+  };
+
+  /**
+   * Broadcast that an alert was dismissed (called by any tab).
+   * All other tabs will instantly close the modal and stop sound.
+   */
+  window.cwocTabSyncAlertDismissed = function(opts) {
+    if (!channel) return;
+    try {
+      channel.postMessage({
+        type: 'alert-dismissed',
+        tabId: TAB_ID,
+        snoozeKey: opts.snoozeKey || null,
+        triggerKey: opts.triggerKey || null
+      });
+    } catch (e) {
+      console.error('[TabSync] Dismiss broadcast failed:', e);
+    }
+  };
+
+  /**
+   * Broadcast that an alert was snoozed (called by any tab).
+   * All other tabs will update snooze state and close the modal.
+   */
+  window.cwocTabSyncAlertSnoozed = function(opts) {
+    if (!channel) return;
+    try {
+      channel.postMessage({
+        type: 'alert-snoozed',
+        tabId: TAB_ID,
+        snoozeKey: opts.snoozeKey || null,
+        triggerKey: opts.triggerKey || null,
+        snoozeUntil: opts.snoozeUntil || null
+      });
+    } catch (e) {
+      console.error('[TabSync] Snooze broadcast failed:', e);
+    }
+  };
 
   // ══════════════════════════════════════════════════════════════════════════
   // Public API — called by other scripts

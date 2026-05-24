@@ -175,6 +175,25 @@ fun RuleEditorScreen(
 
     val isNew = ruleId == "new"
 
+    // Load user's email accounts from SharedPreferences for condition dropdowns
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val emailAccountEmails = remember {
+        try {
+            val prefs = context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+            val accountsJson = prefs.getString("email_accounts", null)
+            if (!accountsJson.isNullOrBlank()) {
+                val gson = com.google.gson.Gson()
+                val listType = object : com.google.gson.reflect.TypeToken<List<Map<String, Any?>>>() {}.type
+                val accounts: List<Map<String, Any?>> = gson.fromJson(accountsJson, listType)
+                accounts.mapNotNull { it["email"] as? String }.filter { it.isNotBlank() }
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     // Load rule on first composition
     LaunchedEffect(ruleId) {
         viewModel.loadRule(ruleId)
@@ -317,7 +336,8 @@ fun RuleEditorScreen(
                 ConditionTreeBuilder(
                     root = conditionTree,
                     onTreeChange = { updatedTree -> viewModel.setConditionTree(updatedTree) },
-                    availableFields = getFieldsForTrigger(triggerType, eventType)
+                    availableFields = getFieldsForTrigger(triggerType, eventType),
+                    emailAccountEmails = emailAccountEmails
                 )
 
                 // ─── Action Section ─────────────────────────────────────────

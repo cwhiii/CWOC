@@ -29,9 +29,11 @@ let _globalTimerAudio = null;
 let _globalTimeFormat = "24hour";
 let _globalAlarmTimeout = null;
 async function _loadAlertStates() {
+  if (!cwocIsServerReachable()) return;
   try {
     const resp = await fetch('/api/alert-state');
     if (!resp.ok) return;
+    cwocNetSuccess();
     const states = await resp.json();
     states.forEach(s => {
       if (s.state === 'dismissed') {
@@ -40,7 +42,12 @@ async function _loadAlertStates() {
         _snoozeRegistry[s.alert_key] = new Date(s.until_ts).getTime();
       }
     });
-  } catch (e) { console.error('Failed to load alert states:', e); }
+  } catch (e) {
+    cwocNetFail();
+    if (e.message && e.message.indexOf('NetworkError') === -1) {
+      console.error('Failed to load alert states:', e);
+    }
+  }
 }
 
 // Persist dismiss state to backend
@@ -228,6 +235,7 @@ function _showAlertModal(opts) {
     if (opts.triggerKey) _persistDismiss(opts.triggerKey);
     if (opts.snoozeKey) _persistDismiss(opts.snoozeKey);
     syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+    if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
   };
   btnRow.appendChild(dismissBtn);
 
@@ -257,6 +265,7 @@ function _showAlertModal(opts) {
           _persistSnooze(opts.snoozeKey, untilTs);
           if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
           syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
+          if (typeof cwocTabSyncAlertSnoozed === 'function') cwocTabSyncAlertSnoozed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
         }
         // Show undo toast
         if (typeof _showSnoozeUndoToast === 'function') {
@@ -305,6 +314,7 @@ function _showAlertModal(opts) {
       if (opts.triggerKey) _persistDismiss(opts.triggerKey);
       if (opts.snoozeKey) _persistDismiss(opts.snoozeKey);
       syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      if (typeof cwocTabSyncAlertDismissed === 'function') cwocTabSyncAlertDismissed({ snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
       return;
     }
     e.preventDefault();
@@ -881,9 +891,24 @@ function _startGlobalAlertSystem() {
       _fetchIndependentAlerts();
     });
 
-    // Another device saved a chit — re-fetch chits
+    // ── Granular chit sync: targeted single-chit updates ──
+    // When a specific chit is updated/created, fetch just that one chit and
+    // patch the in-memory array. Only re-render if the change affects the view.
+
+    syncOn('chit_updated', function(msg) {
+      if (!msg.chit_id) return;
+      _syncPatchSingleChit(msg.chit_id);
+    });
+
+    syncOn('chit_created', function(msg) {
+      if (!msg.chit_id) return;
+      _syncPatchSingleChit(msg.chit_id);
+    });
+
+    // Bulk signal — only used as fallback when granular messages aren't available
+    // (e.g., web-to-web sync via syncSend('chits_changed'))
     syncOn('chits_changed', function() {
-      fetchChits();
+      _syncSmartRefresh();
     });
   }
 
