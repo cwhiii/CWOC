@@ -849,11 +849,11 @@ function _tlSizeCanvas() {
     datedLane.style.minHeight = datedHeight + 'px';
   }
   if (undatedLane) {
-    undatedLane.style.height = undatedHeight + 'px';
-    undatedLane.style.minHeight = undatedHeight + 'px';
+    undatedLane.style.height = (undatedHeight + 40) + 'px';
+    undatedLane.style.minHeight = (undatedHeight + 40) + 'px';
   }
 
-  var totalHeight = datedHeight + undatedHeight + 20; // 20 for divider
+  var totalHeight = datedHeight + undatedHeight + 60; // 20 divider + 40 bottom margin
 
   canvas.style.width = totalWidth + 'px';
   canvas.style.minHeight = totalHeight + 'px';

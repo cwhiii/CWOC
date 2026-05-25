@@ -469,9 +469,9 @@ function _tlLayoutByDate(chits, opts) {
     // Start unconnected below the connected section with a gap
     var unconnectedTopY = topPadding + (connectedMaxRow + 1) * (nodeHeight + vGap);
 
-    // Use as many columns as needed to keep everything visible (target ~5 cols)
-    var ucGridCols = Math.max(3, Math.ceil(undatedUnconnected.length / 3));
-    var ucRows = Math.ceil(undatedUnconnected.length / ucGridCols);
+    // Use 2 rows max for unconnected items — wide layout to fit on screen
+    var ucRows = 2;
+    var ucGridCols = Math.ceil(undatedUnconnected.length / ucRows);
 
     // Fill bottom-left to right, then up: row 0 = bottom, row N = top
     for (var i = 0; i < undatedUnconnected.length; i++) {
