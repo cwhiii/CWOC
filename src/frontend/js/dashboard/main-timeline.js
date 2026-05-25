@@ -1958,10 +1958,10 @@ async function _tlCreateLinkModeDependency(sourceId, targetId) {
   _tlClearLinkSource();
 
   try {
-    var response = await fetch('/api/chits/' + targetId, {
-      method: 'PUT',
+    var response = await fetch('/api/chits/' + targetId + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
+      body: JSON.stringify({ prerequisites: prereqs })
     });
 
     if (!response.ok) {
@@ -2113,10 +2113,10 @@ async function _tlUndo() {
 
   // Persist — only update prerequisites
   try {
-    await fetch('/api/chits/' + action.chitId, {
-      method: 'PUT',
+    await fetch('/api/chits/' + action.chitId + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(action.oldPrereqs) })
+      body: JSON.stringify({ prerequisites: action.oldPrereqs })
     });
   } catch (e) { console.error('[Timeline] Undo failed:', e); }
 
@@ -2142,10 +2142,10 @@ async function _tlRedo() {
 
   // Persist — only update prerequisites
   try {
-    await fetch('/api/chits/' + action.chitId, {
-      method: 'PUT',
+    await fetch('/api/chits/' + action.chitId + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(action.newPrereqs) })
+      body: JSON.stringify({ prerequisites: action.newPrereqs })
     });
   } catch (e) { console.error('[Timeline] Redo failed:', e); }
 
@@ -2188,7 +2188,7 @@ function _tlOnLineClick(e) {
   var target = e.target;
 
   // Only handle clicks on <path> elements with data-from and data-to
-  if (target.tagName !== 'path') return;
+  if (!target || target.tagName.toLowerCase() !== 'path') return;
 
   var prereqId = target.getAttribute('data-from');
   var dependentId = target.getAttribute('data-to');
@@ -2223,12 +2223,14 @@ function _tlOnLineClick(e) {
   var toastMsg = '🔗 Removed dependency: ' + prereqName + ' → ' + depName;
 
   // Show undo toast with 5-second countdown
+  // Persist immediately (don't wait for countdown — prevents data loss on refresh)
+  _tlPersistPrereqRemoval(dependentChit, updatedPrereqs, prereqId, prereqs);
+
   cwocUndoToast(toastMsg, {
     duration: 5000,
     id: 'tl-dep-remove-undo',
     onExpire: function() {
-      // Countdown expired without undo — persist the removal via API
-      _tlPersistPrereqRemoval(dependentChit, updatedPrereqs, prereqId, prereqs);
+      // Countdown expired without undo — already persisted, nothing to do
     },
     onUndo: function() {
       // User clicked Undo — restore the dependency
@@ -2248,18 +2250,22 @@ function _tlOnLineClick(e) {
  */
 async function _tlPersistPrereqRemoval(dependentChit, updatedPrereqs, removedPrereqId, originalPrereqs) {
   try {
-    var resp = await fetch('/api/chits/' + encodeURIComponent(dependentChit.id), {
-      method: 'PUT',
+    console.log('[Timeline] Persisting prereq removal for', dependentChit.id, 'new prereqs:', updatedPrereqs);
+    var resp = await fetch('/api/chits/' + encodeURIComponent(dependentChit.id) + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(updatedPrereqs) })
+      body: JSON.stringify({ prerequisites: updatedPrereqs })
     });
 
     if (!resp.ok) {
-      console.error('[Timeline] Failed to persist dependency removal:', resp.status);
+      var errText = await resp.text().catch(function() { return ''; });
+      console.error('[Timeline] Failed to persist dependency removal:', resp.status, errText);
       // Revert visual — restore the original prerequisites
       dependentChit.prerequisites = originalPrereqs;
       _tlRender(_tlCurrentChits);
       cwocToast('Failed to remove dependency.', 'error');
+    } else {
+      console.log('[Timeline] Prereq removal persisted successfully');
     }
   } catch (err) {
     console.error('[Timeline] Exception persisting dependency removal:', err);
@@ -2299,10 +2305,10 @@ async function _tlUndoPrereqRemoval(dependentChit, restoredPrereqId) {
 
   // Persist the restoration via API
   try {
-    var resp = await fetch('/api/chits/' + encodeURIComponent(dependentChit.id), {
-      method: 'PUT',
+    var resp = await fetch('/api/chits/' + encodeURIComponent(dependentChit.id) + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(currentPrereqs) })
+      body: JSON.stringify({ prerequisites: currentPrereqs })
     });
 
     if (!resp.ok) {
@@ -2555,6 +2561,14 @@ function _tlCreateDragConnector() {
   var canvas = document.getElementById('tl-canvas');
   if (!canvas) return;
 
+  // Highlight source node as the prerequisite
+  var sourceNode = _tlLinkDragState.sourceNode;
+  if (sourceNode) {
+    sourceNode.classList.add('tl-drag-source');
+    sourceNode.style.outline = '3px solid #d4af37';
+    sourceNode.style.outlineOffset = '2px';
+  }
+
   var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'tl-drag-connector');
   svg.style.position = 'absolute';
@@ -2564,11 +2578,28 @@ function _tlCreateDragConnector() {
   svg.style.height = '100%';
   svg.style.overflow = 'visible';
 
+  // Arrow marker for direction indication
+  var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  var marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  marker.setAttribute('id', 'tl-drag-arrow');
+  marker.setAttribute('markerWidth', '8');
+  marker.setAttribute('markerHeight', '8');
+  marker.setAttribute('refX', '6');
+  marker.setAttribute('refY', '4');
+  marker.setAttribute('orient', 'auto');
+  var arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  arrow.setAttribute('d', 'M 0 0 L 8 4 L 0 8 Z');
+  arrow.setAttribute('fill', '#4a2c2a');
+  marker.appendChild(arrow);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
   var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
   line.setAttribute('x1', '0');
   line.setAttribute('y1', '0');
   line.setAttribute('x2', '0');
   line.setAttribute('y2', '0');
+  line.setAttribute('marker-end', 'url(#tl-drag-arrow)');
   svg.appendChild(line);
 
   canvas.appendChild(svg);
@@ -2600,11 +2631,14 @@ function _tlUpdateDragConnector(clientX, clientY) {
 
   var nodeWidth = 180;
   var nodeHeight = 52;
-  var sourceX = parseFloat(sourceNode.style.left) + nodeWidth;
-  var sourceY = parseFloat(sourceNode.style.top) + nodeHeight / 2;
+
+  // Get source node position relative to canvas (using getBoundingClientRect for accuracy)
+  var canvasRect = canvas.getBoundingClientRect();
+  var sourceRect = sourceNode.getBoundingClientRect();
+  var sourceX = (sourceRect.right - canvasRect.left) / _tlZoom;
+  var sourceY = (sourceRect.top + sourceRect.height / 2 - canvasRect.top) / _tlZoom;
 
   // Convert pointer position from client to canvas coordinates
-  var canvasRect = canvas.getBoundingClientRect();
   var pointerX = (clientX - canvasRect.left) / _tlZoom;
   var pointerY = (clientY - canvasRect.top) / _tlZoom;
 
@@ -2621,6 +2655,13 @@ function _tlRemoveDragConnector() {
   if (_tlLinkDragState.connectorSvg) {
     _tlLinkDragState.connectorSvg.remove();
     _tlLinkDragState.connectorSvg = null;
+  }
+  // Remove source highlight
+  var sourceNode = _tlLinkDragState.sourceNode;
+  if (sourceNode) {
+    sourceNode.classList.remove('tl-drag-source');
+    sourceNode.style.outline = '';
+    sourceNode.style.outlineOffset = '';
   }
 }
 
@@ -2710,14 +2751,13 @@ async function _tlAttemptCreateDependency(sourceId, targetId) {
       return;
     }
     var freshChit = await freshResp.json();
-    freshChit.prerequisites = prereqs;
 
     console.log('[Timeline] Saving dependency: source=' + sourceId + ' target=' + targetId + ' prereqs=', prereqs);
 
-    var putResp = await fetch('/api/chits/' + targetId, {
-      method: 'PUT',
+    var putResp = await fetch('/api/chits/' + targetId + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
+      body: JSON.stringify({ prerequisites: prereqs })
     });
 
     if (!putResp.ok) {
@@ -3267,10 +3307,10 @@ async function _tlLinkAsChain() {
 
     // Persist via API
     try {
-      var resp = await fetch('/api/chits/' + encodeURIComponent(link.toId), {
-        method: 'PUT',
+      var resp = await fetch('/api/chits/' + encodeURIComponent(link.toId) + '/fields', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
+        body: JSON.stringify({ prerequisites: prereqs })
       });
 
       if (!resp.ok) {
@@ -3839,8 +3879,8 @@ async function _tlConfirmChitPickerSelections(targetChitId, selectedIds) {
 
   // Persist via API
   try {
-    var resp = await fetch('/api/chits/' + encodeURIComponent(targetChitId), {
-      method: 'PUT',
+    var resp = await fetch('/api/chits/' + encodeURIComponent(targetChitId) + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prerequisites: prereqs })
     });
@@ -4095,8 +4135,8 @@ function _tlConfirmRemovePrereqs(targetChitId, idsToRemove) {
  */
 async function _tlPersistPrereqUpdate(chit, newPrereqs, fallbackPrereqs) {
   try {
-    var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id), {
-      method: 'PUT',
+    var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id) + '/fields', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prerequisites: newPrereqs })
     });

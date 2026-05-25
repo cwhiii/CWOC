@@ -1236,6 +1236,7 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
         "habit_success", "habit_goal", "habit_last_action_date",
         "habit_hide_overall", "show_on_calendar", "availability",
         "snoozed_until", "assigned_to", "recurrence_exceptions",
+        "prerequisites",
     }
     conn = None
     try:

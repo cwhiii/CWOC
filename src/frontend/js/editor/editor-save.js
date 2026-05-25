@@ -431,7 +431,7 @@ async function buildChitObject(opts) {
     chit.checklist.length === 0 &&
     chit.child_chits.length === 0
   ) {
-    cwocToast("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.", "error");
+    if (!_silent) cwocToast("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.", "error");
     return null;
   }
 

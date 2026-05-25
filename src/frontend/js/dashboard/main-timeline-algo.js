@@ -410,6 +410,22 @@ function _tlLayoutByDate(chits, opts) {
         // No undated prereqs — this is a root in the undated graph.
         // If it has a dated prereq, start at the column after that prereq.
         var startDepth = maxDatedPrereqCol >= 0 ? (maxDatedPrereqCol + 1) : 0;
+
+        // Also check: if this undated chit is a PREREQ OF a dated chit,
+        // position it one column to the left of that dated dependent.
+        var fwdEdges = graph.forward.get(uid) || [];
+        var minDatedDepCol = Infinity;
+        for (var f = 0; f < fwdEdges.length; f++) {
+          if (undatedIdSet.has(fwdEdges[f])) continue; // skip undated dependents
+          var depPos = positions.get(fwdEdges[f]);
+          if (depPos) {
+            var depCol = Math.round((depPos.x - leftPadding) / colWidth);
+            if (depCol - 1 > startDepth) {
+              startDepth = depCol - 1;
+            }
+          }
+        }
+
         undatedDepths.set(uid, startDepth);
         udQueue.push(uid);
       }
@@ -458,7 +474,8 @@ function _tlLayoutByDate(chits, opts) {
     if (di === 0) {
       // First column (roots): sort so chits WITH forward edges (have dependents
       // in the undated section) come first, then those without.
-      // This ensures prereqs are at the top rows, aligned with their dependents.
+      // Within the "has dependents" group, sort by number of dependents descending
+      // (established chains first, newly-linked last), then alphabetically.
       depthChits.sort(function(a, b) {
         var aFwd = graph.forward.get(a.id) || [];
         var bFwd = graph.forward.get(b.id) || [];
@@ -466,6 +483,10 @@ function _tlLayoutByDate(chits, opts) {
         var bHasUndatedDep = bFwd.some(function(id) { return undatedIdSet.has(id); });
         if (aHasUndatedDep && !bHasUndatedDep) return -1;
         if (!aHasUndatedDep && bHasUndatedDep) return 1;
+        // Both have or both lack undated deps — sort by total connections descending
+        var aConns = aFwd.length + (graph.reverse.get(a.id) || []).length;
+        var bConns = bFwd.length + (graph.reverse.get(b.id) || []).length;
+        if (aConns !== bConns) return bConns - aConns;
         return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
       });
       for (var j = 0; j < depthChits.length; j++) {

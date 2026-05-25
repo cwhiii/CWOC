@@ -372,8 +372,8 @@ button.delete:hover {
 
 /* ── Chit list container ────────────────────────────────────────────────── */
 .chit-list {
-    background-color: #fffaf0;
-    border: 1px solid #6b4e31;
+    background: transparent;
+    border: none;
     margin-top: 100px;
     height: calc(100vh - 100px);
     overflow: hidden;

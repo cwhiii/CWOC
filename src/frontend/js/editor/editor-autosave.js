@@ -171,9 +171,10 @@ CwocAutoSave.prototype._performSave = async function () {
   }
 
   if (!chit) {
-    // Validation failed (buildChitObject returned null) — skip silently
-    // State stays as 'pending' so next change will retry
-    this._state = 'pending';
+    // Validation failed (buildChitObject returned null) — skip silently.
+    // Reset to 'saved' state so the indicator doesn't misleadingly show
+    // "Saving soon..." on a new empty chit that can't be saved yet.
+    this._state = 'saved';
     this._updateIndicator();
     return;
   }

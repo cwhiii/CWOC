@@ -199,13 +199,13 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 0;
+    z-index: 5;
     overflow: visible;
 }
 
 /* Dependency line paths — pointer-events on individual paths for click detection */
 .timeline-svg-overlay path {
-    pointer-events: stroke;
+    pointer-events: visibleStroke;
     fill: none;
     stroke: var(--aged-brown-medium, #8b4513);
     stroke-width: 2px;
@@ -213,6 +213,11 @@
     stroke-linejoin: round;
     cursor: pointer;
     transition: stroke-width 0.15s ease, opacity 0.15s ease, stroke 0.15s ease;
+}
+
+/* Wider hit area for clicking lines */
+.timeline-svg-overlay path:hover {
+    stroke-width: 6px;
 }
 
 /* Req 14.2: Both-complete dependency lines — dashed at 0.4 opacity */

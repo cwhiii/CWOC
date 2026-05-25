@@ -152,7 +152,7 @@
 .tasks-view,
 .alarms-view,
 .projects-view {
-    padding: 0.75em;
+    padding: 2px;
     display: flex;
     flex-direction: column;
     gap: 0.5em;
@@ -163,6 +163,7 @@
     font-size: 1em;
     color: #2b1e0f;
     overscroll-behavior: contain;
+    background: transparent;
 }
 .tasks-view .chit-card,
 .alarms-view .chit-card,
@@ -174,7 +175,7 @@
 
 /* ── Checklist view — masonry column layout (same as Notes) ───────────────── */
 .checklist-view {
-    padding: 0.75em;
+    padding: 2px;
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
@@ -183,6 +184,7 @@
     min-height: 0;
     box-sizing: border-box;
     overscroll-behavior: contain;
+    background: transparent;
 }
 .checklist-view .chit-card {
     position: absolute;
@@ -345,7 +347,7 @@ li.cwoc-dragging {
 
 /* ── Notes view styles — column-persistent layout ─────────────────────────── */
 .notes-view {
-    padding: 0.75em;
+    padding: 2px;
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
@@ -354,6 +356,7 @@ li.cwoc-dragging {
     min-height: 0;
     box-sizing: border-box;
     overscroll-behavior: contain;
+    background: transparent;
 }
 .notes-view .chit-card {
     position: absolute;
@@ -458,7 +461,7 @@ li.cwoc-dragging {
 
 /* ── Notebook view (combined Notes + Checklists) — masonry layout ─────────── */
 .notebook-view {
-    padding: 0.75em;
+    padding: 2px;
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
@@ -467,6 +470,7 @@ li.cwoc-dragging {
     min-height: 0;
     box-sizing: border-box;
     overscroll-behavior: contain;
+    background: transparent;
 }
 .notebook-view .chit-card {
     position: absolute;
