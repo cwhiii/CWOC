@@ -447,18 +447,41 @@ function _tlLayoutByDate(chits, opts) {
     nextUndatedCol++;
   }
 
-  // Position unconnected undated: fill grid after the connected columns
+  // Position unconnected undated: fill from bottom-left, going right then up.
+  // Calculate how many columns fit in the viewport, then pack them tightly.
   undatedUnconnected.sort(function(a, b) {
     return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
   });
-  var gridStartCol = nextUndatedCol;
-  var gridCols = Math.max(3, Math.ceil(Math.sqrt(undatedUnconnected.length)));
-  for (var i = 0; i < undatedUnconnected.length; i++) {
-    var col = gridStartCol + (i % gridCols);
-    var row = Math.floor(i / gridCols);
-    var x = leftPadding + col * colWidth;
-    var y = topPadding + row * (nodeHeight + vGap);
-    positions.set(undatedUnconnected[i].id, { x: x, y: y, lane: 'undated' });
+
+  if (undatedUnconnected.length > 0) {
+    // Determine available columns based on connected section width
+    var connectedMaxX = 0;
+    for (var i = 0; i < undatedConnected.length; i++) {
+      var p = positions.get(undatedConnected[i].id);
+      if (p && p.x > connectedMaxX) connectedMaxX = p.x;
+    }
+    // How many rows the connected section uses (to place unconnected below)
+    var connectedMaxRow = 0;
+    depthGroups.forEach(function(chitsAtDepth) {
+      if (chitsAtDepth.length > connectedMaxRow) connectedMaxRow = chitsAtDepth.length;
+    });
+
+    // Start unconnected below the connected section with a gap
+    var unconnectedTopY = topPadding + (connectedMaxRow + 1) * (nodeHeight + vGap);
+
+    // Use as many columns as needed to keep everything visible (target ~5 cols)
+    var ucGridCols = Math.max(3, Math.ceil(undatedUnconnected.length / 3));
+    var ucRows = Math.ceil(undatedUnconnected.length / ucGridCols);
+
+    // Fill bottom-left to right, then up: row 0 = bottom, row N = top
+    for (var i = 0; i < undatedUnconnected.length; i++) {
+      var col = i % ucGridCols;
+      var rowFromBottom = Math.floor(i / ucGridCols);
+      var row = (ucRows - 1) - rowFromBottom; // flip so first items are at bottom
+      var x = leftPadding + col * colWidth;
+      var y = unconnectedTopY + row * (nodeHeight + vGap);
+      positions.set(undatedUnconnected[i].id, { x: x, y: y, lane: 'undated' });
+    }
   }
 
   return positions;
