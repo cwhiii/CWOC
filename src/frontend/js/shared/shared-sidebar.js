@@ -210,7 +210,8 @@ function _cwocInjectSidebar() {
   html += '    <span data-val="date" class="active">By Date</span>';
   html += '    <span data-val="dependency">By Dependency</span>';
   html += '  </div>';
-  html += '  <button class="action-button" id="tl-critical-path-btn" style="width:100%;margin-bottom:0;font-size:0.85em;padding:6px;" title="Highlight the longest dependency chain to identify bottlenecks">⚡ Critical Path</button>';
+  html += '  <button class="action-button" id="tl-critical-path-btn" style="width:100%;margin-bottom:8px;font-size:0.85em;padding:6px;" title="Highlight the longest dependency chain to identify bottlenecks">⚡ Critical Path</button>';
+  html += '  <label style="display:flex;align-items:center;gap:6px;font-size:0.85em;cursor:pointer;"><input type="checkbox" id="tl-grey-completed" checked /> Grey out completed</label>';
   html += '</div>';
 
   /* 3d. Indicators time range (only visible on Indicators tab) */

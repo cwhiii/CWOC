@@ -159,6 +159,19 @@ function displayTimelineView(chitsToDisplay) {
 
   // Wire critical path toggle button (Req 13.1–13.6) — Task 4.2
   _tlInitCriticalPathToggle();
+
+  // Wire grey-out completed checkbox — persist state in localStorage
+  var greyCheckbox = document.getElementById('tl-grey-completed');
+  if (greyCheckbox) {
+    // Restore saved state (default: checked)
+    var savedGrey = localStorage.getItem('cwoc_tl_greyCompleted');
+    greyCheckbox.checked = savedGrey !== 'false'; // default true
+
+    greyCheckbox.addEventListener('change', function() {
+      localStorage.setItem('cwoc_tl_greyCompleted', greyCheckbox.checked ? 'true' : 'false');
+      _tlRender(_tlCurrentChits);
+    });
+  }
 }
 
 
@@ -380,14 +393,20 @@ function _tlBuildNodeHTML(chit, zoomLevel) {
   }
 
   // ALWAYS set a solid background — never transparent
-  node.style.backgroundColor = 'ivory';
+  node.style.backgroundColor = '#fffaf0';
 
-  // Completed nodes: solid gray, no color
+  // Completed nodes: grey them out if enabled, otherwise keep normal colors
   if (isComplete) {
-    node.style.backgroundColor = '#d4d4d4';
-    node.style.borderColor = '#999';
-    node.style.color = '#666';
-  } else if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color.trim() !== '') {
+    var greyEnabled = localStorage.getItem('cwoc_tl_greyCompleted') !== 'false';
+    if (greyEnabled) {
+      node.style.backgroundColor = '#d4d4d4';
+      node.style.borderColor = '#999';
+      node.style.color = '#666';
+      node.style.opacity = '0.5';
+    } else if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color.trim() !== '' && chit.color.trim() !== '#') {
+      node.style.backgroundColor = chit.color;
+    }
+  } else if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color.trim() !== '' && chit.color.trim() !== '#') {
     node.style.backgroundColor = chit.color;
   }
 
