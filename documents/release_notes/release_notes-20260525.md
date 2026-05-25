@@ -1,3 +1,7 @@
+## cwoc_server-20260525_1419
+
+Reverted mobile web Email Zone Notes Parity changes — the implementation broke scrolling, button interactions, and layout on mobile. Restored original email zone behavior (zone-header buttons visible, proper body height, no auto-grow). Fixed pre-existing bug where the formatting toolbar (Bold/Italic/etc.) was incorrectly shown on received/sent emails on mobile.
+
 ## cwoc_server-20260525_1321 / cwoc_app-20260525_1321
 
 Email Zone Notes Parity — complete feature. The Email zone on both Android app and mobile web now follows the Notes zone's bottom-pinned toolbar pattern: body fills available space, a pinned toolbar provides formatting (Bold, Italic, Strikethrough, Link, Heading, Bullet, Numbered, Blockquote/Code), undo/redo, preview toggle, and email-specific actions in a compact overflow menu. Desktop web (>768px) is unchanged.

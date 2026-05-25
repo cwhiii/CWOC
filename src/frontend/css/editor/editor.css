@@ -6246,12 +6246,6 @@ input.location {
         display: none !important;
     }
 
-    /* Hide email zone-header action buttons on mobile — actions are in the bottom toolbar */
-    body.mobile-zone-mode #emailSection .zone-actions .zone-button:not(.zone-button-persist),
-    body.mobile-zone-mode #emailSection .zone-actions .notes-undo-redo {
-        display: none !important;
-    }
-
     /* Menu backdrop — blocks all interaction when a zone-more-menu is open */
     .mobile-menu-backdrop {
         display: none;
@@ -6593,11 +6587,10 @@ input.location {
 
     body.mobile-zone-mode #emailContent #emailBody {
         flex: 1;
-        min-height: 200px !important;
+        min-height: calc(100vh - 260px) !important;
         resize: none;
         width: 100%;
         box-sizing: border-box;
-        overflow-y: hidden;
     }
 
     body.mobile-zone-mode #emailContent .email-cc-toggle-btn {

@@ -1106,7 +1106,7 @@
                                     <button type="button" title="Blockquote" onclick="_emailFormatBtn('q','emailBody')">❝</button>
                                     <button type="button" title="Code" onclick="_emailFormatBtn('code','emailBody')">⟨⟩</button>
                                 </div>
-                                <textarea id="emailBody" rows="8" placeholder="Compose your message (markdown supported)..." oninput="autoGrowEmailBody(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&_notesListContinue&&_notesListContinue(this)){event.preventDefault();}"></textarea>
+                                <textarea id="emailBody" rows="8" placeholder="Compose your message (markdown supported)..." onkeydown="if(event.key==='Enter'&&!event.shiftKey&&_notesListContinue&&_notesListContinue(this)){event.preventDefault();}"></textarea>
                                 <div id="emailBodyRendered" class="email-rendered-output markdown-output" style="display:none;cursor:pointer;min-height:180px;padding:10px 12px;" title="Double-click to edit" ondblclick="toggleEmailViewMode(event)"></div>
                             </div>
                         </div>

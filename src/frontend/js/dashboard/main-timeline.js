@@ -534,7 +534,19 @@ function _tlRenderLines(graph, positions) {
     var ld = lineData[li];
     var lineOffset = lineOffsets[li] || 0;
 
-    var d = _tlRouteAroundNodes(ld.startX, ld.startY, ld.endX, ld.endY, ld.prereqId, ld.depId, allNodeRects, lineOffset);
+    var d;
+    if (ld.endX >= ld.startX) {
+      // Normal left-to-right: use routing algorithm
+      d = _tlRouteAroundNodes(ld.startX, ld.startY, ld.endX, ld.endY, ld.prereqId, ld.depId, allNodeRects, lineOffset);
+    } else {
+      // Backward (target is left of source): route down/up then left
+      // Go down from source, then left to target
+      var midY = Math.max(ld.startY, ld.endY) + 30 + Math.abs(lineOffset);
+      d = 'M ' + ld.startX + ',' + ld.startY +
+          ' V ' + midY +
+          ' H ' + ld.endX +
+          ' V ' + ld.endY;
+    }
 
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', d);
@@ -803,7 +815,7 @@ function _tlRenderDateMarkers(chits, opts) {
   // Render markers centered above each date column
   for (var idx = 0; idx < sortedDates.length; idx++) {
     var date = sortedDates[idx];
-    var x = leftPadding + idx * colWidth + nodeWidth / 2; // Center of column
+    var x = leftPadding + idx * colWidth; // Left edge of column (aligned with chits)
 
     var marker = document.createElement('div');
     marker.className = 'tl-date-marker';

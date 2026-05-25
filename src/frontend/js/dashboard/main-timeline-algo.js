@@ -192,9 +192,8 @@ function _tlCriticalPath(chits) {
   if (forward.size === 0) return new Set();
 
   // Compute longest distance from any root to each node using topological processing
-  // dist[node] = longest path length (in edges) from any root to this node
   var dist = new Map();
-  var predecessor = new Map(); // node → [predecessor nodes on longest path]
+  var predecessor = new Map();
 
   // Find roots (no incoming edges)
   var roots = [];
@@ -209,7 +208,6 @@ function _tlCriticalPath(chits) {
   }
 
   // BFS-based longest path (process in topological order via Kahn's algorithm)
-  // Compute in-degrees
   var inDegree = new Map();
   for (var i = 0; i < chits.length; i++) {
     var id = chits[i].id;
@@ -237,13 +235,11 @@ function _tlCriticalPath(chits) {
         dist.set(dep, newDist);
         predecessor.set(dep, [current]);
       } else if (newDist === existingDist) {
-        // Tied path — add this predecessor too
         var preds = predecessor.get(dep) || [];
         preds.push(current);
         predecessor.set(dep, preds);
       }
 
-      // Decrement in-degree and enqueue when all predecessors processed
       var deg = inDegree.get(dep) - 1;
       inDegree.set(dep, deg);
       if (deg === 0) {
@@ -252,16 +248,15 @@ function _tlCriticalPath(chits) {
     }
   }
 
-  // Find the maximum distance (longest path length)
+  // Find the maximum distance
   var maxDist = 0;
   dist.forEach(function(d) {
     if (d > maxDist) maxDist = d;
   });
 
-  // If max distance is 0, no meaningful path exists
   if (maxDist === 0) return new Set();
 
-  // Find all leaf nodes (no outgoing edges) that have the maximum distance
+  // Find all leaf nodes at maximum distance
   var endNodes = [];
   dist.forEach(function(d, id) {
     var outgoing = forward.get(id);
@@ -270,14 +265,13 @@ function _tlCriticalPath(chits) {
     }
   });
 
-  // If no end nodes at max distance, find any nodes at max distance
   if (endNodes.length === 0) {
     dist.forEach(function(d, id) {
       if (d === maxDist) endNodes.push(id);
     });
   }
 
-  // Trace back from end nodes through predecessors to collect all critical path nodes
+  // Trace back from end nodes through predecessors
   var criticalNodes = new Set();
   var traceQueue = [];
   for (var i = 0; i < endNodes.length; i++) {
@@ -306,27 +300,31 @@ function _tlCriticalPath(chits) {
 
 /**
  * Compute node positions for date-based layout.
- * Chits are positioned horizontally under their date column marker.
- * Within each date column, chits stack vertically.
- * Undated chits go at the end (rightmost column).
- * Dependency lines route through the gaps between date columns.
+ * Dated chits are grouped by date into columns (one column per date).
+ * Undated chits are placed below, split into "connected" (have edges to other
+ * undated chits) and "unaffiliated" (no edges to other undated chits).
+ * Connected undated chits are laid out by dependency depth in horizontal chains.
+ * Unaffiliated undated chits fill a 2-row grid below the connected section.
  *
  * @param {Array} chits - Filtered chit array
  * @param {object} opts - { canvasWidth, nodeWidth, nodeHeight }
  * @returns {Map<string, {x: number, y: number, lane: string}>} - Position map
  */
 function _tlLayoutByDate(chits, opts) {
-  var nodeWidth = opts.nodeWidth || 180;
-  var nodeHeight = opts.nodeHeight || 52;
-  var hGap = 60; // Horizontal gap between date columns (lines route here)
-  var vGap = 10; // Vertical gap between nodes in same column
-  var topPadding = 30; // Clear date labels
+  var nodeWidth = 180;
+  var nodeHeight = 52;
+  var hGap = 60;
+  var vGap = 10;
+  var topPadding = 30;
   var leftPadding = 12;
+  var colWidth = nodeWidth + hGap; // 240
 
   var positions = new Map();
   var graph = _tlBuildGraph(chits);
 
-  // Separate dated and undated chits
+  // ── DATED SECTION ──────────────────────────────────────────────────────────
+  // Only chits with due_datetime appear here, grouped by date, one column per date.
+
   var datedChits = [];
   var undatedChits = [];
   for (var i = 0; i < chits.length; i++) {
@@ -334,8 +332,8 @@ function _tlLayoutByDate(chits, opts) {
     else undatedChits.push(chits[i]);
   }
 
-  // Group dated chits by their effective date
-  var dateGroups = new Map(); // dateString → [chit, ...]
+  // Group dated chits by effective date
+  var dateGroups = new Map();
   for (var i = 0; i < datedChits.length; i++) {
     var dateStr = _tlGetEffectiveDate(datedChits[i]);
     if (!dateGroups.has(dateStr)) dateGroups.set(dateStr, []);
@@ -345,103 +343,103 @@ function _tlLayoutByDate(chits, opts) {
   // Sort dates chronologically
   var sortedDates = Array.from(dateGroups.keys()).sort();
 
-  // Position dated chits under their date column
-  var colWidth = nodeWidth + hGap;
+  // Build a lookup: dated chit ID → column index (for depth computation later)
+  var datedColMap = new Map();
+
   for (var colIdx = 0; colIdx < sortedDates.length; colIdx++) {
     var date = sortedDates[colIdx];
     var chitsAtDate = dateGroups.get(date);
     var x = leftPadding + colIdx * colWidth;
 
-    // Sort within column: connected first, incomplete before complete, then alphabetical
+    // Sort alphabetically within column
     chitsAtDate.sort(function(a, b) {
-      var aConn = (graph.forward.has(a.id) || graph.reverse.has(a.id)) ? 0 : 1;
-      var bConn = (graph.forward.has(b.id) || graph.reverse.has(b.id)) ? 0 : 1;
-      if (aConn !== bConn) return aConn - bConn;
-      var aC = ((a.status || '').toLowerCase().replace(/\s+/g, '') === 'complete') ? 1 : 0;
-      var bC = ((b.status || '').toLowerCase().replace(/\s+/g, '') === 'complete') ? 1 : 0;
-      if (aC !== bC) return aC - bC;
-      return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
+      var ta = (a.title || '').toLowerCase();
+      var tb = (b.title || '').toLowerCase();
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
     });
 
     for (var j = 0; j < chitsAtDate.length; j++) {
       var y = topPadding + j * (nodeHeight + vGap);
       positions.set(chitsAtDate[j].id, { x: x, y: y, lane: 'dated' });
+      datedColMap.set(chitsAtDate[j].id, colIdx);
     }
   }
 
-  // Position undated chits in their own lane using dependency-aware layout.
-  // "Connected" = has edges to OTHER UNDATED chits (not just dated prereqs).
-  // Items that only connect to dated chits (no undated edges) are unaffiliated.
-  var undatedConnected = [];
-  var undatedUnconnected = [];
+  // ── UNDATED SECTION ────────────────────────────────────────────────────────
+
+  // Build undated ID set
   var undatedIdSet = new Set();
   for (var i = 0; i < undatedChits.length; i++) {
     undatedIdSet.add(undatedChits[i].id);
   }
+
+  // Classification: "connected" vs "unaffiliated"
+  // Connected = has at least one edge to ANOTHER undated chit OR to a dated chit
+  // Unaffiliated = no edges at all (truly isolated)
+  var undatedConnected = [];
+  var undatedUnaffiliated = [];
   for (var i = 0; i < undatedChits.length; i++) {
     var uid = undatedChits[i].id;
-    // Check if this chit has any edge to ANOTHER undated chit
     var fwd = graph.forward.get(uid) || [];
     var rev = graph.reverse.get(uid) || [];
-    var hasUndatedEdge = fwd.some(function(id) { return undatedIdSet.has(id); }) ||
-                         rev.some(function(id) { return undatedIdSet.has(id); });
-    if (hasUndatedEdge) {
+    var hasAnyEdge = fwd.length > 0 || rev.length > 0;
+    if (hasAnyEdge) {
       undatedConnected.push(undatedChits[i]);
     } else {
-      undatedUnconnected.push(undatedChits[i]);
+      undatedUnaffiliated.push(undatedChits[i]);
     }
   }
 
-  // Compute dependency depths for undated connected chits only
-  // (depth 0 = no prereqs among undated set, depth 1 = depends on depth 0, etc.)
+  // ── Depth computation for connected chits ──────────────────────────────────
   var undatedDepths = new Map();
+
   if (undatedConnected.length > 0) {
-    // Find roots among undated (no prereqs that are also undated)
-    var udQueue = [];
+    // Roots = connected chits with no UNDATED prereqs
+    var roots = [];
     for (var i = 0; i < undatedConnected.length; i++) {
       var uid = undatedConnected[i].id;
-      var prereqs = graph.reverse.get(uid) || [];
+      var rev = graph.reverse.get(uid) || [];
       var hasUndatedPrereq = false;
-      var maxDatedPrereqCol = -1;
-      for (var p = 0; p < prereqs.length; p++) {
-        if (undatedIdSet.has(prereqs[p])) { hasUndatedPrereq = true; }
-        else {
-          // Dated prereq — find its column index
-          var datedPos = positions.get(prereqs[p]);
-          if (datedPos) {
-            var col = Math.round((datedPos.x - leftPadding) / colWidth);
-            if (col > maxDatedPrereqCol) maxDatedPrereqCol = col;
-          }
-        }
+      for (var k = 0; k < rev.length; k++) {
+        if (undatedIdSet.has(rev[k])) { hasUndatedPrereq = true; break; }
       }
-      if (!hasUndatedPrereq) {
-        // No undated prereqs — this is a root in the undated graph.
-        // If it has a dated prereq, start at the column after that prereq.
-        var startDepth = maxDatedPrereqCol >= 0 ? (maxDatedPrereqCol + 1) : 0;
-
-        // Also check: if this undated chit is a PREREQ OF a dated chit,
-        // position it one column to the left of that dated dependent.
-        var fwdEdges = graph.forward.get(uid) || [];
-        var minDatedDepCol = Infinity;
-        for (var f = 0; f < fwdEdges.length; f++) {
-          if (undatedIdSet.has(fwdEdges[f])) continue; // skip undated dependents
-          var depPos = positions.get(fwdEdges[f]);
-          if (depPos) {
-            var depCol = Math.round((depPos.x - leftPadding) / colWidth);
-            if (depCol - 1 > startDepth) {
-              startDepth = depCol - 1;
-            }
-          }
-        }
-
-        undatedDepths.set(uid, startDepth);
-        udQueue.push(uid);
-      }
+      if (!hasUndatedPrereq) roots.push(undatedConnected[i]);
     }
-    // BFS to assign depths
-    var udHead = 0;
-    while (udHead < udQueue.length) {
-      var cur = udQueue[udHead++];
+
+    // Root starting depth: consider connections to dated chits
+    for (var i = 0; i < roots.length; i++) {
+      var uid = roots[i].id;
+      var startDepth = 0;
+
+      // Check if this root is a prereq OF a dated chit → depth = dated dependent's column - 1
+      var fwdEdges = graph.forward.get(uid) || [];
+      for (var f = 0; f < fwdEdges.length; f++) {
+        if (datedColMap.has(fwdEdges[f])) {
+          var depCol = datedColMap.get(fwdEdges[f]);
+          var candidate = depCol - 1;
+          if (candidate > startDepth) startDepth = candidate;
+        }
+      }
+
+      // Check if this root depends ON a dated chit → depth = dated prereq's column + 1
+      var revEdges = graph.reverse.get(uid) || [];
+      for (var r = 0; r < revEdges.length; r++) {
+        if (datedColMap.has(revEdges[r])) {
+          var prereqCol = datedColMap.get(revEdges[r]);
+          var candidate = prereqCol + 1;
+          if (candidate > startDepth) startDepth = candidate;
+        }
+      }
+
+      undatedDepths.set(uid, startDepth);
+    }
+
+    // BFS forward through undated edges to assign depths
+    var bfsQueue = [];
+    for (var i = 0; i < roots.length; i++) bfsQueue.push(roots[i].id);
+    var bfsHead = 0;
+    while (bfsHead < bfsQueue.length) {
+      var cur = bfsQueue[bfsHead++];
       var curDepth = undatedDepths.get(cur);
       var deps = graph.forward.get(cur) || [];
       for (var d = 0; d < deps.length; d++) {
@@ -450,342 +448,282 @@ function _tlLayoutByDate(chits, opts) {
         var existing = undatedDepths.get(deps[d]);
         if (existing === undefined || newDepth > existing) {
           undatedDepths.set(deps[d], newDepth);
-          udQueue.push(deps[d]);
+          bfsQueue.push(deps[d]);
         }
       }
     }
-    // Any not reached get depth 0
+
+    // Unreached chits get depth 0
     for (var i = 0; i < undatedConnected.length; i++) {
       if (!undatedDepths.has(undatedConnected[i].id)) {
         undatedDepths.set(undatedConnected[i].id, 0);
       }
     }
+
+    // Enforce left-to-right: if any undated chit has depth <= its undated prereq's depth, bump it
+    var enforceChanged = true;
+    var enforcePass = 0;
+    while (enforceChanged && enforcePass < undatedConnected.length) {
+      enforceChanged = false;
+      enforcePass++;
+      for (var i = 0; i < undatedConnected.length; i++) {
+        var uid = undatedConnected[i].id;
+        var myDepth = undatedDepths.get(uid) || 0;
+        var rev = graph.reverse.get(uid) || [];
+        for (var r = 0; r < rev.length; r++) {
+          if (!undatedIdSet.has(rev[r])) continue;
+          var prereqDepth = undatedDepths.get(rev[r]);
+          if (prereqDepth !== undefined && myDepth <= prereqDepth) {
+            undatedDepths.set(uid, prereqDepth + 1);
+            enforceChanged = true;
+          }
+        }
+      }
+    }
   }
 
-  // Group connected undated by depth (column)
-  var depthGroups = new Map();
-  for (var i = 0; i < undatedConnected.length; i++) {
-    var depth = undatedDepths.get(undatedConnected[i].id) || 0;
-    if (!depthGroups.has(depth)) depthGroups.set(depth, []);
-    depthGroups.get(depth).push(undatedConnected[i]);
-  }
-
-  // Position connected undated chits as PAIRS on the same row.
-  // Each prereq and its dependent(s) share the same Y coordinate.
-  // Pairs are placed top-to-bottom, most-connected first.
-  
-  // Build connected components among undated connected chits.
-  // All items reachable from each other (through undated edges) form one cluster.
+  // ── Connected components (BFS through ALL undated edges) ───────────────────
+  var components = []; // Array of arrays of chit IDs
   var componentOf = new Map(); // chitId → component index
-  var components = []; // [[chit, chit, ...], ...]
   var visitedComp = new Set();
-  
+
   for (var i = 0; i < undatedConnected.length; i++) {
     var startId = undatedConnected[i].id;
     if (visitedComp.has(startId)) continue;
-    
-    // BFS to find all members of this component
+
     var comp = [];
-    var bfsQueue = [startId];
+    var cQueue = [startId];
     visitedComp.add(startId);
-    var bfsHead = 0;
-    while (bfsHead < bfsQueue.length) {
-      var cur = bfsQueue[bfsHead++];
+    var cHead = 0;
+    while (cHead < cQueue.length) {
+      var cur = cQueue[cHead++];
       comp.push(cur);
       componentOf.set(cur, components.length);
-      // Follow forward and reverse edges within undated set
       var edges = (graph.forward.get(cur) || []).concat(graph.reverse.get(cur) || []);
       for (var e = 0; e < edges.length; e++) {
         if (undatedIdSet.has(edges[e]) && !visitedComp.has(edges[e])) {
           visitedComp.add(edges[e]);
-          bfsQueue.push(edges[e]);
+          cQueue.push(edges[e]);
         }
       }
     }
     components.push(comp);
   }
 
-  // For each component, build chains (rows) by tracing forward from roots
-  var chains = [];
+  // ── Row building within each component ─────────────────────────────────────
+  // Build a chit lookup for undated connected
+  var undatedChitMap = new Map();
+  for (var i = 0; i < undatedConnected.length; i++) {
+    undatedChitMap.set(undatedConnected[i].id, undatedConnected[i]);
+  }
+
+  var allRows = []; // Each entry: { row: [chit, ...], componentIdx: number }
+
   for (var ci = 0; ci < components.length; ci++) {
     var compIds = new Set(components[ci]);
-    var compChits = undatedConnected.filter(function(c) { return compIds.has(c.id); });
     var compPlaced = new Set();
-    
+
     // Find roots within this component (no undated prereqs within component)
     var compRoots = [];
-    for (var j = 0; j < compChits.length; j++) {
-      var rev = graph.reverse.get(compChits[j].id) || [];
-      var hasCompPrereq = rev.some(function(id) { return compIds.has(id); });
-      if (!hasCompPrereq) compRoots.push(compChits[j]);
+    for (var j = 0; j < components[ci].length; j++) {
+      var cid = components[ci][j];
+      var rev = graph.reverse.get(cid) || [];
+      var hasCompPrereq = false;
+      for (var k = 0; k < rev.length; k++) {
+        if (compIds.has(rev[k])) { hasCompPrereq = true; break; }
+      }
+      if (!hasCompPrereq) compRoots.push(cid);
     }
-    
-    // Sort roots by connections descending
+
+    // Sort roots by forward-edge count descending (most connections first)
     compRoots.sort(function(a, b) {
-      var aConns = (graph.forward.get(a.id) || []).length + (graph.reverse.get(a.id) || []).length;
-      var bConns = (graph.forward.get(b.id) || []).length + (graph.reverse.get(b.id) || []).length;
-      return bConns - aConns;
+      var aFwd = (graph.forward.get(a) || []).filter(function(id) { return undatedIdSet.has(id); }).length;
+      var bFwd = (graph.forward.get(b) || []).filter(function(id) { return undatedIdSet.has(id); }).length;
+      return bFwd - aFwd;
     });
-    
-    // Trace chains from each root
+
+    // Trace chains: from each root, follow forward edges picking unplaced items
     for (var ri = 0; ri < compRoots.length; ri++) {
-      var root = compRoots[ri];
-      if (compPlaced.has(root.id)) continue;
-      var chain = [root];
-      compPlaced.add(root.id);
-      
-      var current = root;
+      var rootId = compRoots[ri];
+      if (compPlaced.has(rootId)) continue;
+      var chain = [undatedChitMap.get(rootId)];
+      compPlaced.add(rootId);
+
+      var current = rootId;
       while (true) {
-        var fwd = graph.forward.get(current.id) || [];
-        var nextInChain = null;
+        var fwd = graph.forward.get(current) || [];
+        var nextId = null;
         for (var f = 0; f < fwd.length; f++) {
           if (compIds.has(fwd[f]) && !compPlaced.has(fwd[f])) {
-            var nextChit = compChits.find(function(c) { return c.id === fwd[f]; });
-            if (nextChit) {
-              chain.push(nextChit);
-              compPlaced.add(nextChit.id);
-              nextInChain = nextChit;
-              break;
-            }
+            nextId = fwd[f];
+            break;
           }
         }
-        if (!nextInChain) break;
-        current = nextInChain;
+        if (!nextId) break;
+        chain.push(undatedChitMap.get(nextId));
+        compPlaced.add(nextId);
+        current = nextId;
       }
-      chains.push(chain);
+      allRows.push({ row: chain, componentIdx: ci });
     }
-    
-    // Any remaining in component
-    for (var j = 0; j < compChits.length; j++) {
-      if (!compPlaced.has(compChits[j].id)) {
-        chains.push([compChits[j]]);
-        compPlaced.add(compChits[j].id);
+
+    // Remaining unplaced items in component = single-item rows
+    for (var j = 0; j < components[ci].length; j++) {
+      var cid = components[ci][j];
+      if (!compPlaced.has(cid)) {
+        allRows.push({ row: [undatedChitMap.get(cid)], componentIdx: ci });
+        compPlaced.add(cid);
       }
     }
   }
 
-  // Sort chains: items connected to dated chits float to TOP.
-  // Then sort by chain length descending (longer chains = more important).
-  // Then by depth (items closer to dated section first).
-  chains.sort(function(a, b) {
-    // Check if any member has a dated prereq or dated dependent
-    var aHasDated = a.some(function(c) {
-      var prereqs = graph.reverse.get(c.id) || [];
+  // ── Row sorting (determines vertical order) ────────────────────────────────
+  // Priority 1: Rows where a member DIRECTLY connects to a dated chit (not through undated chain)
+  // Priority 2: Keep clusters together (by component index)
+  // Priority 3: Longer chains higher
+  allRows.sort(function(a, b) {
+    // Check for DIRECT dated connection (the chit itself has a dated prereq/dependent)
+    var aDirectDated = a.row.some(function(c) {
       var fwd = graph.forward.get(c.id) || [];
-      return prereqs.some(function(p) { return !undatedIdSet.has(p); }) ||
-             fwd.some(function(f) { return !undatedIdSet.has(f); });
+      var rev = graph.reverse.get(c.id) || [];
+      for (var k = 0; k < fwd.length; k++) {
+        if (!undatedIdSet.has(fwd[k]) && positions.has(fwd[k])) return true;
+      }
+      for (var k = 0; k < rev.length; k++) {
+        if (!undatedIdSet.has(rev[k]) && positions.has(rev[k])) return true;
+      }
+      return false;
     });
-    var bHasDated = b.some(function(c) {
-      var prereqs = graph.reverse.get(c.id) || [];
+    var bDirectDated = b.row.some(function(c) {
       var fwd = graph.forward.get(c.id) || [];
-      return prereqs.some(function(p) { return !undatedIdSet.has(p); }) ||
-             fwd.some(function(f) { return !undatedIdSet.has(f); });
+      var rev = graph.reverse.get(c.id) || [];
+      for (var k = 0; k < fwd.length; k++) {
+        if (!undatedIdSet.has(fwd[k]) && positions.has(fwd[k])) return true;
+      }
+      for (var k = 0; k < rev.length; k++) {
+        if (!undatedIdSet.has(rev[k]) && positions.has(rev[k])) return true;
+      }
+      return false;
     });
-    if (aHasDated && !bHasDated) return -1;
-    if (!aHasDated && bHasDated) return 1;
-    // Both have or lack dated connections — longer chains first
-    if (a.length !== b.length) return b.length - a.length;
-    // Same length — alphabetical by first item
-    var aTitle = (a[0] && a[0].title || '').toLowerCase();
-    var bTitle = (b[0] && b[0].title || '').toLowerCase();
-    return aTitle < bTitle ? -1 : aTitle > bTitle ? 1 : 0;
+    if (aDirectDated && !bDirectDated) return -1;
+    if (!aDirectDated && bDirectDated) return 1;
+    // Then by component index (keeps clusters together)
+    if (a.componentIdx !== b.componentIdx) return a.componentIdx - b.componentIdx;
+    // Then by chain length descending
+    return b.row.length - a.row.length;
   });
 
-  // Place each chain on a single row — all members share the same Y
-  var nextUndatedCol = 0;
+  // ── Row placement ──────────────────────────────────────────────────────────
+  // Merge all direct-dated single-item rows onto row 0 (they share the first row)
+  var directDatedRow = [];
+  var otherRows = [];
+  for (var ri = 0; ri < allRows.length; ri++) {
+    var row = allRows[ri].row;
+    // A row is "direct dated" if it's a single item with a direct dated connection
+    // and no undated prereqs (it's a leaf hanging off the dated section)
+    if (row.length === 1) {
+      var c = row[0];
+      var fwd = graph.forward.get(c.id) || [];
+      var rev = graph.reverse.get(c.id) || [];
+      var hasDatedEdge = false;
+      for (var k = 0; k < fwd.length; k++) {
+        if (!undatedIdSet.has(fwd[k]) && positions.has(fwd[k])) { hasDatedEdge = true; break; }
+      }
+      if (!hasDatedEdge) {
+        for (var k = 0; k < rev.length; k++) {
+          if (!undatedIdSet.has(rev[k]) && positions.has(rev[k])) { hasDatedEdge = true; break; }
+        }
+      }
+      // Also check: no undated dependents (it's truly just hanging off dated)
+      var hasUndatedDep = fwd.some(function(id) { return undatedIdSet.has(id); });
+      var hasUndatedPrereq = rev.some(function(id) { return undatedIdSet.has(id); });
+      if (hasDatedEdge && !hasUndatedDep && !hasUndatedPrereq) {
+        directDatedRow.push(c);
+        continue;
+      }
+    }
+    otherRows.push(allRows[ri]);
+  }
+
   var currentRow = 0;
-  for (var ci = 0; ci < chains.length; ci++) {
-    var chain = chains[ci];
+
+  // Place direct-dated items: pack onto as few rows as possible.
+  // Items only need a new row if their X (depth) collides with another on the same row.
+  if (directDatedRow.length > 0) {
+    // Sort by depth so we can pack efficiently
+    directDatedRow.sort(function(a, b) {
+      return (undatedDepths.get(a.id) || 0) - (undatedDepths.get(b.id) || 0);
+    });
+
+    // Greedy row packing: for each item, find the first row where its X isn't taken
+    var ddRows = [[]]; // array of arrays, each sub-array = items on that row
+    var ddRowDepths = [new Set()]; // track which depths are used per row
+
+    for (var mi = 0; mi < directDatedRow.length; mi++) {
+      var depth = undatedDepths.get(directDatedRow[mi].id) || 0;
+      var placed = false;
+      for (var r = 0; r < ddRows.length; r++) {
+        if (!ddRowDepths[r].has(depth)) {
+          ddRows[r].push(directDatedRow[mi]);
+          ddRowDepths[r].add(depth);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        ddRows.push([directDatedRow[mi]]);
+        ddRowDepths.push(new Set([depth]));
+      }
+    }
+
+    // Place each packed row
+    for (var r = 0; r < ddRows.length; r++) {
+      var y = topPadding + currentRow * (nodeHeight + vGap);
+      for (var mi = 0; mi < ddRows[r].length; mi++) {
+        var depth = undatedDepths.get(ddRows[r][mi].id) || 0;
+        var x = leftPadding + depth * colWidth;
+        positions.set(ddRows[r][mi].id, { x: x, y: y, lane: 'undated' });
+      }
+      currentRow++;
+    }
+  }
+
+  // Place remaining rows
+  for (var ri = 0; ri < otherRows.length; ri++) {
+    var row = otherRows[ri].row;
     var y = topPadding + currentRow * (nodeHeight + vGap);
-    
-    for (var mi = 0; mi < chain.length; mi++) {
-      var depth = undatedDepths.get(chain[mi].id) || 0;
+    for (var mi = 0; mi < row.length; mi++) {
+      var depth = undatedDepths.get(row[mi].id) || 0;
       var x = leftPadding + depth * colWidth;
-      positions.set(chain[mi].id, { x: x, y: y, lane: 'undated' });
-      if (depth >= nextUndatedCol) nextUndatedCol = depth + 1;
+      positions.set(row[mi].id, { x: x, y: y, lane: 'undated' });
     }
     currentRow++;
   }
 
-  // Position unconnected undated: fill from bottom-left, going right then up.
-  // Calculate how many columns fit in the viewport, then pack them tightly.
-  undatedUnconnected.sort(function(a, b) {
-    return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
+  // ── Unaffiliated placement ─────────────────────────────────────────────────
+  // Sort alphabetically, place BELOW connected section with 1 extra row gap.
+  // 2-row grid, fill left-to-right then next row.
+  undatedUnaffiliated.sort(function(a, b) {
+    var ta = (a.title || '').toLowerCase();
+    var tb = (b.title || '').toLowerCase();
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
   });
 
-  if (undatedUnconnected.length > 0) {
-    // Determine available columns based on connected section width
-    var connectedMaxX = 0;
-    for (var i = 0; i < undatedConnected.length; i++) {
-      var p = positions.get(undatedConnected[i].id);
-      if (p && p.x > connectedMaxX) connectedMaxX = p.x;
-    }
-    // How many rows the connected section uses (to place unconnected below)
-    var connectedMaxRow = 0;
-    depthGroups.forEach(function(chitsAtDepth) {
-      if (chitsAtDepth.length > connectedMaxRow) connectedMaxRow = chitsAtDepth.length;
-    });
+  if (undatedUnaffiliated.length > 0) {
+    // Gap of 1 extra row below connected section
+    var unaffiliatedStartRow = currentRow + 1;
+    var ucCols = Math.ceil(undatedUnaffiliated.length / 2);
 
-    // Start unconnected below the connected section with a gap
-    var unconnectedTopY = topPadding + (connectedMaxRow + 1) * (nodeHeight + vGap);
-
-    // Use 2 rows max for unconnected items — wide layout to fit on screen
-    var ucRows = 2;
-    var ucGridCols = Math.ceil(undatedUnconnected.length / ucRows);
-
-    // Fill bottom-left to right, then up: row 0 = bottom, row N = top
-    for (var i = 0; i < undatedUnconnected.length; i++) {
-      var col = i % ucGridCols;
-      var rowFromBottom = Math.floor(i / ucGridCols);
-      var row = (ucRows - 1) - rowFromBottom; // flip so first items are at bottom
+    for (var i = 0; i < undatedUnaffiliated.length; i++) {
+      var col = i % ucCols;
+      var rowOffset = Math.floor(i / ucCols);
       var x = leftPadding + col * colWidth;
-      var y = unconnectedTopY + row * (nodeHeight + vGap);
-      positions.set(undatedUnconnected[i].id, { x: x, y: y, lane: 'undated' });
+      var y = topPadding + (unaffiliatedStartRow + rowOffset) * (nodeHeight + vGap);
+      positions.set(undatedUnaffiliated[i].id, { x: x, y: y, lane: 'undated' });
     }
   }
 
   return positions;
-}
-
-/**
- * Sort chits so that connected ones (sharing dependency edges) are adjacent.
- * Groups chits by connected component, then orders components by earliest date.
- * Within each component, orders by dependency chain (prereqs first).
- *
- * @param {Array} chits - Array of chit objects
- * @param {{forward: Map, reverse: Map}} graph - Dependency graph
- * @returns {Array} Sorted chit array
- */
-function _tlSortByConnectedness(chits, graph) {
-  if (chits.length <= 1) return chits;
-
-  var idSet = new Set();
-  for (var i = 0; i < chits.length; i++) idSet.add(chits[i].id);
-
-  // Find connected components using BFS
-  var visited = new Set();
-  var components = []; // Array of arrays of chit IDs
-
-  for (var i = 0; i < chits.length; i++) {
-    var startId = chits[i].id;
-    if (visited.has(startId)) continue;
-
-    // BFS to find all nodes in this component
-    var component = [];
-    var queue = [startId];
-    visited.add(startId);
-
-    var head = 0;
-    while (head < queue.length) {
-      var current = queue[head++];
-      component.push(current);
-
-      // Follow forward edges
-      var fwd = graph.forward.get(current) || [];
-      for (var j = 0; j < fwd.length; j++) {
-        if (idSet.has(fwd[j]) && !visited.has(fwd[j])) {
-          visited.add(fwd[j]);
-          queue.push(fwd[j]);
-        }
-      }
-      // Follow reverse edges
-      var rev = graph.reverse.get(current) || [];
-      for (var j = 0; j < rev.length; j++) {
-        if (idSet.has(rev[j]) && !visited.has(rev[j])) {
-          visited.add(rev[j]);
-          queue.push(rev[j]);
-        }
-      }
-    }
-
-    components.push(component);
-  }
-
-  // Build a lookup map: id → chit
-  var chitMap = new Map();
-  for (var i = 0; i < chits.length; i++) chitMap.set(chits[i].id, chits[i]);
-
-  // Sort components: larger components first (connected items are more important),
-  // then by earliest date within the component
-  components.sort(function(a, b) {
-    if (a.length !== b.length) return b.length - a.length; // Larger first
-    var dateA = _tlGetEarliestDate(a, chitMap);
-    var dateB = _tlGetEarliestDate(b, chitMap);
-    return dateA < dateB ? -1 : dateA > dateB ? 1 : 0;
-  });
-
-  // Within each component, sort by dependency order (prereqs before dependents)
-  var result = [];
-  for (var c = 0; c < components.length; c++) {
-    var comp = components[c];
-    // Simple topological sort within the component
-    var sorted = _tlTopoSortComponent(comp, graph);
-    for (var i = 0; i < sorted.length; i++) {
-      var chit = chitMap.get(sorted[i]);
-      if (chit) result.push(chit);
-    }
-  }
-
-  return result;
-}
-
-/**
- * Get the earliest date string from a set of chit IDs.
- */
-function _tlGetEarliestDate(ids, chitMap) {
-  var earliest = 'zzzz';
-  for (var i = 0; i < ids.length; i++) {
-    var chit = chitMap.get(ids[i]);
-    if (chit) {
-      var d = _tlGetEffectiveDate(chit) || chit.created_datetime || '';
-      if (d && d < earliest) earliest = d;
-    }
-  }
-  return earliest;
-}
-
-/**
- * Topological sort within a connected component.
- * Prereqs come before their dependents.
- */
-function _tlTopoSortComponent(ids, graph) {
-  var idSet = new Set(ids);
-  var inDegree = new Map();
-  for (var i = 0; i < ids.length; i++) {
-    var id = ids[i];
-    var rev = graph.reverse.get(id) || [];
-    var count = 0;
-    for (var j = 0; j < rev.length; j++) {
-      if (idSet.has(rev[j])) count++;
-    }
-    inDegree.set(id, count);
-  }
-
-  var queue = [];
-  for (var i = 0; i < ids.length; i++) {
-    if (inDegree.get(ids[i]) === 0) queue.push(ids[i]);
-  }
-
-  var result = [];
-  var head = 0;
-  while (head < queue.length) {
-    var current = queue[head++];
-    result.push(current);
-    var fwd = graph.forward.get(current) || [];
-    for (var j = 0; j < fwd.length; j++) {
-      if (!idSet.has(fwd[j])) continue;
-      var deg = inDegree.get(fwd[j]) - 1;
-      inDegree.set(fwd[j], deg);
-      if (deg === 0) queue.push(fwd[j]);
-    }
-  }
-
-  // Add any remaining (cycles) at the end
-  for (var i = 0; i < ids.length; i++) {
-    if (result.indexOf(ids[i]) === -1) result.push(ids[i]);
-  }
-
-  return result;
 }
 
 
@@ -804,8 +742,8 @@ function _tlTopoSortComponent(ids, graph) {
 function _tlLayoutByDependency(chits, opts) {
   var nodeWidth = opts.nodeWidth || 180;
   var nodeHeight = opts.nodeHeight || 60;
-  var hGap = 60; // Horizontal gap between columns (room for connecting lines)
-  var vGap = 14; // Vertical gap between nodes in same column
+  var hGap = 60;
+  var vGap = 14;
   var padding = 16;
 
   var positions = new Map();
@@ -845,25 +783,18 @@ function _tlLayoutByDependency(chits, opts) {
         positions.set(chitsAtDepth[j].id, { x: x, y: y, lane: 'dated' });
       }
     } else {
-      // Subsequent columns: place each node directly to the right of its prerequisite.
-      // Target Y = average Y of predecessors (so it lines up horizontally).
-      // If multiple nodes target the same Y, fan them out vertically.
-      
-      // First, compute desired Y for each node (avg of predecessors)
+      // Subsequent columns: target Y = average Y of predecessors
       var desired = [];
       for (var j = 0; j < chitsAtDepth.length; j++) {
         var targetY = _tlAvgPredecessorY(chitsAtDepth[j].id, graph, positions, nodeHeight);
         desired.push({ chit: chitsAtDepth[j], targetY: targetY });
       }
-      
-      // Sort by desired Y
+
       desired.sort(function(a, b) { return a.targetY - b.targetY; });
-      
-      // Place nodes, ensuring no overlap (push down if needed)
+
       var lastBottom = -Infinity;
       for (var j = 0; j < desired.length; j++) {
-        var y = desired[j].targetY - nodeHeight / 2; // Center on target Y
-        // Ensure no overlap with previous node in this column
+        var y = desired[j].targetY - nodeHeight / 2;
         if (y < lastBottom + vGap) {
           y = lastBottom + vGap;
         }
