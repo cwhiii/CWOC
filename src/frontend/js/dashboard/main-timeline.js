@@ -2164,12 +2164,14 @@ async function _tlRedo() {
  * Called after the SVG element is created (in displayTimelineView or _tlRender).
  */
 function _tlAttachLineClickListener() {
+  // Attach click directly to each path (not delegation on SVG,
+  // because SVG has pointer-events:none for pass-through)
   var svg = document.getElementById('tl-svg');
   if (!svg) return;
-
-  // Remove any existing listener to avoid duplicates (safe because we use a named function)
-  svg.removeEventListener('click', _tlOnLineClick);
-  svg.addEventListener('click', _tlOnLineClick);
+  var paths = svg.querySelectorAll('path');
+  for (var i = 0; i < paths.length; i++) {
+    paths[i].addEventListener('click', _tlOnLineClick);
+  }
 }
 
 /**
@@ -2185,10 +2187,7 @@ function _tlAttachLineClickListener() {
  * @param {Event} e - Click event (delegated from #tl-svg)
  */
 function _tlOnLineClick(e) {
-  var target = e.target;
-
-  // Only handle clicks on <path> elements with data-from and data-to
-  if (!target || target.tagName.toLowerCase() !== 'path') return;
+  var target = e.currentTarget; // The path element this listener is on
 
   var prereqId = target.getAttribute('data-from');
   var dependentId = target.getAttribute('data-to');

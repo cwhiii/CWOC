@@ -462,89 +462,79 @@ function _tlLayoutByDate(chits, opts) {
     depthGroups.get(depth).push(undatedConnected[i]);
   }
 
-  // Position connected undated: use depth value directly as column index.
-  // Align each chit at the same Y as its prerequisite so lines go straight horizontal.
-  var sortedUdDepths = Array.from(depthGroups.keys()).sort(function(a, b) { return a - b; });
-  var nextUndatedCol = 0;
-  for (var di = 0; di < sortedUdDepths.length; di++) {
-    var depth = sortedUdDepths[di];
-    var depthChits = depthGroups.get(depth);
-    var x = leftPadding + depth * colWidth;
+  // Position connected undated chits as PAIRS on the same row.
+  // Each prereq and its dependent(s) share the same Y coordinate.
+  // Pairs are placed top-to-bottom, most-connected first.
+  
+  // Build pairs: each root (depth 0) with its chain of dependents
+  var chains = []; // [{root: chit, dependents: [chit, chit, ...]}, ...]
+  var placedIds = new Set();
+  
+  // Get depth-0 chits sorted by connections (most first, newly linked last)
+  var minDepthKey = Math.min.apply(null, Array.from(depthGroups.keys()));
+  var roots = (depthGroups.get(minDepthKey) || []).slice();
+  roots.sort(function(a, b) {
+    var aFwd = graph.forward.get(a.id) || [];
+    var bFwd = graph.forward.get(b.id) || [];
+    var aConns = aFwd.length + (graph.reverse.get(a.id) || []).length;
+    var bConns = bFwd.length + (graph.reverse.get(b.id) || []).length;
+    if (aConns !== bConns) return bConns - aConns;
+    return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
+  });
 
-    if (di === 0) {
-      // First column (roots): sort so chits WITH forward edges (have dependents
-      // in the undated section) come first, then those without.
-      // Within the "has dependents" group, sort by number of dependents descending
-      // (established chains first, newly-linked last), then alphabetically.
-      depthChits.sort(function(a, b) {
-        var aFwd = graph.forward.get(a.id) || [];
-        var bFwd = graph.forward.get(b.id) || [];
-        var aHasUndatedDep = aFwd.some(function(id) { return undatedIdSet.has(id); });
-        var bHasUndatedDep = bFwd.some(function(id) { return undatedIdSet.has(id); });
-        if (aHasUndatedDep && !bHasUndatedDep) return -1;
-        if (!aHasUndatedDep && bHasUndatedDep) return 1;
-        // Both have or both lack undated deps — sort by total connections descending
-        var aConns = aFwd.length + (graph.reverse.get(a.id) || []).length;
-        var bConns = bFwd.length + (graph.reverse.get(b.id) || []).length;
-        if (aConns !== bConns) return bConns - aConns;
-        return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
-      });
-      for (var j = 0; j < depthChits.length; j++) {
-        var y = topPadding + j * (nodeHeight + vGap);
-        positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
-      }
-    } else {
-      // Subsequent columns: align each chit with its prerequisite's Y.
-      // Find the best prereq Y — prefer undated prereqs (same section) over dated ones.
-      var desired = [];
-      for (var j = 0; j < depthChits.length; j++) {
-        var chit = depthChits[j];
-        var prereqs = graph.reverse.get(chit.id) || [];
-        var targetY = null;
-
-        // First try to find an undated prereq with a position
-        for (var p = 0; p < prereqs.length; p++) {
-          if (!undatedIdSet.has(prereqs[p])) continue;
-          var prereqPos = positions.get(prereqs[p]);
-          if (prereqPos && prereqPos.lane === 'undated') {
-            targetY = prereqPos.y;
-            break;
+  // For each root, trace its chain forward
+  for (var ri = 0; ri < roots.length; ri++) {
+    var root = roots[ri];
+    if (placedIds.has(root.id)) continue;
+    var chain = [root];
+    placedIds.add(root.id);
+    
+    // Follow forward edges through undated chits
+    var current = root;
+    while (true) {
+      var fwd = graph.forward.get(current.id) || [];
+      var nextInChain = null;
+      for (var f = 0; f < fwd.length; f++) {
+        if (undatedIdSet.has(fwd[f]) && !placedIds.has(fwd[f])) {
+          var nextChit = null;
+          for (var uc = 0; uc < undatedConnected.length; uc++) {
+            if (undatedConnected[uc].id === fwd[f]) { nextChit = undatedConnected[uc]; break; }
+          }
+          if (nextChit) {
+            chain.push(nextChit);
+            placedIds.add(nextChit.id);
+            nextInChain = nextChit;
           }
         }
-
-        // If no undated prereq found, use any prereq with a position
-        if (targetY === null) {
-          for (var p = 0; p < prereqs.length; p++) {
-            var prereqPos = positions.get(prereqs[p]);
-            if (prereqPos) {
-              targetY = prereqPos.y;
-              break;
-            }
-          }
-        }
-
-        // Fallback: stack at end
-        if (targetY === null) {
-          targetY = topPadding + j * (nodeHeight + vGap);
-        }
-        desired.push({ chit: chit, targetY: targetY });
       }
-
-      // Sort by desired Y
-      desired.sort(function(a, b) { return a.targetY - b.targetY; });
-
-      // Place without overlap
-      var lastBottom = -Infinity;
-      for (var j = 0; j < desired.length; j++) {
-        var y = desired[j].targetY;
-        if (y < lastBottom + vGap) {
-          y = lastBottom + vGap;
-        }
-        positions.set(desired[j].chit.id, { x: x, y: y, lane: 'undated' });
-        lastBottom = y + nodeHeight;
-      }
+      if (!nextInChain) break;
+      current = nextInChain;
     }
-    if (depth >= nextUndatedCol) nextUndatedCol = depth + 1;
+    chains.push(chain);
+  }
+
+  // Add any remaining connected chits not in a chain
+  for (var i = 0; i < undatedConnected.length; i++) {
+    if (!placedIds.has(undatedConnected[i].id)) {
+      chains.push([undatedConnected[i]]);
+      placedIds.add(undatedConnected[i].id);
+    }
+  }
+
+  // Place each chain on a single row — all members share the same Y
+  var nextUndatedCol = 0;
+  var currentRow = 0;
+  for (var ci = 0; ci < chains.length; ci++) {
+    var chain = chains[ci];
+    var y = topPadding + currentRow * (nodeHeight + vGap);
+    
+    for (var mi = 0; mi < chain.length; mi++) {
+      var depth = undatedDepths.get(chain[mi].id) || 0;
+      var x = leftPadding + depth * colWidth;
+      positions.set(chain[mi].id, { x: x, y: y, lane: 'undated' });
+      if (depth >= nextUndatedCol) nextUndatedCol = depth + 1;
+    }
+    currentRow++;
   }
 
   // Position unconnected undated: fill from bottom-left, going right then up.

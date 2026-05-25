@@ -6,6 +6,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,32 +14,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Forward
-import androidx.compose.material.icons.filled.Reply
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
-import com.cwoc.app.ui.theme.CwocButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +48,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.mapper.ChitFormState
-import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocOutline
 import com.cwoc.app.ui.theme.CwocInputDefaults
@@ -63,9 +57,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
  * Full Email Compose Zone for the chit editor.
  *
  * Handles three email states:
- * - "draft": Full compose UI with From, To, CC, BCC, Subject, Body, and action buttons
- * - "received": Read-only view with Reply, Forward, Archive actions
- * - "sent": Read-only view with Forward action
+ * - "draft": Full compose UI with From, To, CC, BCC, Subject, Body, and bottom toolbar
+ * - "received": Read-only view with address header, body, and bottom toolbar
+ * - "sent": Read-only view with address header, body, and bottom toolbar
+ *
+ * Layout follows the Notes zone pattern:
+ * 1. Address Header (scrollable top section)
+ * 2. Body (OutlinedTextField with Modifier.weight(1f) filling remaining space)
+ * 3. Bottom Toolbar (pinned with imePadding + navigationBarsPadding)
  *
  * Uses EditorZoneHeader for collapsible zone pattern.
  */
@@ -107,44 +106,74 @@ fun EmailComposeZone(
             )
         }
     ) {
-        when (emailStatus) {
-            "draft" -> DraftComposeContent(
+        // Three-section layout following Notes zone pattern
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // ── Section 1: Address Header (scrollable top) ──
+            EmailAddressHeader(
                 formState = formState,
+                emailStatus = emailStatus,
                 emailAccounts = emailAccounts,
                 contactNames = contactNames,
+                onFormUpdate = onFormUpdate
+            )
+
+            // ── Section 2: Body (fills remaining space) ──
+            EmailBodySection(
+                formState = formState,
+                emailStatus = emailStatus,
                 onFormUpdate = onFormUpdate,
-                onSend = onSend,
-                onSendLater = onSendLater,
-                onSendAndArchive = onSendAndArchive,
-                onDiscard = onDiscard
+                modifier = Modifier.weight(1f)
             )
-            "received" -> ReceivedEmailContent(
-                formState = formState,
-                onReply = onReply,
-                onForward = onForward,
-                onArchive = onArchive
-            )
-            "sent" -> SentEmailContent(
-                formState = formState,
-                onForward = onForward
+
+            // ── Section 3: Bottom Toolbar (pinned above keyboard) ──
+            EmailBottomToolbarPlaceholder(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
             )
         }
     }
 }
 
-// ─── Draft Compose Content ──────────────────────────────────────────────────────
+// ─── Address Header Section ─────────────────────────────────────────────────────
 
+/**
+ * Address header section containing From, To, CC/BCC, and Subject fields.
+ * For draft emails: editable fields with chip input and autocomplete.
+ * For received/sent emails: read-only display.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun DraftComposeContent(
+private fun EmailAddressHeader(
+    formState: ChitFormState,
+    emailStatus: String,
+    emailAccounts: List<String>,
+    contactNames: List<String>,
+    onFormUpdate: (ChitFormState) -> Unit
+) {
+    when (emailStatus) {
+        "draft" -> DraftAddressHeader(
+            formState = formState,
+            emailAccounts = emailAccounts,
+            contactNames = contactNames,
+            onFormUpdate = onFormUpdate
+        )
+        "received", "sent" -> ReadOnlyAddressHeader(formState = formState)
+    }
+}
+
+/**
+ * Editable address header for draft emails.
+ * Contains From dropdown, To chip field, CC/BCC toggle with collapsible fields, and Subject.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun DraftAddressHeader(
     formState: ChitFormState,
     emailAccounts: List<String>,
     contactNames: List<String>,
-    onFormUpdate: (ChitFormState) -> Unit,
-    onSend: () -> Unit,
-    onSendLater: () -> Unit,
-    onSendAndArchive: () -> Unit,
-    onDiscard: () -> Unit
+    onFormUpdate: (ChitFormState) -> Unit
 ) {
     var showCcBcc by remember {
         mutableStateOf(!formState.emailCc.isNullOrBlank() || !formState.emailBcc.isNullOrBlank())
@@ -293,221 +322,101 @@ private fun DraftComposeContent(
             colors = CwocInputDefaults.outlinedColors()
         )
 
-        // Body field (multi-line markdown area)
-        OutlinedTextField(
-            value = formState.emailBodyText ?: formState.note,
-            onValueChange = {
-                onFormUpdate(formState.copy(emailBodyText = it.ifBlank { null }))
-            },
-            label = { Text("Body") },
-            minLines = 8,
-            maxLines = 20,
-            modifier = Modifier.fillMaxWidth(),
-            colors = CwocInputDefaults.outlinedColors()
-        )
+        Spacer(modifier = Modifier.height(4.dp))
+        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+    }
+}
+
+/**
+ * Read-only address header for received and sent emails.
+ */
+@Composable
+private fun ReadOnlyAddressHeader(formState: ChitFormState) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ReadOnlyEmailField(label = "From", value = formState.emailFrom)
+        ReadOnlyEmailField(label = "To", value = formState.emailTo)
+        if (!formState.emailCc.isNullOrBlank()) {
+            ReadOnlyEmailField(label = "CC", value = formState.emailCc)
+        }
+        if (!formState.emailBcc.isNullOrBlank()) {
+            ReadOnlyEmailField(label = "BCC", value = formState.emailBcc)
+        }
+        ReadOnlyEmailField(label = "Subject", value = formState.emailSubject)
 
         Spacer(modifier = Modifier.height(4.dp))
         HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-        Spacer(modifier = Modifier.height(4.dp))
+    }
+}
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Send
-            Button(
-                onClick = onSend,
-                enabled = !formState.emailTo.isNullOrBlank(),
-                modifier = Modifier.weight(1f),
-                colors = CwocButtonDefaults.outsetColors(),
-                border = CwocButtonDefaults.outsetBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Send")
-            }
+// ─── Body Section ───────────────────────────────────────────────────────────────
 
-            // Send Later
-            OutlinedButton(
-                onClick = onSendLater,
-                enabled = !formState.emailTo.isNullOrBlank(),
-                colors = CwocButtonDefaults.outsetColors(),
-                border = CwocButtonDefaults.outsetBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Later")
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Send & Archive
-            OutlinedButton(
-                onClick = onSendAndArchive,
-                enabled = !formState.emailTo.isNullOrBlank(),
-                colors = CwocButtonDefaults.outsetColors(),
-                border = CwocButtonDefaults.outsetBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Send & Archive")
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Discard Draft
-            OutlinedButton(
-                onClick = onDiscard,
-                colors = CwocButtonDefaults.dangerColors(),
-                border = CwocButtonDefaults.dangerBorder,
-                shape = CwocButtonDefaults.outsetShape
-            ) {
-                Icon(
-                    Icons.Default.Delete, null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.error
+/**
+ * Email body section that fills remaining vertical space between address header and toolbar.
+ * For draft emails: editable OutlinedTextField.
+ * For received/sent emails: read-only text display.
+ */
+@Composable
+private fun EmailBodySection(
+    formState: ChitFormState,
+    emailStatus: String,
+    onFormUpdate: (ChitFormState) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp)
+    ) {
+        when (emailStatus) {
+            "draft" -> {
+                OutlinedTextField(
+                    value = formState.emailBodyText ?: formState.note,
+                    onValueChange = {
+                        onFormUpdate(formState.copy(emailBodyText = it.ifBlank { null }))
+                    },
+                    label = { Text("Body") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors(),
+                    shape = RoundedCornerShape(0.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Discard", color = MaterialTheme.colorScheme.error)
+            }
+            "received", "sent" -> {
+                Text(
+                    text = formState.emailBodyText ?: formState.note,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                )
             }
         }
     }
 }
 
-// ─── Received Email Content ─────────────────────────────────────────────────────
+// ─── Bottom Toolbar Placeholder ─────────────────────────────────────────────────
 
+/**
+ * Placeholder bottom toolbar row. Will be filled with overflow menu, preview toggle,
+ * undo/redo, and formatting buttons in task 2.3.
+ */
 @Composable
-private fun ReceivedEmailContent(
-    formState: ChitFormState,
-    onReply: () -> Unit,
-    onForward: () -> Unit,
-    onArchive: () -> Unit
-) {
-    var showHtml by remember { mutableStateOf(true) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun EmailBottomToolbarPlaceholder(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(Color(0xFFF5F0E8))
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Read-only fields
-        ReadOnlyEmailField(label = "From", value = formState.emailFrom)
-        ReadOnlyEmailField(label = "To", value = formState.emailTo)
-        if (!formState.emailCc.isNullOrBlank()) {
-            ReadOnlyEmailField(label = "CC", value = formState.emailCc)
-        }
-        ReadOnlyEmailField(label = "Subject", value = formState.emailSubject)
-
-        // Body toggle: HTML view | Text view
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = showHtml,
-                onClick = { showHtml = true },
-                label = { Text("HTML") }
-            )
-            FilterChip(
-                selected = !showHtml,
-                onClick = { showHtml = false },
-                label = { Text("Text") }
-            )
-        }
-
-        // Body content
-        if (showHtml && !formState.emailBodyHtml.isNullOrBlank()) {
-            MarkdownRenderer(
-                markdown = formState.emailBodyHtml,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            )
-        } else {
-            Text(
-                text = formState.emailBodyText ?: formState.note,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            )
-        }
-
-        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(onClick = onReply, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
-                Icon(Icons.Default.Reply, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Reply")
-            }
-            OutlinedButton(onClick = onForward, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
-                Icon(Icons.Default.Forward, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Forward")
-            }
-            OutlinedButton(onClick = onArchive, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
-                Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Archive")
-            }
-        }
-    }
-}
-
-// ─── Sent Email Content ─────────────────────────────────────────────────────────
-
-@Composable
-private fun SentEmailContent(
-    formState: ChitFormState,
-    onForward: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Read-only fields
-        ReadOnlyEmailField(label = "From", value = formState.emailFrom)
-        ReadOnlyEmailField(label = "To", value = formState.emailTo)
-        if (!formState.emailCc.isNullOrBlank()) {
-            ReadOnlyEmailField(label = "CC", value = formState.emailCc)
-        }
-        ReadOnlyEmailField(label = "Subject", value = formState.emailSubject)
-
-        // Body
+        // Placeholder — toolbar buttons will be added in task 2.3
         Text(
-            text = formState.emailBodyText ?: formState.note,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
+            text = "✉️",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
-
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(onClick = onForward, colors = CwocButtonDefaults.outsetColors(), border = CwocButtonDefaults.outsetBorder, shape = CwocButtonDefaults.outsetShape) {
-                Icon(Icons.Default.Forward, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Forward")
-            }
-        }
     }
 }
 

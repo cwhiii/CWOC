@@ -3661,3 +3661,405 @@ async function _emailOptionDelete() {
     cwocToast('Failed to delete', 'error');
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE: Bottom-pinned email toolbar (mirrors Notes zone pattern)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+var _mobileEmailToolbarEl = null;
+var _mobileEmailDataMenu = null;
+var _mobileEmailHeadingMenu = null;
+var _mobileEmailBlockMenu = null;
+var _mobileEmailIsPreview = false;
+var _mobileEmailKeyboardOpen = false;
+var _mobileEmailZoneActive = false;
+var _mobileEmailBodyFocused = false;
+
+/**
+ * Create the mobile bottom-pinned toolbar for the Email zone.
+ * Mirrors _createMobileNotesToolbar() from editor-notes.js.
+ */
+function _createMobileEmailToolbar() {
+  if (_mobileEmailToolbarEl) return; // already created
+
+  var toolbar = document.createElement('div');
+  toolbar.className = 'mobile-notes-bottom-toolbar';
+  toolbar.id = 'mobileEmailBottomToolbar';
+  toolbar.style.display = 'none'; // hidden until keyboard opens
+
+  // ── Overflow menu button (⋮)
+  var dataBtn = document.createElement('button');
+  dataBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+  dataBtn.title = 'Email actions';
+  dataBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  dataBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  dataBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _toggleMobileEmailDropdown('data');
+  });
+  toolbar.appendChild(dataBtn);
+
+  // ── Preview/Edit toggle
+  var previewBtn = document.createElement('button');
+  previewBtn.id = 'mobileEmailPreviewBtn';
+  previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+  previewBtn.title = 'Preview';
+  previewBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  previewBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  previewBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _mobileEmailTogglePreview();
+  });
+  toolbar.appendChild(previewBtn);
+
+  // ── Undo
+  var undoBtn = document.createElement('button');
+  undoBtn.id = 'mobileEmailUndoBtn';
+  undoBtn.innerHTML = '<i class="fas fa-undo"></i>';
+  undoBtn.title = 'Undo';
+  undoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  undoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  undoBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _emailUndo(e);
+  });
+  toolbar.appendChild(undoBtn);
+
+  // ── Redo
+  var redoBtn = document.createElement('button');
+  redoBtn.id = 'mobileEmailRedoBtn';
+  redoBtn.innerHTML = '<i class="fas fa-redo"></i>';
+  redoBtn.title = 'Redo';
+  redoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  redoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  redoBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _emailRedo(e);
+  });
+  toolbar.appendChild(redoBtn);
+
+  // ── Separator
+  var sep = document.createElement('span');
+  sep.className = 'notes-mobile-tb-sep';
+  toolbar.appendChild(sep);
+
+  // ── Scrollable formatting buttons
+  var scroll = document.createElement('div');
+  scroll.className = 'notes-mobile-tb-scroll';
+
+  var fmtButtons = [
+    { label: '<b>B</b>', title: 'Bold', action: 'b' },
+    { label: '<i>I</i>', title: 'Italic', action: 'i' },
+    { label: '<s>S</s>', title: 'Strikethrough', action: 's' },
+    { label: '🔗', title: 'Link', action: 'k' },
+    { label: 'H▾', title: 'Heading', action: 'heading-dropdown' },
+    { label: '•', title: 'Bullet List', action: 'ul' },
+    { label: '1.', title: 'Numbered List', action: 'ol' },
+    { label: '❝▾', title: 'Block formatting', action: 'block-dropdown' },
+  ];
+
+  fmtButtons.forEach(function(btn) {
+    var el = document.createElement('button');
+    el.innerHTML = btn.label;
+    el.title = btn.title;
+    // Prevent blur on the textarea when tapping toolbar buttons
+    el.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    el.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (el.classList.contains('disabled')) return; // Don't act when disabled
+      if (btn.action === 'heading-dropdown') {
+        _toggleMobileEmailDropdown('heading');
+      } else if (btn.action === 'block-dropdown') {
+        _toggleMobileEmailDropdown('block');
+      } else {
+        _emailFormatBtn(btn.action, 'emailBody');
+      }
+    });
+    scroll.appendChild(el);
+  });
+
+  toolbar.appendChild(scroll);
+
+  // ── Create dropdown menus
+  _mobileEmailHeadingMenu = _createMobileEmailDropdown('heading', [
+    { icon: '', label: 'H1 — Large Heading', action: function() { _emailFormatBtn('h1', 'emailBody'); } },
+    { icon: '', label: 'H2 — Medium Heading', action: function() { _emailFormatBtn('h2', 'emailBody'); } },
+    { icon: '', label: 'H3 — Small Heading', action: function() { _emailFormatBtn('h3', 'emailBody'); } },
+  ]);
+
+  _mobileEmailBlockMenu = _createMobileEmailDropdown('block', [
+    { icon: '❝', label: 'Blockquote', action: function() { _emailFormatBtn('q', 'emailBody'); } },
+    { icon: '⟨⟩', label: 'Code', action: function() { _emailFormatBtn('code', 'emailBody'); } },
+  ]);
+
+  document.body.appendChild(toolbar);
+  document.body.appendChild(_mobileEmailHeadingMenu);
+  document.body.appendChild(_mobileEmailBlockMenu);
+
+  _mobileEmailToolbarEl = toolbar;
+
+  // Wire focus/blur tracking on the email body textarea
+  _wireMobileEmailBodyFocusTracking();
+}
+
+/**
+ * Wire focus/blur event listeners on the emailBody textarea to track focus state.
+ * When the textarea loses focus, formatting buttons are disabled.
+ * When it gains focus, buttons are re-enabled (unless in preview mode).
+ * Note: This integrates with the existing _onEmailTextareaFocus/_onEmailTextareaBlur
+ * handlers from the keyboard tracking (task 5.2). If those handlers are already wired,
+ * this adds a direct listener as a fallback for cases where the toolbar is created
+ * before _showMobileEmailToolbar() is called.
+ */
+function _wireMobileEmailBodyFocusTracking() {
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl || bodyEl._mobileEmailFocusTrackingWired) return;
+  bodyEl._mobileEmailFocusTrackingWired = true;
+
+  bodyEl.addEventListener('focus', function() {
+    _mobileEmailBodyFocused = true;
+    _updateMobileEmailToolbarState();
+  });
+
+  bodyEl.addEventListener('blur', function() {
+    // Short delay to allow toolbar button taps to register before disabling
+    // (touchstart/mousedown with preventDefault keeps focus, but this is a safety net)
+    setTimeout(function() {
+      var active = document.activeElement;
+      var bodyEl = document.getElementById('emailBody');
+      if (active !== bodyEl) {
+        _mobileEmailBodyFocused = false;
+        _updateMobileEmailToolbarState();
+      }
+    }, 200);
+  });
+}
+
+/**
+ * Create a dropdown menu for the mobile email toolbar.
+ * Mirrors _createMobileNotesDropdown() from editor-notes.js.
+ */
+function _createMobileEmailDropdown(type, items) {
+  var menu = document.createElement('div');
+  menu.className = 'mobile-notes-tb-dropdown';
+  menu.id = 'mobileEmailTbDropdown_' + type;
+
+  items.forEach(function(item) {
+    var btn = document.createElement('button');
+    btn.innerHTML = (item.icon ? item.icon + ' ' : '') + item.label;
+    btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _closeMobileEmailDropdowns();
+      item.action();
+      // Re-focus textarea after action
+      var bodyEl = document.getElementById('emailBody');
+      if (bodyEl) bodyEl.focus();
+    });
+    menu.appendChild(btn);
+  });
+
+  return menu;
+}
+
+/**
+ * Toggle a dropdown menu above the mobile email toolbar.
+ */
+function _toggleMobileEmailDropdown(type) {
+  var menu = document.getElementById('mobileEmailTbDropdown_' + type);
+  if (!menu) return;
+
+  var isOpen = menu.classList.contains('active');
+  _closeMobileEmailDropdowns();
+
+  if (!isOpen) {
+    // Position dropdown just above the toolbar
+    if (_mobileEmailToolbarEl) {
+      var tbTop = parseInt(_mobileEmailToolbarEl.style.top) || 0;
+      menu.style.bottom = 'auto';
+      menu.style.top = 'auto';
+      menu.style.bottom = (window.innerHeight - tbTop) + 'px';
+    }
+    menu.classList.add('active');
+    // Close on next tap outside
+    setTimeout(function() {
+      document.addEventListener('click', _closeMobileEmailDropdowns, { once: true });
+    }, 0);
+  }
+}
+
+/**
+ * Close all open mobile email toolbar dropdowns.
+ */
+function _closeMobileEmailDropdowns() {
+  var menus = document.querySelectorAll('[id^="mobileEmailTbDropdown_"].active');
+  menus.forEach(function(m) { m.classList.remove('active'); });
+}
+
+/**
+ * Toggle preview/edit mode from the mobile email toolbar.
+ */
+function _mobileEmailTogglePreview() {
+  if (typeof toggleEmailViewMode === 'function') {
+    toggleEmailViewMode(null);
+  }
+  // Update toolbar state after toggle
+  var rendered = document.getElementById('emailBodyRendered');
+  _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  _updateMobileEmailToolbarState();
+}
+
+/**
+ * Update the mobile email toolbar button states (preview icon, formatting disabled).
+ * Buttons are disabled when in preview mode OR when the email body textarea is not focused.
+ */
+function _updateMobileEmailToolbarState() {
+  var previewBtn = document.getElementById('mobileEmailPreviewBtn');
+  if (previewBtn) {
+    if (_mobileEmailIsPreview) {
+      previewBtn.innerHTML = '<i class="fas fa-edit"></i>';
+      previewBtn.title = 'Edit';
+    } else {
+      previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+      previewBtn.title = 'Preview';
+    }
+  }
+
+  // Disable formatting buttons when in preview mode or when body textarea is not focused
+  var shouldDisable = _mobileEmailIsPreview || !_mobileEmailBodyFocused;
+  var scroll = _mobileEmailToolbarEl ? _mobileEmailToolbarEl.querySelector('.notes-mobile-tb-scroll') : null;
+  if (scroll) {
+    var btns = scroll.querySelectorAll('button');
+    btns.forEach(function(b) {
+      if (shouldDisable) {
+        b.classList.add('disabled');
+      } else {
+        b.classList.remove('disabled');
+      }
+    });
+  }
+}
+
+/**
+ * Show the mobile email toolbar (called when email zone becomes active on mobile).
+ * The toolbar only actually appears when the keyboard is open (textarea focused).
+ */
+function _showMobileEmailToolbar() {
+  _createMobileEmailToolbar();
+  _mobileEmailZoneActive = true;
+
+  // Listen for focus/blur on the email body textarea to show/hide toolbar
+  var bodyEl = document.getElementById('emailBody');
+  if (bodyEl && !bodyEl._mobileToolbarWired) {
+    bodyEl._mobileToolbarWired = true;
+    bodyEl.addEventListener('focus', _onEmailTextareaFocus);
+    bodyEl.addEventListener('blur', _onEmailTextareaBlur);
+  }
+
+  // Also use visualViewport resize to detect keyboard open/close
+  if (window.visualViewport && !window._mobileEmailVVWired) {
+    window._mobileEmailVVWired = true;
+    window.visualViewport.addEventListener('resize', _onMobileEmailViewportResize);
+    window.visualViewport.addEventListener('scroll', _onMobileEmailViewportResize);
+  }
+
+  // If textarea is already focused, show now
+  if (bodyEl && document.activeElement === bodyEl) {
+    _onEmailTextareaFocus();
+  }
+
+  // Sync preview state
+  var rendered = document.getElementById('emailBodyRendered');
+  _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  _updateMobileEmailToolbarState();
+}
+
+/**
+ * Hide the mobile email toolbar (called when navigating away from email zone).
+ */
+function _hideMobileEmailToolbar() {
+  _mobileEmailZoneActive = false;
+  if (_mobileEmailToolbarEl) {
+    _mobileEmailToolbarEl.style.display = 'none';
+  }
+  _closeMobileEmailDropdowns();
+  _mobileEmailKeyboardOpen = false;
+}
+
+/**
+ * Called when the email body textarea gains focus (keyboard opening).
+ */
+function _onEmailTextareaFocus() {
+  if (!_mobileEmailZoneActive) return;
+  _mobileEmailKeyboardOpen = true;
+  _mobileEmailBodyFocused = true;
+  if (_mobileEmailToolbarEl) {
+    _mobileEmailToolbarEl.style.display = 'flex';
+    // Position above keyboard using visualViewport
+    _positionEmailToolbarAboveKeyboard();
+  }
+  _updateMobileEmailToolbarState();
+}
+
+/**
+ * Called when the email body textarea loses focus (keyboard closing).
+ * Uses a 150ms delay to allow tapping toolbar buttons without hiding.
+ */
+function _onEmailTextareaBlur() {
+  // Delay to check if focus moved to a toolbar button
+  setTimeout(function() {
+    var active = document.activeElement;
+    // If focus moved to something inside the toolbar or a dropdown, keep it visible
+    if (_mobileEmailToolbarEl && _mobileEmailToolbarEl.contains(active)) return;
+    var dropdowns = document.querySelectorAll('[id^="mobileEmailTbDropdown_"]');
+    for (var i = 0; i < dropdowns.length; i++) {
+      if (dropdowns[i].contains(active)) return;
+    }
+    // If the email body textarea still has focus somehow, keep visible
+    var bodyEl = document.getElementById('emailBody');
+    if (active === bodyEl) return;
+
+    _mobileEmailKeyboardOpen = false;
+    _mobileEmailBodyFocused = false;
+    if (_mobileEmailToolbarEl) {
+      _mobileEmailToolbarEl.style.display = 'none';
+    }
+    _closeMobileEmailDropdowns();
+    _updateMobileEmailToolbarState();
+  }, 150);
+}
+
+/**
+ * Position the email toolbar above the keyboard using visualViewport.
+ * On mobile, position:fixed + bottom:0 puts it behind the keyboard.
+ * Instead, we use top positioning based on visualViewport height.
+ */
+function _positionEmailToolbarAboveKeyboard() {
+  if (!_mobileEmailToolbarEl) return;
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    // The toolbar should sit at the bottom of the visual viewport
+    // visualViewport.height = visible area height (excludes keyboard)
+    // visualViewport.offsetTop = scroll offset of visual viewport relative to layout viewport
+    var toolbarHeight = _mobileEmailToolbarEl.offsetHeight || 46;
+    var topPos = vv.offsetTop + vv.height - toolbarHeight;
+    _mobileEmailToolbarEl.style.position = 'fixed';
+    _mobileEmailToolbarEl.style.top = topPos + 'px';
+    _mobileEmailToolbarEl.style.bottom = 'auto';
+  } else {
+    // Fallback for browsers without visualViewport API
+    _mobileEmailToolbarEl.style.position = 'fixed';
+    _mobileEmailToolbarEl.style.top = 'auto';
+    _mobileEmailToolbarEl.style.bottom = '0px';
+  }
+}
+
+/**
+ * Handle visualViewport resize/scroll (keyboard open/close, page scroll).
+ */
+function _onMobileEmailViewportResize() {
+  if (!_mobileEmailZoneActive || !_mobileEmailKeyboardOpen) return;
+  _positionEmailToolbarAboveKeyboard();
+}

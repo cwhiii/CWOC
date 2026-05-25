@@ -140,6 +140,7 @@ import com.cwoc.app.ui.screens.editor.zones.ColorZone
 import com.cwoc.app.ui.screens.editor.zones.DateZone
 import com.cwoc.app.ui.screens.editor.zones.EditorZoneHeader
 import com.cwoc.app.ui.screens.editor.zones.HabitsZone
+import com.cwoc.app.ui.screens.editor.utils.MarkdownFormatUtils
 import com.cwoc.app.ui.screens.editor.zones.TagsPickerSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -2358,147 +2359,57 @@ private fun NotesZone(
 
     /** Wrap formatting (bold, italic, strikethrough, code). If no selection, inserts at cursor. */
     fun applyWrapFormat(delimiter: String) {
-        val start = textFieldValue.selection.min
-        val end = textFieldValue.selection.max
-        val text = textFieldValue.text
-        pushUndo(text)
-        if (start == end) {
-            // No selection — insert delimiter pair at cursor
-            val before = text.substring(0, start)
-            val after = text.substring(start)
-            val newText = "$before$delimiter$delimiter$after"
-            val cursorPos = start + delimiter.length
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(cursorPos))
-            onNoteChange(newText)
-        } else {
-            val before = text.substring(0, start)
-            val selected = text.substring(start, end)
-            val after = text.substring(end)
-            val newText = "$before$delimiter$selected$delimiter$after"
-            val newEnd = start + delimiter.length + selected.length + delimiter.length
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, newEnd))
-            onNoteChange(newText)
-        }
+        pushUndo(textFieldValue.text)
+        val result = MarkdownFormatUtils.applyWrapFormat(textFieldValue, delimiter)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     /** Link formatting. If no selection, inserts [text](url) at cursor. */
     fun applyLinkFormat() {
-        val start = textFieldValue.selection.min
-        val end = textFieldValue.selection.max
-        val text = textFieldValue.text
-        pushUndo(text)
-        if (start == end) {
-            // No selection — insert template at cursor
-            val before = text.substring(0, start)
-            val after = text.substring(start)
-            val newText = "${before}[text](url)$after"
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start + 1, start + 5))
-            onNoteChange(newText)
-        } else {
-            val before = text.substring(0, start)
-            val selected = text.substring(start, end)
-            val after = text.substring(end)
-            val isUrl = selected.trim().let { it.startsWith("http://") || it.startsWith("https://") }
-            val newText: String
-            val newSel: TextRange
-            if (isUrl) {
-                newText = "${before}[link text](${selected.trim()})$after"
-                newSel = TextRange(start + 1, start + 1 + "link text".length)
-            } else {
-                newText = "${before}[$selected](url)$after"
-                val urlPos = start + 1 + selected.length + 2
-                newSel = TextRange(urlPos, urlPos + 3)
-            }
-            textFieldValue = TextFieldValue(text = newText, selection = newSel)
-            onNoteChange(newText)
-        }
+        pushUndo(textFieldValue.text)
+        val result = MarkdownFormatUtils.applyLinkFormat(textFieldValue)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     /** Heading: strips existing prefix, applies new level. Works with or without selection. */
     fun applyHeadingFormat(level: Int) {
         val text = textFieldValue.text
+        // Check if line is blank with no selection — if so, do nothing (same as before)
         val cursorPos = textFieldValue.selection.min
         val lineStart = text.lastIndexOf('\n', cursorPos - 1) + 1
         val lineEnd = text.indexOf('\n', cursorPos).let { if (it == -1) text.length else it }
         val lineText = text.substring(lineStart, lineEnd)
         if (lineText.isBlank() && textFieldValue.selection.min == textFieldValue.selection.max) return
         pushUndo(text)
-        val stripped = lineText.replace(Regex("^#{1,3}\\s+"), "")
-        val prefix = "#".repeat(level) + " "
-        val replacement = prefix + stripped
-        val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
-        textFieldValue = TextFieldValue(text = newText, selection = TextRange(lineStart, lineStart + replacement.length))
-        onNoteChange(newText)
+        val result = MarkdownFormatUtils.applyHeadingFormat(textFieldValue, level)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     /** List prefix: prefixes current line or each selected line. */
     fun applyLinePrefixFormat(prefix: String, numbered: Boolean = false) {
-        val text = textFieldValue.text
-        val start = textFieldValue.selection.min
-        val end = textFieldValue.selection.max
-        pushUndo(text)
-        if (start != end) {
-            val before = text.substring(0, start)
-            val selected = text.substring(start, end)
-            val after = text.substring(end)
-            val prefixed = if (numbered) {
-                selected.split('\n').mapIndexed { i, l -> "${i + 1}. $l" }.joinToString("\n")
-            } else {
-                selected.split('\n').joinToString("\n") { "$prefix$it" }
-            }
-            val newText = "$before$prefixed$after"
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + prefixed.length))
-            onNoteChange(newText)
-        } else {
-            val lineStart = text.lastIndexOf('\n', start - 1) + 1
-            val lineEnd = text.indexOf('\n', start).let { if (it == -1) text.length else it }
-            val lineText = text.substring(lineStart, lineEnd)
-            val actualPrefix = if (numbered) "1. " else prefix
-            val replacement = actualPrefix + lineText
-            val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
-            val newCursor = lineStart + replacement.length
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
-            onNoteChange(newText)
-        }
+        pushUndo(textFieldValue.text)
+        val result = MarkdownFormatUtils.applyLinePrefixFormat(textFieldValue, prefix, numbered)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     /** Blockquote: prefixes selected lines with "> ", or current line if no selection. */
     fun applyBlockquoteFormat() {
-        val start = textFieldValue.selection.min
-        val end = textFieldValue.selection.max
-        val text = textFieldValue.text
-        pushUndo(text)
-        if (start == end) {
-            // No selection — prefix current line
-            val lineStart = text.lastIndexOf('\n', start - 1) + 1
-            val lineEnd = text.indexOf('\n', start).let { if (it == -1) text.length else it }
-            val lineText = text.substring(lineStart, lineEnd)
-            val replacement = "> $lineText"
-            val newText = text.substring(0, lineStart) + replacement + text.substring(lineEnd)
-            val newCursor = lineStart + replacement.length
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
-            onNoteChange(newText)
-        } else {
-            val before = text.substring(0, start)
-            val selected = text.substring(start, end)
-            val after = text.substring(end)
-            val quoted = selected.split('\n').joinToString("\n") { "> $it" }
-            val newText = "$before$quoted$after"
-            textFieldValue = TextFieldValue(text = newText, selection = TextRange(start, start + quoted.length))
-            onNoteChange(newText)
-        }
+        pushUndo(textFieldValue.text)
+        val result = MarkdownFormatUtils.applyBlockquoteFormat(textFieldValue)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     /** Horizontal rule: inserts at cursor position. */
     fun applyHorizontalRule() {
-        val text = textFieldValue.text
-        val cursorPos = textFieldValue.selection.min
-        pushUndo(text)
-        val insertion = "\n---\n"
-        val newText = text.substring(0, cursorPos) + insertion + text.substring(cursorPos)
-        val newCursor = cursorPos + insertion.length
-        textFieldValue = TextFieldValue(text = newText, selection = TextRange(newCursor))
-        onNoteChange(newText)
+        pushUndo(textFieldValue.text)
+        val result = MarkdownFormatUtils.applyHorizontalRule(textFieldValue)
+        textFieldValue = result
+        onNoteChange(result.text)
     }
 
     Column(modifier = modifier) {
