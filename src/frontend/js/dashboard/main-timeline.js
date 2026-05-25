@@ -525,7 +525,7 @@ function _tlRenderLines(graph, positions) {
   for (var key in channelGroups) {
     var group = channelGroups[key];
     for (var gi = 0; gi < group.length; gi++) {
-      lineOffsets[group[gi]] = (gi - (group.length - 1) / 2) * 10;
+      lineOffsets[group[gi]] = (gi - (group.length - 1) / 2) * 4;
     }
   }
 
@@ -575,7 +575,16 @@ function _tlRenderLines(graph, positions) {
  */
 function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects, lineOffset) {
   // lineOffset spreads parallel vertical lines so they don't stack
+  // Clamp to stay within the gap (max ±22px from center in a 60px gap)
+  var maxOffset = Math.max(5, Math.floor((endX - startX) / 2) - 4);
   var vOffset = lineOffset || 0;
+  if (vOffset > maxOffset) vOffset = maxOffset;
+  if (vOffset < -maxOffset) vOffset = -maxOffset;
+
+  console.log('[LINE] Routing: from=' + fromId.substring(0,8) + ' to=' + toId.substring(0,8) +
+    ' startX=' + Math.round(startX) + ' startY=' + Math.round(startY) +
+    ' endX=' + Math.round(endX) + ' endY=' + Math.round(endY) +
+    ' gap=' + Math.round(endX - startX) + 'px vOffset=' + vOffset);
   // Check if a straight horizontal line is possible (same Y, nothing in the way)
   if (Math.abs(startY - endY) < 2) {
     var hBlocked = false;
@@ -583,13 +592,14 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
     for (var i = 0; i < nodeRects.length; i++) {
       var nr = nodeRects[i];
       if (nr.id === fromId || nr.id === toId) continue;
-      // Node blocks if it overlaps the line's Y AND is horizontally between start and end
       if (lineY >= (nr.top - 2) && lineY <= (nr.bottom + 2) && nr.left < endX && nr.right > startX) {
         hBlocked = true;
+        console.log('[LINE]   → STRAIGHT blocked by node ' + nr.id.substring(0,8) + ' at x=' + Math.round(nr.left) + '-' + Math.round(nr.right));
         break;
       }
     }
     if (!hBlocked) {
+      console.log('[LINE]   → STRAIGHT LINE (same Y)');
       return 'M ' + startX + ',' + startY + ' L ' + endX + ',' + endY;
     }
   }
@@ -598,15 +608,37 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
   // Strategy: go right from source into the gap, then vertical, then right to target.
   // The gap is the space between node right edges and the next node's left edge.
 
+  // For adjacent columns (gap < 80px), always use L-route through the gap center.
+  // The Z-route is only needed for long-distance connections.
+  var gapSize = endX - startX;
+  if (gapSize > 0 && gapSize < 80) {
+    console.log('[LINE]   → ADJACENT L-ROUTE (gap=' + Math.round(gapSize) + 'px, center=' + Math.round((startX + endX) / 2) + ')');
+    // Simple L-route through gap center with rounded corners
+    var gapCenter = Math.round((startX + endX) / 2) + vOffset;
+    var r = 12;
+    var dy = endY > startY ? 1 : -1;
+    var vertDist = Math.abs(endY - startY);
+    var hr = Math.min(r, vertDist / 2, Math.abs(gapCenter - startX) - 1, Math.abs(endX - gapCenter) - 1);
+    if (hr < 2) hr = 2;
+
+    return 'M ' + startX + ',' + startY +
+      ' H ' + (gapCenter - hr) +
+      ' Q ' + gapCenter + ',' + startY + ' ' + gapCenter + ',' + (startY + hr * dy) +
+      ' V ' + (endY - hr * dy) +
+      ' Q ' + gapCenter + ',' + endY + ' ' + (gapCenter + hr) + ',' + endY +
+      ' H ' + endX;
+  }
+
   // Find a clear vertical channel X (in the gap between columns)
-  var vertX = startX + 30; // Default: centered in the 60px gap between columns
+  var gapMid = Math.round((startX + endX) / 2);
+  var vertX = gapMid; // Default: true center between source and target
   var minY = Math.min(startY, endY) - 5;
   var maxY = Math.max(startY, endY) + 5;
 
   // Try multiple X positions to find a clear vertical channel
   var candidates = [
+    gapMid,
     startX + 30,
-    Math.round((startX + endX) / 2),
     endX - 30
   ];
 
@@ -667,6 +699,7 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
 
   // If horizontal segments are blocked, use a Z-route through the nearest gap
   if (hStartBlocked || hEndBlocked) {
+    console.log('[LINE]   → Z-ROUTE triggered (hStartBlocked=' + hStartBlocked + ' hEndBlocked=' + hEndBlocked + ' vertX=' + Math.round(vertX) + ')');
     // Find the nearest clear horizontal Y between startY and endY first,
     // then expand outward. Prefer gaps between adjacent nodes.
     var horizY = Math.round((startY + endY) / 2);
@@ -734,8 +767,8 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
       horizY = startY < (topMost + bottomMost) / 2 ? topMost - 15 : bottomMost + 15;
     }
 
-    var vertX1 = startX + 30 + vOffset;
-    var vertX2 = endX - 30 + vOffset;
+    var vertX1 = Math.round((startX + endX) / 2) + vOffset;
+    var vertX2 = Math.round((startX + endX) / 2) + vOffset;
     var r = 10;
     var dy1 = horizY > startY ? 1 : -1;
     var dy2 = endY > horizY ? 1 : -1;
@@ -759,7 +792,10 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
   }
 
   // Simple L-route with rounded corners
-  vertX = vertX + vOffset;
+  console.log('[LINE]   → FALLBACK L-ROUTE vertX=' + Math.round(vertX) + ' gapCenter=' + Math.round((startX + endX) / 2));
+  // Ensure vertX is centered in the gap (at least 30px from both startX and endX)
+  var gapCenter = (startX + endX) / 2;
+  vertX = gapCenter + vOffset;
   var r = 12;
   var dy = endY > startY ? 1 : -1;
   var vertDist = Math.abs(endY - startY);
