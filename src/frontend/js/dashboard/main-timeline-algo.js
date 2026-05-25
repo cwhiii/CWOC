@@ -446,17 +446,57 @@ function _tlLayoutByDate(chits, opts) {
     depthGroups.get(depth).push(undatedConnected[i]);
   }
 
-  // Position connected undated: use depth value directly as column index
-  // (depth already accounts for dated prereq positions)
+  // Position connected undated: use depth value directly as column index.
+  // Align each chit at the same Y as its prerequisite so lines go straight horizontal.
   var sortedUdDepths = Array.from(depthGroups.keys()).sort(function(a, b) { return a - b; });
   var nextUndatedCol = 0;
   for (var di = 0; di < sortedUdDepths.length; di++) {
     var depth = sortedUdDepths[di];
     var depthChits = depthGroups.get(depth);
     var x = leftPadding + depth * colWidth;
-    for (var j = 0; j < depthChits.length; j++) {
-      var y = topPadding + j * (nodeHeight + vGap);
-      positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
+
+    if (di === 0) {
+      // First column (roots): just stack vertically
+      for (var j = 0; j < depthChits.length; j++) {
+        var y = topPadding + j * (nodeHeight + vGap);
+        positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
+      }
+    } else {
+      // Subsequent columns: align each chit with its prerequisite's Y
+      var desired = [];
+      for (var j = 0; j < depthChits.length; j++) {
+        var chit = depthChits[j];
+        var prereqs = graph.reverse.get(chit.id) || [];
+        var targetY = topPadding; // default
+        var foundPrereqY = false;
+        for (var p = 0; p < prereqs.length; p++) {
+          var prereqPos = positions.get(prereqs[p]);
+          if (prereqPos) {
+            targetY = prereqPos.y;
+            foundPrereqY = true;
+            break;
+          }
+        }
+        if (!foundPrereqY) {
+          // If prereq is in dated section, use its Y relative to undated
+          targetY = topPadding + j * (nodeHeight + vGap);
+        }
+        desired.push({ chit: chit, targetY: targetY });
+      }
+
+      // Sort by desired Y
+      desired.sort(function(a, b) { return a.targetY - b.targetY; });
+
+      // Place without overlap
+      var lastBottom = -Infinity;
+      for (var j = 0; j < desired.length; j++) {
+        var y = desired[j].targetY;
+        if (y < lastBottom + vGap) {
+          y = lastBottom + vGap;
+        }
+        positions.set(desired[j].chit.id, { x: x, y: y, lane: 'undated' });
+        lastBottom = y + nodeHeight;
+      }
     }
     if (depth >= nextUndatedCol) nextUndatedCol = depth + 1;
   }

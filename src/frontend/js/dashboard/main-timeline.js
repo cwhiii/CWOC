@@ -477,6 +477,8 @@ function _tlRenderLines(graph, positions) {
     }
   }
 
+  // First pass: collect all line endpoints
+  var lineData = [];
   graph.forward.forEach(function(dependents, prereqId) {
     var fromNode = _tlContainer ? _tlContainer.querySelector('.timeline-node[data-chit-id="' + prereqId + '"]') : null;
     if (!fromNode) return;
@@ -488,35 +490,61 @@ function _tlRenderLines(graph, positions) {
       if (!toNode) continue;
       var toRect = toNode.getBoundingClientRect();
 
-      var startX = fromRect.right - svgRect.left + 4;
-      var startY = fromRect.top + fromRect.height / 2 - svgRect.top;
-      var endX = toRect.left - svgRect.left - 4;
-      var endY = toRect.top + toRect.height / 2 - svgRect.top;
+      lineData.push({
+        prereqId: prereqId,
+        depId: depId,
+        startX: fromRect.right - svgRect.left + 4,
+        startY: fromRect.top + fromRect.height / 2 - svgRect.top,
+        endX: toRect.left - svgRect.left - 4,
+        endY: toRect.top + toRect.height / 2 - svgRect.top
+      });
+    }
+  });
 
-      // Spread lines from same source: offset each by 6px so they don't stack
-      var lineOffset = (i - (dependents.length - 1) / 2) * 6;
+  // Group lines by approximate vertical channel (startX rounded to nearest 30px)
+  // Lines sharing the same vertical channel get spread offsets
+  var channelGroups = {};
+  for (var li = 0; li < lineData.length; li++) {
+    var ld = lineData[li];
+    // The vertical channel is roughly at startX + 15 (just past the source node)
+    var channelKey = Math.round((ld.startX + 15) / 30) * 30;
+    if (!channelGroups[channelKey]) channelGroups[channelKey] = [];
+    channelGroups[channelKey].push(li);
+  }
 
-      // Route through gaps: find a clear vertical channel and horizontal channel
-      var d = _tlRouteAroundNodes(startX, startY, endX, endY, prereqId, depId, allNodeRects, lineOffset);
+  // Assign offsets within each channel group
+  var lineOffsets = new Array(lineData.length);
+  for (var key in channelGroups) {
+    var group = channelGroups[key];
+    for (var gi = 0; gi < group.length; gi++) {
+      lineOffsets[group[gi]] = (gi - (group.length - 1) / 2) * 10;
+    }
+  }
+
+  // Second pass: render lines with offsets
+  for (var li = 0; li < lineData.length; li++) {
+    var ld = lineData[li];
+    var lineOffset = lineOffsets[li] || 0;
+
+    var d = _tlRouteAroundNodes(ld.startX, ld.startY, ld.endX, ld.endY, ld.prereqId, ld.depId, allNodeRects, lineOffset);
 
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', d);
-      path.setAttribute('data-from', prereqId);
-      path.setAttribute('data-to', depId);
+      path.setAttribute('data-from', ld.prereqId);
+      path.setAttribute('data-to', ld.depId);
 
-      var fromChit = _tlFindChitById(prereqId);
-      var toChit = _tlFindChitById(depId);
+      var fromChit = _tlFindChitById(ld.prereqId);
+      var toChit = _tlFindChitById(ld.depId);
       var bothComplete = fromChit && toChit &&
         (fromChit.status === 'Complete' || fromChit.status === 'Rejected') &&
         (toChit.status === 'Complete' || toChit.status === 'Rejected');
       if (bothComplete) path.classList.add('tl-line-complete');
-      if (_tlCriticalPathActive && _tlCriticalPathNodes.has(prereqId) && _tlCriticalPathNodes.has(depId)) {
+      if (_tlCriticalPathActive && _tlCriticalPathNodes.has(ld.prereqId) && _tlCriticalPathNodes.has(ld.depId)) {
         path.classList.add('tl-critical-path-line');
       }
 
       svg.appendChild(path);
-    }
-  });
+  }
 }
 
 /**
