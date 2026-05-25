@@ -261,6 +261,14 @@ fun ProjectsScreen(
                                                 color = Color(0xFF8B5E3C)
                                             )
                                         }
+                                        // Severity
+                                        if (!child.severity.isNullOrBlank()) {
+                                            Text(
+                                                text = child.severity,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF8B5E3C)
+                                            )
+                                        }
                                         // Due date
                                         if (!child.dueDatetime.isNullOrBlank()) {
                                             Text(
@@ -709,6 +717,15 @@ private fun KanbanChitCard(
                 if (!chit.priority.isNullOrBlank()) {
                     Text(
                         text = chit.priority,
+                        color = cardTextColor.copy(alpha = 0.7f),
+                        fontSize = 8.sp,
+                        lineHeight = 10.sp
+                    )
+                }
+                // Severity (compact)
+                if (!chit.severity.isNullOrBlank()) {
+                    Text(
+                        text = chit.severity,
                         color = cardTextColor.copy(alpha = 0.7f),
                         fontSize = 8.sp,
                         lineHeight = 10.sp

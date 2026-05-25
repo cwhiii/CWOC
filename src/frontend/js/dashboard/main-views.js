@@ -371,6 +371,7 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     right.appendChild(statusSpan);
   }
   if (chit.priority) addMeta(chit.priority, null);
+  if (chit.severity) addMeta(chit.severity, null);
 
   // Due date — colored + bold if overdue, using configurable color with contrast background
   if (chit.due_datetime) {

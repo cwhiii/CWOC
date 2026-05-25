@@ -105,7 +105,7 @@
             const thead = document.createElement('thead');
             var headerHtml = '<tr><th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th><th>Title</th>';
             if (_trashIsAdmin) headerHtml += '<th>Owner</th>';
-            headerHtml += '<th>Status</th><th>Priority</th><th>Due / Start</th><th>Tags</th><th>Note</th><th>Deleted</th><th class="col-actions">Actions</th></tr>';
+            headerHtml += '<th>Status</th><th>Priority</th><th>Severity</th><th>Due / Start</th><th>Tags</th><th>Note</th><th>Deleted</th><th class="col-actions">Actions</th></tr>';
             thead.innerHTML = headerHtml;
             table.appendChild(thead);
             const tbody = document.createElement('tbody'), SYS = ['Calendar','Checklists','Alarms','Projects','Tasks','Notes'];
@@ -116,6 +116,7 @@
                 if (_trashIsAdmin) { td = document.createElement('td'); td.textContent = chit.owner_display_name || chit.owner_username || '—'; td.title = chit.owner_username || ''; tr.appendChild(td); }
                 td = document.createElement('td'); td.textContent = chit.status || '—'; tr.appendChild(td);
                 td = document.createElement('td'); td.textContent = chit.priority || '—'; tr.appendChild(td);
+                td = document.createElement('td'); td.textContent = chit.severity || '—'; tr.appendChild(td);
                 td = document.createElement('td'); td.textContent = fmtDate(chit.due_datetime || chit.start_datetime); tr.appendChild(td);
                 td = document.createElement('td'); td.className = 'col-tags'; const tags = (chit.tags||[]).filter(t => !SYS.includes(t));
                 if (tags.length > 0) tags.forEach(t => { const c = document.createElement('span'); c.className = 'cwoc-tag-chip'; c.textContent = t.split('/').pop(); td.appendChild(c); }); else td.textContent = '—'; td.title = tags.join(', '); tr.appendChild(td);

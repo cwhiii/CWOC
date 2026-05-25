@@ -332,6 +332,14 @@ private fun SearchResultCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     PriorityBadge(priority = chit.priority)
                 }
+                if (chit.severity != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = chit.severity,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cardTextColor.copy(alpha = 0.75f)
+                    )
+                }
             }
 
             // Note snippet with highlights (show first 100 chars)

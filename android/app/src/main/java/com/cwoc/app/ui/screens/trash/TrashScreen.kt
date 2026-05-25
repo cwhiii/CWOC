@@ -337,10 +337,11 @@ private fun TrashChitCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // Status + Priority row
+                // Status + Priority + Severity row
                 val statusPriority = buildList {
                     chit.status?.takeIf { it.isNotBlank() }?.let { add("Status: $it") }
                     chit.priority?.takeIf { it.isNotBlank() }?.let { add("Priority: $it") }
+                    chit.severity?.takeIf { it.isNotBlank() }?.let { add("Severity: $it") }
                 }
                 if (statusPriority.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(2.dp))

@@ -11,18 +11,267 @@
  * Loaded before: editor-save.js, editor-init.js
  */
 
-/* ── Email Undo/Redo ──────────────────────────────────────────────────────── */
+/* ── Email Undo/Redo (Stack-Based) ────────────────────────────────────────── */
 
-function _emailUndo(e) {
-  if (e) { e.stopPropagation(); e.preventDefault(); }
+var _emailUndoStack = [];
+var _emailRedoStack = [];
+var _emailUndoDebounceTimer = null;
+var _emailUndoLastPushTime = 0;
+var _emailUndoLastWordCount = 0;
+var _emailUndoListenerWired = false;
+
+/**
+ * Push the current email body state onto the undo stack.
+ * Called on text change with 500ms debounce or word-boundary detection.
+ * Clears the redo stack on new edit. Max 50 entries (oldest discarded first).
+ */
+function _emailPushUndo() {
   var bodyEl = document.getElementById('emailBody');
-  if (bodyEl) { bodyEl.focus(); document.execCommand('undo'); }
+  if (!bodyEl) return;
+  var state = { text: bodyEl.value, cursor: bodyEl.selectionStart };
+
+  // Don't push if identical to the top of the stack
+  if (_emailUndoStack.length > 0) {
+    var top = _emailUndoStack[_emailUndoStack.length - 1];
+    if (top.text === state.text) return;
+  }
+
+  _emailUndoStack.push(state);
+  // Enforce max 50 entries — discard oldest
+  if (_emailUndoStack.length > 50) {
+    _emailUndoStack.shift();
+  }
+
+  // Clear redo stack on new edit
+  _emailRedoStack = [];
+
+  _emailUpdateUndoRedoButtons();
 }
 
+/**
+ * Undo — pop from undo stack, push current state to redo, restore text + cursor.
+ */
+function _emailUndo(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (_emailUndoStack.length === 0) return;
+
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl) return;
+
+  // Push current state to redo stack
+  _emailRedoStack.push({ text: bodyEl.value, cursor: bodyEl.selectionStart });
+
+  // Pop from undo stack and restore
+  var prev = _emailUndoStack.pop();
+  bodyEl.value = prev.text;
+  bodyEl.selectionStart = bodyEl.selectionEnd = prev.cursor;
+  bodyEl.focus();
+
+  _emailUpdateUndoRedoButtons();
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
+/**
+ * Redo — pop from redo stack, push current state to undo, restore text + cursor.
+ */
 function _emailRedo(e) {
   if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (_emailRedoStack.length === 0) return;
+
   var bodyEl = document.getElementById('emailBody');
-  if (bodyEl) { bodyEl.focus(); document.execCommand('redo'); }
+  if (!bodyEl) return;
+
+  // Push current state to undo stack
+  _emailUndoStack.push({ text: bodyEl.value, cursor: bodyEl.selectionStart });
+
+  // Pop from redo stack and restore
+  var next = _emailRedoStack.pop();
+  bodyEl.value = next.text;
+  bodyEl.selectionStart = bodyEl.selectionEnd = next.cursor;
+  bodyEl.focus();
+
+  _emailUpdateUndoRedoButtons();
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
+/**
+ * Update the dimming state of undo/redo buttons based on stack contents.
+ * Adds/removes 'disabled' class when stacks are empty.
+ */
+function _emailUpdateUndoRedoButtons() {
+  var undoBtn = document.getElementById('mobileEmailUndoBtn');
+  var redoBtn = document.getElementById('mobileEmailRedoBtn');
+  if (undoBtn) {
+    if (_emailUndoStack.length === 0) {
+      undoBtn.classList.add('disabled');
+    } else {
+      undoBtn.classList.remove('disabled');
+    }
+  }
+  if (redoBtn) {
+    if (_emailRedoStack.length === 0) {
+      redoBtn.classList.add('disabled');
+    } else {
+      redoBtn.classList.remove('disabled');
+    }
+  }
+}
+
+/**
+ * Count whitespace-delimited words in a string.
+ */
+function _emailCountWords(text) {
+  if (!text) return 0;
+  var trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+/**
+ * Handle text input on the email body — push undo state with debounce or word-boundary logic.
+ * Called on 'input' event of the emailBody textarea.
+ */
+function _emailOnBodyInput() {
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl) return;
+
+  var now = Date.now();
+  var currentText = bodyEl.value;
+  var currentWordCount = _emailCountWords(currentText);
+
+  // Word-boundary detection: if word count changed, push immediately
+  if (currentWordCount !== _emailUndoLastWordCount) {
+    // Only push if enough time has passed (avoid double-push with debounce)
+    if (now - _emailUndoLastPushTime > 100) {
+      _emailPushUndo();
+      _emailUndoLastPushTime = now;
+    }
+    _emailUndoLastWordCount = currentWordCount;
+    // Reset debounce timer
+    clearTimeout(_emailUndoDebounceTimer);
+    _emailUndoDebounceTimer = null;
+    return;
+  }
+
+  // 500ms debounce: push state if no further input within 500ms
+  clearTimeout(_emailUndoDebounceTimer);
+  _emailUndoDebounceTimer = setTimeout(function() {
+    _emailPushUndo();
+    _emailUndoLastPushTime = Date.now();
+    _emailUndoLastWordCount = _emailCountWords(bodyEl.value);
+  }, 500);
+}
+
+/**
+ * Wire the undo/redo input listener on the email body textarea.
+ * Called once when the toolbar is created or the email zone is activated.
+ */
+function _emailWireUndoListener() {
+  if (_emailUndoListenerWired) return;
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl) return;
+  _emailUndoListenerWired = true;
+
+  // Capture initial state
+  _emailUndoLastWordCount = _emailCountWords(bodyEl.value);
+
+  bodyEl.addEventListener('input', _emailOnBodyInput);
+
+  // Initial button state
+  _emailUpdateUndoRedoButtons();
+}
+
+/* ── Email Body Auto-Grow (Mobile) ────────────────────────────────────────── */
+
+/**
+ * Auto-grow the email body textarea to fit its content.
+ * On mobile (≤768px), the textarea expands with content (min 200px) and fills
+ * available viewport space between the address header and the bottom toolbar.
+ * On desktop, it simply grows to fit content with a minimum height.
+ *
+ * @param {HTMLTextAreaElement} el — the emailBody textarea element
+ */
+function autoGrowEmailBody(el) {
+  if (!el) el = document.getElementById('emailBody');
+  if (!el) return;
+
+  // Only apply auto-grow behavior on mobile (≤768px)
+  if (window.innerWidth > 768) return;
+
+  // Temporarily reset height to measure content
+  el.style.height = '0px';
+  var contentH = el.scrollHeight;
+
+  // Calculate available space between address header and toolbar
+  var minH = 200;
+  var availableH = _emailCalcAvailableBodyHeight();
+
+  // Use the larger of: content height, minimum height, or available space
+  var targetH = Math.max(contentH, minH, availableH);
+
+  el.style.height = targetH + 'px';
+  el.style.overflowY = contentH > targetH ? 'auto' : 'hidden';
+}
+
+/**
+ * Calculate the available height for the email body textarea on mobile.
+ * This is the viewport height minus the address header height and toolbar height.
+ * Returns 0 if elements aren't found (fallback to min-height).
+ */
+function _emailCalcAvailableBodyHeight() {
+  var emailContent = document.getElementById('emailContent');
+  if (!emailContent) return 0;
+
+  // Get the address header fields height (everything before the body field)
+  var bodyField = emailContent.querySelector('.email-body-field');
+  if (!bodyField) return 0;
+
+  var headerHeight = 0;
+  var children = emailContent.children;
+  for (var i = 0; i < children.length; i++) {
+    if (children[i] === bodyField) break;
+    headerHeight += children[i].offsetHeight;
+  }
+
+  // Account for the zone header
+  var emailSection = document.getElementById('emailSection');
+  var zoneHeader = emailSection ? emailSection.querySelector('.zone-header') : null;
+  var zoneHeaderH = zoneHeader ? zoneHeader.offsetHeight : 0;
+
+  // Account for the bottom toolbar
+  var toolbarH = 46; // standard mobile toolbar height
+  if (_mobileEmailToolbarEl && _mobileEmailToolbarEl.offsetHeight) {
+    toolbarH = _mobileEmailToolbarEl.offsetHeight;
+  }
+
+  // Account for padding/margins
+  var padding = 20;
+
+  // Available = viewport height - zone header - address header - toolbar - padding
+  var vh = window.innerHeight;
+  if (window.visualViewport) {
+    vh = window.visualViewport.height;
+  }
+
+  var available = vh - zoneHeaderH - headerHeight - toolbarH - padding;
+  return Math.max(available, 200); // never less than min-height
+}
+
+/**
+ * Wire the auto-grow listener on the email body textarea.
+ * Called when the email zone is shown on mobile.
+ */
+function _emailWireAutoGrow() {
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl || bodyEl._emailAutoGrowWired) return;
+  bodyEl._emailAutoGrowWired = true;
+
+  bodyEl.addEventListener('input', function() {
+    autoGrowEmailBody(bodyEl);
+  });
+
+  // Initial sizing
+  autoGrowEmailBody(bodyEl);
 }
 
 /** Stores the currently loaded chit for reply/forward operations */
@@ -1140,6 +1389,8 @@ function initEmailZone(chit) {
   // Populate Body
   if (bodyEl) {
     bodyEl.value = chit.email_body_text || '';
+    // Trigger auto-grow on mobile after populating
+    autoGrowEmailBody(bodyEl);
   }
 
   // Populate Subject field (mirrors title)
@@ -1277,6 +1528,9 @@ function initEmailZone(chit) {
 
   // Render email attachment icons at the bottom of the email body
   _renderEmailAttachmentBar(chit);
+
+  // Wire undo/redo stack listener on the email body textarea
+  _emailWireUndoListener();
 }
 
 /**
@@ -2510,6 +2764,7 @@ function _closeEmailExpandModal(save) {
       var bodyEl = document.getElementById('emailBody');
       if (expandBody && bodyEl) {
         bodyEl.value = expandBody.value;
+        autoGrowEmailBody(bodyEl);
       }
       // Sync Subject back to the title field
       var expandSubject = document.getElementById('emailExpandSubject');
@@ -2562,6 +2817,21 @@ function _toggleExpandCcBcc(field) {
  */
 function toggleEmailViewMode(event) {
   if (event) event.stopPropagation();
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+
+  if (status === 'received' || status === 'sent') {
+    // Received/Sent: toggle between HTML iframe and plain text textarea
+    _toggleReceivedEmailViewMode();
+  } else {
+    // Draft: toggle between markdown textarea (edit) and rendered markdown (preview)
+    _toggleDraftEmailViewMode();
+  }
+}
+
+/**
+ * Toggle draft email between edit (textarea) and preview (rendered markdown).
+ */
+function _toggleDraftEmailViewMode() {
   var bodyEl = document.getElementById('emailBody');
   var rendered = document.getElementById('emailBodyRendered');
   if (!bodyEl || !rendered) return;
@@ -2587,6 +2857,39 @@ function toggleEmailViewMode(event) {
     rendered.style.minHeight = h2 + 'px';
     rendered.style.display = 'block';
     bodyEl.style.display = 'none';
+    _setEmailRenderToggleLabel(true);
+  }
+}
+
+/**
+ * Toggle received/sent email between HTML rendered view and plain text.
+ * Uses the existing iframe (emailHtmlIframe) for HTML and the textarea for plain text.
+ */
+function _toggleReceivedEmailViewMode() {
+  var bodyEl = document.getElementById('emailBody');
+  var iframe = document.getElementById('emailHtmlIframe');
+  var rendered = document.getElementById('emailBodyRendered');
+
+  // If there's no iframe (no HTML content), nothing to toggle
+  if (!iframe && !rendered) return;
+
+  if (_emailViewMode === 'html') {
+    // Switch to plain text view
+    if (iframe) iframe.style.display = 'none';
+    if (rendered) rendered.style.display = 'none';
+    if (bodyEl) bodyEl.style.display = '';
+    _emailViewMode = 'text';
+    _setEmailRenderToggleLabel(false);
+  } else {
+    // Switch to HTML view
+    if (iframe) {
+      iframe.style.display = '';
+      if (bodyEl) bodyEl.style.display = 'none';
+    } else if (rendered) {
+      rendered.style.display = 'block';
+      if (bodyEl) bodyEl.style.display = 'none';
+    }
+    _emailViewMode = 'html';
     _setEmailRenderToggleLabel(true);
   }
 }
@@ -3793,14 +4096,23 @@ function _createMobileEmailToolbar() {
     { icon: '⟨⟩', label: 'Code', action: function() { _emailFormatBtn('code', 'emailBody'); } },
   ]);
 
+  // ── Data/overflow menu (dynamic — rebuilt each time based on email status)
+  _mobileEmailDataMenu = document.createElement('div');
+  _mobileEmailDataMenu.className = 'mobile-notes-tb-dropdown';
+  _mobileEmailDataMenu.id = 'mobileEmailTbDropdown_data';
+
   document.body.appendChild(toolbar);
   document.body.appendChild(_mobileEmailHeadingMenu);
   document.body.appendChild(_mobileEmailBlockMenu);
+  document.body.appendChild(_mobileEmailDataMenu);
 
   _mobileEmailToolbarEl = toolbar;
 
   // Wire focus/blur tracking on the email body textarea
   _wireMobileEmailBodyFocusTracking();
+
+  // Wire undo/redo input listener on the email body textarea
+  _emailWireUndoListener();
 }
 
 /**
@@ -3875,6 +4187,11 @@ function _toggleMobileEmailDropdown(type) {
   _closeMobileEmailDropdowns();
 
   if (!isOpen) {
+    // Rebuild data menu content dynamically based on current email status
+    if (type === 'data') {
+      _rebuildMobileEmailDataMenu();
+    }
+
     // Position dropdown just above the toolbar
     if (_mobileEmailToolbarEl) {
       var tbTop = parseInt(_mobileEmailToolbarEl.style.top) || 0;
@@ -3899,23 +4216,163 @@ function _closeMobileEmailDropdowns() {
 }
 
 /**
+ * Rebuild the data/overflow menu content based on the current email status.
+ * Draft: Send, Send Later, Send & Archive, PGP Encrypt toggle, Copy body, Discard draft
+ * Received: Reply, Forward, Archive, Copy body, Download, Add sender to contacts
+ * Sent: Forward, Copy body, Download
+ */
+function _rebuildMobileEmailDataMenu() {
+  var menu = document.getElementById('mobileEmailTbDropdown_data');
+  if (!menu) return;
+
+  // Clear existing items
+  menu.innerHTML = '';
+
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+
+  // Check if To field has recipients (for disabling send actions)
+  var toEl = document.getElementById('emailTo');
+  var toHasValue = false;
+  if (toEl) {
+    var toVal = _emailGetFieldValue(toEl);
+    toHasValue = !!toVal;
+  }
+
+  var items = [];
+
+  if (status === 'draft') {
+    items = [
+      { icon: '✈️', label: 'Send', action: function() { _emailSaveAndSend(); }, disabled: !toHasValue },
+      { icon: '🕐', label: 'Send Later', action: function() { _emailSendLater(); }, disabled: !toHasValue },
+      { icon: '📦', label: 'Send & Archive', action: function() { _emailSaveAndSendArchive(); }, disabled: !toHasValue },
+      { icon: '🔒', label: 'PGP Encrypt: ' + (typeof _pgpEnabled !== 'undefined' && _pgpEnabled ? 'ON' : 'OFF'), action: function() { if (typeof _emailTogglePgp === 'function') _emailTogglePgp(); } },
+      { icon: '📋', label: 'Copy body', action: function() { _mobileEmailCopyBody(); } },
+      { icon: '🗑️', label: 'Discard draft', action: function() { _mobileEmailDiscardWithConfirm(); }, danger: true },
+    ];
+  } else if (status === 'received') {
+    items = [
+      { icon: '↩️', label: 'Reply', action: function() { _emailReply(); } },
+      { icon: '↪️', label: 'Forward', action: function() { _emailForward(); } },
+      { icon: '📦', label: 'Archive', action: function() { _emailOptionArchive(); } },
+      { icon: '📋', label: 'Copy body', action: function() { _mobileEmailCopyBody(); } },
+      { icon: '⬇️', label: 'Download', action: function() { _emailDownloadRaw(); } },
+      { icon: '👤', label: 'Add sender to contacts', action: function() { _emailAddSenderAsContact(); } },
+    ];
+  } else if (status === 'sent') {
+    items = [
+      { icon: '↪️', label: 'Forward', action: function() { _emailForward(); } },
+      { icon: '📋', label: 'Copy body', action: function() { _mobileEmailCopyBody(); } },
+      { icon: '⬇️', label: 'Download', action: function() { _emailDownloadRaw(); } },
+    ];
+  }
+
+  items.forEach(function(item) {
+    var btn = document.createElement('button');
+    btn.innerHTML = item.icon + ' ' + item.label;
+    if (item.danger) btn.classList.add('danger');
+    if (item.disabled) {
+      btn.classList.add('disabled');
+      btn.style.opacity = '0.4';
+      btn.style.pointerEvents = 'none';
+    }
+    btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (item.disabled) return;
+      _closeMobileEmailDropdowns();
+      item.action();
+    });
+    menu.appendChild(btn);
+  });
+}
+
+/**
+ * Copy the email body content to the clipboard.
+ */
+function _mobileEmailCopyBody() {
+  var bodyEl = document.getElementById('emailBody');
+  var text = bodyEl ? bodyEl.value : '';
+  if (!text) {
+    // If textarea is empty/hidden (preview mode), try the rendered content
+    var rendered = document.getElementById('emailBodyRendered');
+    if (rendered) text = rendered.textContent || rendered.innerText || '';
+  }
+  if (!text) {
+    cwocToast('Nothing to copy.', 'info');
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      cwocToast('Body copied to clipboard.', 'success');
+    }).catch(function() {
+      cwocToast('Failed to copy.', 'error');
+    });
+  } else {
+    // Fallback for older browsers
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      cwocToast('Body copied to clipboard.', 'success');
+    } catch (e) {
+      cwocToast('Failed to copy.', 'error');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
+/**
+ * Discard draft with confirmation dialog (from mobile overflow menu).
+ * Uses cwocConfirm() before calling _emailDiscardDraft().
+ */
+async function _mobileEmailDiscardWithConfirm() {
+  // _emailDiscardDraft already has its own confirmation dialog built in,
+  // so we just call it directly — it handles the confirm/cancel flow.
+  await _emailDiscardDraft();
+}
+
+/**
  * Toggle preview/edit mode from the mobile email toolbar.
  */
 function _mobileEmailTogglePreview() {
   if (typeof toggleEmailViewMode === 'function') {
     toggleEmailViewMode(null);
   }
-  // Update toolbar state after toggle
-  var rendered = document.getElementById('emailBodyRendered');
-  _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  // Update preview state based on email status
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+  if (status === 'received' || status === 'sent') {
+    // For received/sent: "preview" = HTML view (rendered), "edit" = plain text
+    _mobileEmailIsPreview = (_emailViewMode === 'html');
+  } else {
+    // For draft: "preview" = rendered markdown shown
+    var rendered = document.getElementById('emailBodyRendered');
+    _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  }
   _updateMobileEmailToolbarState();
+
+  // For received/sent or preview mode: show toolbar pinned at bottom (no keyboard)
+  var isReceivedOrSent = (status === 'received' || status === 'sent');
+  if ((isReceivedOrSent || _mobileEmailIsPreview) && _mobileEmailToolbarEl && _mobileEmailZoneActive) {
+    _mobileEmailToolbarEl.style.display = 'flex';
+    _mobileEmailToolbarEl.style.position = 'fixed';
+    _mobileEmailToolbarEl.style.top = 'auto';
+    _mobileEmailToolbarEl.style.bottom = '0px';
+  }
 }
 
 /**
  * Update the mobile email toolbar button states (preview icon, formatting disabled).
- * Buttons are disabled when in preview mode OR when the email body textarea is not focused.
+ * In preview mode: hide Undo, Redo, separator, and formatting scroll — show only Overflow + Edit.
+ * In edit mode: show full toolbar. Formatting buttons disabled when body textarea not focused.
  */
 function _updateMobileEmailToolbarState() {
+  if (!_mobileEmailToolbarEl) return;
+
   var previewBtn = document.getElementById('mobileEmailPreviewBtn');
   if (previewBtn) {
     if (_mobileEmailIsPreview) {
@@ -3927,19 +4384,61 @@ function _updateMobileEmailToolbarState() {
     }
   }
 
-  // Disable formatting buttons when in preview mode or when body textarea is not focused
-  var shouldDisable = _mobileEmailIsPreview || !_mobileEmailBodyFocused;
-  var scroll = _mobileEmailToolbarEl ? _mobileEmailToolbarEl.querySelector('.notes-mobile-tb-scroll') : null;
-  if (scroll) {
-    var btns = scroll.querySelectorAll('button');
-    btns.forEach(function(b) {
-      if (shouldDisable) {
-        b.classList.add('disabled');
-      } else {
-        b.classList.remove('disabled');
-      }
-    });
+  // Determine if we should show minimal toolbar
+  // For received/sent emails: always minimal (no editing possible)
+  // For draft emails: minimal only when in preview mode
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+  var isReceivedOrSent = (status === 'received' || status === 'sent');
+  var showMinimal = _mobileEmailIsPreview || isReceivedOrSent;
+
+  // In preview/read-only mode: hide Undo, Redo, separator, and formatting scroll section
+  var undoBtn = document.getElementById('mobileEmailUndoBtn');
+  var redoBtn = document.getElementById('mobileEmailRedoBtn');
+  var sep = _mobileEmailToolbarEl.querySelector('.notes-mobile-tb-sep');
+  var scroll = _mobileEmailToolbarEl.querySelector('.notes-mobile-tb-scroll');
+
+  if (showMinimal) {
+    // Minimal toolbar: only Overflow + Preview/Edit button visible
+    if (undoBtn) undoBtn.style.display = 'none';
+    if (redoBtn) redoBtn.style.display = 'none';
+    if (sep) sep.style.display = 'none';
+    if (scroll) scroll.style.display = 'none';
+  } else {
+    // Full toolbar: show everything
+    if (undoBtn) undoBtn.style.display = '';
+    if (redoBtn) redoBtn.style.display = '';
+    if (sep) sep.style.display = '';
+    if (scroll) scroll.style.display = '';
+
+    // Disable formatting buttons when body textarea is not focused
+    if (scroll) {
+      var btns = scroll.querySelectorAll('button');
+      btns.forEach(function(b) {
+        if (!_mobileEmailBodyFocused) {
+          b.classList.add('disabled');
+        } else {
+          b.classList.remove('disabled');
+        }
+      });
+    }
   }
+
+  // For received/sent: update preview button to show HTML/Text toggle labels
+  if (isReceivedOrSent && previewBtn) {
+    if (_emailViewMode === 'html') {
+      previewBtn.innerHTML = '<i class="fas fa-file-alt"></i>';
+      previewBtn.title = 'Show plain text';
+    } else {
+      previewBtn.innerHTML = '<i class="fas fa-code"></i>';
+      previewBtn.title = 'Show HTML view';
+    }
+    // Hide preview button entirely if no HTML content available
+    var hasHtml = !!(_emailCurrentChit && _emailCurrentChit.email_body_html);
+    previewBtn.style.display = hasHtml ? '' : 'none';
+  }
+
+  // Update undo/redo button dimming based on stack state
+  _emailUpdateUndoRedoButtons();
 }
 
 /**
@@ -3949,6 +4448,12 @@ function _updateMobileEmailToolbarState() {
 function _showMobileEmailToolbar() {
   _createMobileEmailToolbar();
   _mobileEmailZoneActive = true;
+
+  // Wire undo/redo listener (idempotent — only wires once)
+  _emailWireUndoListener();
+
+  // Wire auto-grow on the email body textarea (idempotent)
+  _emailWireAutoGrow();
 
   // Listen for focus/blur on the email body textarea to show/hide toolbar
   var bodyEl = document.getElementById('emailBody');
@@ -3970,10 +4475,28 @@ function _showMobileEmailToolbar() {
     _onEmailTextareaFocus();
   }
 
-  // Sync preview state
-  var rendered = document.getElementById('emailBodyRendered');
-  _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  // Sync preview state based on email status
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+  if (status === 'received' || status === 'sent') {
+    // For received/sent: preview = HTML view (default when HTML content exists)
+    var iframe = document.getElementById('emailHtmlIframe');
+    _mobileEmailIsPreview = (iframe && iframe.style.display !== 'none') || (_emailViewMode === 'html');
+  } else {
+    // For draft: preview = rendered markdown shown
+    var rendered = document.getElementById('emailBodyRendered');
+    _mobileEmailIsPreview = rendered && rendered.style.display !== 'none';
+  }
   _updateMobileEmailToolbarState();
+
+  // In preview mode (or received/sent emails), show toolbar immediately with minimal buttons
+  // since there's no textarea to focus (or textarea is read-only)
+  var isReceivedOrSent = (status === 'received' || status === 'sent');
+  if ((isReceivedOrSent || _mobileEmailIsPreview) && _mobileEmailToolbarEl) {
+    _mobileEmailToolbarEl.style.display = 'flex';
+    _mobileEmailToolbarEl.style.position = 'fixed';
+    _mobileEmailToolbarEl.style.top = 'auto';
+    _mobileEmailToolbarEl.style.bottom = '0px';
+  }
 }
 
 /**
@@ -4020,6 +4543,21 @@ function _onEmailTextareaBlur() {
     // If the email body textarea still has focus somehow, keep visible
     var bodyEl = document.getElementById('emailBody');
     if (active === bodyEl) return;
+
+    // For received/sent emails or preview mode, keep toolbar visible (pinned at bottom)
+    var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+    var isReceivedOrSent = (status === 'received' || status === 'sent');
+    if (isReceivedOrSent || _mobileEmailIsPreview) {
+      _mobileEmailBodyFocused = false;
+      // Keep toolbar visible but reposition to bottom (no keyboard)
+      if (_mobileEmailToolbarEl) {
+        _mobileEmailToolbarEl.style.position = 'fixed';
+        _mobileEmailToolbarEl.style.top = 'auto';
+        _mobileEmailToolbarEl.style.bottom = '0px';
+      }
+      _updateMobileEmailToolbarState();
+      return;
+    }
 
     _mobileEmailKeyboardOpen = false;
     _mobileEmailBodyFocused = false;

@@ -2908,6 +2908,32 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailSearchContacts(query)` | Search cached contacts by query string, return top 5 matches (favorites first) |
 | `_wireEmailAutocomplete(inputId, dropdownId)` | Wire up autocomplete on an email input field |
 | `_toggleEmailCcBcc(field)` | Toggle Cc or Bcc field visibility in the email zone |
+| `_emailPushUndo()` | Push current email body state onto undo stack (max 50 entries, oldest discarded); clears redo stack |
+| `_emailUndo(e)` | Revert email body text and cursor to previous undo stack state; pushes current state to redo stack |
+| `_emailRedo(e)` | Restore email body text and cursor from redo stack; pushes current state to undo stack |
+| `_emailUpdateUndoRedoButtons()` | Dim/enable undo and redo buttons based on stack emptiness |
+| `_emailCountWords(text)` | Count whitespace-delimited words in text (for word-boundary undo trigger) |
+| `_emailOnBodyInput()` | Handle email body input — push undo state on 500ms debounce or word-boundary crossing |
+| `_emailWireUndoListener()` | Wire input/keydown listeners on email body textarea for undo/redo tracking |
+| `autoGrowEmailBody(el)` | Auto-grow email body textarea to fit content (called from oninput attribute) |
+| `_emailCalcAvailableBodyHeight()` | Calculate available height for email body between address header and toolbar |
+| `_emailWireAutoGrow()` | Wire auto-grow behavior and initial sizing for email body textarea on mobile |
+| `_createMobileEmailToolbar()` | Create and inject the bottom-pinned mobile email toolbar (overflow, preview, undo/redo, formatting buttons) |
+| `_wireMobileEmailBodyFocusTracking()` | Wire focus/blur listeners on email body textarea for toolbar show/hide |
+| `_createMobileEmailDropdown(type, items)` | Create a dropdown menu DOM element for the mobile email toolbar |
+| `_toggleMobileEmailDropdown(type)` | Toggle visibility of a mobile email toolbar dropdown (data/heading/block) |
+| `_closeMobileEmailDropdowns()` | Close all open mobile email toolbar dropdowns |
+| `_rebuildMobileEmailDataMenu()` | Rebuild the overflow menu items based on current email status (draft/received/sent) |
+| `_mobileEmailCopyBody()` | Copy email body text to clipboard with toast feedback |
+| `_mobileEmailDiscardWithConfirm()` | Show confirmation dialog before discarding draft email |
+| `_mobileEmailTogglePreview()` | Toggle between edit and preview mode in the mobile email toolbar |
+| `_updateMobileEmailToolbarState()` | Update toolbar button states (disabled, active) based on current mode and focus |
+| `_showMobileEmailToolbar()` | Show the mobile email toolbar (position above keyboard) |
+| `_hideMobileEmailToolbar()` | Hide the mobile email toolbar |
+| `_onEmailTextareaFocus()` | Handle email textarea focus — show toolbar, start keyboard tracking |
+| `_onEmailTextareaBlur()` | Handle email textarea blur — hide toolbar with 150ms delay for button taps |
+| `_positionEmailToolbarAboveKeyboard()` | Position toolbar above keyboard using visualViewport height |
+| `_onMobileEmailViewportResize()` | Reposition toolbar on visualViewport resize events |
 
 #### editor-email-pgp.js
 
@@ -4235,6 +4261,7 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 | People Expand Modal | `.people-expand-modal` — nearly full-screen modal overlay with alphabetical list of all people (contacts + system users), type labels ("Contact", "Viewer", "Manager", "Assigned"), shrink button (⤡), and ESC-to-close support |
 | Responsive (≤400px) | Compact chit-specific overrides |
 | Responsive (≤480px) | Mobile chit-specific overrides |
+| Mobile Email Zone | Hide zone-header action buttons on mobile (≤768px); email body mobile-specific min-height and auto-grow styles |
 
 #### editor-email.css
 Email zone styles for the chit editor. Uses the parchment theme variables from `shared-editor.css`. Load AFTER `shared-editor.css` and `editor.css`.
@@ -4247,11 +4274,11 @@ Email zone styles for the chit editor. Uses the parchment theme variables from `
 | Email Field Rows (`.email-field`) | Flex layout for label + input pairs (From, To, Cc, Bcc); label styling with min-width, font-weight, Lora serif font |
 | Email Field Inputs | Text input styling with inset border, Lora font, focus ring with accent-teal |
 | From Display (`.email-from-display`) | Read-only From field with dotted border, italic text, parchment background |
-| Email Body (`#emailBody`) | Full-width textarea with min-height 180px, vertical resize, Lora font, placeholder styling |
+| Email Body (`#emailBody`) | Full-width textarea with min-height 180px (200px on mobile), vertical resize, Lora font, placeholder styling; auto-grow on mobile |
 | Disabled / Read-Only States | Parchment background, dotted border, reduced opacity for disabled/readonly fields |
 | Recipient Tag Chips (`.email-recipient-chip`) | Inline-flex chip styling consistent with existing tag/people chip pattern; accent-teal background, remove button |
 | Email Action Buttons | `#emailSendBtn` (info-blue), `#emailReplyBtn` / `#emailForwardBtn` (aged-brown) with hover states |
-| Responsive — Tablet (≤768px) | Reduced gap and font sizes for email fields |
+| Responsive — Tablet (≤768px) | Reduced gap and font sizes for email fields; zone-header action buttons hidden on mobile |
 | Responsive — Mobile (≤480px) | Stacked column layout for email fields, full-width inputs, 16px font to prevent iOS zoom |
 | Email Thread Section (`.email-thread-*`) | Thread conversation view below email body: header, list, items with sender/date/preview, current-email highlight |
 | HTML Email Rendering (`.email-html-*`) | Toggle buttons for HTML/Text view, sandboxed iframe styling |

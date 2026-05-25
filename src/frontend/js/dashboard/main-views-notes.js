@@ -118,6 +118,30 @@ function displayNotesView(chitsToDisplay) {
       titleSpan.textContent = chit.title || '(Untitled)';
       titleRow.appendChild(titleSpan);
 
+      // Status / Severity / Priority badges (only if non-blank)
+      if (chit.status) {
+        var _nStatusSpan = document.createElement('span');
+        _nStatusSpan.textContent = chit.status;
+        _nStatusSpan.style.cssText = 'font-size:0.75em;opacity:0.85;margin-left:0.4em;font-weight:normal;';
+        if (chit.status === 'Blocked') {
+          var _nBlockedCol = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
+          _nStatusSpan.style.cssText = 'font-size:0.75em;margin-left:0.4em;font-weight:bold;padding:1px 5px;border-radius:3px;background:' + _nBlockedCol + ';color:' + contrastColorForBg(_nBlockedCol) + ';';
+        }
+        titleRow.appendChild(_nStatusSpan);
+      }
+      if (chit.severity) {
+        var _nSevSpan = document.createElement('span');
+        _nSevSpan.textContent = chit.severity;
+        _nSevSpan.style.cssText = 'font-size:0.75em;opacity:0.85;margin-left:0.4em;font-weight:normal;';
+        titleRow.appendChild(_nSevSpan);
+      }
+      if (chit.priority) {
+        var _nPriSpan = document.createElement('span');
+        _nPriSpan.textContent = chit.priority;
+        _nPriSpan.style.cssText = 'font-size:0.75em;opacity:0.85;margin-left:0.4em;font-weight:normal;';
+        titleRow.appendChild(_nPriSpan);
+      }
+
       // Owner badge — show only when owner differs from current user
       if (chit.owner_display_name) {
         var _notesUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;

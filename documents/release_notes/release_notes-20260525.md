@@ -1,3 +1,15 @@
+## cwoc_server-20260525_1321 / cwoc_app-20260525_1321
+
+Email Zone Notes Parity — complete feature. The Email zone on both Android app and mobile web now follows the Notes zone's bottom-pinned toolbar pattern: body fills available space, a pinned toolbar provides formatting (Bold, Italic, Strikethrough, Link, Heading, Bullet, Numbered, Blockquote/Code), undo/redo, preview toggle, and email-specific actions in a compact overflow menu. Desktop web (>768px) is unchanged.
+
+## cwoc_server-20260525_1313
+
+Hide email zone-header action buttons (Send, Reply, Forward, Discard, Undo, Redo, Render, PGP, Options, Send Later, Expand) on mobile (≤768px) — these actions are now in the mobile bottom toolbar. Only the Email activate/deactivate toggle remains in the zone header on mobile. Desktop unchanged.
+
+## cwoc_server-20260525_1311 / cwoc_app-20260525_1311
+
+Status, severity, and priority now display on chit cards across all views (Tasks, Notes, Checklists, Alarms, Projects, Timeline, Trash, Search) on all platforms (web, mobile, Android app). Fields are only shown when non-blank.
+
 ## cwoc_server-20260525_1248
 
 Added 2px perimeter padding to all view containers (matching email view's .email-scroll-wrap) — just the outer edge, not inter-item spacing.

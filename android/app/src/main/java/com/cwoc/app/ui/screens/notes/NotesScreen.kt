@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +19,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -341,7 +345,7 @@ private fun NotesList(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun NoteCard(
     note: ChitEntity,
@@ -439,6 +443,59 @@ private fun NoteCard(
                     color = cardTextColor.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 2.dp)
                 )
+            }
+
+            // Status / Severity / Priority badges (only if non-blank)
+            val hasMetaBadges = !note.status.isNullOrBlank() || !note.severity.isNullOrBlank() || !note.priority.isNullOrBlank()
+            if (hasMetaBadges) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (!note.status.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = note.status,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (!note.severity.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = note.severity,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (!note.priority.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = note.priority,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             if (!note.title.isNullOrBlank() || !note.ownerDisplayName.isNullOrBlank()) {

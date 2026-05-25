@@ -65,7 +65,7 @@ Thread Nests let you attach any non-email chit (task, note, checklist, etc.) to 
 
 ## Email Formatting Shortcuts
 
-These keyboard shortcuts work in both the small email zone and the expanded editor. The expanded editor also has a toolbar with buttons for each action.
+These keyboard shortcuts work in both the small email zone and the expanded editor. The expanded editor also has a toolbar with buttons for each action. On mobile (≤768px), a bottom-pinned toolbar provides the same formatting buttons in a scrollable row — see [Mobile Email Toolbar](#mobile-email-toolbar) below.
 
 - `Ctrl+B` — **Bold** (wraps selection with `**`)
 - `Ctrl+I` — *Italic* (wraps selection with `*`)
@@ -79,6 +79,23 @@ These keyboard shortcuts work in both the small email zone and the expanded edit
 - `Ctrl+Shift+-` — Horizontal rule (inserts `---`)
 
 Bold, italic, strikethrough, link, code, and blockquote require selected text. Lists prefix the current line. Headings apply to the current line. Horizontal rule always inserts.
+
+## Mobile Email Toolbar
+
+On mobile devices (viewport ≤768px) and the Android app, the Email zone uses a bottom-pinned toolbar — the same pattern as the Notes zone. The toolbar appears above the keyboard when the email body is focused and provides quick access to all formatting and actions without scrolling.
+
+**Toolbar layout (left to right):** Overflow menu (⋮) · Preview toggle (👁) · Undo (↺) · Redo (↻) · scrollable formatting buttons (Bold, Italic, Strikethrough, Link, Heading▾, Bullet, Numbered, Block▾)
+
+- **Overflow Menu** — Context-dependent actions based on email status:
+  - *Draft:* Send, Send Later, Send & Archive, PGP Encrypt toggle, Copy body, Discard draft
+  - *Received:* Reply, Forward, Archive, Copy body, Download, Add sender to contacts
+  - *Sent:* Forward, Copy body, Download
+- **Preview Toggle** — Switch between editing (raw markdown) and rendered preview. For received emails, toggles between HTML and plain text views
+- **Undo / Redo** — Reverts or restores email body edits. States are pushed on 500ms debounce or word-boundary crossing (max 50 entries). Buttons dim when their stack is empty
+- **Formatting Buttons** — Horizontally scrollable row with the same formatting actions as the desktop toolbar. Heading and Block buttons open dropdown menus above the toolbar
+- **Auto-grow Body** — The email body textarea expands with content (minimum 200px height) to fill available space between the address header and toolbar
+
+On desktop (>768px), the email zone retains its existing zone-header button layout — no bottom toolbar is shown.
 
 ## Badges
 

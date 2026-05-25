@@ -300,7 +300,8 @@
     }
 
     #emailBody {
-        min-height: 150px;
+        min-height: 200px;
+        resize: none;
     }
 }
 
@@ -329,8 +330,9 @@
     }
 
     #emailBody {
-        min-height: 120px;
+        min-height: 200px;
         font-size: 16px; /* prevents iOS zoom on focus */
+        resize: none;
     }
 
     .zone-content {

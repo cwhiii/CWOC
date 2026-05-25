@@ -370,14 +370,22 @@ function _tlLayoutByDate(chits, opts) {
   }
 
   // Position undated chits in their own lane using dependency-aware layout.
-  // Connected chits are laid out left-to-right by dependency depth (prereqs left,
-  // dependents right). Unconnected chits fill remaining grid positions after.
+  // "Connected" = has edges to OTHER UNDATED chits (not just dated prereqs).
+  // Items that only connect to dated chits (no undated edges) are unaffiliated.
   var undatedConnected = [];
   var undatedUnconnected = [];
   var undatedIdSet = new Set();
   for (var i = 0; i < undatedChits.length; i++) {
     undatedIdSet.add(undatedChits[i].id);
-    if (graph.forward.has(undatedChits[i].id) || graph.reverse.has(undatedChits[i].id)) {
+  }
+  for (var i = 0; i < undatedChits.length; i++) {
+    var uid = undatedChits[i].id;
+    // Check if this chit has any edge to ANOTHER undated chit
+    var fwd = graph.forward.get(uid) || [];
+    var rev = graph.reverse.get(uid) || [];
+    var hasUndatedEdge = fwd.some(function(id) { return undatedIdSet.has(id); }) ||
+                         rev.some(function(id) { return undatedIdSet.has(id); });
+    if (hasUndatedEdge) {
       undatedConnected.push(undatedChits[i]);
     } else {
       undatedUnconnected.push(undatedChits[i]);
@@ -466,60 +474,122 @@ function _tlLayoutByDate(chits, opts) {
   // Each prereq and its dependent(s) share the same Y coordinate.
   // Pairs are placed top-to-bottom, most-connected first.
   
-  // Build pairs: each root (depth 0) with its chain of dependents
-  var chains = []; // [{root: chit, dependents: [chit, chit, ...]}, ...]
-  var placedIds = new Set();
+  // Build connected components among undated connected chits.
+  // All items reachable from each other (through undated edges) form one cluster.
+  var componentOf = new Map(); // chitId → component index
+  var components = []; // [[chit, chit, ...], ...]
+  var visitedComp = new Set();
   
-  // Get depth-0 chits sorted by connections (most first, newly linked last)
-  var minDepthKey = Math.min.apply(null, Array.from(depthGroups.keys()));
-  var roots = (depthGroups.get(minDepthKey) || []).slice();
-  roots.sort(function(a, b) {
-    var aFwd = graph.forward.get(a.id) || [];
-    var bFwd = graph.forward.get(b.id) || [];
-    var aConns = aFwd.length + (graph.reverse.get(a.id) || []).length;
-    var bConns = bFwd.length + (graph.reverse.get(b.id) || []).length;
-    if (aConns !== bConns) return bConns - aConns;
-    return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
-  });
-
-  // For each root, trace its chain forward
-  for (var ri = 0; ri < roots.length; ri++) {
-    var root = roots[ri];
-    if (placedIds.has(root.id)) continue;
-    var chain = [root];
-    placedIds.add(root.id);
+  for (var i = 0; i < undatedConnected.length; i++) {
+    var startId = undatedConnected[i].id;
+    if (visitedComp.has(startId)) continue;
     
-    // Follow forward edges through undated chits
-    var current = root;
-    while (true) {
-      var fwd = graph.forward.get(current.id) || [];
-      var nextInChain = null;
-      for (var f = 0; f < fwd.length; f++) {
-        if (undatedIdSet.has(fwd[f]) && !placedIds.has(fwd[f])) {
-          var nextChit = null;
-          for (var uc = 0; uc < undatedConnected.length; uc++) {
-            if (undatedConnected[uc].id === fwd[f]) { nextChit = undatedConnected[uc]; break; }
-          }
-          if (nextChit) {
-            chain.push(nextChit);
-            placedIds.add(nextChit.id);
-            nextInChain = nextChit;
-          }
+    // BFS to find all members of this component
+    var comp = [];
+    var bfsQueue = [startId];
+    visitedComp.add(startId);
+    var bfsHead = 0;
+    while (bfsHead < bfsQueue.length) {
+      var cur = bfsQueue[bfsHead++];
+      comp.push(cur);
+      componentOf.set(cur, components.length);
+      // Follow forward and reverse edges within undated set
+      var edges = (graph.forward.get(cur) || []).concat(graph.reverse.get(cur) || []);
+      for (var e = 0; e < edges.length; e++) {
+        if (undatedIdSet.has(edges[e]) && !visitedComp.has(edges[e])) {
+          visitedComp.add(edges[e]);
+          bfsQueue.push(edges[e]);
         }
       }
-      if (!nextInChain) break;
-      current = nextInChain;
     }
-    chains.push(chain);
+    components.push(comp);
   }
 
-  // Add any remaining connected chits not in a chain
-  for (var i = 0; i < undatedConnected.length; i++) {
-    if (!placedIds.has(undatedConnected[i].id)) {
-      chains.push([undatedConnected[i]]);
-      placedIds.add(undatedConnected[i].id);
+  // For each component, build chains (rows) by tracing forward from roots
+  var chains = [];
+  for (var ci = 0; ci < components.length; ci++) {
+    var compIds = new Set(components[ci]);
+    var compChits = undatedConnected.filter(function(c) { return compIds.has(c.id); });
+    var compPlaced = new Set();
+    
+    // Find roots within this component (no undated prereqs within component)
+    var compRoots = [];
+    for (var j = 0; j < compChits.length; j++) {
+      var rev = graph.reverse.get(compChits[j].id) || [];
+      var hasCompPrereq = rev.some(function(id) { return compIds.has(id); });
+      if (!hasCompPrereq) compRoots.push(compChits[j]);
+    }
+    
+    // Sort roots by connections descending
+    compRoots.sort(function(a, b) {
+      var aConns = (graph.forward.get(a.id) || []).length + (graph.reverse.get(a.id) || []).length;
+      var bConns = (graph.forward.get(b.id) || []).length + (graph.reverse.get(b.id) || []).length;
+      return bConns - aConns;
+    });
+    
+    // Trace chains from each root
+    for (var ri = 0; ri < compRoots.length; ri++) {
+      var root = compRoots[ri];
+      if (compPlaced.has(root.id)) continue;
+      var chain = [root];
+      compPlaced.add(root.id);
+      
+      var current = root;
+      while (true) {
+        var fwd = graph.forward.get(current.id) || [];
+        var nextInChain = null;
+        for (var f = 0; f < fwd.length; f++) {
+          if (compIds.has(fwd[f]) && !compPlaced.has(fwd[f])) {
+            var nextChit = compChits.find(function(c) { return c.id === fwd[f]; });
+            if (nextChit) {
+              chain.push(nextChit);
+              compPlaced.add(nextChit.id);
+              nextInChain = nextChit;
+              break;
+            }
+          }
+        }
+        if (!nextInChain) break;
+        current = nextInChain;
+      }
+      chains.push(chain);
+    }
+    
+    // Any remaining in component
+    for (var j = 0; j < compChits.length; j++) {
+      if (!compPlaced.has(compChits[j].id)) {
+        chains.push([compChits[j]]);
+        compPlaced.add(compChits[j].id);
+      }
     }
   }
+
+  // Sort chains: items connected to dated chits float to TOP.
+  // Then sort by chain length descending (longer chains = more important).
+  // Then by depth (items closer to dated section first).
+  chains.sort(function(a, b) {
+    // Check if any member has a dated prereq or dated dependent
+    var aHasDated = a.some(function(c) {
+      var prereqs = graph.reverse.get(c.id) || [];
+      var fwd = graph.forward.get(c.id) || [];
+      return prereqs.some(function(p) { return !undatedIdSet.has(p); }) ||
+             fwd.some(function(f) { return !undatedIdSet.has(f); });
+    });
+    var bHasDated = b.some(function(c) {
+      var prereqs = graph.reverse.get(c.id) || [];
+      var fwd = graph.forward.get(c.id) || [];
+      return prereqs.some(function(p) { return !undatedIdSet.has(p); }) ||
+             fwd.some(function(f) { return !undatedIdSet.has(f); });
+    });
+    if (aHasDated && !bHasDated) return -1;
+    if (!aHasDated && bHasDated) return 1;
+    // Both have or lack dated connections — longer chains first
+    if (a.length !== b.length) return b.length - a.length;
+    // Same length — alphabetical by first item
+    var aTitle = (a[0] && a[0].title || '').toLowerCase();
+    var bTitle = (b[0] && b[0].title || '').toLowerCase();
+    return aTitle < bTitle ? -1 : aTitle > bTitle ? 1 : 0;
+  });
 
   // Place each chain on a single row — all members share the same Y
   var nextUndatedCol = 0;

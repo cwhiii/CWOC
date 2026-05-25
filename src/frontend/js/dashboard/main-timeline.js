@@ -391,8 +391,12 @@ function _tlBuildNodeHTML(chit, zoomLevel) {
     node.style.backgroundColor = chit.color;
   }
 
-  // Tooltip: title + status + completion date if complete
-  var tooltip = (chit.title || '(Untitled)') + ' — ' + (chit.status || 'ToDo');
+  // Tooltip: title + status + severity + priority + completion date if complete
+  var tooltipParts = [];
+  if (chit.status) tooltipParts.push(chit.status);
+  if (chit.severity) tooltipParts.push(chit.severity);
+  if (chit.priority) tooltipParts.push(chit.priority);
+  var tooltip = (chit.title || '(Untitled)') + (tooltipParts.length > 0 ? ' — ' + tooltipParts.join(' · ') : '');
   if (isComplete && chit.completed_datetime) {
     tooltip += '\nCompleted: ' + chit.completed_datetime.substring(0, 10);
   }
@@ -408,7 +412,11 @@ function _tlBuildNodeHTML(chit, zoomLevel) {
   if (zoomLevel === 'medium' || zoomLevel === 'close') {
     var statusEl = document.createElement('div');
     statusEl.className = 'timeline-node-status';
-    statusEl.textContent = chit.status || '';
+    var statusParts = [];
+    if (chit.status) statusParts.push(chit.status);
+    if (chit.severity) statusParts.push(chit.severity);
+    if (chit.priority) statusParts.push(chit.priority);
+    statusEl.textContent = statusParts.join(' · ');
     if (isComplete) statusEl.style.color = '#888';
     node.appendChild(statusEl);
   }

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.sync.SyncState
@@ -272,6 +273,41 @@ private fun ChitAlertCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // Status / Severity / Priority badges (only if non-blank)
+            val hasMetaBadges = !chit.status.isNullOrBlank() || !chit.severity.isNullOrBlank() || !chit.priority.isNullOrBlank()
+            if (hasMetaBadges) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!chit.status.isNullOrBlank()) {
+                        Text(
+                            text = chit.status,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (!chit.severity.isNullOrBlank()) {
+                        Text(
+                            text = chit.severity,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (!chit.priority.isNullOrBlank()) {
+                        Text(
+                            text = chit.priority,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cardTextColor.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
 
             // Content zone recess (Task 24) — wraps everything below header row
             val summaryParts = buildAlertSummaryParts(alertCounts)

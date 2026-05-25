@@ -705,7 +705,7 @@ private fun IndicatorIcons(task: ChitEntity, textColor: Color, isSubChit: Boolea
 @Composable
 private fun MetaValuesRow(task: ChitEntity, sortState: SortState, textColor: Color, bgColor: Color = Color(0xFFFDF6E3)) {
     val metaColor = textColor.copy(alpha = 0.75f)
-    val hasAnyMeta = task.priority != null || task.dueDatetime != null ||
+    val hasAnyMeta = task.priority != null || task.severity != null || task.dueDatetime != null ||
         task.startDatetime != null || task.pointInTime != null
 
     if (!hasAnyMeta) return
@@ -723,6 +723,15 @@ private fun MetaValuesRow(task: ChitEntity, sortState: SortState, textColor: Col
                 isSortActive = sortState.field == SortField.PRIORITY,
                 sortDir = sortState.direction,
                 color = priorityColor(task.priority)
+            )
+        }
+        // Severity
+        if (task.severity != null) {
+            MetaChip(
+                text = task.severity,
+                isSortActive = false,
+                sortDir = sortState.direction,
+                color = severityColor(task.severity)
             )
         }
         // Due date (Phase 1.5: overdue pill)
@@ -1040,6 +1049,15 @@ private fun priorityColor(priority: String): Color = when (priority) {
     "High" -> Color(0xFFD2691E)
     "Medium" -> Color(0xFF8B6914)
     "Low" -> Color(0xFF4A6741)
+    else -> Color(0xFF5C4A3A)
+}
+
+/** Severity color for meta display. */
+private fun severityColor(severity: String): Color = when (severity) {
+    "Critical" -> Color(0xFFB22222)
+    "Major" -> Color(0xFFD2691E)
+    "Normal" -> Color(0xFF8B6914)
+    "Minor" -> Color(0xFF4A6741)
     else -> Color(0xFF5C4A3A)
 }
 

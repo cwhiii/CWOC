@@ -5,8 +5,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -270,7 +274,7 @@ private fun FilteredEmptyState(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ChecklistChitCard(
     chit: ChitEntity,
@@ -349,6 +353,60 @@ private fun ChecklistChitCard(
 
             // Content zone recess (Task 24) — wraps everything below header row
             Spacer(modifier = Modifier.height(6.dp))
+
+            // Status / Severity / Priority badges (only if non-blank)
+            val hasMetaBadges = !chit.status.isNullOrBlank() || !chit.severity.isNullOrBlank() || !chit.priority.isNullOrBlank()
+            if (hasMetaBadges) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (!chit.status.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = chit.status,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (!chit.severity.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = chit.severity,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (!chit.priority.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = Color(0xFFFFFFF0)
+                        ) {
+                            Text(
+                                text = chit.priority,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cardTextColor.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
