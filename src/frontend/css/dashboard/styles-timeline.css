@@ -97,17 +97,10 @@
 
 /* ── Lane Divider — visible horizontal separator ──────────────────────────── */
 .timeline-lane-divider {
-    height: 3px;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--aged-brown-light, #a0522d) 10%,
-        var(--aged-brown-medium, #8b4513) 50%,
-        var(--aged-brown-light, #a0522d) 90%,
-        transparent 100%
-    );
-    opacity: 0.6;
-    margin: 0 16px;
+    height: 4px;
+    background: var(--aged-brown-medium, #8b4513);
+    opacity: 0.8;
+    margin: 4px 0;
     flex-shrink: 0;
 }
 

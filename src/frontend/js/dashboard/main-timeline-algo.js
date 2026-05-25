@@ -456,29 +456,54 @@ function _tlLayoutByDate(chits, opts) {
     var x = leftPadding + depth * colWidth;
 
     if (di === 0) {
-      // First column (roots): just stack vertically
+      // First column (roots): sort so chits WITH forward edges (have dependents
+      // in the undated section) come first, then those without.
+      // This ensures prereqs are at the top rows, aligned with their dependents.
+      depthChits.sort(function(a, b) {
+        var aFwd = graph.forward.get(a.id) || [];
+        var bFwd = graph.forward.get(b.id) || [];
+        var aHasUndatedDep = aFwd.some(function(id) { return undatedIdSet.has(id); });
+        var bHasUndatedDep = bFwd.some(function(id) { return undatedIdSet.has(id); });
+        if (aHasUndatedDep && !bHasUndatedDep) return -1;
+        if (!aHasUndatedDep && bHasUndatedDep) return 1;
+        return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
+      });
       for (var j = 0; j < depthChits.length; j++) {
         var y = topPadding + j * (nodeHeight + vGap);
         positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
       }
     } else {
-      // Subsequent columns: align each chit with its prerequisite's Y
+      // Subsequent columns: align each chit with its prerequisite's Y.
+      // Find the best prereq Y — prefer undated prereqs (same section) over dated ones.
       var desired = [];
       for (var j = 0; j < depthChits.length; j++) {
         var chit = depthChits[j];
         var prereqs = graph.reverse.get(chit.id) || [];
-        var targetY = topPadding; // default
-        var foundPrereqY = false;
+        var targetY = null;
+
+        // First try to find an undated prereq with a position
         for (var p = 0; p < prereqs.length; p++) {
+          if (!undatedIdSet.has(prereqs[p])) continue;
           var prereqPos = positions.get(prereqs[p]);
-          if (prereqPos) {
+          if (prereqPos && prereqPos.lane === 'undated') {
             targetY = prereqPos.y;
-            foundPrereqY = true;
             break;
           }
         }
-        if (!foundPrereqY) {
-          // If prereq is in dated section, use its Y relative to undated
+
+        // If no undated prereq found, use any prereq with a position
+        if (targetY === null) {
+          for (var p = 0; p < prereqs.length; p++) {
+            var prereqPos = positions.get(prereqs[p]);
+            if (prereqPos) {
+              targetY = prereqPos.y;
+              break;
+            }
+          }
+        }
+
+        // Fallback: stack at end
+        if (targetY === null) {
           targetY = topPadding + j * (nodeHeight + vGap);
         }
         desired.push({ chit: chit, targetY: targetY });

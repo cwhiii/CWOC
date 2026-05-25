@@ -195,11 +195,10 @@ function _tlBuildContainer() {
   datedLane.id = 'tl-dated-lane';
   canvas.appendChild(datedLane);
 
-  // Lane divider (draggable)
+  // Lane divider (full-width, bold)
   var divider = document.createElement('div');
   divider.className = 'timeline-lane-divider';
-  divider.style.cursor = 'row-resize';
-  divider.title = 'Drag to resize lanes';
+  divider.id = 'tl-lane-divider';
   canvas.appendChild(divider);
 
   // Undated lane
@@ -302,6 +301,7 @@ function _tlRender(chits) {
   requestAnimationFrame(function() {
     _tlRenderLines(_tlGraph, _tlPositions);
     _tlAttachLineClickListener();
+    _tlUpdateDividerGaps();
   });
 }
 
@@ -506,8 +506,8 @@ function _tlRenderLines(graph, positions) {
   var channelGroups = {};
   for (var li = 0; li < lineData.length; li++) {
     var ld = lineData[li];
-    // The vertical channel is roughly at startX + 15 (just past the source node)
-    var channelKey = Math.round((ld.startX + 15) / 30) * 30;
+    // The vertical channel is roughly at startX + 30 (centered in gap)
+    var channelKey = Math.round((ld.startX + 30) / 30) * 30;
     if (!channelGroups[channelKey]) channelGroups[channelKey] = [];
     channelGroups[channelKey].push(li);
   }
@@ -579,15 +579,15 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
   // The gap is the space between node right edges and the next node's left edge.
 
   // Find a clear vertical channel X (in the gap between columns)
-  var vertX = startX + 15; // Default: just past the source node's right edge
+  var vertX = startX + 30; // Default: centered in the 60px gap between columns
   var minY = Math.min(startY, endY) - 5;
   var maxY = Math.max(startY, endY) + 5;
 
   // Try multiple X positions to find a clear vertical channel
   var candidates = [
-    startX + 15,
+    startX + 30,
     Math.round((startX + endX) / 2),
-    endX - 15
+    endX - 30
   ];
 
   var vertClear = false;
@@ -714,8 +714,8 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
       horizY = startY < (topMost + bottomMost) / 2 ? topMost - 15 : bottomMost + 15;
     }
 
-    var vertX1 = startX + 15 + vOffset;
-    var vertX2 = endX - 15 + vOffset;
+    var vertX1 = startX + 30 + vOffset;
+    var vertX2 = endX - 30 + vOffset;
     var r = 10;
     var dy1 = horizY > startY ? 1 : -1;
     var dy2 = endY > horizY ? 1 : -1;
@@ -947,6 +947,67 @@ function _tlSizeCanvas() {
     svg.style.width = totalWidth + 'px';
     svg.style.height = totalHeight + 'px';
   }
+}
+
+
+/**
+ * Update the lane divider to have gaps where dependency lines cross it.
+ * Uses a CSS gradient with transparent sections at line X positions.
+ */
+function _tlUpdateDividerGaps() {
+  var divider = document.getElementById('tl-lane-divider');
+  if (!divider) return;
+
+  var svg = document.getElementById('tl-svg');
+  if (!svg) return;
+
+  var dividerRect = divider.getBoundingClientRect();
+  var svgRect = svg.getBoundingClientRect();
+  var dividerY = dividerRect.top + dividerRect.height / 2 - svgRect.top;
+
+  // Find all line X positions that cross the divider Y
+  var lineXPositions = [];
+  var paths = svg.querySelectorAll('path');
+  for (var i = 0; i < paths.length; i++) {
+    var pathEl = paths[i];
+    // Sample the path at the divider Y to find where it crosses
+    var pathLen = pathEl.getTotalLength();
+    for (var t = 0; t < pathLen; t += 5) {
+      var pt = pathEl.getPointAtLength(t);
+      if (Math.abs(pt.y - dividerY) < 8) {
+        lineXPositions.push(pt.x - (dividerRect.left - svgRect.left));
+        break;
+      }
+    }
+  }
+
+  if (lineXPositions.length === 0) {
+    divider.style.background = '';
+    return;
+  }
+
+  // Sort and build gradient with gaps
+  lineXPositions.sort(function(a, b) { return a - b; });
+  var gapWidth = 12;
+  var color = 'var(--aged-brown-medium, #8b4513)';
+  var stops = [];
+  var lastEnd = 0;
+
+  for (var i = 0; i < lineXPositions.length; i++) {
+    var gapStart = lineXPositions[i] - gapWidth / 2;
+    var gapEnd = lineXPositions[i] + gapWidth / 2;
+    if (gapStart > lastEnd) {
+      stops.push(color + ' ' + lastEnd + 'px');
+      stops.push(color + ' ' + gapStart + 'px');
+    }
+    stops.push('transparent ' + gapStart + 'px');
+    stops.push('transparent ' + gapEnd + 'px');
+    lastEnd = gapEnd;
+  }
+  stops.push(color + ' ' + lastEnd + 'px');
+  stops.push(color + ' 100%');
+
+  divider.style.background = 'linear-gradient(90deg, ' + stops.join(', ') + ')';
 }
 
 
