@@ -612,25 +612,73 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
     }
   }
 
-  // If horizontal segments are blocked, use a Z-route that goes above or below
+  // If horizontal segments are blocked, use a Z-route through the nearest gap
   if (hStartBlocked || hEndBlocked) {
-    // Find a clear horizontal Y that avoids all nodes between startX and endX
-    var horizY = -1;
-    // Try above the topmost node first, then below the bottommost
-    var topMost = Infinity, bottomMost = -Infinity;
+    // Find the nearest clear horizontal Y between startY and endY first,
+    // then expand outward. Prefer gaps between adjacent nodes.
+    var horizY = Math.round((startY + endY) / 2);
+    var found = false;
+
+    // Collect all node edges (tops and bottoms) in the horizontal span
+    var edges = [];
     for (var i = 0; i < nodeRects.length; i++) {
       var nr = nodeRects[i];
       if (nr.id === fromId || nr.id === toId) continue;
       if (nr.left < endX && nr.right > startX) {
-        if (nr.top < topMost) topMost = nr.top;
-        if (nr.bottom > bottomMost) bottomMost = nr.bottom;
+        edges.push(nr.top);
+        edges.push(nr.bottom);
       }
     }
-    // Route above if source is above midpoint, below otherwise
-    if (startY < (topMost + bottomMost) / 2) {
-      horizY = topMost - 15;
-    } else {
-      horizY = bottomMost + 15;
+    edges.sort(function(a, b) { return a - b; });
+
+    // Try gaps between consecutive edges (midpoints between bottom of one and top of next)
+    var gapCandidates = [];
+    for (var i = 0; i < edges.length - 1; i++) {
+      var gapMid = (edges[i] + edges[i + 1]) / 2;
+      // Check this Y is actually clear (not inside any node)
+      var gapClear = true;
+      for (var j = 0; j < nodeRects.length; j++) {
+        var nr = nodeRects[j];
+        if (nr.id === fromId || nr.id === toId) continue;
+        if (nr.left < endX && nr.right > startX && gapMid >= nr.top && gapMid <= nr.bottom) {
+          gapClear = false;
+          break;
+        }
+      }
+      if (gapClear && edges[i + 1] - edges[i] > 6) {
+        gapCandidates.push(gapMid);
+      }
+    }
+
+    // Also try above topmost and below bottommost
+    if (edges.length > 0) {
+      gapCandidates.push(edges[0] - 15);
+      gapCandidates.push(edges[edges.length - 1] + 15);
+    }
+
+    // Pick the candidate closest to the midpoint of startY and endY
+    var targetY = (startY + endY) / 2;
+    gapCandidates.sort(function(a, b) {
+      return Math.abs(a - targetY) - Math.abs(b - targetY);
+    });
+
+    if (gapCandidates.length > 0) {
+      horizY = gapCandidates[0];
+      found = true;
+    }
+
+    if (!found) {
+      // Fallback: just go above or below everything
+      var topMost = Infinity, bottomMost = -Infinity;
+      for (var i = 0; i < nodeRects.length; i++) {
+        var nr = nodeRects[i];
+        if (nr.id === fromId || nr.id === toId) continue;
+        if (nr.left < endX && nr.right > startX) {
+          if (nr.top < topMost) topMost = nr.top;
+          if (nr.bottom > bottomMost) bottomMost = nr.bottom;
+        }
+      }
+      horizY = startY < (topMost + bottomMost) / 2 ? topMost - 15 : bottomMost + 15;
     }
 
     var vertX1 = startX + 15;
