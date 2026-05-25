@@ -395,19 +395,18 @@ function _tlBuildNodeHTML(chit, zoomLevel) {
   // ALWAYS set a solid background — never transparent
   node.style.backgroundColor = '#fffaf0';
 
-  // Completed nodes: grey them out if enabled, otherwise keep normal colors
+  // Apply chit's custom color (if valid)
+  if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color !== 'transparent' && chit.color.trim() !== '' && chit.color.trim() !== '#') {
+    node.style.backgroundColor = chit.color;
+  }
+
+  // Grey out completed nodes: overlay 85% grey + 50% opacity (only when checkbox is checked)
   if (isComplete) {
     var greyEnabled = localStorage.getItem('cwoc_tl_greyCompleted') !== 'false';
     if (greyEnabled) {
-      node.style.backgroundColor = '#d4d4d4';
-      node.style.borderColor = '#999';
-      node.style.color = '#666';
+      node.style.filter = 'grayscale(85%)';
       node.style.opacity = '0.5';
-    } else if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color.trim() !== '' && chit.color.trim() !== '#') {
-      node.style.backgroundColor = chit.color;
     }
-  } else if (chit.color && chit.color !== 'null' && chit.color !== 'undefined' && chit.color.trim() !== '' && chit.color.trim() !== '#') {
-    node.style.backgroundColor = chit.color;
   }
 
   // Tooltip: title + status + severity + priority + completion date if complete

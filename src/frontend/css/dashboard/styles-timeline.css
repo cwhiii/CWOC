@@ -184,11 +184,9 @@
     border-color: #c0392b;
 }
 
-/* Req 11.4, 14.1: Complete — solid gray (not translucent) */
+/* Req 11.4, 14.1: Complete — border only (greying handled by JS checkbox) */
 .tl-node-complete {
-    background-color: #d4d4d4 !important;
-    border-color: #999 !important;
-    color: #666 !important;
+    border-color: #999;
 }
 
 /* ── SVG Overlay — dependency line container ──────────────────────────────── */
