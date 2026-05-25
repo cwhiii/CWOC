@@ -523,14 +523,15 @@ function _tlRenderLines(graph, positions) {
  * Lines NEVER cross through any node.
  */
 function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects) {
-  // Same Y — straight horizontal line (only valid if no nodes between them)
+  // Check if a straight horizontal line is possible (same Y, nothing in the way)
   if (Math.abs(startY - endY) < 2) {
-    // Check if any node blocks this horizontal path
     var hBlocked = false;
+    var lineY = startY;
     for (var i = 0; i < nodeRects.length; i++) {
       var nr = nodeRects[i];
       if (nr.id === fromId || nr.id === toId) continue;
-      if (startY >= nr.top && startY <= nr.bottom && nr.left > startX && nr.right < endX) {
+      // Node blocks if it overlaps the line's Y AND is horizontally between start and end
+      if (lineY >= (nr.top - 2) && lineY <= (nr.bottom + 2) && nr.left < endX && nr.right > startX) {
         hBlocked = true;
         break;
       }
@@ -540,27 +541,25 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
     }
   }
 
-  // Find the vertical channel: the gap closest to the source that's clear
-  // Try the midpoint first, then search for a clear X
-  var vertX = Math.round((startX + endX) / 2);
+  // For non-straight lines, route through the gap between columns.
+  // Strategy: go right from source into the gap, then vertical, then right to target.
+  // The gap is the space between node right edges and the next node's left edge.
+
+  // Find a clear vertical channel X (in the gap between columns)
+  var vertX = startX + 15; // Default: just past the source node's right edge
   var minY = Math.min(startY, endY) - 5;
   var maxY = Math.max(startY, endY) + 5;
 
-  // Check if vertX is clear for vertical travel
-  var vertClear = true;
-  for (var i = 0; i < nodeRects.length; i++) {
-    var nr = nodeRects[i];
-    if (nr.id === fromId || nr.id === toId) continue;
-    if (vertX >= nr.left && vertX <= nr.right && nr.top < maxY && nr.bottom > minY) {
-      vertClear = false;
-      break;
-    }
-  }
+  // Try multiple X positions to find a clear vertical channel
+  var candidates = [
+    startX + 15,
+    Math.round((startX + endX) / 2),
+    endX - 15
+  ];
 
-  // If midpoint is blocked, find a clear vertical channel
-  if (!vertClear) {
-    // Search in the gap immediately after the source (startX to startX + 30)
-    vertX = startX + 15;
+  var vertClear = false;
+  for (var c = 0; c < candidates.length; c++) {
+    vertX = candidates[c];
     vertClear = true;
     for (var i = 0; i < nodeRects.length; i++) {
       var nr = nodeRects[i];
@@ -570,68 +569,70 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
         break;
       }
     }
+    if (vertClear) break;
   }
 
-  // If still blocked, try just before the target
+  // If no candidate works, search more aggressively in 10px steps
   if (!vertClear) {
-    vertX = endX - 15;
-    vertClear = true;
-    for (var i = 0; i < nodeRects.length; i++) {
-      var nr = nodeRects[i];
-      if (nr.id === fromId || nr.id === toId) continue;
-      if (vertX >= nr.left && vertX <= nr.right && nr.top < maxY && nr.bottom > minY) {
-        vertClear = false;
-        break;
-      }
-    }
-  }
-
-  // Now check if the horizontal segments are clear
-  // Horizontal at startY from startX to vertX
-  var hStartClear = true;
-  for (var i = 0; i < nodeRects.length; i++) {
-    var nr = nodeRects[i];
-    if (nr.id === fromId || nr.id === toId) continue;
-    var segLeft = Math.min(startX, vertX);
-    var segRight = Math.max(startX, vertX);
-    if (startY >= nr.top && startY <= nr.bottom && nr.left < segRight && nr.right > segLeft) {
-      hStartClear = false;
-      break;
-    }
-  }
-
-  // Horizontal at endY from vertX to endX
-  var hEndClear = true;
-  for (var i = 0; i < nodeRects.length; i++) {
-    var nr = nodeRects[i];
-    if (nr.id === fromId || nr.id === toId) continue;
-    var segLeft = Math.min(vertX, endX);
-    var segRight = Math.max(vertX, endX);
-    if (endY >= nr.top && endY <= nr.bottom && nr.left < segRight && nr.right > segLeft) {
-      hEndClear = false;
-      break;
-    }
-  }
-
-  // If horizontal segments are blocked, use a Z-route through a horizontal gap
-  if (!hStartClear || !hEndClear) {
-    var horizY = Math.round((startY + endY) / 2);
-    var found = false;
-    for (var attempt = 0; attempt < 20; attempt++) {
-      var testY = horizY + (attempt % 2 === 0 ? attempt * 5 : -attempt * 5);
-      var clear = true;
+    for (var offset = 20; offset < 200; offset += 10) {
+      vertX = startX + offset;
+      if (vertX >= endX) break;
+      vertClear = true;
       for (var i = 0; i < nodeRects.length; i++) {
         var nr = nodeRects[i];
         if (nr.id === fromId || nr.id === toId) continue;
-        if (testY >= nr.top && testY <= nr.bottom && nr.left < endX && nr.right > startX) {
-          clear = false;
+        if (vertX >= nr.left && vertX <= nr.right && nr.top < maxY && nr.bottom > minY) {
+          vertClear = false;
           break;
         }
       }
-      if (clear) { horizY = testY; found = true; break; }
+      if (vertClear) break;
+    }
+  }
+
+  // Check if the horizontal segment at startY from startX to vertX is clear
+  var hStartBlocked = false;
+  for (var i = 0; i < nodeRects.length; i++) {
+    var nr = nodeRects[i];
+    if (nr.id === fromId || nr.id === toId) continue;
+    if (startY >= (nr.top - 2) && startY <= (nr.bottom + 2) && nr.left < vertX && nr.right > startX) {
+      hStartBlocked = true;
+      break;
+    }
+  }
+
+  // Check if the horizontal segment at endY from vertX to endX is clear
+  var hEndBlocked = false;
+  for (var i = 0; i < nodeRects.length; i++) {
+    var nr = nodeRects[i];
+    if (nr.id === fromId || nr.id === toId) continue;
+    if (endY >= (nr.top - 2) && endY <= (nr.bottom + 2) && nr.left < endX && nr.right > vertX) {
+      hEndBlocked = true;
+      break;
+    }
+  }
+
+  // If horizontal segments are blocked, use a Z-route that goes above or below
+  if (hStartBlocked || hEndBlocked) {
+    // Find a clear horizontal Y that avoids all nodes between startX and endX
+    var horizY = -1;
+    // Try above the topmost node first, then below the bottommost
+    var topMost = Infinity, bottomMost = -Infinity;
+    for (var i = 0; i < nodeRects.length; i++) {
+      var nr = nodeRects[i];
+      if (nr.id === fromId || nr.id === toId) continue;
+      if (nr.left < endX && nr.right > startX) {
+        if (nr.top < topMost) topMost = nr.top;
+        if (nr.bottom > bottomMost) bottomMost = nr.bottom;
+      }
+    }
+    // Route above if source is above midpoint, below otherwise
+    if (startY < (topMost + bottomMost) / 2) {
+      horizY = topMost - 15;
+    } else {
+      horizY = bottomMost + 15;
     }
 
-    // Z-route with rounded corners
     var vertX1 = startX + 15;
     var vertX2 = endX - 15;
     var r = 10;
@@ -849,11 +850,11 @@ function _tlSizeCanvas() {
     datedLane.style.minHeight = datedHeight + 'px';
   }
   if (undatedLane) {
-    undatedLane.style.height = (undatedHeight + 40) + 'px';
-    undatedLane.style.minHeight = (undatedHeight + 40) + 'px';
+    undatedLane.style.height = (undatedHeight + 60) + 'px';
+    undatedLane.style.minHeight = (undatedHeight + 60) + 'px';
   }
 
-  var totalHeight = datedHeight + undatedHeight + 60; // 20 divider + 40 bottom margin
+  var totalHeight = datedHeight + undatedHeight + 100; // 20 divider + 80 bottom margin
 
   canvas.style.width = totalWidth + 'px';
   canvas.style.minHeight = totalHeight + 'px';

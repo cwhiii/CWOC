@@ -394,11 +394,23 @@ function _tlLayoutByDate(chits, opts) {
       var uid = undatedConnected[i].id;
       var prereqs = graph.reverse.get(uid) || [];
       var hasUndatedPrereq = false;
+      var maxDatedPrereqCol = -1;
       for (var p = 0; p < prereqs.length; p++) {
-        if (undatedIdSet.has(prereqs[p])) { hasUndatedPrereq = true; break; }
+        if (undatedIdSet.has(prereqs[p])) { hasUndatedPrereq = true; }
+        else {
+          // Dated prereq — find its column index
+          var datedPos = positions.get(prereqs[p]);
+          if (datedPos) {
+            var col = Math.round((datedPos.x - leftPadding) / colWidth);
+            if (col > maxDatedPrereqCol) maxDatedPrereqCol = col;
+          }
+        }
       }
       if (!hasUndatedPrereq) {
-        undatedDepths.set(uid, 0);
+        // No undated prereqs — this is a root in the undated graph.
+        // If it has a dated prereq, start at the column after that prereq.
+        var startDepth = maxDatedPrereqCol >= 0 ? (maxDatedPrereqCol + 1) : 0;
+        undatedDepths.set(uid, startDepth);
         udQueue.push(uid);
       }
     }
@@ -434,17 +446,19 @@ function _tlLayoutByDate(chits, opts) {
     depthGroups.get(depth).push(undatedConnected[i]);
   }
 
-  // Position connected undated: each depth = one column, stack vertically
+  // Position connected undated: use depth value directly as column index
+  // (depth already accounts for dated prereq positions)
   var sortedUdDepths = Array.from(depthGroups.keys()).sort(function(a, b) { return a - b; });
   var nextUndatedCol = 0;
   for (var di = 0; di < sortedUdDepths.length; di++) {
-    var depthChits = depthGroups.get(sortedUdDepths[di]);
-    var x = leftPadding + nextUndatedCol * colWidth;
+    var depth = sortedUdDepths[di];
+    var depthChits = depthGroups.get(depth);
+    var x = leftPadding + depth * colWidth;
     for (var j = 0; j < depthChits.length; j++) {
       var y = topPadding + j * (nodeHeight + vGap);
       positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
     }
-    nextUndatedCol++;
+    if (depth >= nextUndatedCol) nextUndatedCol = depth + 1;
   }
 
   // Position unconnected undated: fill from bottom-left, going right then up.
