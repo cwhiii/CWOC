@@ -493,8 +493,11 @@ function _tlRenderLines(graph, positions) {
       var endX = toRect.left - svgRect.left - 4;
       var endY = toRect.top + toRect.height / 2 - svgRect.top;
 
+      // Spread lines from same source: offset each by 6px so they don't stack
+      var lineOffset = (i - (dependents.length - 1) / 2) * 6;
+
       // Route through gaps: find a clear vertical channel and horizontal channel
-      var d = _tlRouteAroundNodes(startX, startY, endX, endY, prereqId, depId, allNodeRects);
+      var d = _tlRouteAroundNodes(startX, startY, endX, endY, prereqId, depId, allNodeRects, lineOffset);
 
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', d);
@@ -522,7 +525,9 @@ function _tlRenderLines(graph, positions) {
  * Horizontal travel happens in the vertical gap between rows.
  * Lines NEVER cross through any node.
  */
-function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects) {
+function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects, lineOffset) {
+  // lineOffset spreads parallel vertical lines so they don't stack
+  var vOffset = lineOffset || 0;
   // Check if a straight horizontal line is possible (same Y, nothing in the way)
   if (Math.abs(startY - endY) < 2) {
     var hBlocked = false;
@@ -681,8 +686,8 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
       horizY = startY < (topMost + bottomMost) / 2 ? topMost - 15 : bottomMost + 15;
     }
 
-    var vertX1 = startX + 15;
-    var vertX2 = endX - 15;
+    var vertX1 = startX + 15 + vOffset;
+    var vertX2 = endX - 15 + vOffset;
     var r = 10;
     var dy1 = horizY > startY ? 1 : -1;
     var dy2 = endY > horizY ? 1 : -1;
@@ -706,6 +711,7 @@ function _tlRouteAroundNodes(startX, startY, endX, endY, fromId, toId, nodeRects
   }
 
   // Simple L-route with rounded corners
+  vertX = vertX + vOffset;
   var r = 12;
   var dy = endY > startY ? 1 : -1;
   var vertDist = Math.abs(endY - startY);
