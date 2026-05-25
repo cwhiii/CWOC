@@ -369,22 +369,39 @@ function _tlLayoutByDate(chits, opts) {
     }
   }
 
-  // Position undated chits after the last date column
-  var undatedX = leftPadding + sortedDates.length * colWidth;
-  // Sort undated: connected first, incomplete first, then alphabetical
-  undatedChits.sort(function(a, b) {
-    var aConn = (graph.forward.has(a.id) || graph.reverse.has(a.id)) ? 0 : 1;
-    var bConn = (graph.forward.has(b.id) || graph.reverse.has(b.id)) ? 0 : 1;
-    if (aConn !== bConn) return aConn - bConn;
-    var aC = ((a.status || '').toLowerCase().replace(/\s+/g, '') === 'complete') ? 1 : 0;
-    var bC = ((b.status || '').toLowerCase().replace(/\s+/g, '') === 'complete') ? 1 : 0;
-    if (aC !== bC) return aC - bC;
+  // Position undated chits in their own lane as a grid.
+  // Connected chits (those with dependencies) go at the top, clustered
+  // below & one column to the left of what depends on them.
+  // Unconnected chits fill remaining grid positions.
+  var undatedConnected = [];
+  var undatedUnconnected = [];
+  for (var i = 0; i < undatedChits.length; i++) {
+    var uc = undatedChits[i];
+    if (graph.forward.has(uc.id) || graph.reverse.has(uc.id)) {
+      undatedConnected.push(uc);
+    } else {
+      undatedUnconnected.push(uc);
+    }
+  }
+
+  // Sort connected by dependency order (prereqs first)
+  undatedConnected = _tlSortByConnectedness(undatedConnected, graph);
+
+  // Sort unconnected alphabetically
+  undatedUnconnected.sort(function(a, b) {
     return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
   });
 
-  for (var i = 0; i < undatedChits.length; i++) {
-    var y = topPadding + i * (nodeHeight + vGap);
-    positions.set(undatedChits[i].id, { x: undatedX, y: y, lane: 'undated' });
+  // Grid layout: multiple columns
+  var gridCols = Math.max(3, Math.ceil(Math.sqrt(undatedChits.length)));
+  var allUndated = undatedConnected.concat(undatedUnconnected);
+
+  for (var i = 0; i < allUndated.length; i++) {
+    var col = i % gridCols;
+    var row = Math.floor(i / gridCols);
+    var x = leftPadding + col * colWidth;
+    var y = topPadding + row * (nodeHeight + vGap);
+    positions.set(allUndated[i].id, { x: x, y: y, lane: 'undated' });
   }
 
   return positions;
@@ -659,24 +676,22 @@ function _tlChainOrder(nodes) {
 // ── Helper Functions ─────────────────────────────────────────────────────────
 
 /**
- * Check if a chit has any date field set.
+ * Check if a chit has a due date set.
  * @param {object} chit
  * @returns {boolean}
  */
 function _tlChitHasDate(chit) {
-  return !!(chit.start_datetime || chit.due_datetime || chit.point_in_time);
+  return !!chit.due_datetime;
 }
 
 /**
- * Get the effective date string for a chit (for positioning on the timeline).
- * Priority: point_in_time > start_datetime > due_datetime.
+ * Get the due date string for a chit (for positioning on the timeline).
  * Returns the date portion only (YYYY-MM-DD).
  * @param {object} chit
  * @returns {string}
  */
 function _tlGetEffectiveDate(chit) {
-  var dt = chit.point_in_time || chit.start_datetime || chit.due_datetime || '';
-  // Extract date portion (first 10 chars of ISO string)
+  var dt = chit.due_datetime || '';
   if (dt.length >= 10) return dt.substring(0, 10);
   return dt;
 }

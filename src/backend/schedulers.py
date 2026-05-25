@@ -1950,6 +1950,105 @@ async def _timezone_change_detection_loop():
             logger.error(f"[TZ-Detection] Unexpected error: {e}")
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# Server-Side Email Polling
+# ══════════════════════════════════════════════════════════════════════════
+
+async def _email_poll_loop():
+    """Background loop that polls email on the server based on the user's check_interval setting.
+    
+    Runs independently of any browser/app connection. Reads the interval from
+    the first email account's check_interval setting (stored in settings.email_accounts).
+    Defaults to 1 minute if not set or set to 'manual'.
+    """
+    await asyncio.sleep(15)  # Let server fully start and warm caches first
+    logger.info("[EmailPoll] Server-side email polling started")
+
+    while True:
+        try:
+            # Read interval from settings
+            interval_minutes = _get_email_poll_interval()
+            if interval_minutes <= 0:
+                # Manual only — sleep 60s and re-check in case setting changes
+                await asyncio.sleep(60)
+                continue
+
+            # Run the sync in a thread (IMAP is blocking I/O)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _email_poll_sync_all_users)
+
+            # Sleep for the configured interval
+            await asyncio.sleep(interval_minutes * 60)
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"[EmailPoll] Unexpected error: {e}")
+            await asyncio.sleep(60)  # Back off on error
+
+
+def _get_email_poll_interval() -> int:
+    """Read the email check interval from settings. Returns minutes (0 = manual/disabled)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT email_accounts FROM settings LIMIT 1")
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            return 1  # Default: 1 minute
+        import json as _json
+        accounts = _json.loads(row[0])
+        if isinstance(accounts, list) and len(accounts) > 0:
+            interval = accounts[0].get("check_interval", "1")
+            if interval == "manual":
+                return 0
+            val = int(interval)
+            return val if val > 0 else 1
+        return 1
+    except Exception as e:
+        logger.warning(f"[EmailPoll] Failed to read interval from settings: {e}")
+        return 1  # Default to 1 minute on error
+    finally:
+        if conn:
+            conn.close()
+
+
+def _email_poll_sync_all_users():
+    """Run email sync for all users that have email accounts configured."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        # Get all user IDs that have email accounts
+        cursor.execute("SELECT user_id FROM settings WHERE email_accounts IS NOT NULL AND email_accounts != '' AND email_accounts != '[]'")
+        user_ids = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        conn = None
+
+        if not user_ids:
+            return
+
+        from src.backend.routes.email import _do_email_sync, _email_sync_running
+        for user_id in user_ids:
+            # Skip if a sync is already running for this user (e.g., manual trigger)
+            if _email_sync_running.get(user_id):
+                continue
+            try:
+                _email_sync_running[user_id] = True
+                _do_email_sync(user_id)
+            except Exception as e:
+                logger.error(f"[EmailPoll] Sync failed for user {user_id}: {e}")
+            finally:
+                _email_sync_running[user_id] = False
+
+    except Exception as e:
+        logger.error(f"[EmailPoll] Error in sync_all_users: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -1968,7 +2067,8 @@ async def start_weather_schedulers():
     asyncio.create_task(_snooze_check_loop())
     asyncio.create_task(_email_send_later_loop())
     asyncio.create_task(_timezone_change_detection_loop())
-    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check + email send-later + timezone detection)")
+    asyncio.create_task(_email_poll_loop())
+    logger.info("Background tasks started (weather + alerts + snooze + email send-later + timezone detection + email polling)")
 
 
 # ══════════════════════════════════════════════════════════════════════════

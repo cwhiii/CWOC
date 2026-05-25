@@ -60,7 +60,7 @@ function _loadEmailAccountSettings(settings) {
     el = document.getElementById('emailMaxPull');
     if (el) el.value = firstAcct.max_pull || 50;
     el = document.getElementById('emailCheckInterval');
-    if (el) el.value = firstAcct.check_interval || 'manual';
+    if (el) el.value = firstAcct.check_interval || '1';
     // Signature
     el = document.getElementById('emailSignature');
     if (el) el.value = firstAcct.signature || '';

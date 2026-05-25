@@ -90,10 +90,14 @@ function displayTimelineView(chitsToDisplay) {
   // Clear existing content
   chitList.innerHTML = '';
 
+  console.log('[Timeline] Input chits:', chitsToDisplay.length);
+
   // Filter to task-relevant chits — only show chits with a status (actual tasks)
   var allTaskChits = chitsToDisplay.filter(function(chit) {
     return !!chit.status;
   });
+
+  console.log('[Timeline] After status filter:', allTaskChits.length, '(removed', chitsToDisplay.length - allTaskChits.length, 'without status)');
 
   // Hide completed chits UNLESS they are part of a dependency tree
   // (have prerequisites or are a prerequisite of something else)
@@ -106,6 +110,24 @@ function displayTimelineView(chitsToDisplay) {
     if (graph.reverse.has(chit.id) && graph.reverse.get(chit.id).length > 0) return true;
     return false;
   });
+
+  console.log('[Timeline] After complete filter:', taskChits.length, '(removed', allTaskChits.length - taskChits.length, 'completed without deps)');
+
+  // Log date grouping
+  var _datedCount = 0, _undatedCount = 0;
+  var _dateGroups = {};
+  taskChits.forEach(function(c) {
+    if (c.start_datetime || c.due_datetime || c.point_in_time) {
+      _datedCount++;
+      var d = (c.point_in_time || c.start_datetime || c.due_datetime || '').substring(0, 10);
+      if (!_dateGroups[d]) _dateGroups[d] = [];
+      _dateGroups[d].push(c.title);
+    } else {
+      _undatedCount++;
+    }
+  });
+  console.log('[Timeline] Dated:', _datedCount, 'Undated:', _undatedCount);
+  console.log('[Timeline] Date groups:', JSON.stringify(_dateGroups));
 
   // Cache for resize re-render
   _tlCurrentChits = taskChits;
@@ -273,14 +295,14 @@ function _tlRender(chits) {
   // Render nodes
   _tlRenderNodes(chits, _tlPositions);
 
-  // Render dependency lines
-  _tlRenderLines(_tlGraph, _tlPositions);
-
-  // Attach line click listener (event delegation on SVG for click-to-remove)
-  _tlAttachLineClickListener();
-
-  // Size the canvas to fit all content
+  // Size the canvas to fit all content (must happen before lines so layout is final)
   _tlSizeCanvas();
+
+  // Render dependency lines (uses getBoundingClientRect, needs final layout)
+  requestAnimationFrame(function() {
+    _tlRenderLines(_tlGraph, _tlPositions);
+    _tlAttachLineClickListener();
+  });
 }
 
 
@@ -307,7 +329,7 @@ function _tlRenderNodes(chits, positions) {
   // Determine zoom level for detail rendering
   var zoomLevel = _tlGetZoomLevel();
 
-  // Create nodes — in date mode, put everything in the dated lane (single grid)
+  // Place nodes in their correct lane
   for (var i = 0; i < chits.length; i++) {
     var chit = chits[i];
     var pos = positions.get(chit.id);
@@ -316,7 +338,12 @@ function _tlRenderNodes(chits, positions) {
     var node = _tlBuildNodeHTML(chit, zoomLevel);
     node.style.left = pos.x + 'px';
     node.style.top = pos.y + 'px';
-    datedLane.appendChild(node);
+
+    if (pos.lane === 'undated') {
+      undatedLane.appendChild(node);
+    } else {
+      datedLane.appendChild(node);
+    }
   }
 }
 
@@ -1787,16 +1814,10 @@ async function _tlCreateLinkModeDependency(sourceId, targetId) {
   _tlClearLinkSource();
 
   try {
-    // Fetch fresh chit to avoid overwriting other fields
-    var freshResp = await fetch('/api/chit/' + targetId);
-    if (!freshResp.ok) throw new Error('Failed to fetch chit');
-    var freshChit = await freshResp.json();
-    freshChit.prerequisites = prereqs;
-
     var response = await fetch('/api/chits/' + targetId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(freshChit)
+      body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
     });
 
     if (!response.ok) {
@@ -1946,13 +1967,12 @@ async function _tlUndo() {
   if (!chit) return;
   chit.prerequisites = action.oldPrereqs.slice();
 
-  // Persist
-  var putBody = Object.assign({}, chit);
+  // Persist — only update prerequisites
   try {
     await fetch('/api/chits/' + action.chitId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(putBody)
+      body: JSON.stringify({ prerequisites: JSON.stringify(action.oldPrereqs) })
     });
   } catch (e) { console.error('[Timeline] Undo failed:', e); }
 
@@ -1976,13 +1996,12 @@ async function _tlRedo() {
   if (!chit) return;
   chit.prerequisites = action.newPrereqs.slice();
 
-  // Persist
-  var putBody = Object.assign({}, chit);
+  // Persist — only update prerequisites
   try {
     await fetch('/api/chits/' + action.chitId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(putBody)
+      body: JSON.stringify({ prerequisites: JSON.stringify(action.newPrereqs) })
     });
   } catch (e) { console.error('[Timeline] Redo failed:', e); }
 
@@ -2554,7 +2573,7 @@ async function _tlAttemptCreateDependency(sourceId, targetId) {
     var putResp = await fetch('/api/chits/' + targetId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(freshChit)
+      body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
     });
 
     if (!putResp.ok) {
@@ -3107,7 +3126,7 @@ async function _tlLinkAsChain() {
       var resp = await fetch('/api/chits/' + encodeURIComponent(link.toId), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prerequisites: prereqs })
+        body: JSON.stringify({ prerequisites: JSON.stringify(prereqs) })
       });
 
       if (!resp.ok) {

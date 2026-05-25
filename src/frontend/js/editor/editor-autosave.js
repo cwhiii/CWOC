@@ -162,7 +162,7 @@ CwocAutoSave.prototype._performSave = async function () {
   // Validation gate: build the chit object, skip if invalid
   var chit = null;
   try {
-    chit = await buildChitObject();
+    chit = await buildChitObject({ silent: true });
   } catch (e) {
     // Validation error — skip silently
     this._state = 'pending';

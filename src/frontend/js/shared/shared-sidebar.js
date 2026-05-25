@@ -210,7 +210,6 @@ function _cwocInjectSidebar() {
   html += '    <span data-val="date" class="active">By Date</span>';
   html += '    <span data-val="dependency">By Dependency</span>';
   html += '  </div>';
-  html += '  <button class="action-button" id="tl-link-mode-btn" style="width:100%;margin-bottom:6px;font-size:0.85em;padding:6px;" title="Click two tasks in sequence to create a dependency between them (first becomes prerequisite of second)">🔗 Link Mode</button>';
   html += '  <button class="action-button" id="tl-critical-path-btn" style="width:100%;margin-bottom:0;font-size:0.85em;padding:6px;" title="Highlight the longest dependency chain to identify bottlenecks">⚡ Critical Path</button>';
   html += '</div>';
 

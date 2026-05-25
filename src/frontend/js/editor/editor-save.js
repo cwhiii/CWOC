@@ -218,8 +218,10 @@ function isValidMediaSource(src) {
 /**
  * Collect all form values into a chit object.
  * Returns null if validation fails (and shows alert).
+ * @param {object} [opts] - Options: { silent: true } suppresses validation toasts
  */
-async function buildChitObject() {
+async function buildChitObject(opts) {
+  var _silent = opts && opts.silent;
   const chit = {};
   chit.id = window.currentChitId || generateUniqueId();
 
@@ -390,16 +392,16 @@ async function buildChitObject() {
     const startDate = startDateInput ? startDateInput.value.trim() : '';
     const startTime = startTimeInput ? startTimeInput.value.trim() : '';
     if (!startDate) {
-      cwocToast('Start date is required when Start & End is selected.', 'error');
+      if (!_silent) cwocToast('Start date is required when Start & End is selected.', 'error');
       return null;
     }
     if (!isAllDay && !startTime) {
-      cwocToast('Start time is required (or check All Day).', 'error');
+      if (!_silent) cwocToast('Start time is required (or check All Day).', 'error');
       return null;
     }
     if (chit.start_datetime && chit.end_datetime) {
       if (new Date(chit.end_datetime) < new Date(chit.start_datetime)) {
-        cwocToast('End time cannot be before start time.', 'error');
+        if (!_silent) cwocToast('End time cannot be before start time.', 'error');
         return null;
       }
     }
@@ -407,11 +409,11 @@ async function buildChitObject() {
     const dueDate = dueDateInput ? dueDateInput.value.trim() : '';
     const dueTime = dueTimeInput ? dueTimeInput.value.trim() : '';
     if (!dueDate) {
-      cwocToast('Due date is required when Due is selected.', 'error');
+      if (!_silent) cwocToast('Due date is required when Due is selected.', 'error');
       return null;
     }
     if (!isAllDay && !dueTime) {
-      cwocToast('Due time is required (or check All Day).', 'error');
+      if (!_silent) cwocToast('Due time is required (or check All Day).', 'error');
       return null;
     }
   }

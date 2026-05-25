@@ -609,42 +609,16 @@ function _emailSetPillSpinners(spinning) {
 
 /**
  * Start or restart the auto-check mail timer based on settings.
- * Called after settings are loaded and after each manual check.
+ * DEPRECATED: Email polling is now handled server-side. This function is kept
+ * as a no-op so existing calls don't error.
  */
 function _emailStartAutoCheck() {
-    // Clear any existing timer
-    if (_emailAutoCheckTimer) {
-        clearInterval(_emailAutoCheckTimer);
-        _emailAutoCheckTimer = null;
-    }
-
-    // Load interval from cached settings
-    if (typeof getCachedSettings !== 'function') return;
-    getCachedSettings().then(function(settings) {
-        // Check email_accounts (multi-account) first, fall back to legacy
-        var interval = 'manual';
-        var accounts = settings.email_accounts;
-        if (Array.isArray(accounts) && accounts.length > 0) {
-            interval = accounts[0].check_interval || 'manual';
-        } else {
-            var acct = settings.email_account;
-            if (acct && typeof acct === 'object') interval = acct.check_interval || 'manual';
-        }
-        if (!interval || interval === 'manual') return;
-
-        var ms = parseInt(interval, 10) * 60 * 1000;
-        if (isNaN(ms) || ms < 60000) return;
-
-        _emailAutoCheckTimer = setInterval(function() {
-            console.debug('[Email] Auto-check mail (interval: ' + interval + 'm)');
-            _checkMail();
-        }, ms);
-        console.debug('[Email] Auto-check scheduled every ' + interval + ' min');
-    });
+    // Server-side polling handles email checks now — no browser timer needed.
+    console.debug('[Email] Server-side polling active — browser auto-check disabled');
 }
 
-// Start auto-check when the page loads (after a short delay for settings to load)
-setTimeout(_emailStartAutoCheck, 3000);
+// No-op on page load (server handles polling)
+// setTimeout(_emailStartAutoCheck, 3000);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Editor Return — save state before navigating to editor for single-chit refresh

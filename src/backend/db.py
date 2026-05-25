@@ -32,19 +32,45 @@ class _ChitCache:
     
     Stores the fully-serialized JSON bytes (ready to return as a raw Response).
     Invalidated whenever any chit is created, updated, or deleted.
-    Rebuilds lazily on next request after invalidation.
+    Rebuilds eagerly in a background thread on invalidation so the cache
+    is always warm when the browser asks.
     """
     def __init__(self):
         self._json_bytes = {}  # user_id → bytes (pre-serialized JSON)
         self._valid = {}  # user_id → bool
         self._built_at = {}  # user_id → timestamp
+        self._rebuild_lock = {}  # user_id → bool (prevents concurrent rebuilds)
     
     def invalidate(self, user_id: str = None):
-        """Mark cache as stale. If user_id is None, invalidate all users."""
+        """Mark cache as stale and immediately rebuild in background."""
+        import threading
         if user_id:
             self._valid[user_id] = False
+            threading.Thread(target=self._rebuild, args=(user_id,), daemon=True).start()
         else:
+            # Invalidate all — rebuild each known user
+            known_users = list(self._json_bytes.keys())
             self._valid.clear()
+            for uid in known_users:
+                threading.Thread(target=self._rebuild, args=(uid,), daemon=True).start()
+    
+    def _rebuild(self, user_id: str):
+        """Rebuild the cache for a user (runs in background thread)."""
+        if self._rebuild_lock.get(user_id):
+            return  # Already rebuilding
+        self._rebuild_lock[user_id] = True
+        try:
+            import json as _json
+            from src.backend.routes.chits import _build_chit_list_for_user
+            chits = _build_chit_list_for_user(user_id)
+            json_bytes = _json.dumps(chits, default=str).encode("utf-8")
+            self._json_bytes[user_id] = json_bytes
+            self._valid[user_id] = True
+            self._built_at[user_id] = time.time()
+        except Exception as e:
+            logger.warning(f"[ChitCache] Background rebuild failed for {user_id}: {e}")
+        finally:
+            self._rebuild_lock[user_id] = False
     
     def get_json(self, user_id: str):
         """Return cached pre-serialized JSON bytes or None if cache is stale/missing."""
