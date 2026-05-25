@@ -369,39 +369,96 @@ function _tlLayoutByDate(chits, opts) {
     }
   }
 
-  // Position undated chits in their own lane as a grid.
-  // Connected chits (those with dependencies) go at the top, clustered
-  // below & one column to the left of what depends on them.
-  // Unconnected chits fill remaining grid positions.
+  // Position undated chits in their own lane using dependency-aware layout.
+  // Connected chits are laid out left-to-right by dependency depth (prereqs left,
+  // dependents right). Unconnected chits fill remaining grid positions after.
   var undatedConnected = [];
   var undatedUnconnected = [];
+  var undatedIdSet = new Set();
   for (var i = 0; i < undatedChits.length; i++) {
-    var uc = undatedChits[i];
-    if (graph.forward.has(uc.id) || graph.reverse.has(uc.id)) {
-      undatedConnected.push(uc);
+    undatedIdSet.add(undatedChits[i].id);
+    if (graph.forward.has(undatedChits[i].id) || graph.reverse.has(undatedChits[i].id)) {
+      undatedConnected.push(undatedChits[i]);
     } else {
-      undatedUnconnected.push(uc);
+      undatedUnconnected.push(undatedChits[i]);
     }
   }
 
-  // Sort connected by dependency order (prereqs first)
-  undatedConnected = _tlSortByConnectedness(undatedConnected, graph);
+  // Compute dependency depths for undated connected chits only
+  // (depth 0 = no prereqs among undated set, depth 1 = depends on depth 0, etc.)
+  var undatedDepths = new Map();
+  if (undatedConnected.length > 0) {
+    // Find roots among undated (no prereqs that are also undated)
+    var udQueue = [];
+    for (var i = 0; i < undatedConnected.length; i++) {
+      var uid = undatedConnected[i].id;
+      var prereqs = graph.reverse.get(uid) || [];
+      var hasUndatedPrereq = false;
+      for (var p = 0; p < prereqs.length; p++) {
+        if (undatedIdSet.has(prereqs[p])) { hasUndatedPrereq = true; break; }
+      }
+      if (!hasUndatedPrereq) {
+        undatedDepths.set(uid, 0);
+        udQueue.push(uid);
+      }
+    }
+    // BFS to assign depths
+    var udHead = 0;
+    while (udHead < udQueue.length) {
+      var cur = udQueue[udHead++];
+      var curDepth = undatedDepths.get(cur);
+      var deps = graph.forward.get(cur) || [];
+      for (var d = 0; d < deps.length; d++) {
+        if (!undatedIdSet.has(deps[d])) continue;
+        var newDepth = curDepth + 1;
+        var existing = undatedDepths.get(deps[d]);
+        if (existing === undefined || newDepth > existing) {
+          undatedDepths.set(deps[d], newDepth);
+          udQueue.push(deps[d]);
+        }
+      }
+    }
+    // Any not reached get depth 0
+    for (var i = 0; i < undatedConnected.length; i++) {
+      if (!undatedDepths.has(undatedConnected[i].id)) {
+        undatedDepths.set(undatedConnected[i].id, 0);
+      }
+    }
+  }
 
-  // Sort unconnected alphabetically
+  // Group connected undated by depth (column)
+  var depthGroups = new Map();
+  for (var i = 0; i < undatedConnected.length; i++) {
+    var depth = undatedDepths.get(undatedConnected[i].id) || 0;
+    if (!depthGroups.has(depth)) depthGroups.set(depth, []);
+    depthGroups.get(depth).push(undatedConnected[i]);
+  }
+
+  // Position connected undated: each depth = one column, stack vertically
+  var sortedUdDepths = Array.from(depthGroups.keys()).sort(function(a, b) { return a - b; });
+  var nextUndatedCol = 0;
+  for (var di = 0; di < sortedUdDepths.length; di++) {
+    var depthChits = depthGroups.get(sortedUdDepths[di]);
+    var x = leftPadding + nextUndatedCol * colWidth;
+    for (var j = 0; j < depthChits.length; j++) {
+      var y = topPadding + j * (nodeHeight + vGap);
+      positions.set(depthChits[j].id, { x: x, y: y, lane: 'undated' });
+    }
+    nextUndatedCol++;
+  }
+
+  // Position unconnected undated: fill grid after the connected columns
   undatedUnconnected.sort(function(a, b) {
     return (a.title || '').toLowerCase() < (b.title || '').toLowerCase() ? -1 : 1;
   });
-
-  // Grid layout: multiple columns
-  var gridCols = Math.max(3, Math.ceil(Math.sqrt(undatedChits.length)));
-  var allUndated = undatedConnected.concat(undatedUnconnected);
-
-  for (var i = 0; i < allUndated.length; i++) {
-    var col = i % gridCols;
+  var gridStartCol = nextUndatedCol;
+  var gridCols = Math.max(3, Math.ceil(Math.sqrt(undatedUnconnected.length)));
+  for (var i = 0; i < undatedUnconnected.length; i++) {
+    var col = gridStartCol + (i % gridCols);
     var row = Math.floor(i / gridCols);
     var x = leftPadding + col * colWidth;
     var y = topPadding + row * (nodeHeight + vGap);
-    positions.set(allUndated[i].id, { x: x, y: y, lane: 'undated' });
+    positions.set(undatedUnconnected[i].id, { x: x, y: y, lane: 'undated' });
   }
 
   return positions;
