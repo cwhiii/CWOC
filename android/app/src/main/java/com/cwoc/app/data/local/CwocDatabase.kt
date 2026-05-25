@@ -29,7 +29,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
         NotificationEntity::class,
         StandaloneAlertEntity::class
     ],
-    version = 9,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

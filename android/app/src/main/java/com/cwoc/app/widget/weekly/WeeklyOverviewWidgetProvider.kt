@@ -256,7 +256,10 @@ class WeeklyOverviewWidgetProvider : AppWidgetProvider() {
                 com.cwoc.app.data.local.migration.MIGRATION_5_6,
                 com.cwoc.app.data.local.migration.MIGRATION_6_7,
                 com.cwoc.app.data.local.migration.MIGRATION_7_8,
-                com.cwoc.app.data.local.migration.MIGRATION_8_9
+                com.cwoc.app.data.local.migration.MIGRATION_8_9,
+                com.cwoc.app.data.local.migration.MIGRATION_9_10,
+                com.cwoc.app.data.local.migration.MIGRATION_10_11,
+                com.cwoc.app.data.local.migration.MIGRATION_11_12
             )
             .build()
     }

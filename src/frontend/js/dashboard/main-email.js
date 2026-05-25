@@ -6,6 +6,15 @@
  *             storePreviousState), shared-utils.js (getCachedSettings)
  * ────────────────────────────────────────────────────────────────────────── */
 
+/* Thread cache — stores _emailGroupByThread() output with fingerprint for cache hit detection */
+var _emailThreadCache = { fingerprint: null, threads: null, allEmailChits: null };
+
+/* DOM cache — stores detached email scroll container for instant reattach on tab switch back */
+var _emailDomCache = { dom: null, scrollTop: 0, fingerprint: null, bundleToolbar: null };
+
+/* rAF handle for progressive rendering — allows cancellation on tab switch away */
+var _emailRenderRafId = null;
+
 /* Email sub-filter state: 'inbox' (default), 'bytag', 'drafts', 'trash' */
 var _emailSubFilter = 'inbox';
 
@@ -56,6 +65,50 @@ function _emailPersistAccountStatus() {
 
 /* Whether account filter has been initialized with all accounts */
 var _emailAccountFilterInitialized = false;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Thread cache — fingerprint-based caching of _emailGroupByThread() results
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Compute a deterministic fingerprint from email chits.
+ * Format: count|id1+emailReadBit+archivedBit|id2+emailReadBit+archivedBit|...
+ * Sorted by chit ID for determinism regardless of input order.
+ * @param {Array} emailChits — array of email chit objects
+ * @returns {string} fingerprint string
+ */
+function _emailComputeFingerprint(emailChits) {
+    if (!emailChits || emailChits.length === 0) return '0';
+    var segments = [];
+    for (var i = 0; i < emailChits.length; i++) {
+        var c = emailChits[i];
+        var readBit = c.email_read ? '1' : '0';
+        var archivedBit = c.archived ? '1' : '0';
+        segments.push(c.id + readBit + archivedBit);
+    }
+    segments.sort();
+    return emailChits.length + '|' + segments.join('|');
+}
+
+/**
+ * Invalidate the thread cache, forcing recomputation on next displayEmailView() call.
+ */
+function _emailInvalidateThreadCache() {
+    _emailThreadCache.fingerprint = null;
+    _emailThreadCache.threads = null;
+    _emailThreadCache.allEmailChits = null;
+}
+
+/**
+ * Invalidate the DOM cache, forcing a full rebuild on next displayEmailView() call.
+ * Called when data changes (fetch, sync, filter change) to prevent stale DOM display.
+ */
+function _emailInvalidateDomCache() {
+    _emailDomCache.dom = null;
+    _emailDomCache.scrollTop = 0;
+    _emailDomCache.fingerprint = null;
+    _emailDomCache.bundleToolbar = null;
+}
 
 /* Cached contacts for sender image lookup */
 var _emailDashContactsCache = null;
@@ -279,6 +332,8 @@ function _emailToggleAccountFilter(nickname) {
     } else {
         _emailAccountFilter.splice(idx, 1);
     }
+    // Invalidate DOM cache — account filter change means cached DOM is stale
+    if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
     _emailRenderAccountFilterButtons();
     // Re-trigger the email view render with the current tab
     if (typeof filterChits === 'function') filterChits('Email');
@@ -591,6 +646,34 @@ function _emailStartAutoCheck() {
 // Start auto-check when the page loads (after a short delay for settings to load)
 setTimeout(_emailStartAutoCheck, 3000);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Editor Return — save state before navigating to editor for single-chit refresh
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Save editor return state before navigating to the editor.
+ * Stores the chit ID, scroll position, and a snapshot of the chits array
+ * so that on return we can do a single-chit refresh instead of full fetchChits().
+ * @param {string} chitId — the ID of the chit being opened/edited
+ */
+function _emailSaveEditorReturnState(chitId) {
+    // Save the chit ID we're navigating to
+    localStorage.setItem('cwoc_editor_return_chit_id', chitId);
+
+    // Save the email scroll position
+    var scrollWrap = document.querySelector('.email-scroll-wrap');
+    var scrollTop = scrollWrap ? scrollWrap.scrollTop : 0;
+    localStorage.setItem('cwoc_email_scroll_top', String(scrollTop));
+
+    // Persist the full chits array to sessionStorage for instant restore on return
+    try {
+        sessionStorage.setItem('cwoc_chits_snapshot', JSON.stringify(chits));
+    } catch (e) {
+        // Quota exceeded — skip snapshot; editor return will fall back to full fetchChits()
+        console.warn('[Email] Failed to save chits snapshot (quota?):', e.message);
+    }
+}
+
 // Check for pending email send (from editor undo-send flow)
 setTimeout(_emailCheckPendingSend, 500);
 
@@ -773,6 +856,29 @@ function displayEmailView(chitsToDisplay) {
         return db.localeCompare(da);
     });
 
+    // Compute fingerprint from ALL email chits (pre-filter) for cache lookups
+    var currentFingerprint = _emailComputeFingerprint(allEmailChits);
+
+    // DOM cache check: if fingerprint matches and cached DOM exists, reattach instantly
+    // Must happen BEFORE rendering bundle toolbar to avoid duplicates
+    if (emailChits.length > 0 && _emailDomCache.dom && _emailDomCache.fingerprint === currentFingerprint) {
+        try {
+            if (_emailDomCache.bundleToolbar) {
+                container.appendChild(_emailDomCache.bundleToolbar);
+            }
+            container.appendChild(_emailDomCache.dom);
+            _emailDomCache.dom.scrollTop = _emailDomCache.scrollTop;
+            // Clear any stale checkbox selections from the cached DOM
+            _emailDomCache.dom.querySelectorAll('.email-select-cb:checked').forEach(function(cb) {
+                cb.checked = false;
+            });
+            return;
+        } catch (e) {
+            // Reattach failed (element was garbage collected or invalid) — fall through to rebuild
+            _emailInvalidateDomCache();
+        }
+    }
+
     if (emailChits.length === 0) {
         // Still show bundle toolbar even when no emails match — use FULL inbox for counts
         if (typeof _renderBundleToolbar === 'function') {
@@ -796,9 +902,27 @@ function displayEmailView(chitsToDisplay) {
     var scrollWrap = document.createElement('div');
     scrollWrap.className = 'email-scroll-wrap';
 
-    // Render email cards — always threaded
-    // Build thread map from ALL emails (cross-folder), then filter to visible
-    var allThreads = _emailGroupByThread(allEmailChits);
+    var allThreads;
+    if (_emailThreadCache.fingerprint === currentFingerprint
+        && _emailThreadCache.threads !== null
+        && _emailThreadCache.threads.length > 0) {
+        // Cache hit — reuse previously computed threads
+        allThreads = _emailThreadCache.threads;
+    } else {
+        // Cache miss — recompute and store
+        allThreads = _emailGroupByThread(allEmailChits);
+        _emailThreadCache.fingerprint = currentFingerprint;
+        _emailThreadCache.threads = allThreads;
+        _emailThreadCache.allEmailChits = allEmailChits;
+    }
+
+    // Safety: if cache returned empty but we have email chits, force recompute (Req 1.7)
+    if ((!allThreads || allThreads.length === 0) && allEmailChits.length > 0) {
+        allThreads = _emailGroupByThread(allEmailChits);
+        _emailThreadCache.fingerprint = currentFingerprint;
+        _emailThreadCache.threads = allThreads;
+        _emailThreadCache.allEmailChits = allEmailChits;
+    }
 
     // Inject nested chits (non-email chits with nest_thread_id) into threads
     _emailInjectNests(allThreads);
@@ -846,12 +970,52 @@ function displayEmailView(chitsToDisplay) {
     var totalThreads = visibleThreads.length;
     var threadsToRender = paginateEnabled ? visibleThreads.slice(0, PAGE_SIZE) : visibleThreads;
 
-    // Date grouping: insert headers between date boundaries
+    // Date grouping setting
     var groupBy = (window._cwocSettings || {}).email_group_by || 'date';
+
+    container.appendChild(scrollWrap);
+
+    // Progressive render: first batch sync, remaining via rAF
+    // Also handles "Load More" button after all batches complete
+    var loadMoreInfo = null;
+    if (paginateEnabled && totalThreads > PAGE_SIZE) {
+        loadMoreInfo = { visibleThreads: visibleThreads, PAGE_SIZE: PAGE_SIZE };
+    }
+    _emailRenderThreadsProgressively(scrollWrap, threadsToRender, viSettings, groupBy, currentFingerprint, loadMoreInfo);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Progressive Renderer — renders first batch sync, remaining via rAF
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Render email thread cards progressively: first 10 synchronously, remaining
+ * in chunks of 10 via requestAnimationFrame to keep the UI responsive.
+ *
+ * @param {HTMLElement} scrollWrap — the .email-scroll-wrap container (already in DOM)
+ * @param {Array} threads — array of thread objects to render
+ * @param {Object} viSettings — visual indicator settings
+ * @param {string} groupBy — grouping mode ('date' or other)
+ * @param {string} fingerprint — current fingerprint to store in DOM cache after completion
+ * @param {Object|null} loadMoreInfo — if pagination applies: { visibleThreads, PAGE_SIZE }
+ */
+function _emailRenderThreadsProgressively(scrollWrap, threads, viSettings, groupBy, fingerprint, loadMoreInfo) {
+    var BATCH_SIZE = 10;
+    var total = threads.length;
+
+    // Cancel any previously scheduled progressive render
+    if (_emailRenderRafId) {
+        cancelAnimationFrame(_emailRenderRafId);
+        _emailRenderRafId = null;
+    }
+
+    // Track last date group header across batches for continuity
     var lastGroup = null;
 
-    threadsToRender.forEach(function(thread) {
-        // Insert date group header if grouping is enabled
+    /**
+     * Render a single thread card (with optional date group header) into scrollWrap.
+     */
+    function renderThread(thread) {
         if (groupBy === 'date') {
             var groupLabel = _emailGetDateGroup(thread.latest);
             if (groupLabel !== lastGroup) {
@@ -864,30 +1028,77 @@ function displayEmailView(chitsToDisplay) {
         }
 
         if (thread.totalCount <= 1) {
-            // Single message — render as normal card
             scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
         } else {
-            // Multi-message thread — render stacked parchment card
             scrollWrap.appendChild(_buildThreadedEmailCard(thread, viSettings));
         }
-    });
-
-    // "Load More" button if paginated and there are more threads
-    if (paginateEnabled && totalThreads > PAGE_SIZE) {
-        var loadMoreWrap = document.createElement('div');
-        loadMoreWrap.className = 'email-load-more-wrap';
-        var loadMoreBtn = document.createElement('button');
-        loadMoreBtn.className = 'cwoc-btn email-load-more-btn';
-        var remaining = totalThreads - PAGE_SIZE;
-        loadMoreBtn.textContent = 'Load More (' + remaining + ' remaining)';
-        loadMoreBtn.addEventListener('click', function() {
-            _emailLoadMoreThreads(scrollWrap, visibleThreads, PAGE_SIZE, viSettings, loadMoreWrap);
-        });
-        loadMoreWrap.appendChild(loadMoreBtn);
-        scrollWrap.appendChild(loadMoreWrap);
     }
 
-    container.appendChild(scrollWrap);
+    /**
+     * Called when all batches are complete (or if ≤ BATCH_SIZE total).
+     * Appends "Load More" button if pagination applies, stores fingerprint in DOM cache.
+     */
+    function onComplete() {
+        _emailRenderRafId = null;
+
+        // Append "Load More" button if paginated and there are more threads
+        if (loadMoreInfo) {
+            var visibleThreads = loadMoreInfo.visibleThreads;
+            var PAGE_SIZE = loadMoreInfo.PAGE_SIZE;
+            var totalThreads = visibleThreads.length;
+            var remaining = totalThreads - PAGE_SIZE;
+            if (remaining > 0) {
+                var loadMoreWrap = document.createElement('div');
+                loadMoreWrap.className = 'email-load-more-wrap';
+                var loadMoreBtn = document.createElement('button');
+                loadMoreBtn.className = 'cwoc-btn email-load-more-btn';
+                loadMoreBtn.textContent = 'Load More (' + remaining + ' remaining)';
+                loadMoreBtn.addEventListener('click', function() {
+                    _emailLoadMoreThreads(scrollWrap, visibleThreads, PAGE_SIZE, viSettings, loadMoreWrap);
+                });
+                loadMoreWrap.appendChild(loadMoreBtn);
+                scrollWrap.appendChild(loadMoreWrap);
+            }
+        }
+
+        // Store fingerprint so DOM cache knows the current state
+        _emailDomCache.fingerprint = fingerprint;
+    }
+
+    // If total threads ≤ BATCH_SIZE, render all synchronously — no rAF needed
+    if (total <= BATCH_SIZE) {
+        for (var i = 0; i < total; i++) {
+            renderThread(threads[i]);
+        }
+        onComplete();
+        return;
+    }
+
+    // Render first batch (BATCH_SIZE) synchronously for instant viewport fill
+    for (var i = 0; i < BATCH_SIZE; i++) {
+        renderThread(threads[i]);
+    }
+
+    // Schedule remaining threads in chunks of BATCH_SIZE via rAF
+    var offset = BATCH_SIZE;
+
+    function renderNextBatch() {
+        var end = Math.min(offset + BATCH_SIZE, total);
+        for (var j = offset; j < end; j++) {
+            renderThread(threads[j]);
+        }
+        offset = end;
+
+        if (offset < total) {
+            // More batches remain — schedule next frame
+            _emailRenderRafId = requestAnimationFrame(renderNextBatch);
+        } else {
+            // All done
+            onComplete();
+        }
+    }
+
+    _emailRenderRafId = requestAnimationFrame(renderNextBatch);
 }
 
 /** Current pagination offset — tracks how many threads have been rendered */
@@ -1280,10 +1491,12 @@ function _buildEmailCard(chit, viSettings) {
 
     card.appendChild(content);
 
-    // Double-click handler: navigate to editor (consistent with all other views)
-    card.addEventListener('dblclick', function(e) {
-        if (e.target.classList.contains('email-select-cb')) return;
+    // Single-click handler: navigate to editor
+    card.addEventListener('click', function(e) {
+        if (e.target.closest('.email-select-cb, .email-hover-btn, .email-pin-btn, .email-track-btn, .email-attachment-thumb, .email-thread-badge, a, button, input')) return;
+        if (window._emailSwipeActive) return;
         if (typeof storePreviousState === 'function') storePreviousState();
+        _emailSaveEditorReturnState(chit.id);
         window.location.href = '/frontend/html/editor.html?id=' + chit.id + '&expand=email';
     });
 
@@ -1359,8 +1572,8 @@ function _buildEmailCard(chit, viSettings) {
                     _swIndicator.style.opacity = String(0.4 + pctR * 0.6);
                 } else {
                     _swIndicator.style.justifyContent = 'flex-end';
-                    _swIndicator.style.background = '#f8d7da';
-                    _swIndicator.style.color = '#721c24';
+                    _swIndicator.style.background = '#d32f2f';
+                    _swIndicator.style.color = '#ffffff';
                     _swIndicator.innerHTML = 'Delete <i class="fas fa-trash" style="margin-left:8px;font-size:1.2em;"></i>';
                     var pctL = Math.min(Math.abs(visualDx) / (_card.offsetWidth * _swThreshold), 1);
                     _swIndicator.style.opacity = String(0.4 + pctL * 0.6);
@@ -1381,27 +1594,59 @@ function _buildEmailCard(chit, viSettings) {
 
             if (triggered && visualDx > 0) {
                 // Complete right swipe → archive
+                // Slide card fully off-screen
                 _card.style.transition = 'transform 0.2s ease-out';
                 _card.style.transform = 'translateX(' + cardWidth + 'px)';
                 setTimeout(function() {
-                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
-                    _card.style.transform = '';
-                    _card.style.transition = '';
-                    _card.style.position = '';
-                    _card.style.zIndex = '';
-                    _emailQuickArchive(_chit, _card);
+                    // Card is now off-screen — show the indicator fully for a moment
+                    _card.style.display = 'none';
+                    if (_swIndicator) {
+                        // Fade out the indicator over 600ms
+                        _swIndicator.style.transition = 'opacity 0.6s ease-out';
+                        _swIndicator.style.opacity = '0';
+                        setTimeout(function() {
+                            if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                            _card.style.transition = '';
+                            _card.style.transform = '';
+                            _card.style.position = '';
+                            _card.style.zIndex = '';
+                            _emailQuickArchive(_chit, _card);
+                        }, 600);
+                    } else {
+                        _card.style.transition = '';
+                        _card.style.transform = '';
+                        _card.style.position = '';
+                        _card.style.zIndex = '';
+                        _emailQuickArchive(_chit, _card);
+                    }
                 }, 200);
             } else if (triggered && visualDx < 0) {
                 // Complete left swipe → delete
+                // Slide card fully off-screen
                 _card.style.transition = 'transform 0.2s ease-out';
                 _card.style.transform = 'translateX(-' + cardWidth + 'px)';
                 setTimeout(function() {
-                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
-                    _card.style.transform = '';
-                    _card.style.transition = '';
-                    _card.style.position = '';
-                    _card.style.zIndex = '';
-                    _emailQuickDelete(_chit, _card);
+                    // Card is now off-screen — show the indicator fully for a moment
+                    _card.style.display = 'none';
+                    if (_swIndicator) {
+                        // Fade out the indicator over 600ms
+                        _swIndicator.style.transition = 'opacity 0.6s ease-out';
+                        _swIndicator.style.opacity = '0';
+                        setTimeout(function() {
+                            if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                            _card.style.transition = '';
+                            _card.style.transform = '';
+                            _card.style.position = '';
+                            _card.style.zIndex = '';
+                            _emailQuickDelete(_chit, _card);
+                        }, 600);
+                    } else {
+                        _card.style.transition = '';
+                        _card.style.transform = '';
+                        _card.style.position = '';
+                        _card.style.zIndex = '';
+                        _emailQuickDelete(_chit, _card);
+                    }
                 }, 200);
             } else {
                 // Snap back
@@ -1535,8 +1780,14 @@ function _emailUpdateBulkBar() {
     }
 }
 
-/** Select all / deselect all visible email cards (toggles) */
+/** Select all / deselect all visible email cards (delegates to cycle logic) */
 function _emailBulkSelectAll() {
+    // Delegate to the bundle cycling logic if available
+    if (typeof _emailCycleSelectMode === 'function') {
+        _emailCycleSelectMode();
+        return;
+    }
+    // Fallback: simple toggle
     var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
     var allChecked = _emailSelectedIds.length > 0 && _emailSelectedIds.length === allCbs.length;
 
@@ -1839,6 +2090,8 @@ async function _emailBulkTag() {
 
 function _setEmailSubFilter(filter) {
     _emailSubFilter = filter;
+    // Invalidate DOM cache — filter change means cached DOM is stale
+    if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
     // Sync sidebar radio buttons
     var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
     radios.forEach(function(r) { r.checked = (r.value === filter); });
@@ -2006,6 +2259,13 @@ function _showAttachmentContextMenu(e, url, filename, mimeType) {
         document.body.appendChild(dl);
         dl.click();
         document.body.removeChild(dl);
+    });
+
+    _item('<i class="fas fa-print"></i>', 'Print', function() {
+        _printAttachment(
+            url.split('/attachments/')[0].split('/api/chits/')[1],
+            { id: url.split('/attachments/')[1], filename: filename, mime_type: mimeType }
+        );
     });
 
     document.body.appendChild(menu);
@@ -2260,6 +2520,8 @@ var _emailUnreadTop = false;
 function _toggleEmailUnreadTop() {
     var cb = document.getElementById('email-unread-top-toggle');
     _emailUnreadTop = cb ? cb.checked : !_emailUnreadTop;
+    // Invalidate DOM cache — sort order change means cached DOM is stale
+    if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
     // Update label active states
     var newestLabel = document.getElementById('email-sort-label-newest');
     var unreadLabel = document.getElementById('email-sort-label-unread');
@@ -2582,11 +2844,13 @@ function _buildNestedChitCard(chit) {
     // Click navigates to editor
     card.addEventListener('dblclick', function(e) {
         if (typeof storePreviousState === 'function') storePreviousState();
+        _emailSaveEditorReturnState(chit.id);
         window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(chit.id);
     });
     // Single click also navigates (nested chits don't need multi-select)
     card.addEventListener('click', function(e) {
         if (typeof storePreviousState === 'function') storePreviousState();
+        _emailSaveEditorReturnState(chit.id);
         window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(chit.id);
     });
 
@@ -2752,11 +3016,15 @@ function _toggleThreadExpand(wrapper, thread, viSettings) {
  * If the user clicks Undo, the card reappears and nothing is changed.
  */
 function _emailQuickArchive(chit, card) {
-    // Immediately hide the card
-    card.style.transition = 'opacity 0.3s, transform 0.3s';
-    card.style.opacity = '0';
-    card.style.transform = 'translateX(30px)';
-    setTimeout(function() { card.style.display = 'none'; }, 300);
+    // Hide the card if not already hidden (swipe handler hides it before calling)
+    if (card.style.display !== 'none') {
+        card.style.transition = 'opacity 0.2s, max-height 0.3s';
+        card.style.opacity = '0';
+        card.style.overflow = 'hidden';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        requestAnimationFrame(function() { card.style.maxHeight = '0'; });
+        setTimeout(function() { card.style.display = 'none'; }, 300);
+    }
 
     var title = chit.title || chit.email_subject || '(No Subject)';
 
@@ -2810,11 +3078,15 @@ function _emailQuickArchive(chit, card) {
  * Hides the card immediately, then deletes after the countdown expires.
  */
 function _emailQuickDelete(chit, card) {
-    // Immediately hide the card
-    card.style.transition = 'opacity 0.3s, transform 0.3s';
-    card.style.opacity = '0';
-    card.style.transform = 'translateX(30px)';
-    setTimeout(function() { card.style.display = 'none'; }, 300);
+    // Hide the card if not already hidden (swipe handler hides it before calling)
+    if (card.style.display !== 'none') {
+        card.style.transition = 'opacity 0.2s, max-height 0.3s';
+        card.style.opacity = '0';
+        card.style.overflow = 'hidden';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        requestAnimationFrame(function() { card.style.maxHeight = '0'; });
+        setTimeout(function() { card.style.display = 'none'; }, 300);
+    }
 
     var title = chit.title || chit.email_subject || '(No Subject)';
 

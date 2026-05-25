@@ -86,7 +86,7 @@ class SyncForegroundService : Service() {
 
     private fun buildNotification(text: String): Notification {
         return NotificationCompat.Builder(this, NotificationChannelManager.CHANNEL_ID_SYNC_SERVICE)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_cwoc)
             .setContentTitle("CWOC Sync")
             .setContentText(text)
             .setOngoing(true)

@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.cwoc.app.MainActivity
 import com.cwoc.app.R
+import android.graphics.BitmapFactory
 
 private const val TAG = "CWOC_ALARM_RECV"
 
@@ -101,7 +102,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Build notification
         val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_cwoc)
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.drawable.cwoc_logo))
             .setContentTitle(chitTitle)
             .setContentText(contentText)
             .setPriority(priority)

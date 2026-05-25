@@ -60,8 +60,10 @@ import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.AttachmentPrintPickerDialog
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.SnoozePickerDialog
 
 import com.cwoc.app.ui.components.UndoToast
@@ -95,6 +97,9 @@ import androidx.compose.runtime.LaunchedEffect
 import com.cwoc.app.data.remote.dto.RuleHabitDto
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.cwoc.app.ui.screens.editor.zones.AttachmentInfo
+import com.cwoc.app.util.PrintAttachmentHelper
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Tasks screen — flat list of task chits with inline status dropdown, note preview,
@@ -118,7 +123,8 @@ fun TasksScreen(
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
     sidebarStateViewModel: SidebarStateViewModel? = null,
-    onQuickAlert: (() -> Unit)? = null
+    onQuickAlert: (() -> Unit)? = null,
+    onCreateRule: ((ChitEntity) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -142,9 +148,23 @@ fun TasksScreen(
 
     val tasksMode = sidebarStateViewModel?.state?.collectAsState()?.value?.tasksViewMode ?: "tasks"
 
+    // PERF: Log every recomposition with loading state
+    android.util.Log.d("PERF", "[TasksScreen] COMPOSE: isLoading=${uiState.isLoading}, tasks=${uiState.tasks.size}, syncState=$syncState")
+
+    // PERF: Track time from screen appearance to data loaded
+    val screenAppearedAt = remember { System.nanoTime() }
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            val elapsed = (System.nanoTime() - screenAppearedAt) / 1_000_000
+            android.util.Log.d("PERF", "[TasksScreen] *** LOADING COMPLETE — ${elapsed}ms from screen appear to data ready (${uiState.tasks.size} tasks) ***")
+        }
+    }
+
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
     var showSnoozeDialog by remember { mutableStateOf(false) }
+    var showPrintAttachmentPicker by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Phase 7: Apply filters then sort. When sort=NONE, use status weight order.
     // When sort=MANUAL, apply the saved manual order from FilterSortViewModel.
@@ -154,7 +174,9 @@ fun TasksScreen(
     }
 
     val filteredSortedTasks = remember(uiState.tasks, filterState, sortState, manualOrder) {
+        val filterStart = System.currentTimeMillis()
         val filtered = FilterEngine.applyFilters(uiState.tasks, filterState)
+        val afterFilter = System.currentTimeMillis()
         val sorted = when {
             sortState.field == SortField.NONE -> {
                 // Phase 7.1: Default sort by status weight
@@ -170,7 +192,9 @@ fun TasksScreen(
             }
         }
         val pinned = sortPinnedFirst(sorted) { it.pinned }
-        filterSnoozedItems(pinned)
+        val result = filterSnoozedItems(pinned)
+        android.util.Log.d("PERF", "[TasksScreen] filter=${afterFilter - filterStart}ms, sort+pin=${System.currentTimeMillis() - afterFilter}ms, total=${System.currentTimeMillis() - filterStart}ms, in=${uiState.tasks.size}→out=${result.size}")
+        result
     }
 
     val hasActiveFilters = filterState != FilterState()
@@ -187,6 +211,7 @@ fun TasksScreen(
                 filteredSortedTasks.isEmpty() && hasActiveFilters -> {
                     FilteredEmptyState(onClearFilters = { filterSortViewModel?.clearFilters() })
                 }
+                uiState.tasks.isEmpty() && syncState == SyncState.SYNCING -> LoadingChitsState()
                 uiState.tasks.isEmpty() -> TasksEmptyState()
                 filteredSortedTasks.isEmpty() -> {
                     FilteredEmptyState(onClearFilters = { filterSortViewModel?.clearFilters() })
@@ -346,7 +371,9 @@ fun TasksScreen(
                 },
                 onSnooze = { showSnoozeDialog = true },
                 onEdit = { onNavigateToEditor(currentMenuChit.id) },
-                onDelete = { viewModel.softDelete(currentMenuChit.id) }
+                onDelete = { viewModel.softDelete(currentMenuChit.id) },
+                onCreateRule = if (onCreateRule != null) { { onCreateRule(currentMenuChit) } } else null,
+                onPrintAttachment = { showPrintAttachmentPicker = true }
             )
         }
 
@@ -363,6 +390,35 @@ fun TasksScreen(
                 },
                 onDismiss = { showSnoozeDialog = false }
             )
+        }
+
+        // Print Attachment picker dialog
+        if (showPrintAttachmentPicker && currentMenuChit != null) {
+            val attachments = PrintAttachmentHelper.parseAttachments(currentMenuChit.attachments)
+            if (attachments.size == 1) {
+                // Single attachment — print directly
+                showPrintAttachmentPicker = false
+                coroutineScope.launch {
+                    PrintAttachmentHelper.downloadAndPrint(
+                        context, attachments[0], currentMenuChit.id, serverUrl, authToken
+                    )
+                }
+            } else if (attachments.size > 1) {
+                AttachmentPrintPickerDialog(
+                    attachments = attachments,
+                    onSelect = { selected ->
+                        showPrintAttachmentPicker = false
+                        coroutineScope.launch {
+                            PrintAttachmentHelper.downloadAndPrint(
+                                context, selected, currentMenuChit.id, serverUrl, authToken
+                            )
+                        }
+                    },
+                    onDismiss = { showPrintAttachmentPicker = false }
+                )
+            } else {
+                showPrintAttachmentPicker = false
+            }
         }
     }
 }

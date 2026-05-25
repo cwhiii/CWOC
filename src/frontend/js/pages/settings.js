@@ -1822,6 +1822,9 @@ class SettingsManager {
     var emailPaginateEl = document.getElementById("emailPaginate");
     if (emailPaginateEl) emailPaginateEl.checked = this.settings.paginate_email === '1';
 
+    var emailEscQuickExitEl = document.getElementById("emailEscQuickExit");
+    if (emailEscQuickExitEl) emailEscQuickExitEl.checked = this.settings.email_esc_quick_exit === '1';
+
     var bundlesMultiEl = document.getElementById("bundlesMultiPlacement");
     if (bundlesMultiEl) bundlesMultiEl.checked = this.settings.bundles_multi_placement === '1';
 
@@ -2143,6 +2146,7 @@ class SettingsManager {
       autosave_desktop: document.getElementById("autosave-desktop-toggle")?.checked ? '1' : '0',
       autosave_mobile: document.getElementById("autosave-mobile-toggle")?.checked ? '1' : '0',
       paginate_email: document.getElementById("emailPaginate")?.checked ? '1' : '0',
+      email_esc_quick_exit: document.getElementById("emailEscQuickExit")?.checked ? '1' : '0',
       bundles_multi_placement: document.getElementById("bundlesMultiPlacement")?.checked ? '1' : '0',
       bundles_enabled: document.getElementById("bundlesEnabled")?.checked ? '1' : '0',
       bundles_show_count: document.getElementById("bundlesShowCount")?.value || 'unread',

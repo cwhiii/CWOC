@@ -23,7 +23,7 @@ router = APIRouter()
 def _is_admin(conn, user_id: str) -> bool:
     """Check if the given user has admin privileges."""
     row = conn.execute(
-        "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+        "SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,)
     ).fetchone()
     return bool(row and row[0])
 
@@ -138,6 +138,8 @@ def restore_chit(chit_id: str, request: Request):
                 (current_time, chit_id),
             )
         conn.commit()
+        from src.backend.db import chit_cache
+        chit_cache.invalidate(user_id)
         return {"message": "Chit restored"}
     except HTTPException:
         raise

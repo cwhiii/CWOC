@@ -1,8 +1,12 @@
-Build failed: 2026-05-23T18:23:31.844316037Z
+Build failed: 2026-05-24T22:53:11.095774585Z
 
 === Kotlin Compiler Errors ===
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/MainActivity.kt:693:68 [UNRESOLVED_REFERENCE] Unresolved reference: @MainActivity
 e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/MainActivity.kt:700:68 [UNRESOLVED_REFERENCE] Unresolved reference: @MainActivity
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/CreateRuleFromChitDialog.kt:164:19 [UNRESOLVED_REFERENCE_WRONG_RECEIVER] Unresolved reference. None of the following candidates is applicable because of receiver type mismatch: 
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/CreateRuleFromChitDialog.kt:166:43 [NONE_APPLICABLE] None of the following functions can be called with the arguments supplied: 
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/CreateRuleFromChitDialog.kt:176:21 [UNRESOLVED_REFERENCE_WRONG_RECEIVER] Unresolved reference. None of the following candidates is applicable because of receiver type mismatch: 
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/components/CreateRuleFromChitDialog.kt:178:45 [NONE_APPLICABLE] None of the following functions can be called with the arguments supplied: 
 
 === Task Failure ===
 Execution failed for task ':app:compileDebugKotlin'.

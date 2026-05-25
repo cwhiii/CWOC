@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.domain.checklist.ChecklistItem
 import com.cwoc.app.domain.checklist.ChecklistOperations
 import com.cwoc.app.domain.filter.FilterEngine
@@ -49,6 +50,8 @@ import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.AttachmentPrintPickerDialog
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.TagChipsRow
 import com.cwoc.app.ui.components.ChecklistProgressBadge
@@ -62,6 +65,9 @@ import com.cwoc.app.ui.components.sortPinnedFirst
 import com.cwoc.app.ui.components.ReorderableStaggeredGrid
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
+import com.cwoc.app.ui.screens.editor.zones.AttachmentInfo
+import com.cwoc.app.util.PrintAttachmentHelper
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Checklists view — displays all chits with checklist data.
@@ -80,9 +86,11 @@ fun ChecklistsScreen(
     viewModel: ChecklistsViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
-    onQuickAlert: (() -> Unit)? = null
+    onQuickAlert: (() -> Unit)? = null,
+    onCreateRule: ((ChitEntity) -> Unit)? = null
 ) {
     val chits by viewModel.checklistChits.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     // Collect filter/sort state if ViewModel is provided
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
@@ -98,7 +106,12 @@ fun ChecklistsScreen(
     // Long-press action menu state
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
     var showSnoozeDialog by remember { mutableStateOf(false) }
+    var showPrintAttachmentPicker by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE) }
+    val serverUrl = remember { prefs.getString("server_url", "")?.trimEnd('/') ?: "" }
+    val authToken = remember { prefs.getString("auth_token", "") ?: "" }
 
     // Apply filters, sort, and pin-to-top to the checklist chits
     val filteredSortedChits = remember(chits, filterState, sortState) {
@@ -116,6 +129,9 @@ fun ChecklistsScreen(
                 FilteredEmptyState(
                     onClearFilters = { filterSortViewModel?.clearFilters() }
                 )
+            }
+            chits.isEmpty() && syncState == SyncState.SYNCING -> {
+                LoadingChitsState()
             }
             chits.isEmpty() -> {
                 EmptyChecklistsState()
@@ -176,7 +192,9 @@ fun ChecklistsScreen(
                     showSnoozeDialog = true
                 },
                 onEdit = { onNavigateToEditor(currentMenuChit.id) },
-                onDelete = { /* Checklists screen doesn't have soft-delete yet */ }
+                onDelete = { /* Checklists screen doesn't have soft-delete yet */ },
+                onCreateRule = if (onCreateRule != null) { { onCreateRule(currentMenuChit) } } else null,
+                onPrintAttachment = { showPrintAttachmentPicker = true }
             )
         }
 
@@ -198,6 +216,34 @@ fun ChecklistsScreen(
                     showSnoozeDialog = false
                 }
             )
+        }
+
+        // Print Attachment picker dialog
+        if (showPrintAttachmentPicker && currentMenuChit != null) {
+            val attachments = PrintAttachmentHelper.parseAttachments(currentMenuChit.attachments)
+            if (attachments.size == 1) {
+                showPrintAttachmentPicker = false
+                coroutineScope.launch {
+                    PrintAttachmentHelper.downloadAndPrint(
+                        context, attachments[0], currentMenuChit.id, serverUrl, authToken
+                    )
+                }
+            } else if (attachments.size > 1) {
+                AttachmentPrintPickerDialog(
+                    attachments = attachments,
+                    onSelect = { selected ->
+                        showPrintAttachmentPicker = false
+                        coroutineScope.launch {
+                            PrintAttachmentHelper.downloadAndPrint(
+                                context, selected, currentMenuChit.id, serverUrl, authToken
+                            )
+                        }
+                    },
+                    onDismiss = { showPrintAttachmentPicker = false }
+                )
+            } else {
+                showPrintAttachmentPicker = false
+            }
         }
     }
 }

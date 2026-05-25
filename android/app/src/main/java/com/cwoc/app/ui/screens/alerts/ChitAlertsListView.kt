@@ -35,18 +35,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.AttachmentPrintPickerDialog
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.sortPinnedFirst
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.launch
+import com.cwoc.app.ui.screens.editor.zones.AttachmentInfo
+import com.cwoc.app.util.PrintAttachmentHelper
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Chits List View for the Alerts screen — displays all chits that have alert data.
@@ -63,9 +69,11 @@ fun ChitAlertsListView(
     viewModel: AlertsViewModel,
     onNavigateToEditor: (String) -> Unit,
     filterSortViewModel: FilterSortViewModel? = null,
-    chitRepository: ChitRepository? = null
+    chitRepository: ChitRepository? = null,
+    onCreateRule: ((ChitEntity) -> Unit)? = null
 ) {
     val alertChits by viewModel.alertChits.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     // Settings for SnoozePickerDialog
@@ -86,9 +94,16 @@ fun ChitAlertsListView(
     // Long-press action menu state
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
     var showSnoozeDialog by remember { mutableStateOf(false) }
+    var showPrintAttachmentPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE) }
+    val alertsServerUrl = remember { prefs.getString("server_url", "")?.trimEnd('/') ?: "" }
+    val alertsAuthToken = remember { prefs.getString("auth_token", "") ?: "" }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (filteredSortedChits.isEmpty()) {
+        if (filteredSortedChits.isEmpty() && syncState == SyncState.SYNCING) {
+            LoadingChitsState()
+        } else if (filteredSortedChits.isEmpty()) {
             // Empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -150,7 +165,9 @@ fun ChitAlertsListView(
                 onEdit = { onNavigateToEditor(currentMenuChit.id) },
                 onDelete = {
                     viewModel.deleteReminder(currentMenuChit.id)
-                }
+                },
+                onCreateRule = if (onCreateRule != null) { { onCreateRule(currentMenuChit) } } else null,
+                onPrintAttachment = { showPrintAttachmentPicker = true }
             )
         }
 
@@ -172,6 +189,34 @@ fun ChitAlertsListView(
                     showSnoozeDialog = false
                 }
             )
+        }
+
+        // Print Attachment picker dialog
+        if (showPrintAttachmentPicker && currentMenuChit != null) {
+            val attachments = PrintAttachmentHelper.parseAttachments(currentMenuChit.attachments)
+            if (attachments.size == 1) {
+                showPrintAttachmentPicker = false
+                coroutineScope.launch {
+                    PrintAttachmentHelper.downloadAndPrint(
+                        context, attachments[0], currentMenuChit.id, alertsServerUrl, alertsAuthToken
+                    )
+                }
+            } else if (attachments.size > 1) {
+                AttachmentPrintPickerDialog(
+                    attachments = attachments,
+                    onSelect = { selected ->
+                        showPrintAttachmentPicker = false
+                        coroutineScope.launch {
+                            PrintAttachmentHelper.downloadAndPrint(
+                                context, selected, currentMenuChit.id, alertsServerUrl, alertsAuthToken
+                            )
+                        }
+                    },
+                    onDismiss = { showPrintAttachmentPicker = false }
+                )
+            } else {
+                showPrintAttachmentPicker = false
+            }
         }
     }
 }

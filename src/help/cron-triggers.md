@@ -1,5 +1,6 @@
 # Cron Triggers & Habit Rules
 
+- [Create a Rule from a Chit](#create-a-rule-from-a-chit)
 - [Cron Expression Syntax](#cron-expression-syntax)
 - [Supported Syntax](#supported-syntax)
 - [Common Examples](#common-examples)
@@ -14,6 +15,20 @@
 
 
 The Rules Engine supports **cron-based scheduling** for precise control over when rules fire, and **habit mode** for tracking whether automated maintenance tasks actually run on schedule.
+
+## Create a Rule from a Chit
+
+You can quickly create a rule based on any chit's populated fields directly from the context menu:
+
+1. **Right-click** (desktop) or **long-press** (mobile/app) on any chit card to open the context menu.
+2. Select **"Create a Rule"** from the menu.
+3. A modal appears showing all populated fields on that chit that can be used as rule conditions (title, status, priority, tags, people, location, email sender/subject, etc.).
+4. Select the field you want to base the rule on and click **"Create Rule"**.
+5. The [Rule Editor](/frontend/html/rule-editor.html) opens with the trigger type and condition pre-populated based on your selection.
+
+This is a quick way to create rules like "whenever a chit has this tag, do X" or "whenever an email arrives from this sender, do Y" without manually configuring the condition from scratch.
+
+**Available on:** Desktop web (right-click), mobile web (long-press), and Android app (long-press).
 
 ## Cron Expression Syntax
 

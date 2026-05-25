@@ -72,6 +72,132 @@ def _rename_bundle_tags(cursor, owner_id: str, old_name: str, new_name: str):
     pass
 
 
+def _merge_condition_into_bundle_rule(cursor, bundle_id: str, owner_id: str, new_leaf: dict, bundle_name: str = "") -> str:
+    """Merge a new leaf condition into the bundle's single rule.
+
+    Each bundle has exactly ONE rule. If the bundle already has a rule, the new
+    condition is added as an OR sibling. If no rule exists, one is created.
+
+    Also consolidates legacy multi-rule bundles: if a bundle has multiple rules
+    from the old behavior, they are merged into a single rule with an OR group.
+
+    Args:
+        cursor: Active DB cursor (caller manages commit)
+        bundle_id: The bundle to add the condition to
+        owner_id: The authenticated user
+        new_leaf: A condition leaf dict, e.g. {"type": "leaf", "field": "email_from", "operator": "contains", "value": "foo@bar.com"}
+        bundle_name: Optional bundle name for the rule name
+
+    Returns:
+        The rule_id of the bundle's (single) rule.
+    """
+    now = datetime.utcnow().isoformat()
+    new_tag = f"CWOC_System/BundleID/{bundle_id}"
+
+    # Get all existing rules for this bundle
+    cursor.execute(
+        "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
+        (bundle_id, owner_id),
+    )
+    existing_rule_ids = [r[0] for r in cursor.fetchall()]
+
+    if not existing_rule_ids:
+        # No rule exists — create one with the new leaf wrapped in an OR group
+        rule_id = str(uuid4())
+        conditions = {
+            "type": "group",
+            "operator": "OR",
+            "children": [new_leaf]
+        }
+        actions = [{"type": "add_tag", "params": {"tag": new_tag}}]
+        rule_name = f"Bundle: {bundle_name}" if bundle_name else f"Bundle rule"
+
+        cursor.execute("""
+            INSERT INTO rules (id, owner_id, name, trigger_type, enabled, priority,
+                             conditions, actions, confirm_before_apply, created_datetime, modified_datetime)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            rule_id, owner_id, rule_name, "email_received",
+            1, 0,
+            serialize_json_field(conditions),
+            serialize_json_field(actions),
+            0, now, now
+        ))
+
+        # Create bundle_rules association
+        assoc_id = str(uuid4())
+        cursor.execute("""
+            INSERT INTO bundle_rules (id, bundle_id, rule_id, owner_id, created_datetime)
+            VALUES (?, ?, ?, ?, ?)
+        """, (assoc_id, bundle_id, rule_id, owner_id, now))
+
+        return rule_id
+
+    # ── Bundle has existing rule(s) — consolidate into one ──
+    # Load all existing rules' conditions
+    all_leaves = []
+    primary_rule_id = existing_rule_ids[0]
+
+    for rid in existing_rule_ids:
+        cursor.execute(
+            "SELECT conditions FROM rules WHERE id = ? AND owner_id = ?",
+            (rid, owner_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            continue
+        conds = deserialize_json_field(row[0])
+        if not conds:
+            continue
+        # Extract leaves from whatever structure exists
+        _extract_leaves(conds, all_leaves)
+
+    # Add the new leaf (check for duplicates first)
+    if not _leaf_already_exists(new_leaf, all_leaves):
+        all_leaves.append(new_leaf)
+
+    # Build the consolidated OR group
+    conditions = {
+        "type": "group",
+        "operator": "OR",
+        "children": all_leaves
+    }
+
+    # Update the primary rule with the merged conditions
+    cursor.execute("""
+        UPDATE rules SET conditions = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?
+    """, (serialize_json_field(conditions), now, primary_rule_id, owner_id))
+
+    # Delete any extra rules and their associations (consolidation)
+    if len(existing_rule_ids) > 1:
+        for rid in existing_rule_ids[1:]:
+            cursor.execute("DELETE FROM bundle_rules WHERE rule_id = ? AND owner_id = ?", (rid, owner_id))
+            cursor.execute("DELETE FROM rules WHERE id = ? AND owner_id = ?", (rid, owner_id))
+
+    return primary_rule_id
+
+
+def _extract_leaves(node: dict, leaves: list):
+    """Recursively extract all leaf conditions from a condition tree."""
+    if not isinstance(node, dict):
+        return
+    if node.get("type") == "leaf":
+        leaves.append(node)
+    elif node.get("type") == "group":
+        for child in (node.get("children") or []):
+            _extract_leaves(child, leaves)
+
+
+def _leaf_already_exists(new_leaf: dict, existing_leaves: list) -> bool:
+    """Check if a leaf condition already exists in the list (same field, operator, value)."""
+    for leaf in existing_leaves:
+        if (leaf.get("field") == new_leaf.get("field") and
+            leaf.get("operator") == new_leaf.get("operator") and
+            leaf.get("value") == new_leaf.get("value")):
+            return True
+    return False
+
+
 def _remove_bundle_tag_by_id(cursor, owner_id: str, bundle_id: str):
     """Remove a bundle tag from all chits that have it (by bundle ID)."""
     tag = f"CWOC_System/BundleID/{bundle_id}"
@@ -332,10 +458,10 @@ def create_bundle(bundle: BundleCreate, request: Request):
 
 @bundles_router.post("/api/bundles/{bundle_id}/add-rule")
 async def add_rule_to_bundle(bundle_id: str, request: Request):
-    """Add a new OR condition rule to an existing bundle.
+    """Add a new OR condition to the bundle's single rule.
     
-    Creates a rule that matches emails by subject or sender and adds them to the bundle.
-    The rule is added as an OR condition to the bundle's existing rules.
+    Merges the new condition into the bundle's existing rule as an OR sibling.
+    If no rule exists yet, creates one.
     
     Request body:
     - match_type: "subject" or "sender"
@@ -373,61 +499,33 @@ async def add_rule_to_bundle(bundle_id: str, request: Request):
         if is_catch_all:
             raise HTTPException(status_code=400, detail="Cannot add rules to the catch-all bundle")
         
-        # Create the rule
-        rule_id = str(uuid4())
-        rule_name = f"Auto: {match_type.title()} matches '{match_value}'"
-        
-        # Build condition tree based on match type
+        # Build the new leaf condition
         if match_type == "subject":
-            conditions = {
+            new_leaf = {
                 "type": "leaf",
                 "field": "email_subject",
                 "operator": "contains",
                 "value": match_value
             }
         else:  # sender
-            conditions = {
-                "type": "leaf", 
+            new_leaf = {
+                "type": "leaf",
                 "field": "email_from",
                 "operator": "contains",
                 "value": match_value
             }
         
-        # Create actions array
-        actions = [
-            {"type": "add_tag", "params": {"tag": f"CWOC_System/BundleID/{bundle_id}"}}
-        ]
-        
-        # Create the rule
-        now = datetime.utcnow().isoformat()
-        cursor.execute("""
-            INSERT INTO rules (id, owner_id, name, trigger_type, enabled, priority,
-                             conditions, actions, confirm_before_apply, created_datetime, modified_datetime)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            rule_id, owner_id, rule_name, "email_received",
-            1, 0,  # enabled=1, priority=0
-            serialize_json_field(conditions),
-            serialize_json_field(actions),
-            0,  # confirm_before_apply=0
-            now, now
-        ))
-        
-        # Associate rule with bundle
-        bundle_rule_id = str(uuid4())
-        cursor.execute("""
-            INSERT INTO bundle_rules (id, bundle_id, rule_id, owner_id, created_datetime)
-            VALUES (?, ?, ?, ?, ?)
-        """, (bundle_rule_id, bundle_id, rule_id, owner_id, now))
+        # Merge into the bundle's single rule
+        rule_id = _merge_condition_into_bundle_rule(cursor, bundle_id, owner_id, new_leaf, bundle_name)
         
         conn.commit()
         
-        logger.info(f"Added rule {rule_id} to bundle {bundle_name} for {match_type}='{match_value}'")
+        logger.info(f"Added condition to bundle {bundle_name} rule for {match_type}='{match_value}'")
         
         return {
             "success": True,
             "rule_id": rule_id,
-            "rule_name": rule_name,
+            "rule_name": f"Bundle: {bundle_name}",
             "bundle_name": bundle_name
         }
         
@@ -518,51 +616,26 @@ async def drop_email_to_bundle(bundle_id: str, request: Request):
 
         # ── Create a rule for "always" modes ──
         if mode != "move_once":
-            rule_id = str(uuid4())
 
             if mode == "always_sender":
                 field = "email_from"
-                # Use "contains" for wildcard support, "equals" for exact
                 operator = "wildcard" if "*" in match_value else "contains"
-                rule_name = f"Bundle rule: sender matches '{match_value}'"
             elif mode == "always_subject":
                 field = "email_subject"
                 operator = "wildcard" if "*" in match_value else "equals"
-                rule_name = f"Bundle rule: subject matches '{match_value}'"
             elif mode == "always_recipient":
                 field = "email_to"
                 operator = "wildcard" if "*" in match_value else "contains"
-                rule_name = f"Bundle rule: recipient matches '{match_value}'"
 
-            conditions = {
+            new_leaf = {
                 "type": "leaf",
                 "field": field,
                 "operator": operator,
                 "value": match_value
             }
 
-            actions = [
-                {"type": "add_tag", "params": {"tag": new_tag}}
-            ]
-
-            cursor.execute("""
-                INSERT INTO rules (id, owner_id, name, trigger_type, enabled, priority,
-                                 conditions, actions, confirm_before_apply, created_datetime, modified_datetime)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                rule_id, owner_id, rule_name, "email_received",
-                1, 0,
-                serialize_json_field(conditions),
-                serialize_json_field(actions),
-                0, now, now
-            ))
-
-            # Associate rule with bundle
-            bundle_rule_id = str(uuid4())
-            cursor.execute("""
-                INSERT INTO bundle_rules (id, bundle_id, rule_id, owner_id, created_datetime)
-                VALUES (?, ?, ?, ?, ?)
-            """, (bundle_rule_id, bundle_id, rule_id, owner_id, now))
+            rule_id = _merge_condition_into_bundle_rule(cursor, bundle_id, owner_id, new_leaf, bundle_name)
+            rule_name = f"Bundle: {bundle_name}"
 
         conn.commit()
 
@@ -789,8 +862,14 @@ def update_bundle(bundle_id: str, bundle: BundleUpdate, request: Request):
 
         # Name changes are purely cosmetic — tags use bundle ID, not name.
         # No tag migration needed.
-
-            # Sync rule name to match bundle name
+        # Sync rule name to match bundle name
+        if bundle.name is not None:
+            cursor.execute(
+                "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
+                (bundle_id, user_id),
+            )
+            rule_ids = [r[0] for r in cursor.fetchall()]
+            new_name = bundle.name.strip()
             for rid in rule_ids:
                 cursor.execute(
                     "UPDATE rules SET name = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?",
@@ -957,6 +1036,165 @@ def disable_bundle(bundle_id: str, request: Request):
 
 
 # ── Bundle-Rule Association Endpoints ─────────────────────────────────────
+
+@bundles_router.get("/api/bundles/{bundle_id}/rules")
+def get_bundle_rules(bundle_id: str, request: Request):
+    """Get all rules associated with a bundle, with full rule details."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Verify bundle ownership
+        cursor.execute(
+            "SELECT id FROM bundles WHERE id = ? AND owner_id = ?",
+            (bundle_id, user_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Bundle not found")
+
+        # Get all rules for this bundle
+        rules = _get_rules_for_bundle(cursor, bundle_id, user_id)
+
+        # Deserialize JSON fields for each rule
+        result = []
+        for rule in rules:
+            rule["conditions"] = deserialize_json_field(rule.get("conditions"))
+            rule["actions"] = deserialize_json_field(rule.get("actions"))
+            rule["enabled"] = bool(rule.get("enabled", 1))
+            result.append(rule)
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching bundle rules: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch bundle rules: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@bundles_router.post("/api/bundles/{bundle_id}/consolidate-rules")
+def consolidate_bundle_rules(bundle_id: str, request: Request):
+    """Consolidate multiple legacy rules into a single rule with an OR group.
+
+    If the bundle already has only one rule, returns it as-is.
+    If it has multiple rules (from old per-sender behavior), merges all their
+    conditions into a single OR group in one rule and deletes the extras.
+
+    Returns the single rule_id for the bundle.
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Verify bundle ownership
+        cursor.execute(
+            "SELECT name FROM bundles WHERE id = ? AND owner_id = ?",
+            (bundle_id, user_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bundle not found")
+        bundle_name = row[0]
+
+        # Get all existing rules for this bundle
+        cursor.execute(
+            "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
+            (bundle_id, user_id),
+        )
+        existing_rule_ids = [r[0] for r in cursor.fetchall()]
+
+        if not existing_rule_ids:
+            # No rules — create an empty OR group rule
+            now = datetime.utcnow().isoformat()
+            rule_id = str(uuid4())
+            new_tag = f"CWOC_System/BundleID/{bundle_id}"
+            conditions = {"type": "group", "operator": "OR", "children": []}
+            actions = [{"type": "add_tag", "params": {"tag": new_tag}}]
+
+            cursor.execute("""
+                INSERT INTO rules (id, owner_id, name, trigger_type, enabled, priority,
+                                 conditions, actions, confirm_before_apply, created_datetime, modified_datetime)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                rule_id, user_id, f"Bundle: {bundle_name}", "email_received",
+                1, 0, serialize_json_field(conditions), serialize_json_field(actions),
+                0, now, now
+            ))
+            assoc_id = str(uuid4())
+            cursor.execute("""
+                INSERT INTO bundle_rules (id, bundle_id, rule_id, owner_id, created_datetime)
+                VALUES (?, ?, ?, ?, ?)
+            """, (assoc_id, bundle_id, rule_id, user_id, now))
+            conn.commit()
+            return {"rule_id": rule_id}
+
+        if len(existing_rule_ids) == 1:
+            # Already consolidated — but ensure it's an OR group structure
+            rule_id = existing_rule_ids[0]
+            cursor.execute(
+                "SELECT conditions FROM rules WHERE id = ? AND owner_id = ?",
+                (rule_id, user_id),
+            )
+            cond_row = cursor.fetchone()
+            if cond_row:
+                conds = deserialize_json_field(cond_row[0])
+                # If it's a bare leaf, wrap it in an OR group
+                if conds and conds.get("type") == "leaf":
+                    wrapped = {"type": "group", "operator": "OR", "children": [conds]}
+                    now = datetime.utcnow().isoformat()
+                    cursor.execute("""
+                        UPDATE rules SET conditions = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?
+                    """, (serialize_json_field(wrapped), now, rule_id, user_id))
+                    conn.commit()
+            return {"rule_id": rule_id}
+
+        # Multiple rules — consolidate into one
+        now = datetime.utcnow().isoformat()
+        primary_rule_id = existing_rule_ids[0]
+        all_leaves = []
+
+        for rid in existing_rule_ids:
+            cursor.execute(
+                "SELECT conditions FROM rules WHERE id = ? AND owner_id = ?",
+                (rid, user_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                continue
+            conds = deserialize_json_field(row[0])
+            if conds:
+                _extract_leaves(conds, all_leaves)
+
+        # Build consolidated OR group
+        conditions = {"type": "group", "operator": "OR", "children": all_leaves}
+
+        cursor.execute("""
+            UPDATE rules SET conditions = ?, name = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?
+        """, (serialize_json_field(conditions), f"Bundle: {bundle_name}", now, primary_rule_id, user_id))
+
+        # Delete extra rules and their associations
+        for rid in existing_rule_ids[1:]:
+            cursor.execute("DELETE FROM bundle_rules WHERE rule_id = ? AND owner_id = ?", (rid, user_id))
+            cursor.execute("DELETE FROM rules WHERE id = ? AND owner_id = ?", (rid, user_id))
+
+        conn.commit()
+        return {"rule_id": primary_rule_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error consolidating bundle rules: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to consolidate rules: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
 
 @bundles_router.post("/api/bundles/{bundle_id}/rules")
 def associate_rule_with_bundle(bundle_id: str, body: BundleRuleAssociate, request: Request):

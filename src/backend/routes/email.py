@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from uuid import uuid4
 
-from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
+from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags, get_next_sync_version
 from src.backend.rules_engine import dispatch_trigger
 from src.backend.routes.bundles import classify_email_into_bundle, classify_email_into_bundles, classify_email_auto_bundles, ensure_auto_bundles_exist
 
@@ -766,6 +766,36 @@ def _save_email_attachments(chit_id: str, extracted: list) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Thread ID computation
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _compute_thread_id(message_id: str, in_reply_to: str, references: str) -> str:
+    """Compute the thread_id for an email message.
+
+    The thread_id is the root message-ID of the conversation:
+    1. First entry in the References header (the original message that started the thread)
+    2. Fallback: the In-Reply-To message-ID
+    3. Fallback: the email's own Message-ID (it IS the thread root)
+
+    This gives every email in a conversation the same thread_id,
+    allowing O(1) groupBy on the client.
+    """
+    # References header lists message-IDs oldest-first, so first = root
+    if references:
+        refs = references.split()
+        if refs:
+            return refs[0].strip()
+
+    # No references but has in-reply-to — use that as the thread root
+    if in_reply_to:
+        return in_reply_to
+
+    # This message is the thread root
+    return message_id
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Chit creation from parsed email
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -838,6 +868,14 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
     attachment_metadata = _save_email_attachments(chit_id, extracted_attachments)
     attachments_json = serialize_json_field(attachment_metadata) if attachment_metadata else None
 
+    # Compute thread_id from references/in-reply-to chain
+    in_reply_to = (parsed.get("email_in_reply_to", "") or "").strip()
+    references = (parsed.get("email_references", "") or "").strip()
+    thread_id = _compute_thread_id(message_id, in_reply_to, references)
+
+    # Assign sync_version for mobile sync tracking
+    sync_version = get_next_sync_version(cursor)
+
     cursor.execute(
         """INSERT INTO chits (
             id, title, tags, point_in_time,
@@ -849,7 +887,9 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             email_in_reply_to, email_references,
             email_account_id,
             attachments,
-            deleted, archived, pinned
+            thread_id,
+            deleted, archived, pinned,
+            sync_version
         ) VALUES (
             ?, ?, ?, ?,
             ?, ?,
@@ -860,7 +900,9 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             ?, ?,
             ?,
             ?,
-            ?, ?, ?
+            ?,
+            ?, ?, ?,
+            ?
         )""",
         (
             chit_id,
@@ -885,9 +927,11 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             parsed.get("email_references", ""),
             account_id,
             attachments_json,
+            thread_id,
             False,
             False,
             False,
+            sync_version,
         ),
     )
     return chit_id
@@ -1821,6 +1865,8 @@ def _do_email_sync(user_id: str):
 
                 # Final commit
                 conn.commit()
+                from src.backend.db import chit_cache
+                chit_cache.invalidate(user_id)
                 total_new += new_count
                 nickname = account.get("nickname", account_email)
                 sync_details.append({
@@ -1926,6 +1972,7 @@ def _do_email_sync(user_id: str):
                     logger.warning(f"Backfill orphan emails failed: {e}")
 
         conn.commit()
+        chit_cache.invalidate(user_id)
 
         # ── Bundle classification for new email chits ─────────────────
         if all_email_chits:
@@ -1990,49 +2037,114 @@ def _do_email_sync(user_id: str):
             pass
 
         # Send push notification for each new email individually
+        # Skip ntfy if a WebSocket client is connected (the app will show its own notification)
         if total_new > 0:
             try:
-                from src.backend.routes.ntfy import send_ntfy_notification
-                from src.backend.schedulers import _get_server_base_url
-                base = _get_server_base_url()
-                icon_url = f"{base}/static/cwoc-icon-192.png"
+                from src.backend.routes.health import _sync_hub
+                ws_connected = _sync_hub.has_connections()
+            except Exception:
+                ws_connected = False
 
-                for email_chit in all_email_chits:
-                    chit_id = email_chit.get("id", "")
-                    subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
-                    sender = email_chit.get("email_from", "Unknown")
-                    click_url = f"{base}/frontend/html/editor.html?id={chit_id}&expand=email"
-                    send_ntfy_notification(
-                        user_id=user_id,
-                        title=f"📬 {sender}",
-                        body=subject,
-                        click_url=click_url,
-                        tags="email,incoming_envelope",
-                        icon_url=icon_url,
-                    )
-            except Exception as e:
-                logger.warning(f"Ntfy notification failed for new email: {e}")
+            if ws_connected:
+                logger.info("[Email Sync] WebSocket client connected — skipping ntfy (app will notify natively)")
+            else:
+                try:
+                    from src.backend.routes.ntfy import send_ntfy_notification
+                    from src.backend.schedulers import _get_server_base_url
+                    base = _get_server_base_url()
+                    icon_url = f"{base}/static/cwoc-icon-192.png"
 
-            # Also store email notifications in the notifications table for the Notifications view
+                    for email_chit in all_email_chits:
+                        chit_id = email_chit.get("id", "")
+                        subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
+                        sender = email_chit.get("email_from", "Unknown")
+                        click_url = f"{base}/frontend/html/editor.html?id={chit_id}&expand=email"
+                        send_ntfy_notification(
+                            user_id=user_id,
+                            title=f"📬 {sender}",
+                            body=subject,
+                            click_url=click_url,
+                            tags="email,incoming_envelope",
+                            icon_url=icon_url,
+                        )
+                except Exception as e:
+                    logger.warning(f"Ntfy notification failed for new email: {e}")
+
+            # Send Web Push notifications for email (with action buttons for mobile browser)
             try:
-                notif_conn = sqlite3.connect(DB_PATH)
-                notif_cursor = notif_conn.cursor()
-                now_iso = datetime.utcnow().isoformat()
+                from src.backend.routes.push import send_push_to_user
                 for email_chit in all_email_chits:
                     chit_id = email_chit.get("id", "")
                     subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
                     sender = email_chit.get("email_from", "Unknown")
-                    notif_cursor.execute(
-                        """INSERT INTO notifications
-                           (id, user_id, chit_id, chit_title, owner_display_name,
-                            notification_type, status, created_datetime)
-                           VALUES (?, ?, ?, ?, ?, 'email', 'pending', ?)""",
-                        (str(uuid4()), user_id, chit_id, f"📬 {sender}: {subject}", "", now_iso),
-                    )
-                notif_conn.commit()
-                notif_conn.close()
+                    push_payload = {
+                        "title": f"📬 {sender}",
+                        "body": subject,
+                        "icon": "/static/cwoc-icon-192.png",
+                        "badge": "/static/cwoc-icon-192.png",
+                        "data": {
+                            "url": f"/frontend/html/editor.html?id={chit_id}&expand=email",
+                            "chitId": chit_id,
+                            "type": "email",
+                        },
+                        "actions": [
+                            {"action": "trash", "title": "Trash"},
+                            {"action": "archive", "title": "Archive"},
+                            {"action": "markread", "title": "Mark Read"},
+                        ],
+                    }
+                    send_push_to_user(user_id, push_payload)
+            except ImportError:
+                pass  # pywebpush not available
             except Exception as e:
-                logger.warning(f"Failed to store email notifications in DB: {e}")
+                logger.warning(f"Web Push notification failed for new email: {e}")
+
+            # Store notifications ONLY for calendar invites (emails with text/calendar MIME part)
+            try:
+                calendar_invite_chits = [c for c in all_email_chits if c.get("has_calendar_attachment")]
+                if calendar_invite_chits:
+                    notif_conn = sqlite3.connect(DB_PATH)
+                    notif_cursor = notif_conn.cursor()
+                    now_iso = datetime.utcnow().isoformat()
+                    for email_chit in calendar_invite_chits:
+                        chit_id = email_chit.get("id", "")
+                        subject = email_chit.get("title") or email_chit.get("email_subject") or "No subject"
+                        sender = email_chit.get("email_from", "Unknown")
+                        notif_cursor.execute(
+                            """INSERT INTO notifications
+                               (id, user_id, chit_id, chit_title, owner_display_name,
+                                notification_type, status, created_datetime)
+                               VALUES (?, ?, ?, ?, ?, 'calendar_invite', 'pending', ?)""",
+                            (str(uuid4()), user_id, chit_id, f"📅 {sender}: {subject}", "", now_iso),
+                        )
+                    notif_conn.commit()
+                    notif_conn.close()
+            except Exception as e:
+                logger.warning(f"Failed to store calendar invite notifications in DB: {e}")
+
+            # Broadcast WebSocket "chits_changed" so the mobile app triggers an incremental sync
+            try:
+                import asyncio
+                import time as _time
+                from src.backend.routes.health import _sync_hub, _sync_messages, _sync_max_messages, _sync_event_loop
+                import src.backend.routes.health as health_module
+
+                payload = {"type": "chits_changed", "entity": "chit", "source": "email_sync"}
+                msg = {"id": health_module._sync_next_id, "data": payload, "ts": _time.time()}
+                health_module._sync_next_id += 1
+                _sync_messages.append(msg)
+                if len(_sync_messages) > _sync_max_messages:
+                    _sync_messages[:] = _sync_messages[-_sync_max_messages:]
+
+                # Schedule the async broadcast on the main event loop
+                if _sync_event_loop is not None:
+                    asyncio.run_coroutine_threadsafe(
+                        _sync_hub.broadcast(payload, msg_id=msg["id"]),
+                        _sync_event_loop
+                    )
+                logger.info("[Email Sync] Broadcast chits_changed to WebSocket clients")
+            except Exception as e:
+                logger.warning(f"[Email Sync] WebSocket broadcast failed (best-effort): {e}")
 
         result = {"new_count": total_new, "deleted_count": total_deleted, "accounts_synced": accounts_synced}
         if sync_errors:

@@ -99,7 +99,7 @@ def admin_list_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, is_admin, is_active FROM users ORDER BY username"
+            "SELECT id, username, display_name, is_admin, is_active FROM contacts WHERE username IS NOT NULL ORDER BY username"
         ).fetchall()
         return [dict(r) for r in rows]
     except Exception as e:
@@ -153,7 +153,7 @@ def admin_bulk_update(body: BulkUpdateRequest, request: Request):
         if "owner_id" in updates and "owner_display_name" not in updates:
             conn.row_factory = sqlite3.Row
             user_row = conn.execute(
-                "SELECT display_name, username FROM users WHERE id = ?",
+                "SELECT display_name, username FROM contacts WHERE id = ? AND username IS NOT NULL",
                 (updates["owner_id"],)
             ).fetchone()
             if user_row:

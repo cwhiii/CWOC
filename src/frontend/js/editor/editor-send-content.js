@@ -135,15 +135,27 @@ async function _openSendContentModal(e, contentType) {
   _sendContentModal.style.display = 'flex';
   _sendContentModalOpen = true;
 
-  // Fetch chits and populate
+  // Use shared cache from editor-send-item.js for instant display, then refresh if stale
   try {
-    var response = await fetch('/api/chits');
-    if (!response.ok) throw new Error('Failed to fetch chits');
-    var allChits = await response.json();
+    var allChits;
+    var now = Date.now();
+
+    if (typeof _sendItemChitsCache !== 'undefined' && _sendItemChitsCache) {
+      allChits = _sendItemChitsCache;
+    } else {
+      var response = await fetch('/api/chits');
+      if (!response.ok) throw new Error('Failed to fetch chits');
+      allChits = await response.json();
+      // Update shared cache
+      if (typeof _sendItemChitsCache !== 'undefined') {
+        _sendItemChitsCache = allChits;
+        _sendItemChitsCacheTime = now;
+      }
+    }
 
     // Exclude current chit, sort alphabetically
     var available = allChits
-      .filter(function(c) { return c.id !== window.currentChitId; })
+      .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
       .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
 
     _sendContentModal._availableChits = available;
@@ -155,6 +167,31 @@ async function _openSendContentModal(e, contentType) {
     if (titleEl) {
       var label = contentType === 'notes' ? 'Send Notes To' : 'Send Checklist To';
       titleEl.textContent = label + ' (' + available.length + ' available)';
+    }
+
+    // If cache was stale, refresh in background
+    if (typeof _sendItemChitsCacheTime !== 'undefined' && (now - _sendItemChitsCacheTime) >= _SEND_ITEM_CACHE_TTL) {
+      fetch('/api/chits').then(function(resp) {
+        if (resp.ok) return resp.json();
+        return null;
+      }).then(function(data) {
+        if (data) {
+          _sendItemChitsCache = data;
+          _sendItemChitsCacheTime = Date.now();
+          if (_sendContentModalOpen && _sendContentModal) {
+            var freshAvailable = data
+              .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+              .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+            _sendContentModal._availableChits = freshAvailable;
+            _sendContentRenderChits(freshAvailable);
+            var titleEl2 = document.getElementById('sendContentModalTitle');
+            if (titleEl2) {
+              var label2 = _sendContentType === 'notes' ? 'Send Notes To' : 'Send Checklist To';
+              titleEl2.textContent = label2 + ' (' + freshAvailable.length + ' available)';
+            }
+          }
+        }
+      }).catch(function() { /* silent */ });
     }
   } catch (err) {
     console.error('Error fetching chits for send-content modal:', err);

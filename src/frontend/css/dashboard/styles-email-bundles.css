@@ -39,6 +39,45 @@
     flex-shrink: 0;
 }
 
+.bundle-toolbar-actions .bundle-select-all-cycle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-size: 1.1em;
+    padding: 0;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.bundle-toolbar-actions .bundle-select-all-cycle:hover {
+    background: rgba(139, 90, 43, 0.12);
+}
+
+.bundle-toolbar-actions .bundle-select-label {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.75em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.bundle-toolbar-actions .bundle-select-label.visible {
+    opacity: 1;
+}
+
+.bundle-toolbar-actions .bundle-select-label.fading {
+    opacity: 0;
+}
+
 .bundle-toolbar-actions .bundle-action-btn {
     display: inline-flex;
     align-items: center;

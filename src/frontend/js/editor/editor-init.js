@@ -128,7 +128,9 @@ function resetEditorForNewChit() {
     selectedColorName.textContent = "Transparent";
   }
 
+  window._editorLoadingChit = true;
   _setColor("transparent", "Transparent");
+  window._editorLoadingChit = false;
 
   window._currentTagSelection = [];
   window._loadedChildChits = [];
@@ -419,6 +421,8 @@ async function loadChitData(chitId) {
   if (!chitId || window.isNewChit) {
     return;
   }
+
+  window._editorLoadingChit = true;
 
   try {
     const response = await fetch(`/api/chit/${chitId}`);
@@ -933,6 +937,7 @@ async function loadChitData(chitId) {
       }
     }
 
+    window._editorLoadingChit = false;
     markEditorSaved();
     setTimeout(() => markEditorSaved(), 200);
     setTimeout(() => markEditorSaved(), 500);
@@ -941,6 +946,7 @@ async function loadChitData(chitId) {
       _showInstanceBanner(window._editingInstance);
     }
   } catch (error) {
+    window._editorLoadingChit = false;
     console.error("[loadChitData] Error loading chit:", error);
   }
 }

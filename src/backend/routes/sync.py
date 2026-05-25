@@ -77,7 +77,11 @@ def _deserialize_chit_for_sync(chit: dict) -> dict:
 
 
 def _deserialize_contact_for_sync(contact: dict) -> dict:
-    """Deserialize JSON fields on a contact dict in place for sync response."""
+    """Deserialize JSON fields on a contact dict in place for sync response.
+
+    Strips sensitive auth fields (password_hash, private_pgp_key_encrypted)
+    and adds display fields (is_user, username, is_admin, is_active) for mobile.
+    """
     contact["phones"] = deserialize_json_field(contact.get("phones"))
     contact["emails"] = deserialize_json_field(contact.get("emails"))
     contact["addresses"] = deserialize_json_field(contact.get("addresses"))
@@ -89,6 +93,17 @@ def _deserialize_contact_for_sync(contact: dict) -> dict:
     contact["favorite"] = bool(contact.get("favorite"))
     contact["tags"] = deserialize_json_field(contact.get("tags"))
     contact["shared_to_vault"] = bool(contact.get("shared_to_vault"))
+
+    # Strip sensitive auth fields — NEVER send to clients (REQ-10.3, REQ-9.2)
+    contact.pop("password_hash", None)
+    contact.pop("private_pgp_key_encrypted", None)
+
+    # Add is_user flag and display fields for mobile (REQ-9.2)
+    contact["is_user"] = contact.get("username") is not None
+    # Keep username, is_admin, is_active for display purposes on mobile
+    contact["is_admin"] = bool(contact.get("is_admin"))
+    contact["is_active"] = bool(contact.get("is_active")) if contact.get("is_active") is not None else True
+
     return contact
 
 
@@ -501,6 +516,7 @@ _SETTINGS_PUSH_FIELDS = frozenset([
     # Email privacy (already in DB from earlier migration)
     "email_block_tracking_pixels", "email_external_content",
     "email_read_receipts", "email_undo_send_delay", "email_group_by",
+    "email_esc_quick_exit",
 ])
 
 
@@ -618,6 +634,7 @@ def _build_chit_insert_values(chit: dict, user_id: str, sync_version: int, curre
         serialize_json_field(chit.get("prerequisites")),
         1 if chit.get("checklist_autosave") else 0 if chit.get("checklist_autosave") is not None else None,
         1 if chit.get("auto_complete_checklist", True) else 0,
+        chit.get("thread_id"),
         sync_version,
     )
 
@@ -636,11 +653,11 @@ _INSERT_CHIT_SQL = """
         email_subject, email_body_text, email_body_html, email_date, email_folder,
         email_status, email_read, email_in_reply_to, email_references,
         attachments, availability, snoozed_until, prerequisites,
-        checklist_autosave, auto_complete_checklist, sync_version
+        checklist_autosave, auto_complete_checklist, thread_id, sync_version
     ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
 """
 
@@ -722,6 +739,7 @@ def _build_chit_update_values(chit: dict, sync_version: int, current_time: str, 
         serialize_json_field(chit.get("prerequisites")),
         1 if chit.get("checklist_autosave") else 0 if chit.get("checklist_autosave") is not None else None,
         1 if chit.get("auto_complete_checklist", True) else 0,
+        chit.get("thread_id"),
         sync_version,
         chit_id,
     )
@@ -745,7 +763,7 @@ _UPDATE_CHIT_SQL = """
         email_date = ?, email_folder = ?, email_status = ?, email_read = ?,
         email_in_reply_to = ?, email_references = ?, attachments = ?,
         availability = ?, snoozed_until = ?, prerequisites = ?,
-        checklist_autosave = ?, auto_complete_checklist = ?, sync_version = ?
+        checklist_autosave = ?, auto_complete_checklist = ?, thread_id = ?, sync_version = ?
     WHERE id = ?
 """
 
@@ -1415,6 +1433,10 @@ async def sync_push(request: Request):
                 }
 
         conn.commit()
+
+        # Invalidate chit cache since sync push may have modified chits
+        from src.backend.db import chit_cache
+        chit_cache.invalidate(user_id)
 
         # Get final server version after all writes
         cursor.execute("SELECT next_version FROM sync_state WHERE id = 1")

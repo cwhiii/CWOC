@@ -37,16 +37,22 @@ class ChitRepository @Inject constructor(
     private val pushScope = CoroutineScope(Dispatchers.IO)
 
     /** All task chits (status not null, not deleted/archived), ordered by priority and due date. */
-    fun getTaskChits(): Flow<List<ChitEntity>> = chitDao.getTaskChits()
+    fun getTaskChits(): Flow<List<ChitEntity>> = chitDao.getTaskChits().also {
+        android.util.Log.d("PERF", "[ChitRepo] getTaskChits() Flow created")
+    }
 
     /** Task chits filtered by a specific status value. */
     fun getTasksByStatus(status: String): Flow<List<ChitEntity>> = chitDao.getTasksByStatus(status)
 
     /** All note chits (has note content, no status or dates, not deleted/archived). */
-    fun getNoteChits(): Flow<List<ChitEntity>> = chitDao.getNoteChits()
+    fun getNoteChits(): Flow<List<ChitEntity>> = chitDao.getNoteChits().also {
+        android.util.Log.d("PERF", "[ChitRepo] getNoteChits() Flow created")
+    }
 
     /** All calendar chits (has start or end datetime, not deleted/archived). */
-    fun getCalendarChits(): Flow<List<ChitEntity>> = chitDao.getCalendarChits()
+    fun getCalendarChits(): Flow<List<ChitEntity>> = chitDao.getCalendarChits().also {
+        android.util.Log.d("PERF", "[ChitRepo] getCalendarChits() Flow created")
+    }
 
     /** Calendar chits for a specific day range. */
     fun getChitsForDay(dayStart: String, dayEnd: String): Flow<List<ChitEntity>> =
@@ -270,6 +276,31 @@ class ChitRepository @Inject constructor(
         chitDao.upsert(entity)
         dirtyTracker.markDirty(entity.id, dirtyFields)
         triggerPushIfOnline(entity.id)
+        notifyWidgets()
+    }
+
+    /** Mark an email chit as read. Updates emailRead=true, marks dirty, triggers sync push. */
+    suspend fun markEmailAsRead(chitId: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        chitDao.upsert(entity.copy(emailRead = true, modifiedDatetime = now))
+        dirtyTracker.markDirty(chitId, setOf("emailRead"))
+        triggerPushIfOnline(chitId)
+        notifyWidgets()
+    }
+
+    /** Move an email chit to trash folder. Updates tags and email_folder, marks dirty, triggers sync push. */
+    suspend fun moveEmailToTrash(chitId: String) {
+        val entity = chitDao.getById(chitId) ?: return
+        val now = Instant.now().toString()
+        val currentTags = entity.tags.orEmpty().toMutableList()
+        if (!currentTags.contains("CWOC_System/Email/Trash")) {
+            currentTags.add("CWOC_System/Email/Trash")
+        }
+        currentTags.remove("CWOC_System/Email/Inbox")
+        chitDao.upsert(entity.copy(tags = currentTags, emailFolder = "trash", modifiedDatetime = now))
+        dirtyTracker.markDirty(chitId, setOf("tags", "email_folder"))
+        triggerPushIfOnline(chitId)
         notifyWidgets()
     }
 

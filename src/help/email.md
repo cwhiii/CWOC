@@ -22,7 +22,9 @@ CWOC includes a built-in email client that supports multiple email accounts. Con
 
 - **Email View** — View inbox, sent, drafts, and trash folders. Shift+click an email card to toggle read/unread status
 - **Compose** — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. The body supports **markdown** with a live HTML preview below the text area. When sent, the email is delivered as properly rendered HTML
-- **Expanded Editor** — Click Expand to open the full-screen email editor with a formatting toolbar, subject field, and split view (markdown on top, preview on bottom). Opening an email from the Email view auto-expands
+- **Expanded Editor** — Click Expand to open the full-screen email editor with a formatting toolbar, subject field, and split view (markdown on top, preview on bottom). Opening an email from the Email view auto-expands. The expanded view fills the entire screen with a 1px border and no margins
+- **Email Options** — In the email zone header, an "Options" dropdown button provides quick access to email management actions: Archive, Mark Read/Unread, Add to Bundle, Snooze, Tag, and Delete. For received emails, all actions are available; for drafts and sent emails, only Delete is shown. The same actions appear as individual buttons in the expanded email viewer's header bar
+- **Quick Exit** — Enable "Quick exit: ESC closes email and exits chit" in [Settings → Email](/frontend/html/settings.html#email) to make pressing ESC in the expanded email viewer close both the viewer and the chit editor in one keystroke, returning you to the dashboard
 - **Reply / Forward** — Open a received email and use the Reply or Forward buttons to create a new draft with quoted content. The expand/collapse state is preserved across reply and forward
 - **Send & Archive** — Alongside the Send button, Send & Archive sends the reply and archives the original email in one step
 - **Threading** — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages. Click any thread entry to navigate to that email
@@ -46,7 +48,7 @@ Bundle tabs appear in a toolbar above your email list when viewing the Inbox sub
 - **Edit / Delete** — Right-click (or long-press on mobile) a bundle tab to open the context menu with Edit, Reorder, and Delete options. "Everything Else" cannot be deleted
 - **Reorder** — Choose "Reorder" from the context menu, then drag tabs to rearrange. In single-placement mode, order determines priority (first match wins)
 - **Multi-Placement** — By default, each email goes to the first matching bundle only. Enable "Allow Multi-Placement" in [Settings → Email](/frontend/html/settings.html#email) to let emails appear in multiple bundles simultaneously
-- **Bulk Actions** — Use the Select All checkbox, Archive, Tag, and Mark Read/Unread buttons in the toolbar row above the bundle tabs to act on multiple emails at once
+- **Bulk Actions** — Use the Select button, Archive, Tag, and Mark Read/Unread buttons in the toolbar row above the bundle tabs to act on multiple emails at once. The Select button cycles through four modes each time you click it: **All** (selects every visible email), **None** (clears selection), **Read** (selects only read emails), and **Unread** (selects only unread emails). A brief label appears next to the button showing which mode was just activated, then fades away after a couple of seconds
 
 ## Thread Nests
 

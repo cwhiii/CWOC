@@ -1,38 +1,27 @@
 package com.cwoc.app.ui.screens.email
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +39,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.remote.BundleDto
 import com.cwoc.app.domain.email.DateGroup
 import com.cwoc.app.ui.components.UndoToast
+import com.cwoc.app.ui.components.AddToBundleSheet
+import com.cwoc.app.ui.components.AddToBundleResult
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 
 /**
@@ -96,6 +86,12 @@ fun EmailScreen(
     // Debug logging
     android.util.Log.d("CWOC_EMAIL", "EmailScreen composing, isLoading=${uiState.isLoading}, threads=${uiState.threads.size}")
 
+    // Filter out threads that are pending dismissal (swiped but waiting for undo countdown)
+    val visibleThreads = remember(uiState.threads, uiState.pendingDismissThreadIds) {
+        if (uiState.pendingDismissThreadIds.isEmpty()) uiState.threads
+        else uiState.threads.filter { it.id !in uiState.pendingDismissThreadIds }
+    }
+
     // Context menu state for long-press on email cards
     var contextMenuThreadId by remember { mutableStateOf<String?>(null) }
 
@@ -114,15 +110,18 @@ fun EmailScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             // Sticky BundleToolbar with BulkActionsBar (Row 1) and Bundle Tabs (Row 2)
+            val selectModeLabel by viewModel.selectModeLabel.collectAsState()
             BundleToolbar(
                 bundleViewModel = bundleViewModel,
                 currentFolder = uiState.currentFolder,
                 isMultiPlacement = false, // Controlled by settings
                 isMultiSelectMode = uiState.isMultiSelectMode,
                 selectedCount = uiState.selectedIds.size,
-                totalCount = uiState.threads.size,
+                totalCount = visibleThreads.size,
                 onSelectAll = { viewModel.selectAll() },
                 onDeselectAll = { viewModel.exitMultiSelect() },
+                onCycleSelectMode = { viewModel.cycleSelectMode() },
+                selectModeLabel = selectModeLabel,
                 onArchiveSelected = {
                     viewModel.bulkArchive { success, failed ->
                         // Toast handled by ViewModel or could show snackbar
@@ -146,22 +145,9 @@ fun EmailScreen(
                 .padding(paddingValues)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ─── Account Filter Pills ────────────────────────────────────
-                AccountFilterPills(
-                    accounts = uiState.accounts,
-                    onToggleAccount = { accountId -> viewModel.toggleAccountFilter(accountId) },
-                    onNavigateToEmailSettings = onNavigateToEmailSettings
-                )
-
-                // ─── Check Mail Button + Unread-at-Top Toggle Row ────────────
-                CheckMailAndToggleRow(
-                    isSyncing = uiState.syncingAccounts.isNotEmpty(),
-                    unreadAtTop = uiState.unreadAtTop,
-                    onCheckMail = { viewModel.triggerSync() },
-                    onToggleUnreadAtTop = { viewModel.toggleUnreadAtTop() }
-                )
-
                 // ─── Content Area ────────────────────────────────────────────
+                // Note: Account filter pills, Check Mail button, and Unread-at-top toggle
+                // are in the sidebar (SidebarContent.kt), matching the mobile web layout.
                 when {
                     uiState.isLoading -> {
                         Box(
@@ -174,7 +160,7 @@ fun EmailScreen(
                             )
                         }
                     }
-                    uiState.threads.isEmpty() -> {
+                    visibleThreads.isEmpty() -> {
                         // ─── Empty State with Context ────────────────────────
                         EmptyStateWithContext(
                             currentFolder = uiState.currentFolder,
@@ -184,13 +170,13 @@ fun EmailScreen(
                     else -> {
                         // ─── Email Thread List with Date Group Headers ────────
                         EmailListWithDateGroups(
-                            threads = uiState.threads,
+                            threads = visibleThreads,
                             groupByDate = uiState.groupByDate,
                             isMultiSelectMode = uiState.isMultiSelectMode,
                             selectedIds = uiState.selectedIds,
                             paginateEnabled = uiState.paginateEnabled,
                             totalThreadCount = uiState.totalThreadCount,
-                            displayedCount = uiState.threads.size,
+                            displayedCount = visibleThreads.size,
                             contextMenuThreadId = contextMenuThreadId,
                             senderImageUrls = senderImageUrls,
                             serverUrl = serverUrl,
@@ -214,12 +200,14 @@ fun EmailScreen(
                             onArchiveThread = { thread ->
                                 viewModel.archiveWithUndo(
                                     thread.latestMessage.id,
+                                    thread.id,
                                     thread.subject
                                 )
                             },
                             onDeleteThread = { thread ->
                                 viewModel.deleteWithUndo(
                                     thread.latestMessage.id,
+                                    thread.id,
                                     thread.subject
                                 )
                             },
@@ -309,114 +297,50 @@ fun EmailScreen(
         )
     }
 
-    // ─── Bundle Picker Dialog (Add to Bundle from context menu) ──────────────
+    // ─── Add to Bundle Sheet (unified — from context menu) ─────────────────
     bundlePickerThreadId?.let { chitId ->
         val bundleState by bundleViewModel.uiState.collectAsState()
         val currentBundleId = viewModel.getCurrentBundleId(chitId, bundleState.bundles)
+        val emailMeta = remember(chitId) { viewModel.getEmailMetadataForBundle(chitId) }
 
-        BundlePickerDialog(
-            bundles = bundleState.bundles,
-            currentBundleId = currentBundleId,
-            onSelectBundle = { selectedBundleId ->
-                val selectedBundle = bundleState.bundles.find { it.id == selectedBundleId }
-                if (selectedBundle != null) {
-                    viewModel.addEmailToBundle(
-                        chitId = chitId,
-                        bundleId = selectedBundleId,
-                        bundleName = selectedBundle.name ?: "Unnamed"
-                    )
-                }
-                bundlePickerThreadId = null
-            },
-            onDismiss = { bundlePickerThreadId = null }
-        )
-    }
-}
-
-// ─── Check Mail Button + Unread-at-Top Toggle ────────────────────────────────────
-
-/**
- * Row containing the Check Mail button with sync animation and the
- * Unread-at-top toggle switch.
- *
- * Validates: Requirements 32.1-32.3, 34.1-34.3
- */
-@Composable
-private fun CheckMailAndToggleRow(
-    isSyncing: Boolean,
-    unreadAtTop: Boolean,
-    onCheckMail: () -> Unit,
-    onToggleUnreadAtTop: () -> Unit
-) {
-    // Sync icon rotation animation
-    val rotation by animateFloatAsState(
-        targetValue = if (isSyncing) 360f else 0f,
-        animationSpec = if (isSyncing) {
-            tween(durationMillis = 1000, easing = LinearEasing)
+        if (emailMeta != null) {
+            AddToBundleSheet(
+                senderEmail = emailMeta.first,
+                subject = emailMeta.second,
+                recipientEmail = emailMeta.third,
+                bundles = bundleState.bundles,
+                currentBundleId = currentBundleId,
+                onConfirm = { result ->
+                    if (result.newBundleName != null) {
+                        // Create new bundle, then drop
+                        viewModel.createBundleAndDropEmail(
+                            bundleName = result.newBundleName,
+                            chitId = chitId,
+                            mode = result.mode.apiValue,
+                            matchValue = result.matchValue,
+                            applyRetroactively = result.applyRetroactively
+                        )
+                    } else if (result.bundleId != null) {
+                        // Drop into existing bundle
+                        viewModel.dropEmailToBundle(
+                            chitId = chitId,
+                            bundleId = result.bundleId,
+                            mode = result.mode.apiValue,
+                            matchValue = result.matchValue,
+                            applyRetroactively = result.applyRetroactively
+                        )
+                    }
+                    bundlePickerThreadId = null
+                },
+                onDismiss = { bundlePickerThreadId = null }
+            )
         } else {
-            tween(durationMillis = 0)
-        },
-        label = "syncRotation"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Check Mail button
-        TextButton(
-            onClick = onCheckMail,
-            enabled = !isSyncing
-        ) {
-            Icon(
-                imageVector = Icons.Default.Sync,
-                contentDescription = "Check Mail",
-                modifier = Modifier
-                    .size(18.dp)
-                    .then(
-                        if (isSyncing) Modifier.rotate(rotation) else Modifier
-                    ),
-                tint = if (isSyncing) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = if (isSyncing) "Syncing..." else "Check Mail",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isSyncing) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-        }
-
-        // Unread-at-top toggle
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Unread first",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Switch(
-                checked = unreadAtTop,
-                onCheckedChange = { onToggleUnreadAtTop() },
-                modifier = Modifier.height(24.dp),
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
+            bundlePickerThreadId = null
         }
     }
 }
+
+
 
 // ─── Empty State with Context ────────────────────────────────────────────────────
 
@@ -567,7 +491,8 @@ private fun EmailListWithDateGroups(
                     // Swipe gestures: right → archive, left → delete (matching web)
                     com.cwoc.app.ui.components.swipe.SwipeToAction(
                         onArchive = { onArchiveThread(thread) },
-                        onSnooze = { onDeleteThread(thread) } // Left swipe = delete for email
+                        onSnooze = { onDeleteThread(thread) }, // Left swipe = delete for email
+                        endSwipeStyle = com.cwoc.app.ui.components.swipe.DeleteSwipeStyle
                     ) {
                         // Resolve sender image URL from the cached map
                         val senderEmail = remember(thread.latestMessage.emailFrom) {

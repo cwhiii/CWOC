@@ -3851,6 +3851,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Pre-fill condition from "Create a Rule" context menu
+    var prefillField = params.get('prefill_field');
+    var prefillOperator = params.get('prefill_operator');
+    var prefillValue = params.get('prefill_value');
+    if (!ruleId && prefillField) {
+        // Ensure trigger is set first (so field list is correct)
+        if (presetTrigger && !document.getElementById('rule-trigger').value) {
+            var trigEl = document.getElementById('rule-trigger');
+            if (trigEl) { trigEl.value = presetTrigger; _onTriggerChange(); }
+        }
+        // Create a pre-populated condition tree with the selected field
+        _conditionTree = {
+            _id: _nextNodeId(),
+            type: 'group',
+            operator: 'AND',
+            children: [{
+                _id: _nextNodeId(),
+                type: 'leaf',
+                field: prefillField,
+                operator: prefillOperator || 'equals',
+                value: prefillValue || ''
+            }]
+        };
+        renderConditionTree();
+    }
+
     // Bundle mode: auto-set name, description, hide actions
     if (bundleId && !ruleId) {
         window._isBundleRule = true;

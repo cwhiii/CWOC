@@ -43,13 +43,16 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.ChitActionMenu
+import com.cwoc.app.ui.components.AttachmentPrintPickerDialog
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.QuickEditSheet
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.components.UndoToast
@@ -57,6 +60,9 @@ import com.cwoc.app.ui.components.chitColorBorder
 import com.cwoc.app.ui.components.sortPinnedFirst
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import kotlinx.coroutines.launch
+import com.cwoc.app.ui.screens.editor.zones.AttachmentInfo
+import com.cwoc.app.util.PrintAttachmentHelper
+import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 
 /**
@@ -75,7 +81,8 @@ fun NotesScreen(
     viewModel: NotesViewModel = hiltViewModel(),
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
-    onQuickAlert: (() -> Unit)? = null
+    onQuickAlert: (() -> Unit)? = null,
+    onCreateRule: ((ChitEntity) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -95,9 +102,14 @@ fun NotesScreen(
     // Long-press action menu state
     var menuChit by remember { mutableStateOf<ChitEntity?>(null) }
     var showSnoozeDialog by remember { mutableStateOf(false) }
+    var showPrintAttachmentPicker by remember { mutableStateOf(false) }
     // D3: Quick-edit sheet state
     var quickEditChit by remember { mutableStateOf<ChitEntity?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE) }
+    val notesServerUrl = remember { prefs.getString("server_url", "")?.trimEnd('/') ?: "" }
+    val notesAuthToken = remember { prefs.getString("auth_token", "") ?: "" }
 
     // Apply filters, sort, and pin-to-top to the notes list
     val filteredSortedNotes = remember(uiState.notes, filterState, sortState) {
@@ -125,6 +137,9 @@ fun NotesScreen(
                     FilteredEmptyState(
                         onClearFilters = { filterSortViewModel?.clearFilters() }
                     )
+                }
+                uiState.notes.isEmpty() && syncState == SyncState.SYNCING -> {
+                    LoadingChitsState()
                 }
                 uiState.notes.isEmpty() -> {
                     NotesEmptyState()
@@ -187,7 +202,9 @@ fun NotesScreen(
                     showSnoozeDialog = true
                 },
                 onEdit = { onNavigateToEditor(currentMenuChit.id) },
-                onDelete = { viewModel.softDelete(currentMenuChit.id) }
+                onDelete = { viewModel.softDelete(currentMenuChit.id) },
+                onCreateRule = if (onCreateRule != null) { { onCreateRule(currentMenuChit) } } else null,
+                onPrintAttachment = { showPrintAttachmentPicker = true }
             )
         }
 
@@ -209,6 +226,34 @@ fun NotesScreen(
                     showSnoozeDialog = false
                 }
             )
+        }
+
+        // Print Attachment picker dialog
+        if (showPrintAttachmentPicker && currentMenuChit != null) {
+            val attachments = PrintAttachmentHelper.parseAttachments(currentMenuChit.attachments)
+            if (attachments.size == 1) {
+                showPrintAttachmentPicker = false
+                coroutineScope.launch {
+                    PrintAttachmentHelper.downloadAndPrint(
+                        context, attachments[0], currentMenuChit.id, notesServerUrl, notesAuthToken
+                    )
+                }
+            } else if (attachments.size > 1) {
+                AttachmentPrintPickerDialog(
+                    attachments = attachments,
+                    onSelect = { selected ->
+                        showPrintAttachmentPicker = false
+                        coroutineScope.launch {
+                            PrintAttachmentHelper.downloadAndPrint(
+                                context, selected, currentMenuChit.id, notesServerUrl, notesAuthToken
+                            )
+                        }
+                    },
+                    onDismiss = { showPrintAttachmentPicker = false }
+                )
+            } else {
+                showPrintAttachmentPicker = false
+            }
         }
 
         // D3: Quick-edit bottom sheet

@@ -42,7 +42,8 @@ fun AlertsScreen(
     filterSortViewModel: FilterSortViewModel? = null,
     chitRepository: ChitRepository? = null,
     settingsRepository: SettingsRepository? = null,
-    sidebarStateViewModel: SidebarStateViewModel? = null
+    sidebarStateViewModel: SidebarStateViewModel? = null,
+    onCreateRule: ((com.cwoc.app.data.local.entity.ChitEntity) -> Unit)? = null
 ) {
     val selectedMode by viewModel.selectedMode.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -90,7 +91,8 @@ fun AlertsScreen(
                     viewModel = viewModel,
                     onNavigateToEditor = onNavigateToEditor,
                     filterSortViewModel = filterSortViewModel,
-                    chitRepository = chitRepository
+                    chitRepository = chitRepository,
+                    onCreateRule = onCreateRule
                 )
                 "independent" -> IndependentAlertsBoard(
                     viewModel = viewModel,

@@ -300,7 +300,7 @@ async def import_ics(body: ICSImportRequest, request: Request):
             target_user_id = body.target_user_id
 
         # Look up target user info
-        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (target_user_id,))
+        cursor.execute("SELECT display_name, username FROM contacts WHERE id = ? AND username IS NOT NULL", (target_user_id,))
         user_row = cursor.fetchone()
         if not user_row:
             raise HTTPException(status_code=404, detail="Target user not found")
@@ -438,7 +438,7 @@ BATCH_TAG_PREFIX = "cwoc_system/imported/"
 def _is_admin(conn, user_id: str) -> bool:
     """Check if the given user has admin privileges."""
     row = conn.execute(
-        "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+        "SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,)
     ).fetchone()
     return bool(row and row[0])
 

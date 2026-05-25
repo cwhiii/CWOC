@@ -18,6 +18,8 @@ import com.cwoc.app.data.remote.dto.ClientLogRequest
 import com.cwoc.app.data.remote.dto.ClientLogResponse
 import com.cwoc.app.data.remote.dto.AttachmentUploadResponse
 import com.cwoc.app.data.remote.dto.UpdateBundleRequest
+import com.cwoc.app.data.remote.dto.DropEmailRequest
+import com.cwoc.app.data.remote.dto.DropEmailResponse
 import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import retrofit2.Response
@@ -643,6 +645,17 @@ interface CwocApiService {
         @Body body: Map<String, String>
     ): Response<Map<String, Any>>
 
+    /**
+     * Unified drop-email endpoint: move an email to a bundle with optional rule creation.
+     * POST /api/bundles/{bundleId}/drop-email
+     * Supports modes: move_once, always_sender, always_subject, always_recipient.
+     */
+    @POST("/api/bundles/{bundleId}/drop-email")
+    suspend fun dropEmailToBundle(
+        @Path("bundleId") bundleId: String,
+        @Body request: DropEmailRequest
+    ): Response<DropEmailResponse>
+
     // ─── Email operation endpoints ──────────────────────────────────────────
 
     /**
@@ -1066,6 +1079,7 @@ data class BundleDto(
     @com.google.gson.annotations.SerializedName("owner_id") val ownerId: String? = null,
     @com.google.gson.annotations.SerializedName("display_order") val displayOrder: Int? = null,
     val removable: Boolean? = null,
+    @com.google.gson.annotations.SerializedName("is_catch_all") val isCatchAll: Boolean? = null,
     val tag: String? = null,
     val icon: String? = null,
     val color: String? = null,

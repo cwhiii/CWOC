@@ -828,6 +828,8 @@ function _updateEmailButtons(status) {
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = '';
+    var optionsBtn = document.getElementById('emailOptionsBtn');
+    if (optionsBtn) optionsBtn.style.display = '';
     // Show Send Later and Read Receipt for drafts
     var sendLaterBtn = document.getElementById('emailSendLaterBtn');
     if (sendLaterBtn) sendLaterBtn.style.display = '';
@@ -839,6 +841,8 @@ function _updateEmailButtons(status) {
     if (replyBtn) replyBtn.style.display = '';
     if (forwardBtn) forwardBtn.style.display = '';
     if (expandBtn) expandBtn.style.display = '';
+    var optionsBtn2 = document.getElementById('emailOptionsBtn');
+    if (optionsBtn2) optionsBtn2.style.display = '';
     // Hide Send Later and Read Receipt for received
     var sendLaterBtn2 = document.getElementById('emailSendLaterBtn');
     if (sendLaterBtn2) sendLaterBtn2.style.display = 'none';
@@ -850,12 +854,16 @@ function _updateEmailButtons(status) {
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = '';
     if (expandBtn) expandBtn.style.display = '';
+    var optionsBtn3 = document.getElementById('emailOptionsBtn');
+    if (optionsBtn3) optionsBtn3.style.display = '';
   } else {
     if (sendBtn) sendBtn.style.display = 'none';
     if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = 'none';
+    var optionsBtn4 = document.getElementById('emailOptionsBtn');
+    if (optionsBtn4) optionsBtn4.style.display = 'none';
   }
 }
 
@@ -2052,16 +2060,26 @@ function _openEmailExpandModal() {
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSendLater()"><i class="fas fa-clock"></i> Send Later</button>' +
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>' +
-      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _closeEmailExpandModal(false); _emailDiscardDraft()"><i class="fas fa-trash"></i> Discard</button>';
+      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _closeEmailExpandModal(false); _emailDiscardDraft()"><i class="fas fa-trash"></i> Discard</button>' +
+      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _emailOptionDelete()"><i class="fas fa-trash-alt"></i> Delete</button>';
   } else if (status === 'received') {
+    var isArchived = !!(_emailCurrentChit && _emailCurrentChit.archived);
+    var isRead = !!(_emailCurrentChit && _emailCurrentChit.email_read);
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>' +
-      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailOptionArchive()">' + (isArchived ? '📦 Unarchive' : '📦 Archive') + '</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailOptionToggleRead()"><i class="fas fa-envelope' + (isRead ? '' : '-open') + '"></i> ' + (isRead ? 'Unread' : 'Read') + '</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailOptionAddToBundle()"><i class="fas fa-folder-plus"></i> Bundle</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailOptionSnooze()">😴 Snooze</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailOptionTag()"><i class="fas fa-tag"></i> Tag</button>' +
+      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _emailOptionDelete()"><i class="fas fa-trash-alt"></i> Delete</button>';
   } else if (status === 'sent') {
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>' +
-      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>' +
+      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _emailOptionDelete()"><i class="fas fa-trash-alt"></i> Delete</button>';
   }
 
   var disabledAttr = isReadOnly ? ' readonly disabled' : '';
@@ -2080,10 +2098,10 @@ function _openEmailExpandModal() {
   var titleEl = document.getElementById('title');
   var subjectVal = titleEl ? titleEl.value : '';
 
-  // Use the exact same modal structure as the Notes modal — full viewport with 1em margin
+  // Truly fullscreen — no margins, just a 1px border
   overlay.innerHTML =
-    '<div class="modal-contentFull" style="width:calc(100vw - 2em);max-width:calc(100vw - 2em);height:calc(100vh - 2em);display:flex;flex-direction:column;">' +
-      '<div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">' +
+    '<div class="modal-contentFull email-expand-fullscreen" style="width:100vw;max-width:100vw;height:100vh;display:flex;flex-direction:column;border-radius:0;border:1px solid var(--aged-brown-medium);box-shadow:none;">' +
+      '<div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;border-radius:0;">' +
         '<h2 style="margin:0;">✉️ Email</h2>' +
         '<div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">' +
           (isReadOnly ? '' :
@@ -2097,7 +2115,7 @@ function _openEmailExpandModal() {
           '<button type="button" class="zone-button" onclick="_closeEmailExpandModal(true)"><i class="fas fa-check"></i> Done</button>' +
         '</div>' +
       '</div>' +
-      '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">' +
+      '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;min-height:0;display:flex;flex-direction:column;">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
           '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escHtml(fromEl ? fromEl.textContent : '') + '</span>' +
             (status === 'received' && _emailCurrentChit && _emailCurrentChit.email_from ? '<button type="button" class="email-add-contact-btn" onclick="_emailAddSenderAsContact()" title="Add sender as contact"><i class="fas fa-plus-circle"></i></button>' : '') +
@@ -2141,7 +2159,7 @@ function _openEmailExpandModal() {
           '<button type="button" title="Code (Ctrl+E)" onclick="_emailFormatBtn(\'code\')">⟨⟩</button>' +
           '<button type="button" title="Horizontal Rule (Ctrl+Shift+-)" onclick="_emailFormatBtn(\'hr\')">―</button>' +
         '</div>') +
-        '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 280px);">' +
+        '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;min-height:0;">' +
           '<textarea id="emailExpandBody" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;' + (hasHtml ? 'display:none;' : '') + '"' +
             disabledAttr + '>' + _escHtml(bodyVal) + '</textarea>' +
           '<div id="emailExpandRendered" class="email-body-preview" style="display:none;flex:1;min-height:200px;overflow-y:auto;max-height:none;cursor:pointer;" ondblclick="_toggleEmailExpandRender()" title="Double-click to edit"></div>' +
@@ -2157,8 +2175,13 @@ function _openEmailExpandModal() {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopImmediatePropagation();
-      _closeEmailExpandModal(false);
       document.removeEventListener('keydown', _emailExpandEscHandler, true);
+      // Quick exit: skip the modal close and navigate away immediately
+      if (window._cwocSettings && window._cwocSettings.email_esc_quick_exit === '1') {
+        window.location.href = (typeof _getEditorReturnUrl === 'function') ? _getEditorReturnUrl() : '/';
+      } else {
+        _closeEmailExpandModal(false);
+      }
     }
   }
   document.addEventListener('keydown', _emailExpandEscHandler, true);
@@ -2296,25 +2319,39 @@ function _emailFormatBtn(action, textareaId, textareaEl) {
 
   switch (action) {
     case 'b':
-      if (!selected) return; // No selection — do nothing
-      replacement = '**' + selected + '**';
-      cursorEnd = start + replacement.length;
+      if (!selected) {
+        // No selection — insert delimiter pair at cursor, place cursor between
+        replacement = '****';
+        cursorStart = start + 2; cursorEnd = start + 2;
+      } else {
+        replacement = '**' + selected + '**';
+        cursorEnd = start + replacement.length;
+      }
       break;
     case 'i':
-      if (!selected) return; // No selection — do nothing
-      replacement = '_' + selected + '_';
-      cursorEnd = start + replacement.length;
+      if (!selected) {
+        replacement = '__';
+        cursorStart = start + 1; cursorEnd = start + 1;
+      } else {
+        replacement = '_' + selected + '_';
+        cursorEnd = start + replacement.length;
+      }
       break;
     case 'k':
-      if (!selected) return; // No selection — do nothing
-      var isUrl = /^https?:\/\//i.test(selected.trim());
-      if (isUrl) {
-        replacement = '[link text](' + selected.trim() + ')';
-        cursorStart = start + 1; cursorEnd = start + 1 + 'link text'.length;
+      if (!selected) {
+        // No selection — insert [text](url) template
+        replacement = '[text](url)';
+        cursorStart = start + 1; cursorEnd = start + 5;
       } else {
-        replacement = '[' + selected + '](url)';
-        var urlPos = start + 1 + selected.length + 2;
-        cursorStart = urlPos; cursorEnd = urlPos + 3;
+        var isUrl = /^https?:\/\//i.test(selected.trim());
+        if (isUrl) {
+          replacement = '[link text](' + selected.trim() + ')';
+          cursorStart = start + 1; cursorEnd = start + 1 + 'link text'.length;
+        } else {
+          replacement = '[' + selected + '](url)';
+          var urlPos = start + 1 + selected.length + 2;
+          cursorStart = urlPos; cursorEnd = urlPos + 3;
+        }
       }
       break;
     case 'h1':
@@ -2373,18 +2410,39 @@ function _emailFormatBtn(action, textareaId, textareaEl) {
       }
       break;
     case 'q':
-      if (!selected) return; // No selection — do nothing
+      if (!selected) {
+        // No selection — prefix current line with "> "
+        var lineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var lineEnd = text.indexOf('\n', start);
+        if (lineEnd === -1) lineEnd = text.length;
+        var lineText = text.substring(lineStart, lineEnd);
+        replacement = '> ' + lineText;
+        textarea.value = text.substring(0, lineStart) + replacement + text.substring(lineEnd);
+        textarea.selectionStart = lineStart + replacement.length;
+        textarea.selectionEnd = lineStart + replacement.length;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+        return;
+      }
       replacement = selected.split('\n').map(function(l) { return '> ' + l; }).join('\n');
       break;
     case 's':
-      if (!selected) return; // No selection — do nothing
-      replacement = '~~' + selected + '~~';
-      cursorEnd = start + replacement.length;
+      if (!selected) {
+        replacement = '~~~~';
+        cursorStart = start + 2; cursorEnd = start + 2;
+      } else {
+        replacement = '~~' + selected + '~~';
+        cursorEnd = start + replacement.length;
+      }
       break;
     case 'code':
-      if (!selected) return; // No selection — do nothing
-      replacement = '`' + selected + '`';
-      cursorEnd = start + replacement.length;
+      if (!selected) {
+        replacement = '``';
+        cursorStart = start + 1; cursorEnd = start + 1;
+      } else {
+        replacement = '`' + selected + '`';
+        cursorEnd = start + replacement.length;
+      }
       break;
     case 'hr':
       replacement = '\n---\n';
@@ -2866,6 +2924,13 @@ function _switchEmailView(mode) {
  * @param {HTMLIFrameElement} iframe
  */
 function _resizeEmailIframe(iframe) {
+  // In the fullscreen expand modal, let the iframe fill via flex (no fixed height)
+  if (iframe.closest('#emailExpandModal')) {
+    iframe.style.minHeight = '200px';
+    iframe.style.flex = '1';
+    return;
+  }
+  // Small zone: size to content with a cap
   try {
     var doc = iframe.contentDocument || iframe.contentWindow.document;
     if (doc && doc.body) {
@@ -2873,7 +2938,6 @@ function _resizeEmailIframe(iframe) {
       iframe.style.height = Math.max(200, Math.min(height, 800)) + 'px';
     }
   } catch (e) {
-    // Cross-origin restriction — use default height
     iframe.style.height = '400px';
   }
 }
@@ -3324,4 +3388,276 @@ function _emailConfirmUnsavedForNav() {
       resolve('discard');
     }
   });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Email Options Dropdown (zone header) & Expanded Modal Action Buttons
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Show the "Email Options" dropdown menu from the zone header button.
+ * Contains: Archive, Delete, Mark Read/Unread, Add to Bundle, Snooze, Tag.
+ * Delete shows for all statuses; others only for received.
+ */
+function _emailShowOptionsDropdown(e) {
+  e.stopPropagation();
+
+  // Remove any existing dropdown
+  var existing = document.getElementById('emailOptionsDropdown');
+  if (existing) { existing.remove(); return; }
+
+  var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+  var isReceived = (status === 'received');
+  var chitId = window.currentChitId;
+
+  var menu = document.createElement('div');
+  menu.id = 'emailOptionsDropdown';
+  menu.className = 'cwoc-chit-context-menu';
+  menu.style.cssText = 'position:absolute;top:100%;right:0;background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;z-index:1000;';
+
+  function _item(icon, label, onClick) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.9em;color:#1a1208;white-space:nowrap;';
+    item.innerHTML = '<span style="width:18px;text-align:center;">' + icon + '</span> ' + label;
+    item.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
+    item.addEventListener('mouseleave', function() { this.style.background = ''; });
+    item.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      menu.remove();
+      document.removeEventListener('click', _closeDropdown, true);
+      onClick();
+    });
+    menu.appendChild(item);
+  }
+
+  // Archive (received only)
+  if (isReceived) {
+    var isArchived = !!(_emailCurrentChit && _emailCurrentChit.archived);
+    _item(isArchived ? '📦' : '📦', isArchived ? 'Unarchive' : 'Archive', function() {
+      _emailOptionArchive();
+    });
+  }
+
+  // Mark Read/Unread (received only)
+  if (isReceived) {
+    var isRead = !!(_emailCurrentChit && _emailCurrentChit.email_read);
+    _item('<i class="fas fa-envelope' + (isRead ? '' : '-open') + '" style="color:#6b4e31;"></i>', isRead ? 'Mark Unread' : 'Mark Read', function() {
+      _emailOptionToggleRead();
+    });
+  }
+
+  // Add to Bundle (received only)
+  if (isReceived) {
+    _item('<i class="fas fa-folder-plus" style="color:#6b4e31;"></i>', 'Add to Bundle', function() {
+      _emailOptionAddToBundle();
+    });
+  }
+
+  // Snooze (received only)
+  if (isReceived) {
+    _item('😴', 'Snooze', function() {
+      _emailOptionSnooze();
+    });
+  }
+
+  // Tag (received only)
+  if (isReceived) {
+    _item('<i class="fas fa-tag" style="color:#6b4e31;"></i>', 'Tag', function() {
+      _emailOptionTag();
+    });
+  }
+
+  // Separator before delete
+  var sep = document.createElement('div');
+  sep.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+  menu.appendChild(sep);
+
+  // Delete (all statuses)
+  _item('<i class="fas fa-trash-alt" style="color:#a33;"></i>', 'Delete', function() {
+    _emailOptionDelete();
+  });
+
+  // Position relative to the button
+  var btn = document.getElementById('emailOptionsBtn');
+  if (btn) {
+    btn.style.position = 'relative';
+    btn.appendChild(menu);
+  } else {
+    document.body.appendChild(menu);
+  }
+
+  // Close on click outside
+  function _closeDropdown(ev) {
+    if (!menu.contains(ev.target) && ev.target !== btn) {
+      menu.remove();
+      document.removeEventListener('click', _closeDropdown, true);
+    }
+  }
+  setTimeout(function() {
+    document.addEventListener('click', _closeDropdown, true);
+  }, 0);
+}
+
+// ── Email Option Actions (shared between zone dropdown and expanded modal) ──
+
+/** Archive/Unarchive the current email chit */
+async function _emailOptionArchive() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+  var newArchived = !(_emailCurrentChit && _emailCurrentChit.archived);
+  try {
+    var resp = await fetch('/api/chits/' + chitId + '/fields', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: newArchived })
+    });
+    if (resp.ok) {
+      if (_emailCurrentChit) _emailCurrentChit.archived = newArchived;
+      cwocToast(newArchived ? 'Archived' : 'Unarchived', 'info');
+    }
+  } catch (err) {
+    console.error('[EmailOptions] Archive error:', err);
+    cwocToast('Failed to archive', 'error');
+  }
+}
+
+/** Toggle read/unread for the current email chit */
+async function _emailOptionToggleRead() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+  try {
+    var resp = await fetch('/api/email/' + encodeURIComponent(chitId) + '/read', { method: 'PATCH' });
+    if (resp.ok) {
+      var data = await resp.json();
+      if (_emailCurrentChit) _emailCurrentChit.email_read = data.email_read;
+      cwocToast(data.email_read ? 'Marked as read' : 'Marked as unread', 'info');
+    }
+  } catch (err) {
+    console.error('[EmailOptions] Toggle read error:', err);
+    cwocToast('Failed to update read status', 'error');
+  }
+}
+
+/** Show the Add to Bundle modal for the current email chit */
+function _emailOptionAddToBundle() {
+  if (!_emailCurrentChit) return;
+  if (typeof _showAddToBundleModal === 'function') {
+    _showAddToBundleModal(_emailCurrentChit);
+  } else {
+    cwocToast('Bundle feature not available', 'info');
+  }
+}
+
+/** Show snooze options for the current email chit */
+function _emailOptionSnooze() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+
+  // Build a small snooze picker modal
+  var options = [
+    { mins: 60, label: '1 hour' },
+    { mins: 1440, label: '1 day' },
+    { mins: 10080, label: '1 week' },
+    { mins: 20160, label: '2 weeks' },
+    { mins: 43200, label: '1 month' }
+  ];
+
+  var html = options.map(function(opt) {
+    return '<button type="button" class="standard-button" style="margin:4px;" onclick="_emailDoSnooze(' + opt.mins + ')">' + opt.label + '</button>';
+  }).join('');
+
+  // Use a simple overlay
+  var overlay = document.createElement('div');
+  overlay.id = 'emailSnoozeOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;justify-content:center;align-items:center;z-index:10000;';
+  overlay.innerHTML = '<div style="background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:20px;font-family:Lora,Georgia,serif;text-align:center;">' +
+    '<h3 style="margin:0 0 12px;">😴 Snooze Email</h3>' + html +
+    '<br><button type="button" class="standard-button" style="margin-top:12px;" onclick="document.getElementById(\'emailSnoozeOverlay\').remove()">Cancel</button>' +
+    '</div>';
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+/** Execute snooze for the given duration */
+async function _emailDoSnooze(mins) {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+  var overlay = document.getElementById('emailSnoozeOverlay');
+  if (overlay) overlay.remove();
+  try {
+    var resp = await fetch('/api/chits/' + chitId + '/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes: mins })
+    });
+    if (resp.ok) {
+      if (_emailCurrentChit) _emailCurrentChit.snoozed_until = new Date(Date.now() + mins * 60 * 1000).toISOString();
+      cwocToast('Snoozed for ' + (mins >= 1440 ? Math.round(mins / 1440) + ' day(s)' : mins / 60 + ' hour(s)'), 'info');
+    }
+  } catch (err) {
+    console.error('[EmailOptions] Snooze error:', err);
+    cwocToast('Failed to snooze', 'error');
+  }
+}
+
+/** Prompt for a tag and apply it to the current email chit */
+async function _emailOptionTag() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+  if (typeof cwocPromptModal !== 'function') return;
+  cwocPromptModal('Tag Email', 'Enter tag name...', async function(tagName) {
+    if (!tagName || !tagName.trim()) return;
+    tagName = tagName.trim();
+    try {
+      // Get current tags
+      var resp = await fetch('/api/chits/' + chitId);
+      if (!resp.ok) return;
+      var chit = await resp.json();
+      var tags = chit.tags || [];
+      if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+      if (!Array.isArray(tags)) tags = [];
+      // Add tag if not already present
+      var exists = tags.some(function(t) {
+        var name = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
+        return name.toLowerCase() === tagName.toLowerCase();
+      });
+      if (!exists) {
+        tags.push(tagName);
+        await fetch('/api/chits/' + chitId + '/fields', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: JSON.stringify(tags) })
+        });
+        cwocToast('Tagged: ' + tagName, 'info');
+      } else {
+        cwocToast('Tag already exists', 'info');
+      }
+    } catch (err) {
+      console.error('[EmailOptions] Tag error:', err);
+      cwocToast('Failed to tag', 'error');
+    }
+  });
+}
+
+/** Delete (soft-delete) the current email chit */
+async function _emailOptionDelete() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+  var confirmed = await cwocConfirm('Delete this email?', { title: 'Delete Email', confirmLabel: '🗑️ Delete', danger: true });
+  if (!confirmed) return;
+  try {
+    var resp = await fetch('/api/chits/' + chitId, { method: 'DELETE' });
+    if (resp.ok) {
+      cwocToast('Email deleted', 'info');
+      // Close expand modal if open
+      var modal = document.getElementById('emailExpandModal');
+      if (modal) modal.remove();
+      // Navigate back
+      window.location.href = (typeof _getEditorReturnUrl === 'function') ? _getEditorReturnUrl() : '/';
+    }
+  } catch (err) {
+    console.error('[EmailOptions] Delete error:', err);
+    cwocToast('Failed to delete', 'error');
+  }
 }

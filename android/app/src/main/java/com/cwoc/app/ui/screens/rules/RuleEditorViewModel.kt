@@ -108,6 +108,27 @@ class RuleEditorViewModel @Inject constructor(
     fun setIsHabit(value: Boolean) { _isHabit.value = value }
     fun setConditionTree(tree: ConditionNode.Group) { _conditionTree.value = tree }
 
+    /**
+     * Pre-fill the condition tree with a single leaf condition.
+     * Used when navigating from "Create a Rule" context menu on a chit.
+     */
+    fun prefillCondition(field: String, operator: String, value: String) {
+        val decodedValue = try {
+            java.net.URLDecoder.decode(value, "UTF-8")
+        } catch (e: Exception) {
+            value
+        }
+        val leaf = ConditionNode.Leaf(
+            field = field,
+            operator = operator.ifBlank { "equals" },
+            value = decodedValue
+        )
+        _conditionTree.value = ConditionNode.Group(
+            operator = "AND",
+            children = mutableListOf(leaf)
+        )
+    }
+
     fun saveRule(onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isSaving.value = true

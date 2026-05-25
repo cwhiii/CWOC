@@ -108,7 +108,9 @@ fun ChitDto.toEntity(syncedAt: String, gson: Gson): ChitEntity {
         // Checklist/thread fields
         checklistAutosave = checklist_autosave?.toString(),
         nestThreadId = nest_thread_id,
-        autoCompleteChecklist = auto_complete_checklist
+        autoCompleteChecklist = auto_complete_checklist,
+        // Server-computed email thread grouping ID
+        threadId = thread_id
     )
 }
 

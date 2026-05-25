@@ -207,7 +207,10 @@ CwocAutoSave.prototype.notifySaveComplete = function () {
   if (this._retryAfterSave) {
     this._retryAfterSave = false;
     this.scheduleAutoSave();
-  } else if (this._state === 'saving') {
+  } else {
+    // Cancel any pending auto-save timer (e.g., scheduled during initial load)
+    // and reset state to saved
+    this.cancelPending();
     this._state = 'saved';
     this._updateIndicator();
   }

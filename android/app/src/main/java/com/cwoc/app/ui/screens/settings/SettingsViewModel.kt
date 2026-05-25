@@ -41,7 +41,7 @@ data class SettingsFormState(
     val calendarSnapInterval: String = "15",
     val defaultTimezone: String = "America/New_York",
     val unitSystem: String = "imperial",
-    val defaultShareContacts: String = "0",
+    val defaultShareContacts: String = "1",
 
     // --- Clocks Section ---
     val timeFormatDisplay: String = "12hour",
@@ -1651,7 +1651,7 @@ class SettingsViewModel @Inject constructor(
             calendarSnapInterval = entity.calendarSnap ?: "15",
             defaultTimezone = entity.defaultTimezone ?: "America/New_York",
             unitSystem = entity.unitSystem ?: "imperial",
-            defaultShareContacts = entity.defaultShareContacts ?: "0",
+            defaultShareContacts = entity.defaultShareContacts ?: "1",
 
             // --- General Tab: Clocks Section ---
             timeFormatDisplay = entity.timeFormat ?: "12hour",

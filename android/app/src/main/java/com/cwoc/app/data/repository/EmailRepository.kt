@@ -98,4 +98,23 @@ interface EmailRepository {
      * @return Result indicating success or failure.
      */
     suspend fun addRuleToBundle(bundleId: String, matchType: String, matchValue: String): Result<Unit>
+
+    /**
+     * Unified drop-email: move an email to a bundle with optional rule creation.
+     * Uses POST /api/bundles/{bundleId}/drop-email.
+     *
+     * @param bundleId Target bundle ID.
+     * @param chitId The email chit ID.
+     * @param mode "move_once", "always_sender", "always_subject", or "always_recipient".
+     * @param matchValue The value to match (sender email, subject, or recipient).
+     * @param applyRetroactively Whether to reclassify existing emails.
+     * @return Result with the response data on success.
+     */
+    suspend fun dropEmailToBundle(
+        bundleId: String,
+        chitId: String,
+        mode: String,
+        matchValue: String,
+        applyRetroactively: Boolean
+    ): Result<com.cwoc.app.data.remote.dto.DropEmailResponse>
 }

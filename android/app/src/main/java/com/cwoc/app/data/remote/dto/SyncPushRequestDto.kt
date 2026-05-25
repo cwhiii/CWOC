@@ -95,7 +95,10 @@ data class ChitPushDto(
     // Checklist/thread fields
     val checklist_autosave: String?,
     val nest_thread_id: String?,
-    val auto_complete_checklist: Boolean?
+    val auto_complete_checklist: Boolean?,
+
+    // Server-computed email thread grouping ID
+    val thread_id: String?
 )
 
 /**

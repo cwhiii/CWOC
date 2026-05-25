@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.remote.ImportResultDto
-import com.cwoc.app.data.remote.SwitchableUserDto
 import com.cwoc.app.data.repository.ContactRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,10 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -31,7 +28,6 @@ data class PeopleUiState(
     val isGrouped: Boolean = true,
     val searchQuery: String = "",
     val favorites: List<ContactEntity> = emptyList(),
-    val users: List<SwitchableUserDto> = emptyList(),
     val allContacts: List<ContactEntity> = emptyList(),
     val vaultContacts: List<ContactEntity> = emptyList(),
     val flatList: List<ContactEntity> = emptyList(),
@@ -55,7 +51,6 @@ class ContactListViewModel @Inject constructor(
     companion object {
         private const val PREF_KEY_GROUPED = "contacts_grouped_mode"
         private const val PREF_KEY_COLLAPSED = "contacts_collapsed_sections"
-        private const val PREF_KEY_USER_FAV_PREFIX = "user_fav_"
     }
 
     private val _uiState = MutableStateFlow(PeopleUiState(
@@ -80,7 +75,6 @@ class ContactListViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        loadSwitchableUsers()
         observeContacts()
     }
 
@@ -111,17 +105,6 @@ class ContactListViewModel @Inject constructor(
         viewModelScope.launch {
             contactRepository.toggleFavorite(contactId)
         }
-    }
-
-    fun isUserFavorite(userId: String): Boolean =
-        prefs.getBoolean("$PREF_KEY_USER_FAV_PREFIX$userId", false)
-
-    fun toggleUserFavorite(userId: String) {
-        val key = "$PREF_KEY_USER_FAV_PREFIX$userId"
-        val current = prefs.getBoolean(key, false)
-        prefs.edit().putBoolean(key, !current).apply()
-        // Refresh grouped data
-        updateGroupedState(contacts.value)
     }
 
     fun importFile(uri: Uri) {
@@ -197,30 +180,17 @@ class ContactListViewModel @Inject constructor(
 
     private fun updateGroupedState(contactList: List<ContactEntity>) {
         val currentUserId = prefs.getString("user_id", "") ?: ""
-        val users = _uiState.value.users
 
         val favorites = contactList.filter { it.favorite }
         val vault = contactList.filter { it.sharedToVault && it.ownerId != currentUserId }
         val regular = contactList.filter { !it.favorite && !(it.sharedToVault && it.ownerId != currentUserId) }
 
-        // Separate favorited users
-        val favUsers = users.filter { isUserFavorite(it.id) }
-        val nonFavUsers = users.filter { !isUserFavorite(it.id) }
-
         _uiState.value = _uiState.value.copy(
             favorites = favorites,
             allContacts = regular,
             vaultContacts = vault,
-            flatList = contactList,
-            users = users
+            flatList = contactList
         )
-    }
-
-    private fun loadSwitchableUsers() {
-        viewModelScope.launch {
-            val users = contactRepository.getSwitchableUsers()
-            _uiState.value = _uiState.value.copy(users = users)
-        }
     }
 
     private fun loadCollapsedSections(): Set<String> {

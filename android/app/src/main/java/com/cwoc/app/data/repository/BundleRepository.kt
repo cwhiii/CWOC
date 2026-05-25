@@ -70,20 +70,54 @@ class BundleRepositoryImpl @Inject constructor(
     override suspend fun fetchBundles(): Result<List<BundleDto>> {
         return try {
             android.util.Log.d("CWOC_BUNDLES", "fetchBundles: calling GET /api/bundles")
-            val response = apiService.get().getBundles()
+            val api = apiService.get()
+            val response = api.getBundles()
             android.util.Log.d("CWOC_BUNDLES", "fetchBundles: response code=${response.code()}")
             if (response.isSuccessful) {
                 val body = response.body()
                 val list = body?.bundles ?: emptyList()
                 android.util.Log.d("CWOC_BUNDLES", "fetchBundles: success, ${list.size} bundles")
                 _bundles.value = list
+                // Report to client log for remote debugging
+                try {
+                    api.postClientLog(
+                        com.cwoc.app.data.remote.dto.ClientLogRequest(
+                            message = "[BUNDLES] fetchBundles: ${list.size} bundles loaded",
+                            level = "info",
+                            source = "BundleRepository",
+                            timestamp = java.time.Instant.now().toString()
+                        )
+                    )
+                } catch (_: Exception) {}
                 Result.success(list)
             } else {
                 android.util.Log.e("CWOC_BUNDLES", "fetchBundles: failed ${response.code()} ${response.message()}")
+                // Report failure to client log
+                try {
+                    api.postClientLog(
+                        com.cwoc.app.data.remote.dto.ClientLogRequest(
+                            message = "[BUNDLES] fetchBundles FAILED: HTTP ${response.code()} ${response.message()}",
+                            level = "error",
+                            source = "BundleRepository",
+                            timestamp = java.time.Instant.now().toString()
+                        )
+                    )
+                } catch (_: Exception) {}
                 Result.failure(Exception("Failed to fetch bundles: ${response.code()} ${response.message()}"))
             }
         } catch (e: Exception) {
             android.util.Log.e("CWOC_BUNDLES", "fetchBundles: exception ${e.javaClass.simpleName}: ${e.message}")
+            // Report exception to client log — use a fresh api reference in case the first .get() failed
+            try {
+                apiService.get().postClientLog(
+                    com.cwoc.app.data.remote.dto.ClientLogRequest(
+                        message = "[BUNDLES] fetchBundles EXCEPTION: ${e.javaClass.simpleName}: ${e.message}",
+                        level = "error",
+                        source = "BundleRepository",
+                        timestamp = java.time.Instant.now().toString()
+                    )
+                )
+            } catch (_: Exception) {}
             Result.failure(e)
         }
     }

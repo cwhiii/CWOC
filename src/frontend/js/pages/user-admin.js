@@ -106,7 +106,7 @@ function _renderUserTable() {
     var tdImg = document.createElement('td');
     tdImg.setAttribute('data-label', '');
     var imgEl = document.createElement('img');
-    imgEl.src = user.profile_image_url || '/static/images/default-avatar.svg';
+    imgEl.src = user.image_url || '/static/images/default-avatar.svg';
     imgEl.alt = '';
     imgEl.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid rgba(139,90,43,0.3);';
     imgEl.onerror = function() { this.src = '/static/images/default-avatar.svg'; };

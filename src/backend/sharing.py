@@ -258,7 +258,7 @@ def get_shared_chits_for_user(user_id):
         if owner_ids:
             placeholders = ",".join("?" for _ in owner_ids)
             cursor.execute(
-                f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders})",
+                f"SELECT id, display_name, username FROM contacts WHERE id IN ({placeholders})",
                 list(owner_ids),
             )
             owner_name_map = {}
@@ -281,7 +281,7 @@ def get_shared_chits_for_user(user_id):
         if assigned_ids:
             placeholders = ",".join("?" for _ in assigned_ids)
             cursor.execute(
-                f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders})",
+                f"SELECT id, display_name, username FROM contacts WHERE id IN ({placeholders})",
                 list(assigned_ids),
             )
             name_map = {}

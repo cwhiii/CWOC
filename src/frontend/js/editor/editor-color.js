@@ -57,9 +57,11 @@ function _setColor(hex, name = "Custom") {
 
   // Update mobile nav bar color to match chit color
   if (typeof _applyMobileNavBarColor === 'function') _applyMobileNavBarColor();
+  // Update overview panel contrast colors
+  if (typeof _applyMobileOverviewContrast === 'function') _applyMobileOverviewContrast();
 
-  // Enable save button because color changed
-  setSaveButtonUnsaved();
+  // Enable save button because color changed (but not during initial load)
+  if (!window._editorLoadingChit) setSaveButtonUnsaved();
 }
 
 function _updateColorPreview() {

@@ -6,6 +6,8 @@ import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.data.sync.SyncStateManager
 import com.cwoc.app.domain.sort.ChitReorderHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,8 +36,12 @@ class ProjectsViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
     private val chitDao: ChitDao,
     private val chitReorderHelper: ChitReorderHelper,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val syncStateManager: SyncStateManager
 ) : ViewModel() {
+
+    /** Aggregated sync state for the UI indicator. */
+    val syncState: StateFlow<SyncState> = syncStateManager.syncState
 
     private val _projects = MutableStateFlow<List<ProjectWithChildren>>(emptyList())
     val projects: StateFlow<List<ProjectWithChildren>> = _projects.asStateFlow()

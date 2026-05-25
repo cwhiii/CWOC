@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
     compute_system_tags, _build_export_envelope, ensure_tags_in_settings,
-    get_next_sync_version, get_db_connection,
+    get_next_sync_version, get_db_connection, chit_cache,
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
@@ -204,7 +204,7 @@ def _enrich_assigned_to_display_names(cursor, chits):
     # Fetch display names for all assigned user IDs
     placeholders = ",".join("?" for _ in assigned_ids)
     cursor.execute(
-        f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders})",
+        f"SELECT id, display_name, username FROM contacts WHERE username IS NOT NULL AND id IN ({placeholders})",
         list(assigned_ids),
     )
     name_map = {}
@@ -339,15 +339,40 @@ def _cascade_auto_complete_revert(cursor, conn, reverted_chit_id, _visited=None)
 
 @router.get("/api/chits")
 def get_all_chits(request: Request):
-    conn = None
     try:
         user_id = request.state.user_id
+
+        # Check cache first — serve pre-serialized JSON directly (skips FastAPI's JSON encoding)
+        cached_json = chit_cache.get_json(user_id)
+        if cached_json is not None:
+            return Response(content=cached_json, media_type="application/json")
+
+        chits = _build_chit_list_for_user(user_id)
+        # Pre-serialize to JSON bytes and cache
+        import json as _json
+        json_bytes = _json.dumps(chits, default=str).encode("utf-8")
+        chit_cache.set_json(user_id, json_bytes)
+        return Response(content=json_bytes, media_type="application/json")
+    except Exception as e:
+        logger.error(f"Error fetching chits: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch chits: {str(e)}")
+
+
+def _build_chit_list_for_user(user_id: str) -> list:
+    """Build the full chit list for a user (used by endpoint and cache warm-up).
+    
+    Excludes heavy fields not needed for dashboard card rendering:
+    - email_body_text, email_body_html (full email content — only needed in editor)
+    """
+    conn = None
+    try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         chits = []
+        columns = [col[0] for col in cursor.description]
         for row in cursor.fetchall():
-            chit = dict(zip([col[0] for col in cursor.description], row))
+            chit = dict(zip(columns, row))
             chit["tags"] = deserialize_json_field(chit["tags"])
             chit["checklist"] = deserialize_json_field(chit["checklist"])
             chit["people"] = deserialize_json_field(chit["people"])
@@ -372,11 +397,15 @@ def get_all_chits(request: Request):
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
-            # Email fields
+            # Email fields — strip heavy body content (not needed for card rendering)
+            # Keep a short preview of email_body_text for the email card preview line
             chit["email_to"] = deserialize_json_field(chit.get("email_to"))
             chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
             chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
+            body_text = chit.get("email_body_text") or ""
+            chit["email_body_text"] = body_text[:200] if body_text else None
+            chit.pop("email_body_html", None)
             chit["snoozed_until"] = chit.get("snoozed_until")
             chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
             chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
@@ -388,9 +417,6 @@ def get_all_chits(request: Request):
         _enrich_assigned_to_display_names(cursor, chits)
 
         return chits
-    except Exception as e:
-        logger.error(f"Error fetching chits: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch chits: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -407,7 +433,7 @@ def create_chit(chit: Chit, request: Request):
         cursor = conn.cursor()
 
         # Look up the authenticated user's display_name and username for the owner record
-        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT display_name, username FROM contacts WHERE id = ?", (user_id,))
         user_row = cursor.fetchone()
         owner_display_name = user_row[0] if user_row else ""
         owner_username = user_row[1] if user_row else request.state.username
@@ -548,6 +574,7 @@ def create_chit(chit: Chit, request: Request):
             logger.error(f"Assignment notification failed for new chit (best-effort): {str(e)}")
 
         conn.commit()
+        chit_cache.invalidate(user_id)
         chit_data = {
             **chit.dict(), "id": chit_id, "tags": chit_tags,
             "created_datetime": current_time, "modified_datetime": current_time,
@@ -918,7 +945,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 new_shares = chit.shares if isinstance(chit.shares, list) else []
                 old_assigned = old_chit_dict.get("assigned_to")
                 # Look up owner display name for the notification
-                cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (existing_dict_check.get("owner_id") or user_id,))
+                cursor.execute("SELECT display_name, username FROM contacts WHERE id = ?", (existing_dict_check.get("owner_id") or user_id,))
                 _owner_row = cursor.fetchone()
                 _owner_display = _owner_row[0] or _owner_row[1] if _owner_row else ""
                 _create_share_notifications(
@@ -935,7 +962,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 old_assigned = old_chit_dict.get("assigned_to")
                 if chit.assigned_to and chit.assigned_to != old_assigned and chit.assigned_to != user_id:
                     # Look up assigner display name
-                    cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+                    cursor.execute("SELECT display_name, username FROM contacts WHERE id = ?", (user_id,))
                     _assigner_row = cursor.fetchone()
                     _assigner_name = (_assigner_row[0] or _assigner_row[1]) if _assigner_row else "Someone"
                     _send_assignment_notifications(
@@ -945,7 +972,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 logger.error(f"Assignment notification failed for chit update (best-effort): {str(e)}")
         else:
             # Create new chit — look up owner info
-            cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+            cursor.execute("SELECT display_name, username FROM contacts WHERE id = ?", (user_id,))
             user_row = cursor.fetchone()
             owner_display_name = user_row[0] if user_row else ""
             owner_username = user_row[1] if user_row else request.state.username
@@ -1081,6 +1108,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             except Exception as e:
                 logger.error(f"Assignment notification failed for new chit via PUT (best-effort): {str(e)}")
         conn.commit()
+        chit_cache.invalidate(user_id)
 
         # ── Prerequisite cascade: when a chit is marked Complete, unblock dependents ──
         try:
@@ -1184,6 +1212,7 @@ def delete_chit(chit_id: str, request: Request):
         except Exception as e:
             logger.error(f"Audit logging failed for chit deletion (best-effort): {str(e)}")
         conn.commit()
+        chit_cache.invalidate(user_id)
         return {"message": "Chit deleted successfully"}
     except HTTPException:
         raise
@@ -1263,6 +1292,7 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
         sql = f"UPDATE chits SET {', '.join(set_clauses)} WHERE id = ?"
         cursor.execute(sql, values)
         conn.commit()
+        chit_cache.invalidate(user_id)
 
         # Prerequisite cascade when status is patched to Complete
         if fields_to_update.get("status") == "Complete":
@@ -1452,6 +1482,7 @@ def patch_chit_checklist(chit_id: str, body: dict, request: Request):
                 )
 
         conn.commit()
+        chit_cache.invalidate(user_id)
         return {"message": "Checklist saved"}
     except HTTPException:
         raise
@@ -1494,6 +1525,7 @@ def patch_recurrence_exceptions(chit_id: str, body: dict, request: Request):
             (serialize_json_field(exceptions), datetime.utcnow().isoformat(), chit_id)
         )
         conn.commit()
+        chit_cache.invalidate(user_id)
         return {"message": "Exception updated", "exceptions": exceptions}
     except HTTPException:
         raise
@@ -1590,6 +1622,7 @@ def update_rsvp_status(chit_id: str, body: dict, request: Request):
             logger.error(f"Audit logging failed for RSVP update (best-effort): {str(e)}")
 
         conn.commit()
+        chit_cache.invalidate(user_id)
         return {"message": "RSVP status updated", "rsvp_status": rsvp_status}
     except HTTPException:
         raise
@@ -1640,6 +1673,7 @@ def snooze_chit(chit_id: str, request: Request, body: dict = {}):
             (snoozed_until, current_time, chit_id),
         )
         conn.commit()
+        chit_cache.invalidate(user_id)
 
         return {"message": "Chit snoozed" if snoozed_until else "Chit unsnoozed", "snoozed_until": snoozed_until}
     except HTTPException:
@@ -1703,6 +1737,7 @@ def dismiss_conflict(chit_id: str, request: Request):
             (sync_version, chit_id),
         )
         conn.commit()
+        chit_cache.invalidate(user_id)
 
         return {"message": "Conflict dismissed", "sync_version": sync_version}
     except HTTPException:

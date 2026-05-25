@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.data.sync.SyncStateManager
 import com.cwoc.app.domain.recurrence.RecurrenceEngine
 import com.cwoc.app.domain.recurrence.RecurrenceException
 import com.cwoc.app.domain.recurrence.RecurrenceRule
@@ -85,8 +87,15 @@ class CalendarViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
     private val settingsRepository: SettingsRepository,
     private val sharedPreferences: SharedPreferences,
-    private val apiService: com.cwoc.app.data.remote.CwocApiService
+    private val apiService: com.cwoc.app.data.remote.CwocApiService,
+    private val syncStateManager: SyncStateManager,
+    private val syncEngine: com.cwoc.app.data.sync.SyncEngine
 ) : ViewModel() {
+
+    private val vmCreatedAt = System.nanoTime()
+
+    /** Aggregated sync state for the UI indicator. */
+    val syncState: StateFlow<SyncState> = syncStateManager.syncState
 
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
@@ -196,6 +205,9 @@ class CalendarViewModel @Inject constructor(
     private fun loadEvents() {
         loadEventsJob?.cancel()
         loadEventsJob = viewModelScope.launch {
+            val loadStart = System.nanoTime()
+            val sinceVmCreated = (loadStart - vmCreatedAt) / 1_000_000
+            android.util.Log.d("PERF", "[CalendarVM] loadEvents START (${sinceVmCreated}ms since VM created)")
             val state = _uiState.value
             val (dayStart, dayEnd) = getDateRange(state.selectedDate, state.viewMode, state.xDayCount)
 
@@ -310,6 +322,9 @@ class CalendarViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(isLoading = false, events = mergedEvents.distinctBy { e -> e.id })
                 }
+                val elapsed = (System.nanoTime() - loadStart) / 1_000_000
+                android.util.Log.d("PERF", "[CalendarVM] *** loadEvents COMPLETE — ${elapsed}ms, ${mergedEvents.size} events ***")
+                viewModelScope.launch { syncEngine.reportLog("[PERF] CalendarVM: loadEvents took ${elapsed}ms, ${mergedEvents.size} events", "info") }
             }
         }
     }

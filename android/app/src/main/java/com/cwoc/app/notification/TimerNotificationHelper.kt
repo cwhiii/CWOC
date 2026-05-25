@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -56,7 +57,8 @@ class TimerNotificationHelper @Inject constructor(
         )
 
         val notification = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_ID_TIMERS)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_cwoc)
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.drawable.cwoc_logo))
             .setContentTitle("Timer Complete")
             .setContentText("$displayName has finished")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

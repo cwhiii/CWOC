@@ -1317,8 +1317,36 @@ function _buildNotifCard(notif, isUnread) {
       dismissBtn.onclick = function(e) { e.stopPropagation(); _dismissNotifInView(notif.id); };
       btnWrap.appendChild(dismissBtn);
     }
+  } else if (notif.notification_type === 'email') {
+    // Email notifications: just Dismiss (no Accept/Decline)
+    if (isUnread) {
+      var emailDismissBtn = document.createElement('button');
+      emailDismissBtn.className = 'action-button';
+      emailDismissBtn.style.cssText = 'font-size:0.85em;padding:5px 12px;margin:0;width:auto;';
+      emailDismissBtn.textContent = 'Dismiss';
+      emailDismissBtn.onclick = function(e) { e.stopPropagation(); _dismissNotifInView(notif.id); };
+      btnWrap.appendChild(emailDismissBtn);
+    }
+  } else if (notif.notification_type === 'calendar_invite') {
+    // Calendar invite: Accept / Decline pill
+    var pill = document.createElement('div');
+    pill.className = 'cwoc-pill-toggle';
+    pill.style.cssText = 'font-size:0.8em;flex-shrink:0;';
+    var acceptOpt = document.createElement('span');
+    acceptOpt.dataset.val = 'accepted';
+    acceptOpt.textContent = '✓ Accept';
+    acceptOpt.className = notif.status === 'accepted' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+    acceptOpt.onclick = function(e) { e.stopPropagation(); _respondNotifInView(notif.id, 'accepted'); };
+    pill.appendChild(acceptOpt);
+    var declineOpt = document.createElement('span');
+    declineOpt.dataset.val = 'declined';
+    declineOpt.textContent = '✕ Decline';
+    declineOpt.className = notif.status === 'declined' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+    declineOpt.onclick = function(e) { e.stopPropagation(); _respondNotifInView(notif.id, 'declined'); };
+    pill.appendChild(declineOpt);
+    btnWrap.appendChild(pill);
   } else {
-    // Sharing notifications: Accept / Decline pill (always visible)
+    // Sharing notifications (invited/assigned): Accept / Decline pill
     var pill = document.createElement('div');
     pill.className = 'cwoc-pill-toggle';
     pill.style.cssText = 'font-size:0.8em;flex-shrink:0;';

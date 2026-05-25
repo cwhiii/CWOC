@@ -244,7 +244,7 @@ def export_audit_log_csv(
         # Build a cache of user_id -> display_name for actor display
         actor_display_names = {}
         try:
-            cursor.execute("SELECT id, display_name FROM users")
+            cursor.execute("SELECT id, display_name FROM contacts WHERE username IS NOT NULL")
             for urow in cursor.fetchall():
                 actor_display_names[urow["id"]] = urow["display_name"]
         except Exception:
@@ -354,7 +354,7 @@ def get_audit_log(
         # Build a cache of user_id -> display_name for actor display
         actor_display_names = {}
         try:
-            cursor.execute("SELECT id, display_name FROM users")
+            cursor.execute("SELECT id, display_name FROM contacts WHERE username IS NOT NULL")
             for urow in cursor.fetchall():
                 actor_display_names[urow["id"]] = urow["display_name"]
         except Exception:

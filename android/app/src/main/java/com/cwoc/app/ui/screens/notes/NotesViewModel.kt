@@ -9,6 +9,7 @@ import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
+import com.cwoc.app.data.sync.SyncEngine
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.data.sync.SyncStateManager
@@ -36,8 +37,11 @@ class NotesViewModel @Inject constructor(
     private val connectivityMonitor: ConnectivityMonitor,
     private val syncStateManager: SyncStateManager,
     private val settingsRepository: SettingsRepository,
+    private val syncEngine: SyncEngine,
     private val prefs: SharedPreferences
 ) : ViewModel() {
+
+    private val vmCreatedAt = System.nanoTime()
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState: StateFlow<NotesUiState> = _uiState.asStateFlow()
@@ -65,11 +69,19 @@ class NotesViewModel @Inject constructor(
     val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
 
     init {
+        android.util.Log.d("PERF", "[NotesVM] init START")
         viewModelScope.launch {
+            val flowSubStart = System.nanoTime()
+            android.util.Log.d("PERF", "[NotesVM] subscribing to getNoteChits() Flow")
             chitRepository.getNoteChits().collect { notes ->
+                val emitTime = System.nanoTime()
+                val waitForEmit = (emitTime - flowSubStart) / 1_000_000
+                val sinceVmCreated = (emitTime - vmCreatedAt) / 1_000_000
+                android.util.Log.d("PERF", "[NotesVM] *** Flow EMITTED ${notes.size} notes — ${waitForEmit}ms since subscribe, ${sinceVmCreated}ms since VM created ***")
                 _uiState.update {
                     it.copy(isLoading = false, notes = notes)
                 }
+                launch { syncEngine.reportLog("[PERF] NotesVM: Flow emitted ${notes.size} notes after ${waitForEmit}ms wait (${sinceVmCreated}ms since VM created)", "info") }
             }
         }
         viewModelScope.launch {

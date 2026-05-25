@@ -11,6 +11,7 @@ import com.cwoc.app.data.repository.ContactRepository
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
+import com.cwoc.app.data.sync.SyncEngine
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.data.sync.SyncStateManager
@@ -48,8 +49,11 @@ class TasksViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val apiService: CwocApiService,
     private val contactRepository: ContactRepository,
+    private val syncEngine: SyncEngine,
     private val prefs: android.content.SharedPreferences
 ) : ViewModel() {
+
+    private val vmCreatedAt = System.nanoTime()
 
     private val _uiState = MutableStateFlow(TasksUiState())
     val uiState: StateFlow<TasksUiState> = _uiState.asStateFlow()
@@ -123,8 +127,19 @@ class TasksViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
+        val initStart = System.nanoTime()
+        val sinceCreation = (initStart - vmCreatedAt) / 1_000_000
+        android.util.Log.d("PERF", "[TasksVM] init START (${sinceCreation}ms after constructor)")
         viewModelScope.launch {
+            val flowSubStart = System.nanoTime()
+            android.util.Log.d("PERF", "[TasksVM] subscribing to getTaskChits() Flow")
             chitRepository.getTaskChits().collect { tasks ->
+                val emitTime = System.nanoTime()
+                val waitForEmit = (emitTime - flowSubStart) / 1_000_000
+                val sinceVmCreated = (emitTime - vmCreatedAt) / 1_000_000
+                android.util.Log.d("PERF", "[TasksVM] *** Flow EMITTED ${tasks.size} tasks — ${waitForEmit}ms since subscribe, ${sinceVmCreated}ms since VM created ***")
+                
+                val collectStart = System.currentTimeMillis()
                 // Compute sub-chit IDs (chits that are children of project masters)
                 val subChitIds = mutableSetOf<String>()
                 tasks.filter { it.isProjectMaster }.forEach { project ->
@@ -138,6 +153,9 @@ class TasksViewModel @Inject constructor(
                         tasks = tasks
                     )
                 }
+                val elapsed = System.currentTimeMillis() - collectStart
+                android.util.Log.d("PERF", "[TasksVM] Flow processing took ${elapsed}ms, isLoading now FALSE")
+                launch { syncEngine.reportLog("[PERF] TasksVM: Flow emitted ${tasks.size} tasks after ${waitForEmit}ms wait (${sinceVmCreated}ms since VM created), processing=${elapsed}ms", "info") }
             }
         }
         viewModelScope.launch {

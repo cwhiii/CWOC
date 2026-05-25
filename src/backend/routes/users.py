@@ -3,8 +3,12 @@
 Provides endpoints for listing, creating, deactivating, reactivating,
 and resetting passwords for user accounts. All endpoints require the
 requesting user to be an admin (is_admin=True); non-admins receive 403.
+
+After the unified-user-contacts migration, all user data lives in the
+`contacts` table. A contact with `username IS NOT NULL` is a login user.
 """
 
+import json
 import logging
 import sqlite3
 import uuid
@@ -29,16 +33,33 @@ users_router = APIRouter(prefix="/api/users")
 
 
 def _user_row_to_response(row: sqlite3.Row) -> dict:
-    """Convert a user database row to a UserResponse-compatible dict."""
+    """Convert a contacts database row (user-contact) to a UserResponse-compatible dict.
+
+    Extracts the System email from the emails JSON array for backward compatibility.
+    NEVER returns password_hash or private_pgp_key_encrypted.
+    """
+    # Extract email from the emails JSON array (look for "System" label)
+    email = None
+    emails_raw = row["emails"] if "emails" in row.keys() else None
+    if emails_raw:
+        try:
+            emails_list = json.loads(emails_raw) if isinstance(emails_raw, str) else emails_raw
+            for entry in emails_list:
+                if isinstance(entry, dict) and entry.get("label") == "System":
+                    email = entry.get("value")
+                    break
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return {
         "id": row["id"],
         "username": row["username"],
         "display_name": row["display_name"],
-        "email": row["email"],
+        "email": email,
         "is_admin": bool(row["is_admin"]),
         "is_active": bool(row["is_active"]),
         "created_datetime": row["created_datetime"],
-        "profile_image_url": row["profile_image_url"] if "profile_image_url" in row.keys() else None,
+        "image_url": row["image_url"] if "image_url" in row.keys() else None,
     }
 
 
@@ -46,7 +67,7 @@ def _user_row_to_response(row: sqlite3.Row) -> dict:
 
 @users_router.get("")
 def list_users(request: Request):
-    """List all users (admin only). Returns a list of UserResponse objects."""
+    """List all users (admin only). Returns user-contacts from the contacts table."""
     require_admin(request)
 
     conn = None
@@ -54,8 +75,9 @@ def list_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime, profile_image_url "
-            "FROM users ORDER BY created_datetime ASC"
+            "SELECT id, username, display_name, emails, is_admin, is_active, "
+            "created_datetime, image_url "
+            "FROM contacts WHERE username IS NOT NULL ORDER BY created_datetime ASC"
         ).fetchall()
 
         return [_user_row_to_response(row) for row in rows]
@@ -73,7 +95,8 @@ def list_users(request: Request):
 
 @users_router.post("")
 def create_user(body: UserCreate, request: Request):
-    """Create a new user (admin only). Requires username, display_name, password."""
+    """Create a new user (admin only). Inserts a contact record with auth fields,
+    shared_to_vault=1, and email stored in the emails JSON array with label 'System'."""
     require_admin(request)
 
     conn = None
@@ -81,9 +104,9 @@ def create_user(body: UserCreate, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Check username uniqueness (case-insensitive)
+        # Check username uniqueness (case-insensitive) against contacts table
         existing = conn.execute(
-            "SELECT id FROM users WHERE LOWER(username) = LOWER(?)",
+            "SELECT id FROM contacts WHERE LOWER(username) = LOWER(?)",
             (body.username,),
         ).fetchone()
 
@@ -94,18 +117,26 @@ def create_user(body: UserCreate, request: Request):
         now = utcnow_iso()
         password_hash = hash_password(body.password)
 
+        # Build emails JSON array with System label
+        emails_json = []
+        if body.email:
+            emails_json.append({"label": "System", "value": body.email})
+
         conn.execute(
-            "INSERT INTO users (id, username, display_name, email, password_hash, is_admin, is_active, created_datetime, modified_datetime) "
-            "VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+            "INSERT INTO contacts (id, username, display_name, emails, password_hash, "
+            "is_admin, is_active, shared_to_vault, created_datetime, modified_datetime, "
+            "sync_version, owner_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, 1, ?)",
             (
                 user_id,
                 body.username,
                 body.display_name,
-                body.email,
+                json.dumps(emails_json),
                 password_hash,
                 1 if body.is_admin else 0,
                 now,
                 now,
+                user_id,
             ),
         )
         conn.commit()
@@ -144,9 +175,9 @@ def deactivate_user(user_id: str, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Verify target user exists
+        # Verify target user-contact exists
         target = conn.execute(
-            "SELECT id, is_admin, is_active FROM users WHERE id = ?",
+            "SELECT id, is_admin, is_active FROM contacts WHERE id = ? AND username IS NOT NULL",
             (user_id,),
         ).fetchone()
 
@@ -156,7 +187,7 @@ def deactivate_user(user_id: str, request: Request):
         # Prevent deactivation of the last active admin
         if target["is_admin"]:
             active_admin_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM users WHERE is_admin = 1 AND is_active = 1"
+                "SELECT COUNT(*) as cnt FROM contacts WHERE is_admin = 1 AND is_active = 1 AND username IS NOT NULL"
             ).fetchone()["cnt"]
 
             if active_admin_count <= 1:
@@ -165,10 +196,11 @@ def deactivate_user(user_id: str, request: Request):
                     detail="Cannot deactivate the last admin account",
                 )
 
-        # Deactivate the user
+        # Deactivate the user-contact and bump sync_version
         now = utcnow_iso()
         conn.execute(
-            "UPDATE users SET is_active = 0, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET is_active = 0, modified_datetime = ?, sync_version = sync_version + 1 "
+            "WHERE id = ? AND username IS NOT NULL",
             (now, user_id),
         )
 
@@ -195,7 +227,7 @@ def deactivate_user(user_id: str, request: Request):
 
 @users_router.put("/{user_id}/reactivate")
 def reactivate_user(user_id: str, request: Request):
-    """Reactivate a user (admin only). Sets is_active=True."""
+    """Reactivate a user (admin only). Sets is_active=True on the contact record."""
     require_admin(request)
 
     conn = None
@@ -203,9 +235,9 @@ def reactivate_user(user_id: str, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Verify target user exists
+        # Verify target user-contact exists
         target = conn.execute(
-            "SELECT id FROM users WHERE id = ?",
+            "SELECT id FROM contacts WHERE id = ? AND username IS NOT NULL",
             (user_id,),
         ).fetchone()
 
@@ -214,7 +246,8 @@ def reactivate_user(user_id: str, request: Request):
 
         now = utcnow_iso()
         conn.execute(
-            "UPDATE users SET is_active = 1, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET is_active = 1, modified_datetime = ?, sync_version = sync_version + 1 "
+            "WHERE id = ? AND username IS NOT NULL",
             (now, user_id),
         )
         conn.commit()
@@ -235,7 +268,7 @@ def reactivate_user(user_id: str, request: Request):
 
 @users_router.put("/{user_id}/reset-password")
 def reset_password(user_id: str, body: PasswordReset, request: Request):
-    """Reset a user's password (admin only). Hashes the new password and updates the record."""
+    """Reset a user's password (admin only). Hashes the new password and updates the contact record."""
     require_admin(request)
 
     conn = None
@@ -243,9 +276,9 @@ def reset_password(user_id: str, body: PasswordReset, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Verify target user exists
+        # Verify target user-contact exists
         target = conn.execute(
-            "SELECT id FROM users WHERE id = ?",
+            "SELECT id FROM contacts WHERE id = ? AND username IS NOT NULL",
             (user_id,),
         ).fetchone()
 
@@ -255,7 +288,8 @@ def reset_password(user_id: str, body: PasswordReset, request: Request):
         now = utcnow_iso()
         password_hash = hash_password(body.new_password)
         conn.execute(
-            "UPDATE users SET password_hash = ?, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET password_hash = ?, modified_datetime = ?, sync_version = sync_version + 1 "
+            "WHERE id = ? AND username IS NOT NULL",
             (password_hash, now, user_id),
         )
 
@@ -290,7 +324,8 @@ class UserUpdate(BaseModel):
 
 @users_router.put("/{user_id}")
 def update_user(user_id: str, body: UserUpdate, request: Request):
-    """Update a user's profile fields (admin only). Can change username, display_name, email, is_admin."""
+    """Update a user's profile fields (admin only). Can change username, display_name, email, is_admin.
+    Updates the contact record directly. Bumps sync_version for mobile sync."""
     require_admin(request)
 
     conn = None
@@ -299,7 +334,8 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
         conn.row_factory = sqlite3.Row
 
         target = conn.execute(
-            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime FROM users WHERE id = ?",
+            "SELECT id, username, display_name, emails, is_admin, is_active, created_datetime, image_url "
+            "FROM contacts WHERE id = ? AND username IS NOT NULL",
             (user_id,),
         ).fetchone()
 
@@ -311,9 +347,9 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
         params = []
 
         if body.username is not None and body.username != target["username"]:
-            # Check uniqueness (case-insensitive)
+            # Check uniqueness (case-insensitive) against contacts table
             existing = conn.execute(
-                "SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?",
+                "SELECT id FROM contacts WHERE LOWER(username) = LOWER(?) AND id != ?",
                 (body.username, user_id),
             ).fetchone()
             if existing:
@@ -326,14 +362,25 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
             params.append(body.display_name)
 
         if body.email is not None:
-            updates.append("email = ?")
-            params.append(body.email)
+            # Update the System email in the emails JSON array
+            emails_raw = target["emails"]
+            try:
+                emails_list = json.loads(emails_raw) if emails_raw else []
+            except (json.JSONDecodeError, TypeError):
+                emails_list = []
+
+            # Replace or add the System email entry
+            filtered = [e for e in emails_list if not (isinstance(e, dict) and e.get("label") == "System")]
+            if body.email:
+                filtered.insert(0, {"label": "System", "value": body.email})
+            updates.append("emails = ?")
+            params.append(json.dumps(filtered))
 
         if body.is_admin is not None:
             # Prevent removing admin from the last admin
             if not body.is_admin and target["is_admin"]:
                 active_admin_count = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM users WHERE is_admin = 1 AND is_active = 1"
+                    "SELECT COUNT(*) as cnt FROM contacts WHERE is_admin = 1 AND is_active = 1 AND username IS NOT NULL"
                 ).fetchone()["cnt"]
                 if active_admin_count <= 1:
                     raise HTTPException(
@@ -349,17 +396,19 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
         now = utcnow_iso()
         updates.append("modified_datetime = ?")
         params.append(now)
+        updates.append("sync_version = sync_version + 1")
         params.append(user_id)
 
         conn.execute(
-            f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+            f"UPDATE contacts SET {', '.join(updates)} WHERE id = ? AND username IS NOT NULL",
             params,
         )
         conn.commit()
 
-        # Re-fetch updated user
+        # Re-fetch updated user-contact
         updated = conn.execute(
-            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime FROM users WHERE id = ?",
+            "SELECT id, username, display_name, emails, is_admin, is_active, created_datetime, image_url "
+            "FROM contacts WHERE id = ? AND username IS NOT NULL",
             (user_id,),
         ).fetchone()
 

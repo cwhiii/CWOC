@@ -6,8 +6,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.Unarchive
@@ -49,6 +51,8 @@ fun ChitActionMenu(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onCreateChildChit: (() -> Unit)? = null,
+    onCreateRule: (() -> Unit)? = null,
+    onPrintAttachment: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     DropdownMenu(
@@ -135,6 +139,40 @@ fun ChitActionMenu(
                 )
             }
         )
+
+        // Create a Rule
+        if (onCreateRule != null) {
+            DropdownMenuItem(
+                text = { Text("Create a Rule") },
+                onClick = {
+                    onCreateRule()
+                    onDismiss()
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AutoFixHigh,
+                        contentDescription = "Create a Rule"
+                    )
+                }
+            )
+        }
+
+        // Print Attachment (only if chit has attachments)
+        if (onPrintAttachment != null && !chit.attachments.isNullOrBlank()) {
+            DropdownMenuItem(
+                text = { Text("Print Attachment") },
+                onClick = {
+                    onPrintAttachment()
+                    onDismiss()
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Print,
+                        contentDescription = "Print Attachment"
+                    )
+                }
+            )
+        }
 
         // Delete
         DropdownMenuItem(

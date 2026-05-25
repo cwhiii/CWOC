@@ -10,6 +10,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.remote.dto.ClientLogRequest
+import com.cwoc.app.notification.EmailNotificationHelper
 import com.cwoc.app.notification.NotificationScheduler
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -29,13 +30,15 @@ class SyncEngine @Inject constructor(
     private val syncMetadataDao: SyncMetadataDao,
     private val edgeCaseHandler: EdgeCaseHandler,
     private val notificationScheduler: NotificationScheduler,
+    private val emailNotificationHelper: EmailNotificationHelper,
     private val gson: Gson,
     private val prefs: SharedPreferences,
     private val apiService: CwocApiService
 ) {
 
     suspend fun performSync(since: Int = 0): SyncResult {
-        Log.d(TAG, "Starting sync with since=$since")
+        val syncStart = System.nanoTime()
+        Log.d(TAG, "[PERF] Starting sync with since=$since")
 
         // Ensure sync metadata row exists
         if (syncMetadataDao.getMetadata() == null) {
@@ -54,11 +57,14 @@ class SyncEngine @Inject constructor(
         syncMetadataDao.updateSyncStatus("syncing")
 
         try {
-            Log.d(TAG, "Calling GET /api/sync/changes?since=$since&include=chits,contacts,settings")
+            val httpStart = System.nanoTime()
+            Log.d(TAG, "[PERF] Calling GET /api/sync/changes?since=$since")
             val response = apiService.getSyncChanges(
                 since = since,
                 include = "chits,contacts,settings"
             )
+            val httpElapsed = (System.nanoTime() - httpStart) / 1_000_000
+            Log.d(TAG, "[PERF] HTTP response received in ${httpElapsed}ms, code=${response.code()}")
 
             if (!response.isSuccessful) {
                 Log.e(TAG, "Sync failed: HTTP ${response.code()} ${response.message()}")
@@ -103,7 +109,34 @@ class SyncEngine @Inject constructor(
                         entities.firstOrNull()?.let { first ->
                             Log.d(TAG, "First chit: id=${first.id}, title=${first.title}, status=${first.status}, deleted=${first.deleted}, archived=${first.archived}")
                         }
+
+                        // Detect new email chits BEFORE upserting (so we can tell which are new)
+                        // Only show notifications on incremental syncs (since > 0), not initial full sync
+                        val newEmailChits = mutableListOf<com.cwoc.app.data.local.entity.ChitEntity>()
+                        if (since > 0) {
+                            entities.filter { !it.emailMessageId.isNullOrBlank() }.forEach { emailEntity ->
+                                val existing = chitDao.getById(emailEntity.id)
+                                if (existing == null) {
+                                    newEmailChits.add(emailEntity)
+                                }
+                            }
+                        }
+
+                        val upsertStart = System.currentTimeMillis()
                         chitDao.upsertAll(entities)
+                        val upsertElapsed = System.currentTimeMillis() - upsertStart
+                        Log.d(TAG, "[PERF] upsertAll ${entities.size} chits took ${upsertElapsed}ms")
+
+                        // Fire notifications for new email chits
+                        if (newEmailChits.isNotEmpty()) {
+                            Log.d(TAG, "Detected ${newEmailChits.size} new email chits — showing notifications")
+                            newEmailChits.forEach { emailEntity ->
+                                emailNotificationHelper.showEmailNotification(emailEntity)
+                            }
+                            if (newEmailChits.size > 1) {
+                                emailNotificationHelper.showEmailSummaryNotification(newEmailChits.size)
+                            }
+                        }
 
                         // Schedule/reschedule alarms for chits with alerts
                         entities.forEach { entity ->
@@ -191,8 +224,9 @@ class SyncEngine @Inject constructor(
             syncMetadataDao.updateSyncStatus("idle")
 
             val finalDbCount = chitDao.getCount()
-            Log.d(TAG, "Sync complete. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
-            reportLog("Sync success: version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
+            val syncElapsed = (System.nanoTime() - syncStart) / 1_000_000
+            Log.d(TAG, "[PERF] Sync complete in ${syncElapsed}ms. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
+            reportLog("[PERF] Sync complete: ${syncElapsed}ms total, version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
 
             // ── Fetch user profile via the SAME working apiService that just synced ──
             // This ensures profile_image_url is always populated using the proven sync pipeline.

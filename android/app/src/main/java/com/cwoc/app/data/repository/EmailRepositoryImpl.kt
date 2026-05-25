@@ -199,4 +199,30 @@ class EmailRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun dropEmailToBundle(
+        bundleId: String,
+        chitId: String,
+        mode: String,
+        matchValue: String,
+        applyRetroactively: Boolean
+    ): Result<com.cwoc.app.data.remote.dto.DropEmailResponse> {
+        return try {
+            val request = com.cwoc.app.data.remote.dto.DropEmailRequest(
+                chitId = chitId,
+                mode = mode,
+                matchValue = matchValue,
+                applyRetroactively = applyRetroactively
+            )
+            val response = apiService.dropEmailToBundle(bundleId, request)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: com.cwoc.app.data.remote.dto.DropEmailResponse())
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("Drop email to bundle failed (${response.code()}): $errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

@@ -87,5 +87,8 @@ data class ChitDto(
     // Checklist/thread fields
     val checklist_autosave: Boolean? = null,
     val nest_thread_id: String? = null,
-    val auto_complete_checklist: Boolean? = null
+    val auto_complete_checklist: Boolean? = null,
+
+    // Server-computed email thread grouping ID
+    val thread_id: String? = null
 )

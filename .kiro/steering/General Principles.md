@@ -27,7 +27,7 @@ When the user says "mobile," "on mobile," or "the mobile version," they ALWAYS m
 **When investigating any bug or unexpected behavior, get logs IMMEDIATELY.** Do not spend time guessing, theorizing, or tracing through code speculatively. Logs tell you what's actually happening. Guessing wastes time and context.
 
 **Debugging priority order:**
-1. **Get logs.** Ask the user to run `bash fetch-logs.sh` (or hit the log endpoints directly) so you can see what actually happened. If the sandbox can't reach the server, ask the user to fetch them.
+1. **Get logs.** Tell the user to run: `bash /Users/cwhiii/Personal/Misc/Development/CWOC/fetch-logs.sh` — always provide the FULL ABSOLUTE PATH so they can copy-paste it directly. Never say just "bash fetch-logs.sh" without the full path.
 2. **Read the logs.** Look at what the server/client actually did — errors, counts, flow.
 3. **Only then** trace through code to understand WHY the logs show what they show.
 
@@ -136,6 +136,7 @@ If you haven't updated the readme and help files, then you haven't finished a ta
 - Never assume which part is working. Log everything so the exact failure point is immediately visible.
 - Use `console.log` with a clear prefix tag (e.g. `[FeatureName]`) so logs are filterable.
 - **Never remove logging until explicitly told to.** When the user asks to add logging, it stays in the code until the user says to remove it. Do not clean it up, strip it out, or "simplify" it away in subsequent changes.
+- **EVERY error MUST log full details.** Any `catch` block, any non-ok HTTP response, any unexpected state — ALWAYS `console.error` with: the operation that failed, all relevant IDs/values, the error message, the response status and body (if HTTP), and the stack trace. Never swallow errors silently. Never show a generic toast without also logging the specifics. The user must be able to open the browser console and see exactly what went wrong.
 
 ## Frontend Architecture
 - All JS is loaded via `<script>` tags in HTML — no ES modules, no imports. Load order matters: `shared.js` before page-specific scripts.

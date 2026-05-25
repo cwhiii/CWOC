@@ -107,7 +107,7 @@ function _openSnoozeModal() {
   html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
   html += '  <label style="color:#6b4e31;font-size:0.85em;white-space:nowrap;">Custom:</label>';
   html += '  <input type="date" id="snooze-custom-date" style="flex:1;min-width:120px;padding:4px 6px;border:1px solid #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;" />';
-  html += '  <input type="time" id="snooze-custom-time" style="width:90px;padding:4px 6px;border:1px solid #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;" />';
+  html += '  <input type="text" id="snooze-custom-time" readonly style="width:90px;padding:4px 6px;border:1px solid #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;cursor:pointer;background:#fdf5e6;" />';
   html += '  <button class="snooze-preset-btn" onclick="_doSnoozeCustom()">Set</button>';
   html += '</div>';
 
@@ -126,6 +126,11 @@ function _openSnoozeModal() {
   var timeInput = document.getElementById('snooze-custom-time');
   if (dateInput) dateInput.value = tomorrow.toISOString().split('T')[0];
   if (timeInput) timeInput.value = '09:00';
+
+  // Wire up the time input to open the drum roller picker
+  if (timeInput && typeof cwocTimePicker !== 'undefined') {
+    timeInput.addEventListener('click', function() { cwocTimePicker.open(timeInput); });
+  }
 
   // Close on overlay click
   overlay.addEventListener('click', function(e) {

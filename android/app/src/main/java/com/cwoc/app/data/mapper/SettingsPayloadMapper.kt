@@ -364,7 +364,7 @@ object SettingsPayloadMapper {
             calendarSnapInterval = payload.getString("calendar_snap") ?: "15",
             defaultTimezone = payload.getString("default_timezone") ?: "America/New_York",
             timezoneOverride = payload.getString("timezone_override") ?: "",
-            defaultShareContacts = payload.getString("default_share_contacts") ?: "0",
+            defaultShareContacts = payload.getString("default_share_contacts") ?: "1",
             activeClocks = payload.toJsonString("active_clocks") ?: "[\"12 Hour\"]",
             landingView = payload.getString("default_view") ?: "Calendar",
             viewOrder = payload.toJsonString("view_order")

@@ -81,7 +81,7 @@ def get_settings(user_id: str, request: Request):
         settings["map_default_lon"] = settings.get("map_default_lon")
         settings["map_default_zoom"] = settings.get("map_default_zoom")
         settings["map_auto_zoom"] = settings.get("map_auto_zoom", "1")
-        settings["default_share_contacts"] = settings.get("default_share_contacts", "0")
+        settings["default_share_contacts"] = settings.get("default_share_contacts", "1")
         settings["checklist_autosave"] = settings.get("checklist_autosave", "1")
         settings["view_order"] = deserialize_json_field(settings.get("view_order"))
         settings["recent_tags"] = deserialize_json_field(settings.get("recent_tags"))
@@ -234,6 +234,7 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         # Email privacy (already in DB from earlier migration)
         "email_block_tracking_pixels", "email_external_content",
         "email_read_receipts", "email_undo_send_delay", "email_group_by",
+        "email_esc_quick_exit",
     }
 
     conn = None

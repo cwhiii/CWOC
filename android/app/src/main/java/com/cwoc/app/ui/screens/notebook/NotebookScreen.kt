@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
@@ -55,6 +56,7 @@ import com.cwoc.app.ui.components.ChitActionMenu
 import com.cwoc.app.ui.components.ChitListScaffold
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.HealthIndicatorBadges
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.components.PeopleChipsRow
@@ -159,6 +161,9 @@ fun NotebookScreen(
                                 }
                             }
                         }
+                    }
+                    uiState.chits.isEmpty() && syncState == SyncState.SYNCING -> {
+                        LoadingChitsState()
                     }
                     uiState.chits.isEmpty() -> {
                         Box(

@@ -10,7 +10,6 @@
 
     let _allContacts = [];   // Full contact list from API
     let _filteredContacts = []; // After client-side search filter
-    let _allUsers = [];      // All app users from switchable-users API
     let _grouped = true;     // Whether to show sections grouped or flat
 
     const listEl = document.getElementById('people-list');
@@ -66,23 +65,9 @@
     // ── Init ────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
         _loadGroupState();
-        _loadUsers();
         loadContacts();
         searchEl.addEventListener('input', _onSearchInput);
     });
-
-    // ── Load users from API ─────────────────────────────────────────────
-    async function _loadUsers() {
-        try {
-            const resp = await fetch('/api/auth/switchable-users');
-            if (!resp.ok) throw new Error('Failed to fetch users');
-            _allUsers = await resp.json();
-            _renderList();
-        } catch (err) {
-            console.error('Error loading users:', err);
-            _allUsers = [];
-        }
-    }
 
     // ── Load contacts from API ──────────────────────────────────────────
     async function loadContacts(query) {
@@ -130,6 +115,7 @@
                     c.nickname || '',
                     c.organization || '',
                     c.social_context || '',
+                    c.username || '',
                     (c.emails || []).map(e => (e.value || '') + ' ' + (e.label || '')).join(' '),
                     (c.phones || []).map(p => (p.value || '') + ' ' + (p.label || '')).join(' '),
                     (c.addresses || []).map(a => (a.value || '')).join(' '),
@@ -149,15 +135,7 @@
         listEl.innerHTML = '';
         const q = (searchEl.value || '').trim();
 
-        // Filter users by search query too
-        const filteredUsers = q
-            ? _allUsers.filter(u => {
-                const fields = [u.display_name || '', u.username || ''];
-                return fields.some(f => f.toLowerCase().includes(q.toLowerCase()));
-            })
-            : _allUsers.slice();
-
-        if (_filteredContacts.length === 0 && filteredUsers.length === 0) {
+        if (_filteredContacts.length === 0) {
             listEl.innerHTML = q
                 ? '<div class="people-empty">No contacts match your search.</div>'
                 : '<div class="people-empty">No contacts yet. Click "New Contact" to add one.</div>';
@@ -175,10 +153,6 @@
         const vaultContacts = _filteredContacts.filter(c => c.is_vault_contact);
         const others = _filteredContacts.filter(c => !c.favorite && !c.is_vault_contact);
 
-        // Also check for favorited users (stored in localStorage)
-        const favUsers = filteredUsers.filter(u => localStorage.getItem('cwoc_user_fav_' + u.id) === '1');
-        const nonFavUsers = filteredUsers.filter(u => localStorage.getItem('cwoc_user_fav_' + u.id) !== '1');
-
         const sortFn = (a, b) => (a.display_name || '').localeCompare(b.display_name || '', undefined, { sensitivity: 'base' });
         favorites.sort(sortFn);
         others.sort(sortFn);
@@ -186,22 +160,10 @@
 
         // ── Ungrouped mode: flat alphabetical list ──────────────────────
         if (!_grouped) {
-            // Merge users (as pseudo-entries) and all contacts into one list
-            const combined = [];
-            filteredUsers.forEach(function(u) {
-                combined.push({ _type: 'user', _sortName: (u.display_name || u.username || '').toLowerCase(), data: u });
-            });
-            _filteredContacts.forEach(function(c) {
-                combined.push({ _type: 'contact', _sortName: (c.display_name || c.given_name || '').toLowerCase(), data: c });
-            });
-            combined.sort(function(a, b) { return a._sortName.localeCompare(b._sortName, undefined, { sensitivity: 'base' }); });
-
-            combined.forEach(function(item) {
-                if (item._type === 'user') {
-                    listEl.appendChild(_createUserRow(item.data, q));
-                } else {
-                    listEl.appendChild(_createRow(item.data, q));
-                }
+            const combined = _filteredContacts.slice();
+            combined.sort(sortFn);
+            combined.forEach(function(c) {
+                listEl.appendChild(_createRow(c, q));
             });
             return;
         }
@@ -209,20 +171,9 @@
         // ── Grouped mode (default): separate sections ───────────────────
 
         // ── Favorites section ───────────────────────────────────────────
-        if (favorites.length > 0 || favUsers.length > 0) {
-            const allFavItems = [];
-            favorites.forEach(c => allFavItems.push({ _type: 'contact', data: c }));
-            favUsers.forEach(u => allFavItems.push({ _type: 'user', data: u }));
-            _renderSection('favorites', '★ Favorites', allFavItems, q, function(item) {
-                if (item._type === 'user') return _createUserRow(item.data, q);
-                return _createRow(item.data, q);
-            });
-        }
-
-        // ── Users section ───────────────────────────────────────────────
-        if (nonFavUsers.length > 0) {
-            _renderSection('users', '<i class="fas fa-users"></i> Users', nonFavUsers, q, function(u) {
-                return _createUserRow(u, q);
+        if (favorites.length > 0) {
+            _renderSection('favorites', '★ Favorites', favorites, q, function(c) {
+                return _createRow(c, q);
             });
         }
 
@@ -264,79 +215,6 @@
             content.style.maxHeight = 'none';
         }
         listEl.appendChild(content);
-    }
-
-    // ── Create a user row ───────────────────────────────────────────────
-    function _createUserRow(user, query) {
-        const row = document.createElement('div');
-        row.className = 'people-row people-user-row';
-        row.dataset.userId = user.id;
-
-        // Star toggle for users (persisted in localStorage)
-        const star = document.createElement('span');
-        star.className = 'star-toggle';
-        const favKey = 'cwoc_user_fav_' + user.id;
-        const isFav = localStorage.getItem(favKey) === '1';
-        star.textContent = isFav ? '★' : '☆';
-        star.title = isFav ? 'Remove from favorites' : 'Add to favorites';
-        star.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const nowFav = localStorage.getItem(favKey) === '1';
-            if (nowFav) {
-                localStorage.removeItem(favKey);
-                star.textContent = '☆';
-                star.title = 'Add to favorites';
-            } else {
-                localStorage.setItem(favKey, '1');
-                star.textContent = '★';
-                star.title = 'Remove from favorites';
-            }
-            _renderList();
-        });
-        row.appendChild(star);
-
-        // Thumbnail
-        if (user.profile_image_url) {
-            const thumb = document.createElement('img');
-            thumb.className = 'contact-thumb';
-            thumb.src = user.profile_image_url;
-            thumb.alt = '';
-            row.appendChild(thumb);
-        } else {
-            const placeholder = document.createElement('span');
-            placeholder.className = 'contact-thumb-placeholder';
-            placeholder.innerHTML = '<i class="fas fa-users"></i>';
-            row.appendChild(placeholder);
-        }
-
-        // Name + username column
-        const infoCol = document.createElement('div');
-        infoCol.className = 'contact-info';
-
-        const name = document.createElement('span');
-        name.className = 'contact-name' + (isFav ? ' favorite' : '');
-        name.innerHTML = _highlightMatch(user.display_name || user.username, query);
-        infoCol.appendChild(name);
-
-        const detailSpan = document.createElement('span');
-        detailSpan.className = 'contact-detail';
-        detailSpan.innerHTML = _highlightMatch('@' + user.username, query);
-        infoCol.appendChild(detailSpan);
-
-        row.appendChild(infoCol);
-
-        // Click row → navigate to user profile (Cmd/Ctrl+click opens in new tab)
-        row.style.cursor = 'pointer';
-        row.addEventListener('click', (e) => {
-            var url = '/frontend/html/contact-editor.html?mode=profile&user_id=' + encodeURIComponent(user.id);
-            if (e.metaKey || e.ctrlKey) {
-                window.open(url, '_blank');
-            } else {
-                window.location.href = url;
-            }
-        });
-
-        return row;
     }
 
     // ── Create a single contact row ─────────────────────────────────────
@@ -384,6 +262,15 @@
         name.className = 'contact-name' + (contact.favorite ? ' favorite' : '');
         name.innerHTML = _highlightMatch(contact.display_name || contact.given_name || '(unnamed)', query);
         infoCol.appendChild(name);
+
+        // User badge — shown on contacts that are login users
+        if (contact.is_user) {
+            const userBadge = document.createElement('span');
+            userBadge.className = 'user-badge';
+            userBadge.innerHTML = '<i class="fa-solid fa-user-shield"></i>';
+            userBadge.title = 'App user';
+            name.appendChild(userBadge);
+        }
 
         // Vault icon — shown on any contact shared to the vault
         if (contact.shared_to_vault || contact.is_vault_contact) {

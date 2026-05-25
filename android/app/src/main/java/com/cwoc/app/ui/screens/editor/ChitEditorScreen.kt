@@ -176,6 +176,7 @@ fun ChitEditorScreen(
     val contactColors by viewModel.contactColors.collectAsState()
     val contactImages by viewModel.contactImages.collectAsState()
     val peopleSearchResults by viewModel.peopleSearchResults.collectAsState()
+    val availableChitsForPicker by viewModel.availableChitsForPicker.collectAsState()
 
     var isPinned by remember { mutableStateOf(false) }
     var isArchived by remember { mutableStateOf(false) }
@@ -269,6 +270,16 @@ fun ChitEditorScreen(
     // Update visible zones when form state changes (email/habit visibility)
     LaunchedEffect(formState.emailStatus, formState.habit) {
         zoneState.updateVisibleZones(formState)
+    }
+
+    // ─── Auto-Navigate to Email Zone for Existing Email Chits ─────────────
+    // When opened from a notification with sourceTab=Email, jump directly to the email section
+    LaunchedEffect(sourceTab, formState.isNew, formState.emailStatus) {
+        if (sourceTab == "Email" && !formState.isNew && formState.emailStatus != null) {
+            // Small delay to ensure updateVisibleZones has run first
+            delay(100)
+            zoneState.navigateToZoneId("emailSection")
+        }
     }
 
     // ─── Auto-Focus for New Chits (Notes / Checklists) ────────────────────
@@ -504,8 +515,6 @@ fun ChitEditorScreen(
                     // above the keyboard using imePadding().
                     if (zoneState.currentZone.id == "notesSection") {
                         val chitLinkSuggestions by viewModel.chitLinkSuggestions.collectAsState()
-                        val availableChitsForPicker by viewModel.availableChitsForPicker.collectAsState()
-                        LaunchedEffect(Unit) { viewModel.loadAvailableChitsForPicker() }
                         NotesZone(
                             note = formState.note,
                             onNoteChange = { viewModel.updateForm(formState.copy(note = it)) },
@@ -706,6 +715,8 @@ fun ChitEditorScreen(
                                                 onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
                                                 autoCompleteEnabled = formState.autoCompleteChecklist == true,
                                                 currentStatus = formState.status,
+                                                availableChits = availableChitsForPicker,
+                                                onSendItemsToChit = { targetId, items -> viewModel.sendChecklistItemsToChit(targetId, items) },
                                                 externalFocusRequester = checklistFocusRequester
                                             )
                                         }
@@ -748,6 +759,8 @@ fun ChitEditorScreen(
                                                 onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
                                                 autoCompleteEnabled = formState.autoCompleteChecklist == true,
                                                 currentStatus = formState.status,
+                                                availableChits = availableChitsForPicker,
+                                                onSendItemsToChit = { targetId, items -> viewModel.sendChecklistItemsToChit(targetId, items) },
                                                 externalFocusRequester = checklistFocusRequester
                                             )
                                         }
@@ -773,7 +786,8 @@ fun ChitEditorScreen(
                                     val overviewRows = remember(formState) { buildOverviewRows(formState, sourceTab) }
                                     com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
                                         rows = overviewRows,
-                                        onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) }
+                                        onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) },
+                                        chitColor = chitNavColor
                                     )
                                 }
                             }
@@ -893,6 +907,8 @@ fun ChitEditorScreen(
                                     onNoteChange = { viewModel.updateForm(formState.copy(note = it ?: "")) },
                                     autoCompleteEnabled = formState.autoCompleteChecklist == true,
                                     currentStatus = formState.status,
+                                    availableChits = availableChitsForPicker,
+                                    onSendItemsToChit = { targetId, items -> viewModel.sendChecklistItemsToChit(targetId, items) },
                                     externalFocusRequester = checklistFocusRequester
                                 )
                             }

@@ -512,12 +512,21 @@ data class OverviewRow(
 /**
  * Overview zone — read-only summary of all populated fields.
  * Tapping any row navigates to the corresponding zone.
+ * When [chitColor] is provided, uses contrast-safe text colors.
  */
 @Composable
 fun OverviewZoneContent(
     rows: List<OverviewRow>,
-    onRowClick: (String) -> Unit
+    onRowClick: (String) -> Unit,
+    chitColor: Color? = null
 ) {
+    // Compute contrast-safe colors based on chit background
+    val textColor = if (chitColor != null) contrastColor(chitColor) else Color(0xFF3E2B1A)
+    val titleTextColor = if (chitColor != null) contrastColor(chitColor) else Color(0xFF2B1E0F)
+    val arrowColor = if (chitColor != null) textColor.copy(alpha = 0.5f) else Color(0xFFA0845A)
+    val dividerColor = if (chitColor != null) textColor.copy(alpha = 0.2f) else Color(0xFF8B5A2B)
+    val hintColor = if (chitColor != null) textColor.copy(alpha = 0.5f) else Color(0xFF8B7355)
+
     if (rows.isEmpty()) {
         Box(
             modifier = Modifier
@@ -527,7 +536,7 @@ fun OverviewZoneContent(
         ) {
             Text(
                 text = "New chit — swipe or tap a zone to start editing",
-                color = Color(0xFF8B7355),
+                color = hintColor,
                 fontStyle = FontStyle.Italic,
                 fontSize = 14.sp
             )
@@ -551,13 +560,13 @@ fun OverviewZoneContent(
                     modifier = Modifier.weight(1f),
                     fontSize = if (row.isTitle) 16.sp else 14.sp,
                     fontWeight = if (row.isTitle) FontWeight.Bold else FontWeight.Normal,
-                    color = if (row.isTitle) Color(0xFF2B1E0F) else Color(0xFF3E2B1A),
+                    color = if (row.isTitle) titleTextColor else textColor,
                     maxLines = if (row.isMultiLine) 5 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text("›", fontSize = 18.sp, color = Color(0xFFA0845A), fontWeight = FontWeight.Bold)
+                Text("›", fontSize = 18.sp, color = arrowColor, fontWeight = FontWeight.Bold)
             }
-            HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
+            HorizontalDivider(color = dividerColor, thickness = 1.dp)
         }
     }
 }

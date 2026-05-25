@@ -1738,6 +1738,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `initAudioUnlock()` | Initialize the mobile audio unlock system (resume AudioContext on first gesture) |
 | `cwocPlayAudio(audio, opts)` | Play an audio file reliably with retry on blocked playback |
 | `_showAddToBundleModal(chit)` | Show the "Add to Bundle" modal for an email chit; allows user to choose between subject or sender matching, then select a bundle |
+| `_showCreateRuleFromChitModal(chit)` | Show "Create a Rule" modal for a chit — displays populated fields with rule-eligible conditions, then navigates to rule editor with pre-populated condition |
+| `_createRuleFromChitEscHandler(e)` | ESC handler for the Create Rule from Chit modal |
+| `_closeCreateRuleFromChitModal()` | Close and remove the Create Rule from Chit modal |
 | `_loadBundlesForModal(selectEl)` | Load bundles into the bundle selection dropdown from cached settings or API |
 | `_populateBundleSelect(selectEl, bundles)` | Populate the bundle select dropdown with bundle options, filtering out "Everything Else" |
 | `_executeAddToBundle(chit, overlay)` | Execute the "Add to Bundle" action by creating a new rule and triggering reclassification |
@@ -1787,6 +1790,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
 | `_printNoteWithChoice(text, title)` | Show a modal with Raw/Rendered choice, then open a print tab with the note content |
 | `_openPrintTab(text, title, mode)` | Print note content via a hidden iframe without leaving the page (raw or rendered) |
+| `_printAttachment(chitId, attachment)` | Print a single attachment — images render inline, PDFs open in new window, text files fetch and render, other types show metadata |
+| `_printAttachmentPicker(chitId, attachments)` | Show a picker modal for multiple attachments, or print directly if only one; used from context menu |
 | `_printChit()` | Print the entire chit with all populated zones (dates, status, location, tags, people, notes, checklist, alerts, color, flags) via hidden iframe |
 | `_escHtml(str)` | HTML-escape helper for print functions |
 | `getCurrentPeriodDate(chit)` | Return the current period's date as a `YYYY-MM-DD` string for a recurring chit based on its frequency (daily, weekly, monthly, yearly, custom interval) |
@@ -2179,6 +2184,14 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 
 | Symbol | Description |
 |--------|-------------|
+| `_emailThreadCache` | Thread cache state — stores fingerprint, threads array, and allEmailChits reference |
+| `_emailDomCache` | DOM cache state — stores detached email scroll container, scrollTop, fingerprint, and bundle toolbar for instant reattach |
+| `_emailRenderRafId` | rAF handle for progressive rendering — allows cancellation on tab switch away |
+| `_emailComputeFingerprint(emailChits)` | Compute deterministic fingerprint from email chits (count + sorted IDs + read/archived bits) |
+| `_emailInvalidateThreadCache()` | Invalidate thread cache, forcing recomputation on next render |
+| `_emailInvalidateDomCache()` | Invalidate DOM cache, forcing full rebuild on next displayEmailView() call |
+| `_emailRenderThreadsProgressively(scrollWrap, threads, viSettings, groupBy, fingerprint, loadMoreInfo)` | Progressive renderer — renders first 10 threads synchronously, remaining in chunks of 10 via rAF |
+| `_emailSaveEditorReturnState(chitId)` | Save editor return state (chit ID, scroll position, chits snapshot) before navigating to editor |
 | `_emailSubFilter` | Email sub-filter state: `'inbox'` (default), `'bytag'`, `'drafts'`, `'trash'` |
 | `_emailUnreadTop` | Whether to sort unread emails to the top (toggle in sidebar) |
 | `_emailDashContactsCache` | Cached contacts array for sender image lookup |
@@ -2221,6 +2234,7 @@ Email bundle toolbar, tabs, filtering, creation modal, context menu, and drag-to
 
 | Symbol | Description |
 |--------|-------------|
+| `_emailSelectCycleMode` | Current index in the select cycle (0=none, 1=all, 2=read, 3=unread) |
 | `_emailActiveBundle` | Currently active bundle name (persisted to localStorage) |
 | `_emailBundlesData` | Cached bundles array from API |
 | `_fetchBundles(callback)` | Fetch bundles from `GET /api/bundles` and cache; calls callback with bundle data |
@@ -2232,7 +2246,10 @@ Email bundle toolbar, tabs, filtering, creation modal, context menu, and drag-to
 | `_persistActiveBundle()` | Save active bundle to localStorage key `cwoc_email_active_bundle` |
 | `_updateBundleTabActiveStates()` | Update tab visual active states |
 | `_bundleOnSubFilterChange(newFilter)` | Reset/dim bundle tabs when sub-filter changes away from inbox |
-| `_emailBundleSelectAll(checked)` | Select/deselect all visible email checkboxes |
+| `_emailCycleSelectMode()` | Cycle through select modes: All → None → Read → Unread |
+| `_updateSelectAllIcon(mode)` | Update the select button icon based on current mode |
+| `_showSelectModeLabel(mode)` | Show brief mode label indicator that fades after 2s |
+| `_emailBundleSelectAll(checked)` | Legacy select/deselect all (delegates to cycle logic) |
 | `_bundleUpdateActionStates()` | Enable/disable bulk action buttons based on selection count |
 | `_openBundleModal(editBundle)` | Open bundle creation/edit modal; pre-populates if editing |
 | `_bundleModalEscHandler(e)` | ESC key handler for bundle modal (closes modal) |
@@ -2292,6 +2309,70 @@ Omni View rendering, HST bar, section orchestration, email pagination, and filte
 | `_showOmniLockBtn()` | Shows the Lock Filters button in sidebar |
 | `_hideOmniLockBtn()` | Hides the Lock Filters button |
 
+#### main-timeline-algo.js
+
+Pure algorithm functions for the Timeline View. Contains ONLY deterministic pure functions with no DOM access. Separated from `main-timeline.js` for testability.
+
+Depends on: nothing (pure functions, no globals, no DOM).
+
+| Function | Description |
+|----------|-------------|
+| `_tlBuildGraph(chits)` | Build forward/reverse adjacency maps from chit prerequisites arrays; only includes edges where both endpoints are in the visible set |
+| `_tlComputeDepths(chits)` | BFS-based topological depth computation; returns Map of chit ID → depth (0 = root) |
+| `_tlWouldCycle(fromId, toId, adjList)` | BFS cycle detection — returns true if adding edge fromId→toId would create a cycle |
+| `_tlCriticalPath(chits)` | Longest-path computation returning Set of chit IDs on the critical path; includes all tied longest paths |
+| `_tlLayoutByDate(chits, opts)` | Date-based node positioning — dated lane + undated lane; returns Map of chitId → {x, y, lane} |
+| `_tlLayoutByDependency(chits, opts)` | Dependency-depth-based node positioning; returns Map of chitId → {x, y, lane} |
+| `_tlChainOrder(nodes)` | Sort nodes by ascending x then y for bulk chain linking |
+| `_tlChitHasDate(chit)` | Check if a chit has any date field set (start_datetime, due_datetime, or point_in_time) |
+| `_tlGetEffectiveDate(chit)` | Get effective date string for positioning (earliest of start/due/point_in_time) |
+
+#### main-timeline.js
+
+Timeline View rendering, interaction handlers, and SVG management. Main entry point: `displayTimelineView(chits)`, called by `_setTasksMode('timeline')`.
+
+Depends on: `main-timeline-algo.js` (`_tlBuildGraph`, `_tlComputeDepths`, `_tlLayoutByDate`, `_tlLayoutByDependency`, `_tlCriticalPath`, `_tlChitHasDate`, `_tlGetEffectiveDate`, `_tlWouldCycle`, `_tlChainOrder`), `shared-utils.js` (`cwocToast`, `cwocUndoToast`, `formatDate`), `shared-touch.js`.
+
+| Function | Description |
+|----------|-------------|
+| `displayTimelineView(chitsToDisplay)` | Main entry point — builds container, computes layout, renders nodes and lines |
+| `_tlRender(chits)` | Full re-render orchestrator — build graph, compute layout, render nodes, render lines |
+| `_tlBuildContainer()` | Build timeline DOM structure (toolbar, viewport, canvas, lanes, SVG overlay) |
+| `_tlRenderNodes(chits, positions)` | Create/update DOM nodes in dated and undated lanes |
+| `_tlRenderLines(graph, positions)` | Create SVG `<path>` elements with rounded orthogonal routing |
+| `_tlRenderDateMarkers(chits, opts)` | Render vertical date lines with labels at equal spacing |
+| `_tlApplyZoomClass()` | Set `tl-zoom-far`/`tl-zoom-medium`/`tl-zoom-close` based on `_tlZoom` |
+| `_tlBuildNodeHTML(chit, zoomLevel)` | Build node DOM element with status class, custom color, detail level |
+| `_tlComputePathD(fromPos, toPos)` | Compute SVG path `d` attribute for subway-map routing |
+| `_tlRenderEmptyState()` | Render empty state using `.cwoc-empty` class |
+| `_tlOnZoom(e)` | Ctrl+scroll / pinch zoom handler (25%–300%, 10% per tick) |
+| `_tlOnViewportDragStart(e)` | Pan drag start handler |
+| `_tlOnViewportDragMove(e)` | Pan drag move handler (1:1 pixel correspondence) |
+| `_tlOnViewportDragEnd(e)` | Pan drag end handler |
+| `_tlOnPinchStart(e)` | Touch pinch zoom start |
+| `_tlOnPinchMove(e)` | Touch pinch zoom move |
+| `_tlOnPinchEnd(e)` | Touch pinch zoom end |
+| `_tlOnNodeHover(e)` | Highlight node + direct connections, dim everything else (opacity 0.3) |
+| `_tlOnNodeHoverEnd(e)` | Restore all elements to default within 150ms |
+| `_tlToggleLinkMode()` | Toggle Link Mode button state, cursor style, `_tlLinkMode` flag |
+| `_tlOnLinkModeClick(e)` | Link Mode click handler — first click selects source, second creates dependency |
+| `_tlOnNodeDragStart(e)` | Drag-to-link start — show visual connector line |
+| `_tlOnNodeDragMove(e)` | Drag-to-link move — update connector line position |
+| `_tlOnNodeDragEnd(e)` | Drag-to-link end — cycle check and persist dependency |
+| `_tlAttemptCreateDependency(sourceId, targetId)` | Validate (self-link, duplicate, cycle) and create dependency via API |
+| `_tlOnLineClick(e)` | Click/tap on SVG path removes dependency with undo toast |
+| `_tlShowContextMenu(chitId, x, y)` | Right-click / long-press context menu display |
+| `_tlShowChitPicker(targetChitId)` | Searchable chit picker modal for adding prerequisites |
+| `_tlOnRectSelectStart(e)` | Multi-select rectangle drag start |
+| `_tlOnRectSelectMove(e)` | Multi-select rectangle drag move |
+| `_tlOnRectSelectEnd(e)` | Multi-select rectangle drag end — select nodes within bounds |
+| `_tlLinkAsChain()` | Bulk chain linking — link 2+ selected nodes in positional order |
+| `_tlInitOrderToggle()` | Wire the `cwoc-2val-toggle` for order mode switching |
+| `_tlInitCriticalPathToggle()` | Wire "⚡ Critical Path" button toggle |
+| `_tlActivateCriticalPath()` | Compute and highlight critical path nodes/lines |
+| `_tlDeactivateCriticalPath()` | Restore all nodes/lines to normal |
+| `_tlOnCanvasClick(e)` | Click-to-create handler — navigate to editor with date pre-filled or no date |
+
 #### main-modals.js
 
 | Function | Description |
@@ -2345,6 +2426,7 @@ Omni View rendering, HST bar, section orchestration, email pagination, and filte
 | `_updateTabCounts(filteredChits)` | Update tab labels with counts of displayed chits per tab |
 | `_applyChitDisplayOptions()` | Apply visual options — fade past events and highlight overdue chits |
 | `DOMContentLoaded handler` | Main init — wires up sidebar, hotkeys, mobile UI, weather refresh, resize handler, notification inbox, and PWA install button (`#pwa-install-btn` → `handleInstallClick()` from `pwa-register.js`). Includes mobile swipe on header bar to cycle C CAPTN tabs, and mobile swipe on `#chit-list` to navigate calendar periods (calls `previousPeriod()`/`nextPeriod()`) |
+| `_tryEditorReturnRefresh()` | Editor return optimization — restores chits from sessionStorage snapshot, fetches single edited chit, patches array, invalidates caches, re-renders. Returns true if handled, false if full fetchChits() needed |
 
 #### main.js
 
@@ -2589,6 +2671,17 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `_wireNotesModalLivePreview()` | Wire the live preview input listener for real-time markdown rendering (only once) |
 | `_updateNotesModalLivePreview()` | Update the live preview output from the live preview input using `marked.parse()` |
 | `_printNote(event)` | Print note from the editor — shows Raw/Rendered choice modal, opens print tab |
+| `_mobileNotesToolbarEl` | Reference to the mobile bottom-pinned notes toolbar element |
+| `_mobileNotesIsPreview` | Whether the mobile notes view is currently in preview mode |
+| `_createMobileNotesToolbar()` | Create and inject the mobile bottom toolbar for the Notes zone (matches Android app layout) |
+| `_createMobileNotesDropdown(type, items)` | Create a dropdown menu for the mobile notes toolbar |
+| `_toggleMobileNotesDropdown(type)` | Toggle a specific dropdown menu (data, heading, block) from the mobile toolbar |
+| `_closeMobileNotesDropdowns()` | Close all mobile notes toolbar dropdowns |
+| `_mobileNotesTogglePreview()` | Toggle preview/edit mode from the mobile toolbar |
+| `_updateMobileNotesToolbarState()` | Update mobile toolbar button states (preview icon, disabled formatting in preview mode) |
+| `_mobileNotesShare()` | Share notes content via Web Share API (fallback: copy to clipboard) |
+| `_showMobileNotesToolbar()` | Show the mobile notes toolbar when notes zone becomes active |
+| `_hideMobileNotesToolbar()` | Hide the mobile notes toolbar when navigating away from notes zone |
 
 #### editor-send-content.js
 
@@ -3349,14 +3442,12 @@ People page: rolodex browse view with search, favorites, users section, import/e
 | `_toggleSection(sectionId)` | Toggle a section's collapsed state and re-render |
 | `_loadGroupState()` | Load group/ungroup preference from localStorage |
 | `_updateGroupButton()` | Update the group toggle button label and icon to reflect current state |
-| `_loadUsers()` | Fetch active users from GET `/api/auth/switchable-users` |
 | `loadContacts(query)` | Fetch contacts from GET `/api/contacts` (optionally filtered by query) |
 | `_onSearchInput()` | Search input handler — client-side filter with debounced API fallback |
 | `_applyFilter()` | Client-side filter: match query against display name, nickname, org, emails, phones, etc. |
-| `_renderList()` | Render the filtered contact list; grouped mode shows Favorites/Users/All Contacts sections, ungrouped mode shows a single flat alphabetical list |
+| `_renderList()` | Render the filtered contact list; grouped mode shows Favorites/All Contacts/Vault sections, ungrouped mode shows a single flat alphabetical list. User-contacts display a shield badge. |
 | `_renderSection(sectionId, label, items, query, rowFactory)` | Render a collapsible section with divider header and content wrapper |
-| `_createUserRow(user, query)` | Create a user row element with profile image, display name, and username |
-| `_createRow(contact, query)` | Create a single contact row element with star, thumbnail, name, details, and share button |
+| `_createRow(contact, query)` | Create a single contact row element with star, thumbnail, name, user badge (if is_user), details, and share button |
 | `_toggleFavorite(contact, starEl)` | Toggle favorite via PATCH `/api/contacts/:id/favorite` and re-render |
 | `_shareContact(contact)` | Share contact via QR code using `showContactQrCode` from contact-qr.js |
 | `_showImportResult(result)` | Show the import result modal with imported/skipped counts and errors |
@@ -4097,6 +4188,30 @@ Omni View layout, HST bar styling, section cards, and responsive rules. Loaded a
 |---------|-------------|
 | (coordinator) | Loads after all sub-stylesheets; currently empty — reserved for overrides |
 
+#### styles-timeline.css
+Timeline View styles — nodes, lines, lanes, toolbar, zoom levels, interactions, and responsive rules. Loaded after `styles-omni.css` in `index.html`.
+
+| Section | Description |
+|---------|-------------|
+| Timeline Container (`.timeline-container`) | Full-height flex column wrapper |
+| Toolbar (`.timeline-toolbar`) | Toolbar row with order toggle, Link Mode button, Critical Path button |
+| Viewport & Canvas (`.timeline-viewport`, `.timeline-canvas`) | Scrollable overflow container and positioned inner canvas |
+| Lane Layout (`.timeline-lane`, `.timeline-dated-lane`, `.timeline-undated-lane`) | Horizontal lane containers for dated and undated nodes |
+| Lane Divider (`.timeline-lane-divider`) | Visible horizontal separator between dated and undated lanes |
+| Timeline Node (`.timeline-node`) | Absolutely positioned card — base styles, hover, selected states |
+| Status Border Colors (`.tl-node-todo`, `.tl-node-inprogress`, `.tl-node-blocked`, `.tl-node-complete`) | Status-based border color classes |
+| SVG Overlay (`.timeline-svg-overlay`) | SVG overlay positioning (pointer-events: none on container, stroke on paths) |
+| Zoom Level Detail Visibility (`.tl-zoom-far`, `.tl-zoom-medium`, `.tl-zoom-close`) | Detail level visibility rules per zoom range |
+| Date Markers (`.tl-date-marker`) | Vertical date line + label styling |
+| Link Mode Active (`.tl-link-mode-active`) | Cursor crosshair state when Link Mode is on |
+| Hover/Focus Highlighting (`.tl-node-highlighted`, `.tl-node-dimmed`, `.tl-line-highlighted`, `.tl-line-dimmed`) | Hover/focus opacity and emphasis states |
+| Critical Path Highlights (`.tl-critical-path-line`, `.tl-critical-path-node`) | 2× line thickness + distinct color for critical path |
+| Selection Rectangle (`.tl-selection-rect`) | Drag-select rectangle styling |
+| Context Menu (`.tl-context-menu`) | Right-click / long-press context menu |
+| Empty State | Empty state display using `.cwoc-empty` |
+| Drag Connector | Visual connector line during drag-to-link |
+| Responsive (mobile) | Touch-friendly node sizes, toolbar stacking |
+
 ### 3.3 Editor (`src/frontend/css/editor/`)
 
 #### editor.css
@@ -4333,6 +4448,8 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-email.js"></script>
 <script src="/frontend/js/dashboard/main-email-bundles.js"></script>
 <script src="/frontend/js/dashboard/main-omni.js"></script>
+<script src="/frontend/js/dashboard/main-timeline-algo.js"></script>
+<script src="/frontend/js/dashboard/main-timeline.js"></script>
 <script src="/frontend/js/dashboard/main-modals.js"></script>
 <script src="/frontend/js/dashboard/main-init.js"></script>
 <script src="/frontend/js/dashboard/main.js"></script>
@@ -4690,9 +4807,11 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views.js      (coordinator — uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
-              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailDetectTracking, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
+              │     main-email.js      (email tab view — displayEmailView, _emailComputeFingerprint, _emailInvalidateThreadCache, _emailInvalidateDomCache, _emailRenderThreadsProgressively, _emailSaveEditorReturnState, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailDetectTracking, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
               │     main-email-bundles.js (bundle toolbar, tabs, filtering, modal, context menu, reorder — _fetchBundles, _filterByBundle, _renderBundleToolbar, _openBundleModal, _showBundleContextMenu)
               │     main-omni.js       (Omni View — displayOmniView, HST bar, section orchestration, email pagination, filter lock)
+              │     main-timeline-algo.js (pure algorithms — _tlBuildGraph, _tlComputeDepths, _tlWouldCycle, _tlCriticalPath, _tlLayoutByDate, _tlLayoutByDependency, _tlChainOrder)
+              │     main-timeline.js   (Timeline View — displayTimelineView, rendering, interactions, SVG management; depends on main-timeline-algo.js)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)

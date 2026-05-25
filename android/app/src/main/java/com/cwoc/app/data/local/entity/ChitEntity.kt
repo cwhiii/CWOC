@@ -117,6 +117,9 @@ data class ChitEntity(
     val nestThreadId: String? = null,
     val autoCompleteChecklist: Boolean? = null,
 
+    // Server-computed email thread grouping ID
+    val threadId: String? = null,
+
     // Phase 2 — dirty tracking
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

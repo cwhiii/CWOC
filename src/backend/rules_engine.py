@@ -902,7 +902,7 @@ def _get_username_for_user(owner_id: str) -> str:
         conn.execute("PRAGMA busy_timeout=5000")
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT username, display_name FROM users WHERE id = ?", (owner_id,)
+            "SELECT username, display_name FROM contacts WHERE id = ? AND username IS NOT NULL", (owner_id,)
         )
         row = cursor.fetchone()
         if row:
@@ -1283,7 +1283,7 @@ def execute_action(
 
                 # Get owner info for the new chit
                 cursor.execute(
-                    "SELECT username, display_name FROM users WHERE id = ?",
+                    "SELECT username, display_name FROM contacts WHERE id = ? AND username IS NOT NULL",
                     (owner_id,)
                 )
                 user_row = cursor.fetchone()
@@ -1308,6 +1308,8 @@ def execute_action(
                         ensure_tags_in_settings(conn, owner_id, tags_list)
 
                     conn.commit()
+                    from src.backend.db import chit_cache
+                    chit_cache.invalidate(owner_id)
                     return {"success": True, "chit_id": new_chit_id}
                 except Exception as db_err:
                     conn.rollback()
@@ -1362,7 +1364,7 @@ def execute_action(
                 
                 # Get owner info
                 cursor.execute(
-                    "SELECT username, display_name FROM users WHERE id = ?",
+                    "SELECT username, display_name FROM contacts WHERE id = ? AND username IS NOT NULL",
                     (owner_id,)
                 )
                 user_row = cursor.fetchone()
@@ -1452,6 +1454,8 @@ def execute_action(
                 logger.error("Audit logging failed for rule action (best-effort): %s", audit_err)
 
             conn.commit()
+            from src.backend.db import chit_cache
+            chit_cache.invalidate(owner_id)
             return {"success": True, "message": f"Action {action_type} applied to chit {entity_id}"}
 
         # ── Contact actions (future extension point) ─────────────

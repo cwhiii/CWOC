@@ -7,6 +7,7 @@ import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.ContactRepository
 import com.cwoc.app.data.repository.EmailRepository
+import com.cwoc.app.data.repository.BundleRepository
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
@@ -70,6 +71,7 @@ enum class SyncState { IDLE, SYNCING, SUCCESS, ERROR }
 data class UndoAction(
     val type: UndoType,
     val chitId: String,
+    val threadId: String,
     val subject: String,
     val durationMs: Long = 5000L
 )
@@ -102,6 +104,9 @@ data class EmailUiState(
     // Undo state
     val undoAction: UndoAction? = null,
 
+    // Threads pending dismissal (hidden immediately, removed on undo expiry)
+    val pendingDismissThreadIds: Set<String> = emptySet(),
+
     // Sync state
     val accounts: List<EmailAccountInfo> = emptyList(),
     val syncingAccounts: Set<String> = emptySet(),
@@ -121,7 +126,8 @@ class EmailViewModel @Inject constructor(
     private val connectivityMonitor: ConnectivityMonitor,
     private val emailRepository: EmailRepository,
     private val settingsRepository: SettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val bundleRepository: BundleRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EmailUiState())
@@ -217,19 +223,62 @@ class EmailViewModel @Inject constructor(
         }
     }
 
-    /** Select all visible threads. */
-    fun selectAll() {
+    /** Cycle through select modes: All → None → Read → Unread → All → ... */
+    private var _selectCycleIndex = 0
+    private val _selectModes = listOf("all", "none", "read", "unread")
+
+    /** The current select mode label (exposed for UI indicator) */
+    private val _selectModeLabel = MutableStateFlow<String?>(null)
+    val selectModeLabel: StateFlow<String?> = _selectModeLabel.asStateFlow()
+
+    fun cycleSelectMode() {
+        _selectCycleIndex = (_selectCycleIndex + 1) % _selectModes.size
+        val mode = _selectModes[_selectCycleIndex]
+
         _uiState.update { state ->
-            val allIds = state.threads.map { it.id }.toSet()
+            val selectedIds = when (mode) {
+                "all" -> state.threads.map { it.id }.toSet()
+                "none" -> emptySet()
+                "read" -> state.threads.filter { it.unreadCount == 0 }.map { it.id }.toSet()
+                "unread" -> state.threads.filter { it.unreadCount > 0 }.map { it.id }.toSet()
+                else -> emptySet()
+            }
             state.copy(
-                isMultiSelectMode = true,
-                selectedIds = allIds
+                isMultiSelectMode = selectedIds.isNotEmpty(),
+                selectedIds = selectedIds
             )
         }
+
+        // Show mode label briefly
+        _selectModeLabel.value = when (mode) {
+            "all" -> "All"
+            "none" -> "None"
+            "read" -> "Read"
+            "unread" -> "Unread"
+            else -> null
+        }
+
+        // Clear label after 2 seconds
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2000)
+            _selectModeLabel.value = null
+        }
+    }
+
+    /** Reset cycle index when selection is manually changed */
+    private fun resetSelectCycle() {
+        _selectCycleIndex = 0
+    }
+
+    /** Select all visible threads. */
+    fun selectAll() {
+        _selectCycleIndex = 0 // reset so next cycle goes to "all" → "none"
+        cycleSelectMode()
     }
 
     /** Deselect all and exit multi-select mode. */
     fun exitMultiSelect() {
+        _selectCycleIndex = 0
         _uiState.update {
             it.copy(isMultiSelectMode = false, selectedIds = emptySet())
         }
@@ -292,24 +341,32 @@ class EmailViewModel @Inject constructor(
     // ─── Undo Actions ────────────────────────────────────────────────────────
 
     /** Archive an email with undo support. */
-    fun archiveWithUndo(chitId: String, subject: String) {
+    fun archiveWithUndo(chitId: String, threadId: String, subject: String) {
         val undoAction = UndoAction(
             type = UndoType.ARCHIVE,
             chitId = chitId,
+            threadId = threadId,
             subject = subject
         )
-        _uiState.update { it.copy(undoAction = undoAction) }
+        _uiState.update { it.copy(
+            undoAction = undoAction,
+            pendingDismissThreadIds = it.pendingDismissThreadIds + threadId
+        ) }
         startUndoCountdown(undoAction)
     }
 
     /** Delete an email with undo support. */
-    fun deleteWithUndo(chitId: String, subject: String) {
+    fun deleteWithUndo(chitId: String, threadId: String, subject: String) {
         val undoAction = UndoAction(
             type = UndoType.DELETE,
             chitId = chitId,
+            threadId = threadId,
             subject = subject
         )
-        _uiState.update { it.copy(undoAction = undoAction) }
+        _uiState.update { it.copy(
+            undoAction = undoAction,
+            pendingDismissThreadIds = it.pendingDismissThreadIds + threadId
+        ) }
         startUndoCountdown(undoAction)
     }
 
@@ -320,7 +377,10 @@ class EmailViewModel @Inject constructor(
                 UndoType.ARCHIVE -> archive(action.chitId)
                 UndoType.DELETE -> moveToTrash(action.chitId)
             }
-            _uiState.update { it.copy(undoAction = null) }
+            _uiState.update { it.copy(
+                undoAction = null,
+                pendingDismissThreadIds = it.pendingDismissThreadIds - action.threadId
+            ) }
         }
     }
 
@@ -328,7 +388,11 @@ class EmailViewModel @Inject constructor(
     fun cancelUndo() {
         undoCountdownJob?.cancel()
         undoCountdownJob = null
-        _uiState.update { it.copy(undoAction = null) }
+        val action = _uiState.value.undoAction
+        _uiState.update { it.copy(
+            undoAction = null,
+            pendingDismissThreadIds = if (action != null) it.pendingDismissThreadIds - action.threadId else it.pendingDismissThreadIds
+        ) }
     }
 
     /** Start the undo countdown timer. */
@@ -509,26 +573,72 @@ class EmailViewModel @Inject constructor(
             val entity = chitDao.getById(chitId) ?: return@launch
             val now = Instant.now().toString()
 
-            // Strip existing bundle tags and add the new one
+            // Strip existing bundle tags and add the new one (optimistic local update)
             val currentTags = entity.tags.orEmpty().toMutableList()
-            currentTags.removeAll { it.startsWith("CWOC_System/Bundle/") }
-            currentTags.add("CWOC_System/Bundle/$bundleName")
+            currentTags.removeAll { it.startsWith("CWOC_System/Bundle/") || it.startsWith("CWOC_System/BundleID/") }
+            currentTags.add("CWOC_System/BundleID/$bundleId")
 
             chitDao.upsert(entity.copy(tags = currentTags, modifiedDatetime = now))
             dirtyTracker.markDirty(chitId, setOf("tags"))
             triggerPushIfOnline(chitId)
 
-            // Also call the add-rule API so future emails from this sender go to the bundle
-            val senderEmail = entity.emailFrom?.let { extractSenderEmail(it) }
-            if (!senderEmail.isNullOrBlank()) {
-                try {
-                    emailRepository.addRuleToBundle(bundleId, "sender", senderEmail)
-                } catch (_: Exception) {
-                    // Rule creation is best-effort; the immediate tag assignment already worked
-                }
-            }
+            recomputeState()
+        }
+    }
+
+    /**
+     * Unified drop-email: move an email to a bundle with optional rule creation.
+     * Uses the /api/bundles/{bundleId}/drop-email endpoint.
+     */
+    fun dropEmailToBundle(
+        chitId: String,
+        bundleId: String,
+        mode: String,
+        matchValue: String,
+        applyRetroactively: Boolean
+    ) {
+        viewModelScope.launch {
+            // Optimistic local update: move the email tag immediately
+            val entity = chitDao.getById(chitId) ?: return@launch
+            val now = Instant.now().toString()
+            val currentTags = entity.tags.orEmpty().toMutableList()
+            currentTags.removeAll { it.startsWith("CWOC_System/Bundle/") || it.startsWith("CWOC_System/BundleID/") }
+            currentTags.add("CWOC_System/BundleID/$bundleId")
+            chitDao.upsert(entity.copy(tags = currentTags, modifiedDatetime = now))
+
+            // Call the server endpoint
+            emailRepository.dropEmailToBundle(
+                bundleId = bundleId,
+                chitId = chitId,
+                mode = mode,
+                matchValue = matchValue,
+                applyRetroactively = applyRetroactively
+            )
 
             recomputeState()
+        }
+    }
+
+    /**
+     * Create a new bundle, then drop the email into it.
+     */
+    fun createBundleAndDropEmail(
+        bundleName: String,
+        chitId: String,
+        mode: String,
+        matchValue: String,
+        applyRetroactively: Boolean
+    ) {
+        viewModelScope.launch {
+            val result = bundleRepository.createBundle(
+                name = bundleName,
+                description = null,
+                color = null,
+                showInOmni = false
+            )
+            result.onSuccess { newBundle ->
+                dropEmailToBundle(chitId, newBundle.id, mode, matchValue, applyRetroactively)
+            }
         }
     }
 
@@ -544,6 +654,18 @@ class EmailViewModel @Inject constructor(
 
         val bundleName = bundleTags.first().removePrefix("CWOC_System/Bundle/")
         return bundles.find { it.name == bundleName }?.id
+    }
+
+    /**
+     * Get email metadata for the Add to Bundle sheet.
+     * Returns (senderEmail, subject, recipientEmail) or null if chit not found.
+     */
+    fun getEmailMetadataForBundle(chitId: String): Triple<String, String, String>? {
+        val entity = allEmailChits.find { it.id == chitId } ?: return null
+        val senderEmail = entity.emailFrom?.let { extractSenderEmail(it) } ?: ""
+        val subject = entity.emailSubject ?: entity.title ?: ""
+        val recipientEmail = entity.emailTo?.let { extractSenderEmail(it) } ?: ""
+        return Triple(senderEmail, subject, recipientEmail)
     }
 
     // ─── Bulk Actions ────────────────────────────────────────────────────────
@@ -716,6 +838,8 @@ class EmailViewModel @Inject constructor(
                     }
                 }.ifBlank { null },
                 emailAccountId = original.emailAccountId,
+                // Inherit thread_id so the reply stays in the same thread
+                threadId = original.threadId ?: original.emailMessageId,
                 isDirty = true,
                 dirtyFields = "[]"
             )
@@ -820,6 +944,8 @@ class EmailViewModel @Inject constructor(
                 emailBodyText = forwardedBody,
                 emailInReplyTo = original.emailMessageId,
                 emailAccountId = original.emailAccountId,
+                // Forwards start a new thread (different from replies)
+                threadId = null,
                 isDirty = true,
                 dirtyFields = "[]"
             )
@@ -839,72 +965,90 @@ class EmailViewModel @Inject constructor(
     /**
      * Recomputes the filtered, sorted, and paginated email list based on
      * current folder, bundle, account filter, sorting, and pagination settings.
+     * Runs heavy computation on Dispatchers.Default to avoid blocking the UI thread.
      */
     private fun recomputeState() {
-        val state = _uiState.value
-        val folder = state.currentFolder
-        val bundle = state.activeBundle
-        val accountFilter = state.accountFilter
-        val use24Hour = state.use24Hour
+        recomputeJob?.cancel()
+        recomputeJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val state = _uiState.value
+            val folder = state.currentFolder
+            val bundle = state.activeBundle
+            val accountFilter = state.accountFilter
+            val use24Hour = state.use24Hour
 
-        // Step 1: Filter by folder
-        val folderFiltered = filterByFolder(allEmailChits, folder)
+            // Capture references to avoid race conditions
+            val emailChits = allEmailChits
+            val allChitsSnapshot = allChits
 
-        // Step 2: Apply account filter (if any accounts are deselected)
-        val accountFiltered = if (accountFilter.isEmpty() ||
-            accountFilter.size == state.accounts.size) {
-            folderFiltered
-        } else {
-            folderFiltered.filter { chit ->
-                chit.emailAccountId != null && accountFilter.contains(chit.emailAccountId)
+            // Step 1: Filter by folder
+            val folderFiltered = filterByFolder(emailChits, folder)
+
+            // Step 2: Apply account filter (if any accounts are deselected)
+            val accountFiltered = if (accountFilter.isEmpty() ||
+                accountFilter.size == state.accounts.size) {
+                folderFiltered
+            } else {
+                folderFiltered.filter { chit ->
+                    chit.emailAccountId != null && accountFilter.contains(chit.emailAccountId)
+                }
             }
-        }
 
-        // Step 3: Apply bundle filter (only for inbox)
-        val bundleFiltered = if (folder == "inbox" && bundle != null) {
-            accountFiltered.filter { chit ->
-                chit.tags.orEmpty().contains(bundle)
+            // Step 3: Apply bundle filter (only for inbox)
+            val bundleFiltered = if (folder == "inbox" && bundle != null) {
+                accountFiltered.filter { chit ->
+                    chit.tags.orEmpty().contains(bundle)
+                }
+            } else {
+                accountFiltered
             }
-        } else {
-            accountFiltered
+
+            // Step 4: Group into threads
+            val threads = groupIntoThreads(bundleFiltered)
+
+            // Step 5: Pre-build indexes for O(1) lookups during enrichment
+            // Reply indicator index: set of messageIds that have replies
+            val repliedToMessageIds = buildRepliedToIndex(emailChits)
+            // Nested chits index: map of threadId -> list of nested chits
+            val nestedChitsIndex = buildNestedChitsIndex(allChitsSnapshot)
+
+            // Step 6: Enrich threads with domain layer data (using pre-built indexes)
+            val enrichedThreads = threads.map { thread ->
+                enrichThread(thread, use24Hour, repliedToMessageIds, nestedChitsIndex)
+            }
+
+            // Step 7: Sort threads (pinned first, then unread-at-top if enabled)
+            val sortedThreads = sortThreads(enrichedThreads, state.unreadAtTop)
+
+            // Step 8: Compute total count and apply pagination
+            val totalCount = sortedThreads.size
+            val displayedThreads = if (state.paginateEnabled) {
+                val limit = (state.currentPage + 1) * state.pageSize
+                sortedThreads.take(limit)
+            } else {
+                sortedThreads
+            }
+
+            // Step 9: Compute unread count (always based on inbox, ignoring filters)
+            val inboxChits = filterByFolder(emailChits, "inbox")
+            val unreadCount = inboxChits.count { it.emailRead != true }
+
+            // Switch back to Main to update state
+            _uiState.update {
+                it.copy(
+                    threads = displayedThreads,
+                    totalThreadCount = totalCount,
+                    unreadCount = unreadCount,
+                    isLoading = false
+                )
+            }
+
+            // Resolve sender image URLs for visible threads (already launches its own coroutine)
+            resolveSenderImages(displayedThreads)
         }
-
-        // Step 4: Group into threads
-        val threads = groupIntoThreads(bundleFiltered)
-
-        // Step 5: Enrich threads with domain layer data
-        val enrichedThreads = threads.map { thread ->
-            enrichThread(thread, use24Hour)
-        }
-
-        // Step 6: Sort threads (pinned first, then unread-at-top if enabled)
-        val sortedThreads = sortThreads(enrichedThreads, state.unreadAtTop)
-
-        // Step 7: Compute total count and apply pagination
-        val totalCount = sortedThreads.size
-        val displayedThreads = if (state.paginateEnabled) {
-            val limit = (state.currentPage + 1) * state.pageSize
-            sortedThreads.take(limit)
-        } else {
-            sortedThreads
-        }
-
-        // Step 8: Compute unread count (always based on inbox, ignoring filters)
-        val inboxChits = filterByFolder(allEmailChits, "inbox")
-        val unreadCount = inboxChits.count { it.emailRead != true }
-
-        _uiState.update {
-            it.copy(
-                threads = displayedThreads,
-                totalThreadCount = totalCount,
-                unreadCount = unreadCount,
-                isLoading = false
-            )
-        }
-
-        // Resolve sender image URLs for visible threads
-        resolveSenderImages(displayedThreads)
     }
+
+    /** Job for the current recomputeState coroutine — cancelled on re-entry to avoid stacking. */
+    private var recomputeJob: Job? = null
 
     /**
      * Resolves sender email addresses to contact image URLs for the visible threads.
@@ -930,8 +1074,14 @@ class EmailViewModel @Inject constructor(
     /**
      * Enriches a thread with domain-layer computed data:
      * body preview, smart links, date formatting, date group, nested chits, reply indicator.
+     * Uses pre-built indexes for O(1) lookups instead of scanning all chits per thread.
      */
-    private fun enrichThread(thread: EmailThread, use24Hour: Boolean): EmailThread {
+    private fun enrichThread(
+        thread: EmailThread,
+        use24Hour: Boolean,
+        repliedToMessageIds: Set<String>,
+        nestedChitsIndex: Map<String, List<ChitEntity>>
+    ): EmailThread {
         val latest = thread.latestMessage
 
         // Body preview via BodyPreviewStripper
@@ -953,11 +1103,18 @@ class EmailViewModel @Inject constructor(
         // Pinned state (thread is pinned if latest message is pinned)
         val isPinned = latest.pinned
 
-        // Reply indicator: check if any message in the thread has a reply
-        val hasReply = hasReplyIndicator(thread)
+        // Reply indicator: O(1) lookup using pre-built index
+        val hasReply = thread.messages.any { msg ->
+            msg.emailMessageId != null && msg.emailMessageId in repliedToMessageIds
+        }
 
-        // Nested chits: non-email chits with nestThreadId matching this thread
-        val nestedChits = findNestedChits(thread)
+        // Nested chits: O(1) lookup using pre-built index
+        val nestedChits = thread.messages.flatMap { msg ->
+            msg.emailMessageId?.let { nestedChitsIndex[it] } ?: emptyList()
+        }.sortedWith(
+            compareBy<ChitEntity> { it.dueDatetime ?: "\uFFFF" }
+                .thenBy { it.startDatetime ?: "\uFFFF" }
+        )
 
         return thread.copy(
             bodyPreview = bodyPreview,
@@ -968,6 +1125,33 @@ class EmailViewModel @Inject constructor(
             hasReplyIndicator = hasReply,
             nestedChits = nestedChits
         )
+    }
+
+    /**
+     * Builds a set of message IDs that have been replied to (sent or draft replies exist).
+     * Used for O(1) reply indicator lookups during thread enrichment.
+     */
+    private fun buildRepliedToIndex(emailChits: List<ChitEntity>): Set<String> {
+        val repliedTo = mutableSetOf<String>()
+        for (chit in emailChits) {
+            if (chit.emailInReplyTo != null &&
+                (chit.emailStatus == "sent" || chit.emailStatus == "draft")) {
+                repliedTo.add(chit.emailInReplyTo)
+            }
+        }
+        return repliedTo
+    }
+
+    /**
+     * Builds an index of nestThreadId -> list of non-email chits.
+     * Used for O(1) nested chit lookups during thread enrichment.
+     */
+    private fun buildNestedChitsIndex(allChits: List<ChitEntity>): Map<String, List<ChitEntity>> {
+        return allChits.filter { chit ->
+            chit.nestThreadId != null &&
+                chit.emailMessageId == null &&
+                chit.emailStatus == null
+        }.groupBy { it.nestThreadId!! }
     }
 
     /**
@@ -985,40 +1169,6 @@ class EmailViewModel @Inject constructor(
                     }
                 )
                 .thenByDescending { it.latestDate ?: "" }
-        )
-    }
-
-    /**
-     * Checks if a thread has a reply indicator.
-     * A reply exists if any chit in allEmailChits has emailInReplyTo matching
-     * a message in this thread, with status "sent" or "draft".
-     */
-    private fun hasReplyIndicator(thread: EmailThread): Boolean {
-        val messageIds = thread.messages.mapNotNull { it.emailMessageId }.toSet()
-        if (messageIds.isEmpty()) return false
-        return allEmailChits.any { chit ->
-            chit.emailInReplyTo != null &&
-                chit.emailInReplyTo in messageIds &&
-                (chit.emailStatus == "sent" || chit.emailStatus == "draft")
-        }
-    }
-
-    /**
-     * Finds nested chits (non-email chits) that belong to this thread.
-     * Sorted by due_date ascending, then start_datetime ascending.
-     */
-    private fun findNestedChits(thread: EmailThread): List<ChitEntity> {
-        val threadMessageIds = thread.messages.mapNotNull { it.emailMessageId }.toSet()
-        if (threadMessageIds.isEmpty()) return emptyList()
-
-        return allChits.filter { chit ->
-            chit.nestThreadId != null &&
-                chit.nestThreadId in threadMessageIds &&
-                chit.emailMessageId == null &&
-                chit.emailStatus == null
-        }.sortedWith(
-            compareBy<ChitEntity> { it.dueDatetime ?: "\uFFFF" }
-                .thenBy { it.startDatetime ?: "\uFFFF" }
         )
     }
 
@@ -1074,62 +1224,27 @@ class EmailViewModel @Inject constructor(
     }
 
     /**
-     * Groups email chits into threads using two strategies:
-     * 1. Explicit threading via emailInReplyTo / emailReferences chain
-     * 2. Fallback: normalized subject matching (strip Re:/Fwd:/FW:/RE: prefixes)
+     * Groups email chits into threads using the server-computed threadId field.
+     * Falls back to client-side subject matching only for chits without a threadId
+     * (e.g., locally-created drafts before sync).
      *
-     * Each thread is sorted chronologically, with the latest message surfaced.
+     * This is O(n) — a simple groupBy on the threadId field.
      */
     private fun groupIntoThreads(chits: List<ChitEntity>): List<EmailThread> {
         if (chits.isEmpty()) return emptyList()
 
-        // Build a map of messageId -> chit for reference lookups
-        val messageIdMap = mutableMapOf<String, ChitEntity>()
-        for (chit in chits) {
-            chit.emailMessageId?.let { messageIdMap[it] = chit }
-        }
-
-        // Union-Find approach: group chits that share references or normalized subjects
+        // Group by server-provided threadId (fast path — O(n))
         val threadGroups = mutableMapOf<String, MutableList<ChitEntity>>()
-        val chitToThreadId = mutableMapOf<String, String>()
 
         for (chit in chits) {
-            var threadId: String? = null
+            // Use server-computed threadId if available
+            val threadKey = chit.threadId
+                // Fallback for chits without threadId (local drafts, pre-migration emails)
+                ?: chit.emailInReplyTo
+                ?: chit.emailMessageId
+                ?: chit.id
 
-            // Strategy 1: Check if this chit replies to something in our set
-            val inReplyTo = chit.emailInReplyTo
-            if (inReplyTo != null && messageIdMap.containsKey(inReplyTo)) {
-                threadId = chitToThreadId[messageIdMap[inReplyTo]!!.id]
-            }
-
-            // Strategy 2: Check references chain
-            if (threadId == null && chit.emailReferences != null) {
-                val refs = chit.emailReferences.split("\\s+".toRegex())
-                for (ref in refs) {
-                    val refChit = messageIdMap[ref.trim()]
-                    if (refChit != null) {
-                        threadId = chitToThreadId[refChit.id]
-                        if (threadId != null) break
-                    }
-                }
-            }
-
-            // Strategy 3: Fallback to normalized subject matching
-            if (threadId == null) {
-                val normalizedSubject = normalizeSubject(chit.emailSubject)
-                threadId = threadGroups.entries.firstOrNull { (_, members) ->
-                    normalizeSubject(members.first().emailSubject) == normalizedSubject
-                }?.key
-            }
-
-            // If no existing thread found, create a new one
-            if (threadId == null) {
-                threadId = chit.emailMessageId ?: chit.id
-            }
-
-            // Add chit to thread group
-            threadGroups.getOrPut(threadId) { mutableListOf() }.add(chit)
-            chitToThreadId[chit.id] = threadId
+            threadGroups.getOrPut(threadKey) { mutableListOf() }.add(chit)
         }
 
         // Convert groups to EmailThread objects
@@ -1149,15 +1264,9 @@ class EmailViewModel @Inject constructor(
         }.sortedByDescending { it.latestDate ?: "" }
     }
 
-    /**
-     * Normalizes an email subject by stripping common reply/forward prefixes.
-     */
-    private fun normalizeSubject(subject: String?): String {
-        if (subject == null) return ""
-        return subject
-            .replace(Regex("^(\\s*(Re|RE|Fwd|FW|Fw):\\s*)+", RegexOption.IGNORE_CASE), "")
-            .trim()
-            .lowercase()
+    companion object {
+        /** Pre-compiled regex for stripping Re:/Fwd:/FW: prefixes from subjects. */
+        private val SUBJECT_PREFIX_REGEX = Regex("^(\\s*(Re|RE|Fwd|FW|Fw):\\s*)+", RegexOption.IGNORE_CASE)
     }
 
     /** Triggers an immediate push if the device is currently online. */

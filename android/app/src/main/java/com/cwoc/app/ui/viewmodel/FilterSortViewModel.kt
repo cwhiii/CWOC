@@ -218,6 +218,7 @@ class FilterSortViewModel @Inject constructor(
      * for the new tab, or falls back to defaults if none is saved.
      */
     fun onTabChanged(tabRoute: String) {
+        android.util.Log.d("PERF", "[FilterSortVM] onTabChanged → $tabRoute")
         currentTabRoute = tabRoute
         _sortState.value = loadSortPreference(tabRoute)
     }

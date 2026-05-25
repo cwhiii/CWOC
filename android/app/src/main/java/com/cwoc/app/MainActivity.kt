@@ -241,7 +241,14 @@ private fun CwocApp(
     LaunchedEffect(currentSettings?.landingView, currentSettings?.defaultView) {
         if (!landingViewApplied && currentSettings != null) {
             val landingView = currentSettings?.landingView ?: currentSettings?.defaultView ?: "Calendar"
-            val targetTab = when (landingView) {
+            val resolvedView = if (landingView == "Last Viewed") {
+                // Read last viewed tab from SharedPreferences, fall back to Calendar
+                context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+                    .getString("last_viewed_tab", null) ?: "Calendar"
+            } else {
+                landingView
+            }
+            val targetTab = when (resolvedView) {
                 "Omni" -> CCaptnTab.Omni
                 "Calendar" -> CCaptnTab.Calendar
                 "Checklists" -> CCaptnTab.Checklists
@@ -356,7 +363,13 @@ private fun CwocApp(
     LaunchedEffect(currentRoute) {
         val matchingTab = CCaptnTab.entries.find { it.route == currentRoute }
         if (matchingTab != null) {
+            android.util.Log.d("PERF", "[MainActivity] Route changed to: ${currentRoute}, tab=${matchingTab.name}")
             selectedTab = matchingTab
+            // Persist last viewed tab for "Last Viewed" default view setting
+            context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("last_viewed_tab", matchingTab.name)
+                .apply()
         }
     }
 
@@ -406,6 +419,14 @@ private fun CwocApp(
                             .fillMaxSize(0.5f),
                         contentScale = ContentScale.Fit
                     )
+                    Text(
+                        text = BuildConfig.VERSION_NAME,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF6b4e31),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 32.dp)
+                    )
                 }
             }
         } else if (showNavChrome) {
@@ -426,6 +447,7 @@ private fun CwocApp(
                     SidebarContent(
                         selectedTab = selectedTab,
                         onNavigate = { screen ->
+                            android.util.Log.d("PERF", "[NAV] *** Tab navigate START → ${screen.route} (from sidebar) ***")
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.startDestinationId) {
                                     saveState = true
@@ -433,6 +455,7 @@ private fun CwocApp(
                                 launchSingleTop = true
                                 restoreState = true
                             }
+                            android.util.Log.d("PERF", "[NAV] navController.navigate() returned for ${screen.route}")
                         },
                         onNewChit = {
                             navController.navigate(Screen.Editor.createRoute(Screen.Editor.NEW_CHIT_ID))
@@ -565,6 +588,7 @@ private fun CwocApp(
                                             // Swipe left → next tab
                                             val nextIdx = if (curIdx >= orderedTabs.size - 1) 0 else curIdx + 1
                                             val nextTab = orderedTabs[nextIdx]
+                                            android.util.Log.d("PERF", "[NAV] *** Tab navigate START → ${nextTab.route} (swipe left) ***")
                                             selectedTab = nextTab
                                             navController.navigate(nextTab.route) {
                                                 popUpTo(navController.graph.startDestinationId) {
@@ -577,6 +601,7 @@ private fun CwocApp(
                                             // Swipe right → previous tab
                                             val prevIdx = if (curIdx <= 0) orderedTabs.size - 1 else curIdx - 1
                                             val prevTab = orderedTabs[prevIdx]
+                                            android.util.Log.d("PERF", "[NAV] *** Tab navigate START → ${prevTab.route} (swipe right) ***")
                                             selectedTab = prevTab
                                             navController.navigate(prevTab.route) {
                                                 popUpTo(navController.graph.startDestinationId) {
@@ -799,6 +824,7 @@ private fun CwocApp(
                                 isOpen = viewsPanelOpen,
                                 currentRoute = currentRoute,
                                 onNavigate = { route ->
+                                    android.util.Log.d("PERF", "[NAV] *** Tab navigate START → $route (from ViewsPanel) ***")
                                     navController.navigate(route) {
                                         popUpTo(navController.graph.startDestinationId) {
                                             saveState = true
@@ -806,6 +832,7 @@ private fun CwocApp(
                                         launchSingleTop = true
                                         restoreState = true
                                     }
+                                    android.util.Log.d("PERF", "[NAV] navController.navigate() returned for $route")
                                 },
                                 onDismiss = { viewsPanelOpen = false },
                                 orderedMainTabs = orderedTabs

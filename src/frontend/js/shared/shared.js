@@ -663,6 +663,19 @@ function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
     });
     container.appendChild(btn);
   });
+  // Custom date/time button
+  var customBtn = document.createElement('button');
+  customBtn.style.cssText = 'padding:6px 10px;border:1px solid #c4a882;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:Lora,Georgia,serif;font-size:0.8em;cursor:pointer;font-weight:bold;';
+  customBtn.textContent = 'X';
+  customBtn.title = 'Pick date & time';
+  customBtn.addEventListener('click', function() {
+    closeModal();
+    var chitObj = (typeof chits !== 'undefined') ? chits.find(function(c) { return c.id === chitId; }) : { id: chitId, title: '' };
+    _showSnoozeCustomPicker(chitId, chitObj || { id: chitId, title: '' }, function() {
+      if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
+    });
+  });
+  container.appendChild(customBtn);
   var cancelBtn = document.createElement('button');
   cancelBtn.style.cssText = 'padding:6px 10px;border:1px solid #999;border-radius:4px;background:transparent;color:#666;font-family:Lora,Georgia,serif;font-size:0.8em;cursor:pointer;';
   cancelBtn.textContent = 'Cancel';
@@ -672,143 +685,266 @@ function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
 }
 
 /**
- * Show the "Add to Bundle" modal for an email chit.
- * Allows user to choose between subject or sender matching, then select a bundle.
+ * Unified "Add to Bundle" modal for an email chit.
+ * Supports: move once, always by sender/subject/recipient, editable match value,
+ * wildcard support, retroactive reclassification, and creating a new bundle inline.
+ *
+ * Called from: context menu, drag-drop onto bundle tab, mobile long-press picker.
+ *
  * @param {object} chit — the email chit object
+ * @param {string} [preselectedBundleId] — optional bundle ID to pre-select (from drag-drop)
+ * @param {string} [preselectedBundleName] — optional bundle name (for title display)
  */
-function _showAddToBundleModal(chit) {
-  console.log('[AddToBundle] Opening modal for chit:', chit.id, chit.title);
-  
+function _showAddToBundleModal(chit, preselectedBundleId, preselectedBundleName) {
+  if (!chit || !chit.id) return;
+
+
   // Remove any existing modal
-  var existing = document.getElementById('addToBundleModalOverlay');
+  var existing = document.getElementById('bundle-add-overlay');
   if (existing) existing.remove();
 
-  // Create modal overlay
-  var overlay = document.createElement('div');
-  overlay.id = 'addToBundleModalOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  // Extract email metadata
+  var senderRaw = chit.email_from || '';
+  var senderEmail = senderRaw;
+  var emailMatch = senderRaw.match(/<([^>]+)>/);
+  if (emailMatch) senderEmail = emailMatch[1];
+  else if (senderRaw.indexOf('@') > -1) senderEmail = senderRaw.trim();
 
-  // Create modal content
-  var modal = document.createElement('div');
-  modal.style.cssText = 'background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:12px;padding:24px;max-width:500px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
-
-  // Title
-  var title = document.createElement('h3');
-  title.style.cssText = 'margin:0 0 20px 0;color:#1a1208;font-size:1.3em;text-align:center;';
-  title.textContent = 'Add Email to Bundle';
-  modal.appendChild(title);
-
-  // Email info
-  var emailInfo = document.createElement('div');
-  emailInfo.style.cssText = 'background:rgba(255,255,255,0.3);border:1px solid #d4c4a8;border-radius:6px;padding:12px;margin-bottom:20px;font-size:0.9em;';
-  
   var subject = chit.title || chit.email_subject || '(No Subject)';
-  var sender = chit.email_from || '(Unknown Sender)';
-  
-  emailInfo.innerHTML = '<strong>Subject:</strong> ' + _escHtml(subject) + '<br><strong>From:</strong> ' + _escHtml(sender);
-  modal.appendChild(emailInfo);
 
-  // Match type selection
+  var recipientRaw = chit.email_to || '';
+  var recipientEmail = '';
+  if (Array.isArray(recipientRaw)) {
+    recipientEmail = recipientRaw[0] || '';
+  } else if (typeof recipientRaw === 'string' && recipientRaw.startsWith('[')) {
+    try { recipientEmail = JSON.parse(recipientRaw)[0] || ''; } catch(e) { recipientEmail = recipientRaw; }
+  } else {
+    recipientEmail = String(recipientRaw);
+  }
+  var recipMatch = recipientEmail.match(/<([^>]+)>/);
+  if (recipMatch) recipientEmail = recipMatch[1];
+  else if (recipientEmail.indexOf('@') > -1) recipientEmail = recipientEmail.trim();
+
+  // Build modal
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-overlay';
+  overlay.id = 'bundle-add-overlay';
+
+  var modal = document.createElement('div');
+  modal.className = 'cwoc-modal bundle-drop-modal';
+
+  var titleEl = document.createElement('h3');
+  titleEl.textContent = preselectedBundleName ? ('Move to ' + preselectedBundleName) : 'Add Email to Bundle';
+  modal.appendChild(titleEl);
+
+  // ── Mode radio options ──
+  var options = [
+    { value: 'move_once', labelHtml: 'Just this <b>once</b>', matchField: null },
+    { value: 'always_sender', labelHtml: 'Always <b>from</b> this sender', matchField: senderEmail },
+    { value: 'always_subject', labelHtml: 'Always <b>with</b> this subject', matchField: subject },
+    { value: 'always_recipient', labelHtml: 'Always <b>to</b> this recipient', matchField: recipientEmail }
+  ];
+
+  var radioGroup = document.createElement('div');
+  radioGroup.className = 'bundle-drop-options';
+
+  options.forEach(function(opt, idx) {
+    var row = document.createElement('label');
+    row.className = 'bundle-drop-option';
+    var radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'bundle-add-mode';
+    radio.value = opt.value;
+    if (idx === 0) radio.checked = true;
+    row.appendChild(radio);
+    var labelText = document.createElement('span');
+    labelText.innerHTML = opt.labelHtml;
+    row.appendChild(labelText);
+    radioGroup.appendChild(row);
+  });
+  modal.appendChild(radioGroup);
+
+  // ── Match value input ──
+  var matchSection = document.createElement('div');
+  matchSection.className = 'bundle-drop-match-section';
+  matchSection.style.display = 'none';
+
   var matchLabel = document.createElement('label');
-  matchLabel.style.cssText = 'display:block;margin-bottom:16px;font-weight:bold;color:#1a1208;';
-  matchLabel.textContent = 'Match emails by:';
-  modal.appendChild(matchLabel);
+  matchLabel.textContent = 'Match value (use * as wildcard):';
+  matchSection.appendChild(matchLabel);
 
-  var matchOptions = document.createElement('div');
-  matchOptions.style.cssText = 'margin-bottom:20px;';
+  var matchInput = document.createElement('input');
+  matchInput.type = 'text';
+  matchInput.className = 'bundle-drop-match-input';
+  matchInput.value = senderEmail;
+  matchSection.appendChild(matchInput);
+  modal.appendChild(matchSection);
 
-  // Subject radio
-  var subjectRadio = document.createElement('input');
-  subjectRadio.type = 'radio';
-  subjectRadio.name = 'matchType';
-  subjectRadio.value = 'subject';
-  subjectRadio.id = 'matchSubject';
-  
-  var subjectLabel = document.createElement('label');
-  subjectLabel.htmlFor = 'matchSubject';
-  subjectLabel.style.cssText = 'display:block;margin-bottom:8px;cursor:pointer;';
-  subjectLabel.innerHTML = '<input type="radio" name="matchType" value="subject" style="margin-right:8px;"> Subject: "' + _escHtml(subject) + '"';
-  
-  // Sender radio (default)
-  var senderLabel = document.createElement('label');
-  senderLabel.htmlFor = 'matchSender';
-  senderLabel.style.cssText = 'display:block;cursor:pointer;';
-  senderLabel.innerHTML = '<input type="radio" name="matchType" value="sender" checked style="margin-right:8px;"> Sender: "' + _escHtml(sender) + '"';
+  // ── Bundle selection (only if no preselected bundle) ──
+  var bundleSelect = null;
+  var newBundleSection = null;
 
-  matchOptions.appendChild(senderLabel);
-  matchOptions.appendChild(subjectLabel);
-  modal.appendChild(matchOptions);
+  if (!preselectedBundleId) {
+    var bundleLabel = document.createElement('label');
+    bundleLabel.style.cssText = 'display:block;margin-bottom:0.3em;font-weight:bold;color:#1a1208;';
+    bundleLabel.textContent = 'Target bundle:';
+    modal.appendChild(bundleLabel);
 
-  // Bundle selection
-  var bundleLabel = document.createElement('label');
-  bundleLabel.style.cssText = 'display:block;margin-bottom:8px;font-weight:bold;color:#1a1208;';
-  bundleLabel.textContent = 'Add to bundle:';
-  modal.appendChild(bundleLabel);
+    bundleSelect = document.createElement('select');
+    bundleSelect.className = 'bundle-drop-match-input';
+    bundleSelect.style.marginBottom = '0.8em';
+    bundleSelect.innerHTML = '<option value="">Loading...</option>';
+    modal.appendChild(bundleSelect);
 
-  var bundleSelect = document.createElement('select');
-  bundleSelect.style.cssText = 'width:100%;padding:8px;border:1px solid #6b4e31;border-radius:4px;background:#fffaf0;font-family:inherit;margin-bottom:20px;';
-  bundleSelect.innerHTML = '<option value="">Loading bundles...</option>';
-  modal.appendChild(bundleSelect);
+    // "Create new bundle" section
+    newBundleSection = document.createElement('div');
+    newBundleSection.className = 'bundle-drop-match-section';
+    newBundleSection.style.display = 'none';
 
-  // Load bundles
-  _loadBundlesForModal(bundleSelect);
+    var newBundleLabel = document.createElement('label');
+    newBundleLabel.textContent = 'New bundle name:';
+    newBundleSection.appendChild(newBundleLabel);
 
-  // Buttons
-  var buttonRow = document.createElement('div');
-  buttonRow.style.cssText = 'display:flex;gap:12px;justify-content:flex-end;';
+    var newBundleInput = document.createElement('input');
+    newBundleInput.type = 'text';
+    newBundleInput.className = 'bundle-drop-match-input';
+    newBundleInput.placeholder = 'Enter bundle name...';
+    newBundleSection.appendChild(newBundleInput);
+    modal.appendChild(newBundleSection);
+
+    // Load bundles into select
+    _loadBundlesForAddModal(bundleSelect, newBundleSection);
+  }
+
+  // ── Retroactive checkbox ──
+  var retroSection = document.createElement('div');
+  retroSection.className = 'bundle-drop-retro-section';
+
+  var retroLabel = document.createElement('label');
+  retroLabel.className = 'bundle-drop-retro-label';
+
+  var retroCb = document.createElement('input');
+  retroCb.type = 'checkbox';
+  retroCb.checked = true;
+  retroLabel.appendChild(retroCb);
+
+  var retroText = document.createElement('span');
+  retroText.textContent = ' Apply retroactively to existing emails';
+  retroLabel.appendChild(retroText);
+  retroSection.appendChild(retroLabel);
+  modal.appendChild(retroSection);
+
+  // ── Buttons ──
+  var btnRow = document.createElement('div');
+  btnRow.className = 'bundle-drop-buttons';
 
   var cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'zone-button';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.style.cssText = 'padding:8px 16px;border:1px solid #6b4e31;background:#f5f0e8;color:#1a1208;border-radius:4px;cursor:pointer;font-family:inherit;';
-  cancelBtn.onclick = function() { overlay.remove(); };
+  cancelBtn.addEventListener('click', function() { _closeAddBundleModal(); });
+  btnRow.appendChild(cancelBtn);
 
-  var addBtn = document.createElement('button');
-  addBtn.textContent = 'Add to Bundle';
-  addBtn.style.cssText = 'padding:8px 16px;border:1px solid #6b4e31;background:#6b4e31;color:#fdf5e6;border-radius:4px;cursor:pointer;font-family:inherit;';
-  addBtn.onclick = function() { _executeAddToBundle(chit, overlay); };
+  var confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'zone-button zone-button-primary';
+  confirmBtn.textContent = preselectedBundleId ? 'Move' : 'Add to Bundle';
+  confirmBtn.addEventListener('click', function() {
+    var mode = modal.querySelector('input[name="bundle-add-mode"]:checked').value;
+    var matchValue = matchInput.value.trim();
+    var retroactive = retroCb.checked;
 
-  buttonRow.appendChild(cancelBtn);
-  buttonRow.appendChild(addBtn);
-  modal.appendChild(buttonRow);
+    // Determine target bundle ID
+    var targetBundleId = preselectedBundleId || null;
+    if (!targetBundleId && bundleSelect) {
+      targetBundleId = bundleSelect.value;
+    }
+
+    // Handle "create new bundle" option
+    if (!targetBundleId || targetBundleId === '__new__') {
+      var newName = newBundleSection ? newBundleSection.querySelector('input[type="text"]').value.trim() : '';
+      if (!newName) {
+        cwocToast('Please enter a name for the new bundle.', 'error');
+        return;
+      }
+      _createBundleThenDrop(newName, chit.id, mode, matchValue, retroactive);
+      return;
+    }
+
+    if (!targetBundleId) {
+      cwocToast('Please select a bundle.', 'error');
+      return;
+    }
+
+    _executeUnifiedBundleDrop(chit.id, targetBundleId, mode, matchValue, retroactive);
+  });
+  btnRow.appendChild(confirmBtn);
+  modal.appendChild(btnRow);
 
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // ESC to close
-  var escHandler = function(e) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      overlay.remove();
-      document.removeEventListener('keydown', escHandler, true);
+  // ── Show/hide match input based on radio selection ──
+  radioGroup.addEventListener('change', function() {
+    var selected = modal.querySelector('input[name="bundle-add-mode"]:checked').value;
+    if (selected === 'move_once') {
+      matchSection.style.display = 'none';
+      retroCb.checked = false;
+    } else {
+      matchSection.style.display = '';
+      retroCb.checked = true;
+      if (selected === 'always_sender') matchInput.value = senderEmail;
+      else if (selected === 'always_subject') matchInput.value = subject;
+      else if (selected === 'always_recipient') matchInput.value = recipientEmail;
     }
-  };
-  document.addEventListener('keydown', escHandler, true);
+  });
 
-  // Click overlay to close
-  overlay.onclick = function(e) {
-    if (e.target === overlay) overlay.remove();
-  };
+  // ── ESC to close ──
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) _closeAddBundleModal();
+  });
+  document.addEventListener('keydown', _addBundleModalEscHandler, true);
+}
+
+function _addBundleModalEscHandler(e) {
+  if (e.key === 'Escape') {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    _closeAddBundleModal();
+  }
+}
+
+function _closeAddBundleModal() {
+  var overlay = document.getElementById('bundle-add-overlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', _addBundleModalEscHandler, true);
 }
 
 /**
- * Load bundles into the bundle selection dropdown.
- * @param {HTMLSelectElement} selectEl — the select element to populate
+ * Load bundles into the select element for the unified Add to Bundle modal.
+ * Includes a "Create new bundle..." option at the end.
  */
-function _loadBundlesForModal(selectEl) {
-  // Try to get bundles from cached settings first
+function _loadBundlesForAddModal(selectEl, newBundleSection) {
+  var bundles = [];
+
+  // Try cached settings first
   if (window._cwocSettings && window._cwocSettings.bundles) {
-    _populateBundleSelect(selectEl, window._cwocSettings.bundles);
+    bundles = window._cwocSettings.bundles;
+  } else if (typeof _emailBundlesData !== 'undefined' && _emailBundlesData) {
+    bundles = _emailBundlesData;
+  }
+
+  if (bundles && bundles.length) {
+    _populateAddBundleSelect(selectEl, bundles, newBundleSection);
     return;
   }
 
   // Fall back to fetching settings
   if (typeof getCachedSettings === 'function') {
     getCachedSettings().then(function(settings) {
-      var bundles = (settings && settings.bundles) || [];
-      _populateBundleSelect(selectEl, bundles);
-    }).catch(function(err) {
-      console.error('[AddToBundle] Failed to load bundles:', err);
+      var b = (settings && settings.bundles) || [];
+      _populateAddBundleSelect(selectEl, b, newBundleSection);
+    }).catch(function() {
       selectEl.innerHTML = '<option value="">Error loading bundles</option>';
     });
   } else {
@@ -816,149 +952,184 @@ function _loadBundlesForModal(selectEl) {
   }
 }
 
-/**
- * Populate the bundle select dropdown with bundle options.
- * @param {HTMLSelectElement} selectEl — the select element
- * @param {Array} bundles — array of bundle objects
- */
-function _populateBundleSelect(selectEl, bundles) {
+function _populateAddBundleSelect(selectEl, bundles, newBundleSection) {
   selectEl.innerHTML = '';
-  
-  if (!bundles || bundles.length === 0) {
-    selectEl.innerHTML = '<option value="">No bundles available</option>';
-    return;
-  }
 
-  // Add default option
-  var defaultOption = document.createElement('option');
-  defaultOption.value = '';
-  defaultOption.textContent = 'Select a bundle...';
-  selectEl.appendChild(defaultOption);
+  var defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Select a bundle...';
+  selectEl.appendChild(defaultOpt);
 
-  // Filter out "Everything Else" bundle (catch-all, can't add rules to it)
-  var availableBundles = bundles.filter(function(b) {
-    return b.name !== 'Everything Else';
-  });
-
-  // Sort by display order
-  availableBundles.sort(function(a, b) {
+  var available = (bundles || []).filter(function(b) {
+    return !b.is_catch_all && b.display_order !== -1;
+  }).sort(function(a, b) {
     return (a.display_order || 0) - (b.display_order || 0);
   });
 
-  availableBundles.forEach(function(bundle) {
-    var option = document.createElement('option');
-    option.value = bundle.id;
-    option.textContent = bundle.name;
-    if (bundle.description) {
-      option.title = bundle.description;
+  available.forEach(function(bundle) {
+    var opt = document.createElement('option');
+    opt.value = bundle.id;
+    opt.textContent = bundle.name;
+    selectEl.appendChild(opt);
+  });
+
+  // "Create new bundle" option
+  var newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '\u2795 Create new bundle...';
+  selectEl.appendChild(newOpt);
+
+  // Show/hide new bundle name input
+  selectEl.addEventListener('change', function() {
+    if (selectEl.value === '__new__') {
+      newBundleSection.style.display = '';
+      newBundleSection.querySelector('input[type="text"]').focus();
+    } else {
+      newBundleSection.style.display = 'none';
     }
-    selectEl.appendChild(option);
   });
 }
 
 /**
- * Execute the "Add to Bundle" action.
- * @param {object} chit — the email chit
- * @param {HTMLElement} overlay — the modal overlay to close
+ * Create a new bundle, then execute the drop-email action into it.
  */
-function _executeAddToBundle(chit, overlay) {
-  var matchType = document.querySelector('input[name="matchType"]:checked');
-  var bundleSelect = overlay.querySelector('select');
-  
-  if (!matchType || !bundleSelect.value) {
-    cwocToast('Please select a match type and bundle.', 'error');
-    return;
-  }
-
-  var bundleId = bundleSelect.value;
-  var matchBy = matchType.value;
-  
-  // Get the match value
-  var matchValue;
-  if (matchBy === 'subject') {
-    matchValue = chit.title || chit.email_subject || '';
-  } else if (matchBy === 'sender') {
-    matchValue = chit.email_from || '';
-    // Extract just the email address from "Name <email>" format
-    var emailMatch = matchValue.match(/<([^>]+)>/);
-    if (emailMatch) {
-      matchValue = emailMatch[1];
+async function _createBundleThenDrop(bundleName, chitId, mode, matchValue, retroactive) {
+  _closeAddBundleModal();
+  try {
+    var resp = await fetch('/api/bundles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: bundleName })
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      cwocToast(err.detail || 'Failed to create bundle', 'error');
+      return;
     }
+    var newBundle = await resp.json();
+    cwocToast('Created bundle "' + newBundle.name + '"', 'success');
+    await _executeUnifiedBundleDrop(chitId, newBundle.id, mode, matchValue, retroactive);
+  } catch (e) {
+    console.error('[AddToBundle] Create bundle error:', e);
+    cwocToast('Failed to create bundle', 'error');
   }
+}
 
-  if (!matchValue.trim()) {
-    cwocToast('No ' + matchBy + ' found to match against.', 'error');
-    return;
-  }
+/**
+ * Execute the unified bundle drop via /api/bundles/{id}/drop-email.
+ * Used by context menu, drag-drop, and mobile long-press flows.
+ */
+async function _executeUnifiedBundleDrop(chitId, bundleId, mode, matchValue, retroactive) {
+  _closeAddBundleModal();
+  try {
+    var response = await fetch('/api/bundles/' + encodeURIComponent(bundleId) + '/drop-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chit_id: chitId,
+        mode: mode,
+        match_value: matchValue,
+        apply_retroactively: retroactive
+      })
+    });
 
-  console.log('[AddToBundle] Adding rule:', { bundleId, matchBy, matchValue });
-
-  // Call the API to add the rule
-  fetch('/api/bundles/' + encodeURIComponent(bundleId) + '/add-rule', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      match_type: matchBy,
-      match_value: matchValue.trim()
-    })
-  })
-  .then(function(response) {
     if (!response.ok) {
-      return response.json().then(function(err) {
-        throw new Error(err.detail || 'Failed to add rule');
-      });
-    }
-    return response.json();
-  })
-  .then(function(result) {
-    overlay.remove();
-    cwocToast('Added rule to bundle successfully!', 'success');
-    
-    // Immediately move THIS email to the target bundle (instant feedback)
-    // Strip old bundle tags and add the new one
-    var bundleId = result.bundle_id;
-    if (bundleId && chit.id) {
-      fetch('/api/chit/' + encodeURIComponent(chit.id))
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(fullChit) {
-          if (!fullChit) return;
-          var tags = fullChit.tags || [];
-          if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
-          // Strip all existing bundle tags (both old name-based and new ID-based)
-          tags = tags.filter(function(t) {
-            return !(typeof t === 'string' && (t.indexOf('CWOC_System/Bundle/') === 0 || t.indexOf('CWOC_System/BundleID/') === 0));
-          });
-          // Add the new bundle tag (by ID)
-          tags.push('CWOC_System/BundleID/' + bundleId);
-          fullChit.tags = tags;
-          // Serialize email array fields back to strings for PUT
-          ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
-            if (Array.isArray(fullChit[f])) fullChit[f] = JSON.stringify(fullChit[f]);
-          });
-          return fetch('/api/chits/' + encodeURIComponent(chit.id), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fullChit)
-          });
-        })
-        .catch(function(e) { console.error('[AddToBundle] Immediate move failed:', e); });
+      var err = await response.json().catch(function() { return {}; });
+      cwocToast(err.detail || 'Failed to move email', 'error');
+      return;
     }
 
-    // Trigger reclassification for all OTHER matching emails
-    return fetch('/api/bundles/reclassify', { method: 'POST' });
-  })
-  .then(function(reclassifyResp) {
-    if (reclassifyResp && reclassifyResp.ok) {
-      console.log('[AddToBundle] Reclassification triggered');
-      // Invalidate settings cache and refresh
-      if (typeof _invalidateSettingsCache === 'function') _invalidateSettingsCache();
-      if (typeof fetchChits === 'function') fetchChits();
+    var data = await response.json();
+    var msg = 'Moved to ' + data.bundle_name;
+    if (data.rule_name) msg += ' (rule added)';
+    if (data.reclassified_count > 0) msg += ' — ' + data.reclassified_count + ' emails reclassified';
+
+    // Show toast with "Edit Bundle" button when a rule was created/updated
+    if (data.rule_id) {
+      _showBundleDropSuccessToast(msg, data.bundle_id, data.bundle_name);
+    } else {
+      cwocToast(msg, 'success');
     }
-  })
-  .catch(function(err) {
-    console.error('[AddToBundle] Error:', err);
-    cwocToast('Failed to add rule: ' + err.message, 'error');
+
+    // Refresh
+    if (typeof _invalidateSettingsCache === 'function') _invalidateSettingsCache();
+    if (typeof fetchChits === 'function') {
+      await fetchChits();
+      if (typeof displayChits === 'function') displayChits();
+    }
+  } catch (e) {
+    console.error('[AddToBundle] Error:', e);
+    cwocToast('Failed to move email', 'error');
+  }
+}
+
+/**
+ * Show a success toast with an "Edit Bundle" button after a bundle drop that created/updated a rule.
+ * The button navigates to the rule editor for the bundle's consolidated rule.
+ * @param {string} msg — the success message text
+ * @param {string} bundleId — the bundle ID
+ * @param {string} bundleName — the bundle name
+ */
+function _showBundleDropSuccessToast(msg, bundleId, bundleName) {
+  // Remove any existing toast
+  var existing = document.getElementById('cwoc-toast');
+  if (existing) existing.remove();
+
+  var toast = document.createElement('div');
+  toast.id = 'cwoc-toast';
+  toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);'
+    + 'background:#2d5a1e;color:#fdf5e6;border:2px solid #1e3f14;'
+    + 'border-radius:8px;padding:12px 20px;font-family:Lora,Georgia,serif;font-size:0.95em;'
+    + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10000;'
+    + 'max-width:90%;text-align:center;opacity:0;transition:opacity 0.3s ease;'
+    + 'display:flex;align-items:center;gap:12px;';
+
+  var textSpan = document.createElement('span');
+  textSpan.textContent = '✅  ' + msg;
+  toast.appendChild(textSpan);
+
+  var editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.textContent = 'Edit Bundle';
+  editBtn.style.cssText = 'background:#fdf5e6;color:#2d5a1e;border:1px solid #1e3f14;'
+    + 'border-radius:4px;padding:4px 10px;font-family:Lora,Georgia,serif;font-size:0.85em;'
+    + 'cursor:pointer;font-weight:600;white-space:nowrap;';
+  editBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    dismiss();
+    // Consolidate rules then open rule editor
+    fetch('/api/bundles/' + encodeURIComponent(bundleId) + '/consolidate-rules', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.rule_id) {
+          try { localStorage.setItem('cwoc_bundle_needs_reclassify', '1'); } catch(ex) {}
+          window.location.href = '/frontend/html/rule-editor.html'
+            + '?id=' + encodeURIComponent(data.rule_id)
+            + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
+        }
+      })
+      .catch(function() {
+        cwocToast('Failed to open bundle editor', 'error');
+      });
   });
+  toast.appendChild(editBtn);
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(function() { toast.style.opacity = '1'; });
+
+  var timer = null;
+  function dismiss() {
+    if (timer) clearTimeout(timer);
+    toast.style.opacity = '0';
+    setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+  }
+
+  // Auto-dismiss after 6 seconds (longer than normal to give time to click)
+  timer = setTimeout(dismiss, 6000);
+
+  // Click on text area dismisses (but not on the button)
+  textSpan.style.cursor = 'pointer';
+  textSpan.addEventListener('click', dismiss);
 }
 
 /**
@@ -983,10 +1154,10 @@ function _showChitContextMenu(e, chit, onRefresh) {
 
   var menu = document.createElement('div');
   menu.className = 'cwoc-chit-context-menu';
-  menu.style.cssText = 'position:fixed;background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;max-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+  menu.style.cssText = 'position:fixed;background:url("/static/images/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:220px;max-width:230px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
 
   // Position near the click, clamped to viewport
-  var menuX = Math.min(e.clientX, window.innerWidth - 220);
+  var menuX = Math.min(e.clientX, window.innerWidth - 250);
   var menuY = Math.min(e.clientY, window.innerHeight - 300);
   menu.style.left = menuX + 'px';
   menu.style.top = menuY + 'px';
@@ -1008,25 +1179,17 @@ function _showChitContextMenu(e, chit, onRefresh) {
     menu.appendChild(item);
   }
 
-  // Open in Editor
+  // ── Group 1: Primary Actions ──────────────────────────────────────────────────
   _menuItem('<i class="fas fa-pen-to-square" style="color:#6b4e31;"></i>', 'Open in Editor', function() {
     if (typeof storePreviousState === 'function') storePreviousState();
     window.location.href = '/editor?id=' + chitId;
   });
 
-  // Quick Edit (full modal)
   _menuItem('<i class="fas fa-sliders" style="color:#6b4e31;"></i>', 'Quick Edit', function() {
     showQuickEditModal(chit, onRefresh);
   });
 
-  // Add to Bundle (only for emails)
-  if (chit.email_message_id || chit.email_status) {
-    _menuItem('<i class="fas fa-folder-plus" style="color:#6b4e31;"></i>', 'Add to Bundle', function() {
-      _showAddToBundleModal(chit);
-    });
-  }
-
-  // Separator
+  // ── Group 2: Organization (state/visibility) ────────────────────────────────
   var sep1 = document.createElement('div');
   sep1.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
   menu.appendChild(sep1);
@@ -1040,7 +1203,6 @@ function _showChitContextMenu(e, chit, onRefresh) {
       body: JSON.stringify({ pinned: !isPinned })
     }).then(function(r) {
       if (r.ok) {
-        // Update local chit data so re-render reflects the change
         chit.pinned = !isPinned;
         if (typeof chits !== 'undefined') {
           var local = chits.find(function(c) { return c.id === chitId; });
@@ -1055,16 +1217,13 @@ function _showChitContextMenu(e, chit, onRefresh) {
   var isArchived = !!chit.archived;
   _menuItem(isArchived ? '📦' : '📦', isArchived ? 'Unarchive' : 'Archive', function() {
     var newArchived = !isArchived;
-    // Immediately hide locally
     chit.archived = newArchived;
     if (typeof chits !== 'undefined') {
       var local = chits.find(function(c) { return c.id === chitId; });
       if (local) local.archived = newArchived;
     }
     if (onRefresh) onRefresh();
-    // Show undo toast
     _showArchiveUndoToast(chit.title, newArchived, function() {
-      // Undo: revert the archive state
       chit.archived = !newArchived;
       if (typeof chits !== 'undefined') {
         var local2 = chits.find(function(c) { return c.id === chitId; });
@@ -1077,7 +1236,6 @@ function _showChitContextMenu(e, chit, onRefresh) {
         body: JSON.stringify({ archived: !newArchived })
       });
     });
-    // Persist to server
     fetch('/api/chits/' + chitId + '/fields', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1093,7 +1251,6 @@ function _showChitContextMenu(e, chit, onRefresh) {
         .then(function() { if (typeof cwocToast === 'function') cwocToast('Unsnoozed.', 'info'); if (onRefresh) onRefresh(); });
     });
   } else {
-    // Snooze row: emoji + circular minute buttons
     var snoozeRow = document.createElement('div');
     snoozeRow.style.cssText = 'padding:5px 10px;display:flex;align-items:center;gap:5px;';
     var snoozeEmoji = document.createElement('span');
@@ -1107,7 +1264,6 @@ function _showChitContextMenu(e, chit, onRefresh) {
       circleBtn.title = opt.title;
       circleBtn.addEventListener('click', function() {
         _close();
-        // Immediately hide the chit locally
         chit.snoozed_until = new Date(Date.now() + opt.mins * 60 * 1000).toISOString();
         if (typeof chits !== 'undefined') {
           var _localChit = chits.find(function(c) { return c.id === chitId; });
@@ -1125,32 +1281,77 @@ function _showChitContextMenu(e, chit, onRefresh) {
               if (onRefresh) onRefresh();
             });
         });
-        // Persist to server
         fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: opt.mins }) });
       });
       snoozeRow.appendChild(circleBtn);
     });
+    var customBtn = document.createElement('button');
+    customBtn.className = 'cwoc-ctx-snooze-circle';
+    customBtn.textContent = 'X';
+    customBtn.title = 'Pick date & time';
+    customBtn.addEventListener('click', function() {
+      _close();
+      _showSnoozeCustomPicker(chitId, chit, onRefresh);
+    });
+    snoozeRow.appendChild(customBtn);
     menu.appendChild(snoozeRow);
   }
 
-  // Separator
+  // ── Group 3: Tools (less common utility actions) ────────────────────────────
   var sep2 = document.createElement('div');
   sep2.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
   menu.appendChild(sep2);
 
-  // Print Note (only if chit has notes)
-  if (chit.note && chit.note.trim()) {
+  // Add to Bundle (only for emails)
+  if (chit.email_message_id || chit.email_status) {
+    _menuItem('<i class="fas fa-folder-plus" style="color:#6b4e31;"></i>', 'Add to Bundle', function() {
+      _showAddToBundleModal(chit);
+    });
+  }
+
+  _menuItem('<i class="fas fa-wand-magic-sparkles" style="color:#6b4e31;"></i>', 'Create a Rule', function() {
+    _showCreateRuleFromChitModal(chit);
+  });
+
+  // Print Checklist (only if chit has checklist items — not on Email view)
+  if (chit.checklist && chit.checklist.length > 0 && !(typeof currentTab !== 'undefined' && currentTab === 'Email')) {
+    _menuItem('<i class="fas fa-print" style="color:#6b4e31;"></i>', 'Print Checklist', function() {
+      _printChecklist({ items: chit.checklist }, chit.title);
+    });
+  }
+
+  // Print Note (only if chit has notes — not on Checklists or Email view)
+  if (chit.note && chit.note.trim() && !(typeof currentTab !== 'undefined' && (currentTab === 'Checklists' || currentTab === 'Email'))) {
     _menuItem('<i class="fas fa-print" style="color:#6b4e31;"></i>', 'Print Note', function() {
       _printNoteWithChoice(chit.note, chit.title);
     });
   }
 
-  // Delete
+  // Print Email (only on Email view)
+  if ((chit.email_from || chit.email_subject || chit.email_body_text || chit.email_body_html) && typeof currentTab !== 'undefined' && currentTab === 'Email') {
+    _menuItem('<i class="fas fa-print" style="color:#6b4e31;"></i>', 'Print Email', function() {
+      _printEmail(chit);
+    });
+  }
+
+  // Print Attachment (only if chit has attachments)
+  var _ctxAttachments = chit.attachments;
+  if (typeof _ctxAttachments === 'string') { try { _ctxAttachments = JSON.parse(_ctxAttachments); } catch(e) { _ctxAttachments = null; } }
+  if (Array.isArray(_ctxAttachments) && _ctxAttachments.length > 0) {
+    _menuItem('<i class="fas fa-print" style="color:#6b4e31;"></i>', 'Print Attachment', function() {
+      _printAttachmentPicker(chitId, _ctxAttachments);
+    });
+  }
+
+  // ── Group 4: Destructive ───────────────────────────────────────────────────
+  var sep3 = document.createElement('div');
+  sep3.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+  menu.appendChild(sep3);
+
   _menuItem('<i class="fas fa-trash-alt" style="color:#a33;"></i>', 'Delete', function() {
     cwocConfirm('Delete this chit?', { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }).then(function(confirmed) {
       if (!confirmed) return;
       var delTitle = chit.title || '(Untitled)';
-      // Immediately hide locally
       chit.deleted = true;
       if (typeof chits !== 'undefined') {
         var _delLocal = chits.find(function(c) { return c.id === chitId; });
@@ -1159,7 +1360,6 @@ function _showChitContextMenu(e, chit, onRefresh) {
       if (onRefresh) onRefresh();
       if (typeof _showDeleteUndoToast === 'function') {
         _showDeleteUndoToast(chitId, delTitle, null, function() {
-          // Undo: restore locally and on server
           chit.deleted = false;
           if (typeof chits !== 'undefined') {
             var _restLocal = chits.find(function(c) { return c.id === chitId; });
@@ -1168,12 +1368,11 @@ function _showChitContextMenu(e, chit, onRefresh) {
           fetch('/api/trash/' + chitId + '/restore', { method: 'POST' }).then(function() { if (onRefresh) onRefresh(); });
         });
       }
-      // Persist to server
       fetch('/api/chits/' + chitId, { method: 'DELETE' });
     });
   });
 
-  // ── Email-specific actions (mark unread, add to bundle) — only in Email view ──
+  // ── Group 5: Email-specific (contextual) ───────────────────────────────────
   if ((chit.email_from || chit.email_subject || chit.email_date) && typeof currentTab !== 'undefined' && currentTab === 'Email') {
     var emailSep = document.createElement('div');
     emailSep.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
@@ -1225,6 +1424,212 @@ function _showChitContextMenu(e, chit, onRefresh) {
   }
   document.addEventListener('keydown', _escHandler, true);
 }
+
+/**
+ * Show "Create a Rule" modal for a chit — displays all populated fields that
+ * have rule-eligible conditions. User selects a field, then navigates to the
+ * rule editor with that condition pre-populated.
+ *
+ * Follows the same visual pattern as _showAddToBundleModal.
+ *
+ * @param {object} chit — the chit object
+ */
+function _showCreateRuleFromChitModal(chit) {
+  if (!chit) return;
+
+  // Remove any existing modal
+  var existing = document.getElementById('create-rule-from-chit-overlay');
+  if (existing) existing.remove();
+
+  // Determine trigger type based on chit type
+  var isEmail = !!(chit.email_message_id || chit.email_from || chit.email_status);
+  var triggerType = isEmail ? 'email_received' : 'chit_updated';
+
+  // Build list of populated fields with their current values
+  var ruleFields = [];
+
+  // Core fields
+  if (chit.title && chit.title.trim()) {
+    ruleFields.push({ field: 'title', label: 'Title', value: chit.title, operator: 'contains' });
+  }
+  if (chit.status) {
+    ruleFields.push({ field: 'status', label: 'Status', value: chit.status, operator: 'equals' });
+  }
+  if (chit.priority) {
+    ruleFields.push({ field: 'priority', label: 'Priority', value: chit.priority, operator: 'equals' });
+  }
+  if (chit.severity) {
+    ruleFields.push({ field: 'severity', label: 'Severity', value: chit.severity, operator: 'equals' });
+  }
+  if (chit.location && chit.location.trim()) {
+    ruleFields.push({ field: 'location', label: 'Location', value: chit.location, operator: 'contains' });
+  }
+  if (chit.color) {
+    ruleFields.push({ field: 'color', label: 'Color', value: chit.color, operator: 'equals' });
+  }
+
+  // Tags (each tag as a separate option)
+  var tags = chit.tags;
+  if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+  if (Array.isArray(tags) && tags.length > 0) {
+    tags.forEach(function(tag) {
+      if (tag && typeof tag === 'string' && !isSystemTag(tag)) {
+        ruleFields.push({ field: 'tags', label: 'Tag: ' + tag, value: tag, operator: 'tag_present' });
+      }
+    });
+  }
+
+  // People (each person as a separate option)
+  var people = chit.people;
+  if (typeof people === 'string') { try { people = JSON.parse(people); } catch(e) { people = []; } }
+  if (Array.isArray(people) && people.length > 0) {
+    people.forEach(function(person) {
+      if (person && typeof person === 'string') {
+        ruleFields.push({ field: 'people', label: 'Person: ' + person, value: person, operator: 'person_on_chit' });
+      }
+    });
+  }
+
+  // Email fields
+  if (isEmail) {
+    if (chit.email_from) {
+      var senderEmail = chit.email_from;
+      var emailMatch = senderEmail.match(/<([^>]+)>/);
+      if (emailMatch) senderEmail = emailMatch[1];
+      ruleFields.push({ field: 'email_from', label: 'From: ' + senderEmail, value: senderEmail, operator: 'contains' });
+    }
+    if (chit.email_to) {
+      var toRaw = chit.email_to;
+      if (typeof toRaw === 'string' && toRaw.startsWith('[')) { try { toRaw = JSON.parse(toRaw)[0]; } catch(e) {} }
+      if (Array.isArray(toRaw)) toRaw = toRaw[0] || '';
+      if (toRaw) {
+        var toMatch = String(toRaw).match(/<([^>]+)>/);
+        if (toMatch) toRaw = toMatch[1];
+        ruleFields.push({ field: 'email_to', label: 'To: ' + toRaw, value: String(toRaw), operator: 'contains' });
+      }
+    }
+    if (chit.email_subject) {
+      ruleFields.push({ field: 'email_subject', label: 'Subject: ' + chit.email_subject, value: chit.email_subject, operator: 'contains' });
+    }
+  }
+
+  // Note (if present, offer "note contains" option)
+  if (chit.note && chit.note.trim() && chit.note.trim().length <= 100) {
+    ruleFields.push({ field: 'note', label: 'Note contains text', value: chit.note.trim(), operator: 'contains' });
+  }
+
+  // If no rule-eligible fields are populated, show a toast and bail
+  if (ruleFields.length === 0) {
+    cwocToast('This chit has no populated fields to create a rule from.', 'info');
+    return;
+  }
+
+  // Build modal
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-overlay';
+  overlay.id = 'create-rule-from-chit-overlay';
+
+  var modal = document.createElement('div');
+  modal.className = 'cwoc-modal';
+  modal.style.cssText = 'max-width:420px;width:90%;background:#fffaf0;border:2px solid #6b4e31;border-radius:10px;padding:24px;font-family:Lora,Georgia,serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+  var titleEl = document.createElement('h3');
+  titleEl.style.cssText = 'margin:0 0 12px;font-size:1.15em;color:#4a2c2a;';
+  titleEl.textContent = 'Create a Rule';
+  modal.appendChild(titleEl);
+
+  var subtitle = document.createElement('p');
+  subtitle.style.cssText = 'font-size:0.9em;color:#6b4e31;margin:0 0 14px;';
+  subtitle.textContent = 'Select a field to base the rule condition on:';
+  modal.appendChild(subtitle);
+
+  // Radio options for each populated field
+  var radioGroup = document.createElement('div');
+  radioGroup.style.cssText = 'display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;margin-bottom:14px;';
+
+  ruleFields.forEach(function(rf, idx) {
+    var row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background 0.15s;';
+    row.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
+    row.addEventListener('mouseleave', function() { this.style.background = ''; });
+
+    var radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'create-rule-field';
+    radio.value = String(idx);
+    if (idx === 0) radio.checked = true;
+    row.appendChild(radio);
+
+    var labelText = document.createElement('span');
+    labelText.style.cssText = 'font-size:0.95em;color:#1a1208;';
+    labelText.textContent = rf.label;
+    row.appendChild(labelText);
+
+    radioGroup.appendChild(row);
+  });
+  modal.appendChild(radioGroup);
+
+  // Buttons
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'zone-button';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', function() { _closeCreateRuleFromChitModal(); });
+  btnRow.appendChild(cancelBtn);
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'zone-button zone-button-primary';
+  confirmBtn.textContent = 'Create Rule';
+  confirmBtn.addEventListener('click', function() {
+    var selected = modal.querySelector('input[name="create-rule-field"]:checked');
+    if (!selected) return;
+    var idx = parseInt(selected.value, 10);
+    var rf = ruleFields[idx];
+    _closeCreateRuleFromChitModal();
+
+    // Navigate to rule editor with pre-populated condition
+    var params = new URLSearchParams();
+    params.set('trigger', triggerType);
+    params.set('prefill_field', rf.field);
+    params.set('prefill_operator', rf.operator);
+    params.set('prefill_value', rf.value);
+    if (typeof storePreviousState === 'function') storePreviousState();
+    window.location.href = '/frontend/html/rule-editor.html?' + params.toString();
+  });
+  btnRow.appendChild(confirmBtn);
+  modal.appendChild(btnRow);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) _closeCreateRuleFromChitModal();
+  });
+
+  // ESC to close
+  document.addEventListener('keydown', _createRuleFromChitEscHandler, true);
+}
+
+function _createRuleFromChitEscHandler(e) {
+  if (e.key === 'Escape') {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    _closeCreateRuleFromChitModal();
+  }
+}
+
+function _closeCreateRuleFromChitModal() {
+  var overlay = document.getElementById('create-rule-from-chit-overlay');
+  if (overlay) overlay.remove();
+  document.removeEventListener('keydown', _createRuleFromChitEscHandler, true);
+}
+
+/** (isSystemTag is defined in shared-tags.js — used by _showCreateRuleFromChitModal) */
 
 /**
  * Show a delete sub-menu replacing the delete button with options:
@@ -2153,6 +2558,103 @@ function _showSnoozeUndoToast(chitId, chitTitle, mins, onUndo) {
 }
 
 
+/**
+ * Show a custom date/time picker modal for snoozing a chit from the context menu.
+ * @param {string} chitId - The chit ID
+ * @param {object} chit - The chit object (mutated locally for instant UI update)
+ * @param {function} onRefresh - Called after snooze is applied to refresh the view
+ */
+function _showSnoozeCustomPicker(chitId, chit, onRefresh) {
+  var existing = document.getElementById('cwoc-snooze-custom-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-snooze-custom-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;max-width:320px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var defaultDate = tomorrow.toISOString().split('T')[0];
+
+  modal.innerHTML = '<h3 style="margin:0 0 16px;color:#4a2c2a;font-size:1.1em;">😴 Snooze Until</h3>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;">' +
+    '  <input type="date" id="snooze-ctx-date" value="' + defaultDate + '" style="padding:6px 8px;border:1px solid #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.9em;" />' +
+    '  <input type="text" id="snooze-ctx-time" value="09:00" readonly style="padding:6px 8px;border:1px solid #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.9em;cursor:pointer;background:#fdf5e6;" />' +
+    '</div>' +
+    '<div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">' +
+    '  <button id="snooze-ctx-cancel" style="padding:6px 14px;border:1px solid #c4a882;border-radius:4px;background:#fdf5e6;color:#6b4e31;font-family:Lora,Georgia,serif;cursor:pointer;">Cancel</button>' +
+    '  <button id="snooze-ctx-confirm" style="padding:6px 14px;border:1px solid #6b4e31;border-radius:4px;background:#6b4e31;color:#fff;font-family:Lora,Georgia,serif;cursor:pointer;">Snooze</button>' +
+    '</div>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Wire up the time input to open the drum roller picker
+  var timeInput = document.getElementById('snooze-ctx-time');
+  if (timeInput && typeof cwocTimePicker !== 'undefined') {
+    timeInput.addEventListener('click', function() { cwocTimePicker.open(timeInput); });
+  }
+
+  // Close on overlay click
+  function _closeSnoozeCustom() {
+    document.removeEventListener('keydown', _snoozeEscHandler, true);
+    overlay.remove();
+  }
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) _closeSnoozeCustom();
+  });
+  // Close on ESC
+  function _snoozeEscHandler(e) {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      _closeSnoozeCustom();
+    }
+  }
+  document.addEventListener('keydown', _snoozeEscHandler, true);
+  // Cancel button
+  document.getElementById('snooze-ctx-cancel').addEventListener('click', function() { _closeSnoozeCustom(); });
+  // Confirm button
+  document.getElementById('snooze-ctx-confirm').addEventListener('click', function() {
+    var dateVal = document.getElementById('snooze-ctx-date').value;
+    var timeVal = document.getElementById('snooze-ctx-time').value || '09:00';
+    if (!dateVal) { cwocToast('Please select a date.', 'error'); return; }
+    var until = new Date(dateVal + 'T' + timeVal + ':00');
+    if (isNaN(until.getTime())) { cwocToast('Invalid date/time.', 'error'); return; }
+    if (until <= new Date()) { cwocToast('Snooze time must be in the future.', 'error'); return; }
+
+    _closeSnoozeCustom();
+    // Apply locally
+    chit.snoozed_until = until.toISOString();
+    if (typeof chits !== 'undefined') {
+      var _lc = chits.find(function(c) { return c.id === chitId; });
+      if (_lc) _lc.snoozed_until = chit.snoozed_until;
+    }
+    if (onRefresh) onRefresh();
+    // Undo toast
+    var untilStr = until.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+      until.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    var message = '😴 Snoozed: ' + (chit.title || '(Untitled)') + ' until <b>' + untilStr + '</b>';
+    _showDeleteUndoToast(null, chit.title, null, function() {
+      fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
+        .then(function() {
+          chit.snoozed_until = null;
+          if (typeof chits !== 'undefined') {
+            var _lc2 = chits.find(function(c) { return c.id === chitId; });
+            if (_lc2) _lc2.snoozed_until = null;
+          }
+          if (onRefresh) onRefresh();
+        });
+    }, message);
+    // Persist to server
+    fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: until.toISOString() }) });
+  });
+}
+
+
 // ── Shared Audio Unlock System (Mobile) ──────────────────────────────────────
 // Mobile browsers block audio playback unless triggered by a user gesture.
 // This system pre-unlocks audio on the first interaction and re-unlocks when
@@ -2714,6 +3216,8 @@ function _handleRemoteDataChange(type) {
     } else if (path.indexOf('editor') !== -1) {
       // Editor: don't reload — user is actively editing. Show banner if unsaved.
       if (_pageHasUnsavedChanges()) _showAutoRefreshBanner();
+      // Flag that a sync occurred while in the editor — dashboard will do full fetchChits on return
+      try { localStorage.setItem('cwoc_sync_occurred_during_edit', '1'); } catch(e) {}
     }
   } else if (type === 'settings') {
     if (path.indexOf('settings') !== -1) {
@@ -4740,7 +5244,7 @@ function _openPrintTab(text, title, mode) {
  * then prints via hidden iframe.
  * @param {object} checklist - The Checklist instance (has .items array)
  */
-function _printChecklist(checklist) {
+function _printChecklist(checklist, optTitle) {
   if (!checklist || !checklist.items || checklist.items.length === 0) {
     if (typeof cwocToast === 'function') cwocToast('No checklist items to print.', 'info');
     return;
@@ -4784,7 +5288,7 @@ function _printChecklist(checklist) {
   printBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
   printBtn.onclick = function() {
     overlay.remove();
-    _executePrintChecklist(checklist, cb.checked);
+    _executePrintChecklist(checklist, cb.checked, optTitle);
   };
 
   var cancelBtn = document.createElement('button');
@@ -4818,12 +5322,13 @@ function _printChecklist(checklist) {
 
 /**
  * Actually render and print the checklist via hidden iframe.
- * @param {object} checklist - The Checklist instance
+ * @param {object} checklist - The Checklist instance (has .items array)
  * @param {boolean} includeCompleted - Whether to include checked items
+ * @param {string} [optTitle] - Optional title override (used from dashboard context menu)
  */
-function _executePrintChecklist(checklist, includeCompleted) {
+function _executePrintChecklist(checklist, includeCompleted, optTitle) {
   var titleEl = document.getElementById('title');
-  var printTitle = (titleEl ? titleEl.value.trim() : '') || 'Checklist';
+  var printTitle = optTitle || (titleEl ? titleEl.value.trim() : '') || 'Checklist';
 
   var unchecked = checklist.items.filter(function(i) { return !i.checked; });
   var checked = checklist.items.filter(function(i) { return i.checked; });
@@ -4894,6 +5399,279 @@ function _executePrintChecklist(checklist, includeCompleted) {
     iframe.contentWindow.focus();
     iframe.contentWindow.print();
   }, 200);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Print Email
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print an email chit — formats From, To, CC, Subject, Date, and body.
+ * Uses the HTML body if available, otherwise plain text.
+ * @param {object} chit - The email chit object
+ */
+function _printEmail(chit) {
+  var subject = chit.email_subject || chit.title || '(No Subject)';
+  var from = chit.email_from || '';
+  var to = '';
+  var cc = '';
+  try { to = JSON.parse(chit.email_to || '[]').join(', '); } catch(e) { to = chit.email_to || ''; }
+  try { cc = JSON.parse(chit.email_cc || '[]').join(', '); } catch(e) { cc = chit.email_cc || ''; }
+  var date = chit.email_date || '';
+  if (date) {
+    try { date = new Date(date).toLocaleString(); } catch(e) { /* keep raw */ }
+  }
+
+  var headerHtml = '';
+  if (from) headerHtml += '<p><strong>From:</strong> ' + _escHtml(from) + '</p>';
+  if (to) headerHtml += '<p><strong>To:</strong> ' + _escHtml(to) + '</p>';
+  if (cc) headerHtml += '<p><strong>CC:</strong> ' + _escHtml(cc) + '</p>';
+  if (date) headerHtml += '<p><strong>Date:</strong> ' + _escHtml(date) + '</p>';
+
+  var bodyContent = '';
+  if (chit.email_body_html) {
+    bodyContent = '<div class="email-body">' + chit.email_body_html + '</div>';
+  } else if (chit.email_body_text) {
+    bodyContent = '<pre class="email-body-text">' + _escHtml(chit.email_body_text) + '</pre>';
+  } else {
+    bodyContent = '<p style="color:#6b4e31;font-style:italic;">(No email body)</p>';
+  }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>Print: ' + _escHtml(subject) + '</title>'
+    + '<style>'
+    + 'body { font-family: Lora, Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px 40px; color: #1a1208; }'
+    + 'h1 { font-size: 1.4em; border-bottom: 1px solid #8b5a2b; padding-bottom: 8px; margin-bottom: 12px; }'
+    + '.print-meta { font-size: 0.85em; color: #6b4e31; margin-bottom: 16px; }'
+    + '.email-headers { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #c9b896; }'
+    + '.email-headers p { margin: 4px 0; font-size: 0.95em; line-height: 1.4; }'
+    + '.email-body { line-height: 1.6; }'
+    + '.email-body img { max-width: 100%; height: auto; }'
+    + '.email-body-text { font-family: "Courier New", Courier, monospace; font-size: 0.9em; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; }'
+    + '@media print { body { padding: 0; } * { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }'
+    + '</style></head><body>'
+    + '<h1>' + _escHtml(subject) + '</h1>'
+    + '<div class="print-meta">Printed from C.W.\'s Omni Chits \u2014 ' + new Date().toLocaleDateString() + '</div>'
+    + '<div class="email-headers">' + headerHtml + '</div>'
+    + bodyContent
+    + '</body></html>';
+
+  var iframe = document.getElementById('cwoc-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'cwoc-print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+  }
+
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  setTimeout(function() {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, 200);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Print Attachment — print a file attachment directly
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print a single attachment. For images, renders inline. For PDFs, embeds.
+ * For other file types, prints a metadata page with filename and details.
+ * @param {string} chitId - The chit ID
+ * @param {object} attachment - Attachment object {id, filename, size, mime_type}
+ */
+function _printAttachment(chitId, attachment) {
+  var url = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(attachment.id);
+  var filename = attachment.filename || 'Attachment';
+  var mime = attachment.mime_type || '';
+
+  var iframe = document.getElementById('cwoc-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'cwoc-print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+  }
+
+  if (mime.startsWith('image/')) {
+    // Print image directly
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<title>Print: ' + _escHtml(filename) + '</title>'
+      + '<style>'
+      + 'body { margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; font-family: Lora, Georgia, serif; }'
+      + 'h1 { font-size: 1.1em; color: #4a2c2a; margin-bottom: 10px; }'
+      + 'img { max-width: 100%; max-height: 90vh; object-fit: contain; }'
+      + '@media print { body { padding: 0; } img { max-height: none; } }'
+      + '</style></head><body>'
+      + '<h1>' + _escHtml(filename) + '</h1>'
+      + '<img src="' + url + '" onload="setTimeout(function(){window.print();},100);" />'
+      + '</body></html>';
+
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+  } else if (mime === 'application/pdf') {
+    // For PDFs, open in a new window for printing (iframe embed doesn't reliably trigger print)
+    var pdfWin = window.open(url, '_blank');
+    if (pdfWin) {
+      pdfWin.addEventListener('load', function() {
+        setTimeout(function() { pdfWin.print(); }, 500);
+      });
+    } else {
+      cwocToast('Pop-up blocked. Please allow pop-ups to print PDFs.', 'warning');
+    }
+  } else if (mime.startsWith('text/')) {
+    // Fetch text content and print it
+    fetch(url).then(function(r) { return r.text(); }).then(function(text) {
+      var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        + '<title>Print: ' + _escHtml(filename) + '</title>'
+        + '<style>'
+        + 'body { font-family: "Courier New", Courier, monospace; max-width: 800px; margin: 0 auto; padding: 20px 40px; color: #1a1208; font-size: 0.9em; }'
+        + 'h1 { font-family: Lora, Georgia, serif; font-size: 1.2em; border-bottom: 1px solid #8b5a2b; padding-bottom: 8px; margin-bottom: 12px; }'
+        + 'pre { white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; }'
+        + '@media print { body { padding: 0; } }'
+        + '</style></head><body>'
+        + '<h1>' + _escHtml(filename) + '</h1>'
+        + '<pre>' + _escHtml(text) + '</pre>'
+        + '</body></html>';
+
+      var doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+      setTimeout(function() { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 200);
+    }).catch(function(err) {
+      console.error('[PrintAttachment] Failed to fetch text:', err);
+      cwocToast('Failed to load attachment for printing.', 'error');
+    });
+  } else {
+    // Unsupported type — show info page
+    var sizeStr = attachment.size ? (attachment.size < 1024 ? attachment.size + ' B' : (attachment.size < 1048576 ? Math.round(attachment.size / 1024) + ' KB' : (attachment.size / 1048576).toFixed(1) + ' MB')) : 'Unknown';
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<title>Print: ' + _escHtml(filename) + '</title>'
+      + '<style>'
+      + 'body { font-family: Lora, Georgia, serif; max-width: 600px; margin: 40px auto; padding: 20px 40px; color: #1a1208; text-align: center; }'
+      + 'h1 { font-size: 1.3em; margin-bottom: 20px; }'
+      + '.meta { font-size: 0.95em; color: #6b4e31; line-height: 1.8; }'
+      + '.note { margin-top: 20px; font-size: 0.85em; color: #8b5a2b; font-style: italic; }'
+      + '</style></head><body>'
+      + '<h1>📎 ' + _escHtml(filename) + '</h1>'
+      + '<div class="meta">'
+      + '<p><strong>Type:</strong> ' + _escHtml(mime || 'Unknown') + '</p>'
+      + '<p><strong>Size:</strong> ' + sizeStr + '</p>'
+      + '</div>'
+      + '<div class="note">This file type cannot be printed directly. Download it to print from a native application.</div>'
+      + '</body></html>';
+
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(function() { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 200);
+  }
+}
+
+/**
+ * Show a picker modal when a chit has multiple attachments, then print the selected one.
+ * If only one attachment, prints it directly.
+ * @param {string} chitId - The chit ID
+ * @param {Array} attachments - Array of attachment objects
+ */
+function _printAttachmentPicker(chitId, attachments) {
+  if (!attachments || attachments.length === 0) {
+    cwocToast('No attachments to print.', 'info');
+    return;
+  }
+  if (attachments.length === 1) {
+    _printAttachment(chitId, attachments[0]);
+    return;
+  }
+
+  // Multiple attachments — show picker modal
+  var existing = document.getElementById('cwoc-print-attachment-picker');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-print-attachment-picker';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:380px;width:90%;font-family:Lora,Georgia,serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);';
+
+  var h3 = document.createElement('h3');
+  h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;text-align:center;';
+  h3.textContent = 'Print Attachment';
+  box.appendChild(h3);
+
+  var p = document.createElement('p');
+  p.style.cssText = 'margin:0 0 14px;font-size:0.95em;text-align:center;color:#6b4e31;';
+  p.textContent = 'Select an attachment to print:';
+  box.appendChild(p);
+
+  var list = document.createElement('div');
+  list.style.cssText = 'max-height:240px;overflow-y:auto;margin-bottom:14px;';
+
+  attachments.forEach(function(att) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 12px;cursor:pointer;border-radius:4px;display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+    item.addEventListener('mouseenter', function() { item.style.background = '#f0e6d0'; });
+    item.addEventListener('mouseleave', function() { item.style.background = ''; });
+
+    var icon = document.createElement('span');
+    var mime = att.mime_type || '';
+    if (mime.startsWith('image/')) icon.textContent = '🖼️';
+    else if (mime === 'application/pdf') icon.textContent = '📄';
+    else if (mime.startsWith('text/')) icon.textContent = '📝';
+    else icon.textContent = '📎';
+    icon.style.cssText = 'font-size:1.2em;flex-shrink:0;';
+
+    var name = document.createElement('span');
+    name.style.cssText = 'font-size:0.95em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    name.textContent = att.filename || 'Unnamed';
+    name.title = att.filename || '';
+
+    item.appendChild(icon);
+    item.appendChild(name);
+    item.addEventListener('click', function() {
+      overlay.remove();
+      document.removeEventListener('keydown', _escHandler, true);
+      _printAttachment(chitId, att);
+    });
+    list.appendChild(item);
+  });
+  box.appendChild(list);
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'standard-button';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'display:block;margin:0 auto;padding:8px 20px;font-family:inherit;cursor:pointer;opacity:0.7;';
+  cancelBtn.onclick = function() { overlay.remove(); document.removeEventListener('keydown', _escHandler, true); };
+  box.appendChild(cancelBtn);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // ESC to close
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      overlay.remove();
+      document.removeEventListener('keydown', _escHandler, true);
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
+
+  // Click overlay to close
+  overlay.addEventListener('click', function(ev) {
+    if (ev.target === overlay) { overlay.remove(); document.removeEventListener('keydown', _escHandler, true); }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -332,7 +332,9 @@ fun ChitEntity.toPushDto(): ChitPushDto {
         // Checklist/thread fields
         checklist_autosave = checklistAutosave,
         nest_thread_id = nestThreadId,
-        auto_complete_checklist = autoCompleteChecklist
+        auto_complete_checklist = autoCompleteChecklist,
+        // Server-computed email thread grouping ID
+        thread_id = threadId
     )
 }
 

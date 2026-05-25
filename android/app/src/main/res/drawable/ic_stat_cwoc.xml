@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Monochrome "C" silhouette for notification small icon.
+         Android requires the small icon to be a single-color alpha mask (white on transparent).
+         The system tints it with the notification accent color. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C14.76,22 17.24,20.88 19,19.07 L16.79,16.86 C15.55,18.1 13.86,18.85 12,18.85 C8.22,18.85 5.15,15.78 5.15,12 C5.15,8.22 8.22,5.15 12,5.15 C13.86,5.15 15.55,5.9 16.79,7.14 L19,4.93 C17.24,3.12 14.76,2 12,2 Z" />
+</vector>

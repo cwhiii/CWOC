@@ -105,7 +105,8 @@ async def http_exception_handler(request: StarletteRequest, exc: HTTPException):
         content={"detail": exc.detail},
     )
     # Remove WWW-Authenticate header if present (prevents browser auth popup)
-    response.headers.pop("www-authenticate", None)
+    if "www-authenticate" in response.headers:
+        del response.headers["www-authenticate"]
     return response
 
 
@@ -208,6 +209,10 @@ from src.backend.migrations import (
     migrate_add_sync_version,
     migrate_fix_everything_else_typo,
     migrate_dedup_auto_bundles,
+    migrate_unify_users_contacts,
+    migrate_add_email_thread_id,
+    migrate_add_email_esc_quick_exit,
+    migrate_cleanup_email_notifications,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -300,6 +305,10 @@ migrate_add_android_settings_parity()
 migrate_add_sync_version()
 migrate_fix_everything_else_typo()
 migrate_dedup_auto_bundles()
+migrate_unify_users_contacts()
+migrate_add_email_thread_id()
+migrate_add_email_esc_quick_exit()
+migrate_cleanup_email_notifications()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)
@@ -307,7 +316,7 @@ try:
     import sqlite3 as _sqlite3_seed
     _seed_conn = _sqlite3_seed.connect(DB_PATH)
     _seed_cur = _seed_conn.cursor()
-    _seed_cur.execute("SELECT id FROM users WHERE is_active = 1")
+    _seed_cur.execute("SELECT id FROM contacts WHERE username IS NOT NULL AND is_active = 1")
     _user_rows = _seed_cur.fetchall()
     _seed_conn.close()
     for _user_row in _user_rows:
@@ -498,3 +507,26 @@ async def on_startup():
     await start_weather_schedulers()
     await start_rules_scheduler()
     await start_ha_polling_scheduler()
+    # Warm the chit cache in the background so the first page load is instant
+    asyncio.get_event_loop().run_in_executor(None, _warm_chit_cache)
+
+
+def _warm_chit_cache():
+    """Pre-build the /api/chits cache for all users at startup."""
+    import json as _json
+    from src.backend.db import DB_PATH, chit_cache, get_db_connection
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Get all distinct owner_ids that have non-deleted chits
+        cursor.execute("SELECT DISTINCT owner_id FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id IS NOT NULL")
+        owner_ids = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        for user_id in owner_ids:
+            from src.backend.routes.chits import _build_chit_list_for_user
+            chits = _build_chit_list_for_user(user_id)
+            json_bytes = _json.dumps(chits, default=str).encode("utf-8")
+            chit_cache.set_json(user_id, json_bytes)
+        logger.info(f"[Startup] Chit cache warmed for {len(owner_ids)} user(s)")
+    except Exception as e:
+        logger.warning(f"[Startup] Chit cache warm-up failed (non-fatal): {e}")

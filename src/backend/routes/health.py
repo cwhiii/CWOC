@@ -244,11 +244,18 @@ _sync_messages = []  # list of { id: int, data: dict, ts: float }
 _sync_next_id = 1
 _sync_max_messages = 200  # keep last 200 messages
 
+# ── Event loop reference for cross-thread broadcast ──
+_sync_event_loop = None  # Set when the first WebSocket connects
+
 
 class _SyncHub:
     """Manages WebSocket connections and broadcasts sync messages to all clients."""
     def __init__(self):
         self.connections: list = []
+
+    def has_connections(self) -> bool:
+        """Return True if at least one WebSocket client is connected."""
+        return len(self.connections) > 0
 
     async def connect(self, ws: WebSocket):
         await ws.accept()
@@ -301,7 +308,10 @@ async def _ws_ping_loop(ws: WebSocket):
 @router.post("/api/sync/send")
 async def sync_send_message(body: dict):
     """Post a sync message. All other polling clients will receive it."""
-    global _sync_next_id
+    global _sync_next_id, _sync_event_loop
+    # Store the event loop so background threads can schedule broadcasts
+    if _sync_event_loop is None:
+        _sync_event_loop = asyncio.get_event_loop()
     msg = {"id": _sync_next_id, "data": body, "ts": time.time()}
     _sync_next_id += 1
     _sync_messages.append(msg)
@@ -344,7 +354,10 @@ def sync_poll(after: int = Query(0)):
 
 @router.websocket("/ws/sync")
 async def websocket_sync(ws: WebSocket):
-    global _sync_next_id
+    global _sync_next_id, _sync_event_loop
+    # Store the event loop so background threads can schedule broadcasts
+    if _sync_event_loop is None:
+        _sync_event_loop = asyncio.get_event_loop()
     await _sync_hub.connect(ws)
     ping_task = asyncio.create_task(_ws_ping_loop(ws))
     try:
@@ -939,7 +952,7 @@ async def restart_service(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+            "SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=401, detail="Authentication required")

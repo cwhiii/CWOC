@@ -1088,6 +1088,12 @@ function _toggleOptionsMenu(event) {
   if (reminderLabel && notifVal) {
     reminderLabel.textContent = notifVal.value === "true" ? "Remove Reminder" : "Mark as Reminder";
   }
+  // Update snooze label
+  var snoozeLabel = document.getElementById("optMenuSnoozeLabel");
+  if (snoozeLabel) {
+    var isSnoozed = window._currentSnoozedUntil && new Date(window._currentSnoozedUntil) > new Date();
+    snoozeLabel.textContent = isSnoozed ? "Snoozed" : "Snooze";
+  }
   // Hide email option if already an email chit
   var emailOpt = document.getElementById("optMenuEmail");
   if (emailOpt) {

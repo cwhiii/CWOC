@@ -23,6 +23,7 @@ class NotificationChannelManager @Inject constructor(
         const val CHANNEL_ID_REMINDERS = "cwoc_reminders"
         const val CHANNEL_ID_TIMERS = "cwoc_timers"
         const val CHANNEL_ID_SYNC_SERVICE = "cwoc_sync_service"
+        const val CHANNEL_ID_EMAIL = "cwoc_email"
     }
 
     /**
@@ -83,8 +84,18 @@ class NotificationChannelManager @Inject constructor(
             setShowBadge(false)
         }
 
+        // Email channel — default importance, vibration, shows badge
+        val emailChannel = NotificationChannel(
+            CHANNEL_ID_EMAIL,
+            "Email",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Notifications for new email arrivals"
+            enableVibration(true)
+        }
+
         notificationManager.createNotificationChannels(
-            listOf(alarmsChannel, remindersChannel, timersChannel, syncServiceChannel)
+            listOf(alarmsChannel, remindersChannel, timersChannel, syncServiceChannel, emailChannel)
         )
     }
 }

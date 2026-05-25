@@ -11,6 +11,7 @@ import sqlite3
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Optional, List, Any
 from uuid import uuid4
@@ -20,6 +21,46 @@ logger = logging.getLogger(__name__)
 
 # Database path
 DB_PATH = "/app/data/app.db"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Chit Response Cache — pre-built per-user JSON responses served from memory
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class _ChitCache:
+    """In-memory cache for the /api/chits response per user.
+    
+    Stores the fully-serialized JSON bytes (ready to return as a raw Response).
+    Invalidated whenever any chit is created, updated, or deleted.
+    Rebuilds lazily on next request after invalidation.
+    """
+    def __init__(self):
+        self._json_bytes = {}  # user_id → bytes (pre-serialized JSON)
+        self._valid = {}  # user_id → bool
+        self._built_at = {}  # user_id → timestamp
+    
+    def invalidate(self, user_id: str = None):
+        """Mark cache as stale. If user_id is None, invalidate all users."""
+        if user_id:
+            self._valid[user_id] = False
+        else:
+            self._valid.clear()
+    
+    def get_json(self, user_id: str):
+        """Return cached pre-serialized JSON bytes or None if cache is stale/missing."""
+        if self._valid.get(user_id):
+            return self._json_bytes.get(user_id)
+        return None
+    
+    def set_json(self, user_id: str, json_bytes: bytes):
+        """Store the pre-serialized JSON bytes in cache."""
+        self._json_bytes[user_id] = json_bytes
+        self._valid[user_id] = True
+        self._built_at[user_id] = time.time()
+
+
+# Global singleton
+chit_cache = _ChitCache()
 
 
 def get_db_connection(db_path=None):
@@ -369,7 +410,7 @@ def require_admin(request) -> str:
     conn = sqlite3.connect(DB_PATH)
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,))
         row = cursor.fetchone()
         if not row or not row[0]:
             raise HTTPException(status_code=403, detail="Admin access required")

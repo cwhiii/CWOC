@@ -86,7 +86,11 @@ def _serialize_contact_for_db(contact) -> dict:
 
 
 def _row_to_contact(row: dict) -> dict:
-    """Convert a SQLite row dict into a Contact-compatible JSON dict."""
+    """Convert a SQLite row dict into a Contact-compatible JSON dict.
+
+    Strips sensitive auth fields (password_hash, private_pgp_key_encrypted)
+    and adds is_user flag + safe display fields (username, is_admin).
+    """
     row["phones"] = deserialize_json_field(row.get("phones"))
     row["emails"] = deserialize_json_field(row.get("emails"))
     row["addresses"] = deserialize_json_field(row.get("addresses"))
@@ -106,6 +110,18 @@ def _row_to_contact(row: dict) -> dict:
     row.setdefault("dates", None)
     row["tags"] = deserialize_json_field(row.get("tags"))
     row["shared_to_vault"] = bool(row.get("shared_to_vault"))
+
+    # Add is_user flag: True when username is not None (contact is a login user)
+    row["is_user"] = row.get("username") is not None
+
+    # Include username and is_admin for UI badge display
+    row.setdefault("username", None)
+    row["is_admin"] = bool(row.get("is_admin"))
+
+    # NEVER include sensitive auth fields in API responses
+    row.pop("password_hash", None)
+    row.pop("private_pgp_key_encrypted", None)
+
     return row
 
 
@@ -115,6 +131,23 @@ def _write_vcf_file(contact_id: str, contact) -> None:
     filepath = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(vcf_content)
+
+
+def _enforce_system_email_protection(existing_emails, new_emails, is_admin):
+    """Prevent non-admins from modifying the 'System' email on user-contacts.
+
+    If the requester is admin, the new emails are returned unchanged.
+    Otherwise, the original System email entry is preserved at position 0,
+    and any System-labeled entries in the new list are removed.
+    """
+    if is_admin:
+        return new_emails
+    system_email = next((e for e in existing_emails if e.get("label") == "System"), None)
+    if system_email is None:
+        return new_emails
+    filtered = [e for e in new_emails if e.get("label") != "System"]
+    filtered.insert(0, system_email)
+    return filtered
 
 
 # ── Route handlers ────────────────────────────────────────────────────────
@@ -568,6 +601,19 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
         if contact_dict.get("image_url") is None and existing_row.get("image_url"):
             contact_dict["image_url"] = existing_row["image_url"]
 
+        # System email protection: if this is a user-contact and requester is not admin,
+        # preserve the existing System email entry unchanged (REQ-6.1, REQ-6.2, REQ-6.3)
+        is_user_contact = existing_row.get("username") is not None
+        if is_user_contact:
+            # Check if the requester is admin
+            cursor.execute("SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,))
+            admin_row = cursor.fetchone()
+            is_admin = bool(admin_row and admin_row[0])
+
+            existing_emails = deserialize_json_field(existing_row.get("emails")) or []
+            new_emails = contact_dict.get("emails") or []
+            contact_dict["emails"] = _enforce_system_email_protection(existing_emails, new_emails, is_admin)
+
         _write_vcf_file(contact_id, contact_dict)
 
         old_contact_dict = dict(existing_row)
@@ -575,6 +621,11 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
         db_fields = _serialize_contact_for_db(contact)
         if db_fields.get("image_url") is None and existing_row.get("image_url"):
             db_fields["image_url"] = existing_row["image_url"]
+
+        # If System email protection was applied, override the serialized emails
+        # with the protected version from contact_dict
+        if is_user_contact:
+            db_fields["emails"] = serialize_json_field(contact_dict.get("emails"))
 
         # Assign sync_version for mobile sync tracking
         sync_version = get_next_sync_version(cursor)
@@ -644,7 +695,7 @@ def delete_contact(contact_id: str, request: Request):
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, display_name, owner_id, shared_to_vault FROM contacts WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (contact_id,))
+        cursor.execute("SELECT id, display_name, owner_id, shared_to_vault, username FROM contacts WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (contact_id,))
         existing = cursor.fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
@@ -653,6 +704,9 @@ def delete_contact(contact_id: str, request: Request):
         is_vault = bool(existing[3])
         if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        # Prevent deletion of user-contacts (contacts with a username set)
+        if existing[4] is not None:
+            raise HTTPException(status_code=400, detail="Cannot delete a user-contact. Deactivate via user admin instead.")
         contact_display_name = existing[1]
 
         current_time = datetime.now().isoformat()

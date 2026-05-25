@@ -847,9 +847,14 @@ function _updateFavicon(tab) {
 }
 
 function filterChits(tab) {
+  var _perfStart = performance.now();
+  console.log('[PERF] filterChits START → tab=' + tab);
   storePreviousState();
 
   currentTab = tab;
+
+  // Persist last viewed tab for "Last Viewed" default view setting
+  try { localStorage.setItem('cwoc_last_viewed_tab', tab); } catch (e) { /* ignore */ }
 
   // Update favicon to match the active view
   _updateFavicon(tab);
@@ -924,6 +929,20 @@ function filterChits(tab) {
   const tasksSection = document.getElementById('section-tasks-mode');
   if (tasksSection) {
     tasksSection.style.display = (tab === 'Tasks') ? '' : 'none';
+    // Sync button highlighting to current mode
+    if (tab === 'Tasks' && typeof _tasksViewMode !== 'undefined') {
+      var _tmModes = ['tasks', 'habits', 'assigned', 'timeline'];
+      _tmModes.forEach(function(m) {
+        var btn = document.getElementById('tasks-mode-' + m);
+        if (btn) { btn.style.background = (m === _tasksViewMode) ? 'ivory' : ''; btn.style.color = (m === _tasksViewMode) ? '#3b1f0a' : ''; }
+      });
+    }
+  }
+
+  // Show/hide Timeline controls (only visible when Tasks tab + timeline mode)
+  var timelineControlsSection = document.getElementById('section-timeline-controls');
+  if (timelineControlsSection) {
+    timelineControlsSection.style.display = (tab === 'Tasks' && typeof _tasksViewMode !== 'undefined' && _tasksViewMode === 'timeline') ? '' : 'none';
   }
 
   // Show/hide Filters for Indicators tab (hide them)
@@ -970,8 +989,10 @@ function filterChits(tab) {
   }
 
   updateDateRange();
+  console.log('[PERF] filterChits pre-displayChits: ' + (performance.now() - _perfStart).toFixed(1) + 'ms');
   displayChits();
   _updateClearFiltersButton();
+  console.log('[PERF] filterChits TOTAL: ' + (performance.now() - _perfStart).toFixed(1) + 'ms');
 }
 
 function searchChits() {

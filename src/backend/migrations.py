@@ -1523,7 +1523,7 @@ def migrate_add_contact_vault():
     """Add shared_to_vault column to contacts table and default_share_contacts to settings.
 
     shared_to_vault (BOOLEAN DEFAULT 0): when true, the contact is visible to all users.
-    default_share_contacts (TEXT DEFAULT '0'): user preference for new contacts.
+    default_share_contacts (TEXT DEFAULT '1'): user preference for new contacts.
 
     Fully idempotent — checks column existence before adding.
     """
@@ -1545,7 +1545,7 @@ def migrate_add_contact_vault():
         settings_cols = {row[1] for row in cursor.fetchall()}
 
         if "default_share_contacts" not in settings_cols:
-            cursor.execute("ALTER TABLE settings ADD COLUMN default_share_contacts TEXT DEFAULT '0'")
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_share_contacts TEXT DEFAULT '1'")
             logger.info("Added default_share_contacts column to settings table")
 
         conn.commit()
@@ -3760,6 +3760,434 @@ def migrate_dedup_auto_bundles():
             logger.info(f"Converted {total_converted} chit(s) from name-based to ID-based bundle tags")
     except Exception as e:
         logger.error(f"Error in migrate_dedup_auto_bundles: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Unified User-Contacts: migration ─────────────────────────────────────
+
+def migrate_unify_users_contacts():
+    """Merge users into contacts table — a user IS a contact with auth fields.
+
+    Steps:
+    1. Add auth columns to contacts: username (TEXT UNIQUE), password_hash (TEXT),
+       is_admin (BOOLEAN DEFAULT 0), is_active (BOOLEAN DEFAULT 1),
+       private_pgp_key_encrypted (TEXT). Each wrapped in try/except for idempotency.
+    2. Create partial unique index on contacts(username) WHERE username IS NOT NULL.
+    3. For each user in the users table: INSERT into contacts (preserving UUID)
+       or UPDATE existing contact with auth fields. Maps:
+       - user.email → emails JSON entry with label "System"
+       - user.profile_image_url → contact.image_url
+       - user.emails_json → merged into contact emails array
+       - All profile fields (given_name, surname, phones, addresses, etc.)
+    4. Set shared_to_vault = 1 on all migrated user-contacts.
+    5. Rename users table to users_deprecated (with existence check).
+
+    Fully idempotent — safe to run multiple times.
+    """
+    import json as _json
+    from datetime import datetime
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── 1. Add auth columns to contacts table ────────────────────────
+        # Note: username uniqueness is enforced by the partial unique index
+        # (step 2), not by a column constraint — SQLite doesn't support
+        # UNIQUE constraints on ALTER TABLE ADD COLUMN.
+        auth_columns = [
+            ("username", "TEXT"),
+            ("password_hash", "TEXT"),
+            ("is_admin", "BOOLEAN DEFAULT 0"),
+            ("is_active", "BOOLEAN DEFAULT 1"),
+            ("private_pgp_key_encrypted", "TEXT"),
+        ]
+
+        for col_name, col_def in auth_columns:
+            try:
+                cursor.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_def}")
+                logger.info(f"Added {col_name} column to contacts table")
+            except Exception:
+                # Column already exists — idempotent
+                pass
+
+        # ── 2. Create partial unique index on username ───────────────────
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_username
+            ON contacts(username) WHERE username IS NOT NULL
+        """)
+
+        # ── 3. Migrate user records into contacts ────────────────────────
+        # Check if users table still exists (may have been renamed already)
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+        )
+        if cursor.fetchone():
+            cursor.execute("SELECT * FROM users")
+            user_columns = [desc[0] for desc in cursor.description]
+            users = cursor.fetchall()
+
+            for user_row in users:
+                user = dict(zip(user_columns, user_row))
+                user_id = user["id"]
+
+                # Build the emails JSON array
+                emails_list = []
+
+                # Add the System email from user.email
+                if user.get("email"):
+                    emails_list.append({"label": "System", "value": user["email"]})
+
+                # Merge in emails_json (additional emails from user profile)
+                if user.get("emails_json"):
+                    try:
+                        extra_emails = _json.loads(user["emails_json"]) if isinstance(user["emails_json"], str) else user["emails_json"]
+                        if isinstance(extra_emails, list):
+                            for entry in extra_emails:
+                                # Avoid duplicating the System email
+                                if isinstance(entry, dict) and entry.get("label") != "System":
+                                    emails_list.append(entry)
+                                elif isinstance(entry, dict) and entry.get("label") == "System":
+                                    # If there's already a System email from emails_json, skip
+                                    # (we already added it from user.email)
+                                    pass
+                    except (ValueError, TypeError):
+                        pass
+
+                emails_json_str = serialize_json_field(emails_list) if emails_list else None
+
+                # Check if a contact with this ID already exists
+                cursor.execute("SELECT id FROM contacts WHERE id = ?", (user_id,))
+                existing_contact = cursor.fetchone()
+
+                # Also check if a contact with this username already exists
+                # (from a previous partial migration run)
+                if not existing_contact and user.get("username"):
+                    cursor.execute(
+                        "SELECT id FROM contacts WHERE username = ?",
+                        (user["username"],)
+                    )
+                    existing_by_username = cursor.fetchone()
+                    if existing_by_username:
+                        # Username already migrated to a different contact row — skip
+                        logger.info(
+                            f"User '{user['username']}' already exists in contacts "
+                            f"(id={existing_by_username[0]}), skipping"
+                        )
+                        continue
+
+                now = datetime.utcnow().isoformat() + "Z"
+
+                if existing_contact:
+                    # UPDATE existing contact with auth fields and profile data
+                    cursor.execute("""
+                        UPDATE contacts SET
+                            username = ?,
+                            password_hash = ?,
+                            is_admin = ?,
+                            is_active = ?,
+                            private_pgp_key_encrypted = ?,
+                            display_name = COALESCE(?, display_name),
+                            given_name = COALESCE(?, given_name),
+                            surname = COALESCE(?, surname),
+                            middle_names = COALESCE(?, middle_names),
+                            prefix = COALESCE(?, prefix),
+                            suffix = COALESCE(?, suffix),
+                            nickname = COALESCE(?, nickname),
+                            phones = COALESCE(?, phones),
+                            emails = COALESCE(?, emails),
+                            addresses = COALESCE(?, addresses),
+                            call_signs = COALESCE(?, call_signs),
+                            x_handles = COALESCE(?, x_handles),
+                            websites = COALESCE(?, websites),
+                            organization = COALESCE(?, organization),
+                            social_context = COALESCE(?, social_context),
+                            notes = COALESCE(?, notes),
+                            has_signal = COALESCE(?, has_signal),
+                            signal_username = COALESCE(?, signal_username),
+                            pgp_key = COALESCE(?, pgp_key),
+                            color = COALESCE(?, color),
+                            tags = COALESCE(?, tags),
+                            image_url = COALESCE(?, image_url),
+                            shared_to_vault = 1,
+                            modified_datetime = ?
+                        WHERE id = ?
+                    """, (
+                        user["username"],
+                        user["password_hash"],
+                        user.get("is_admin", 0),
+                        user.get("is_active", 1),
+                        user.get("private_pgp_key_encrypted"),
+                        user.get("display_name"),
+                        user.get("given_name"),
+                        user.get("surname"),
+                        user.get("middle_names"),
+                        user.get("prefix"),
+                        user.get("suffix"),
+                        user.get("nickname"),
+                        user.get("phones"),
+                        emails_json_str,
+                        user.get("addresses"),
+                        user.get("call_signs"),
+                        user.get("x_handles"),
+                        user.get("websites"),
+                        user.get("organization"),
+                        user.get("social_context"),
+                        user.get("notes"),
+                        user.get("has_signal"),
+                        user.get("signal_username"),
+                        user.get("pgp_key"),
+                        user.get("color"),
+                        user.get("tags"),
+                        user.get("profile_image_url"),
+                        now,
+                        user_id,
+                    ))
+                else:
+                    # INSERT new contact record preserving the user's UUID
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO contacts (
+                            id, given_name, surname, middle_names, prefix, suffix,
+                            display_name, nickname, phones, emails, addresses,
+                            call_signs, x_handles, websites, has_signal, signal_username,
+                            pgp_key, color, organization, social_context, notes, tags,
+                            image_url, shared_to_vault, created_datetime, modified_datetime,
+                            owner_id, username, password_hash, is_admin, is_active,
+                            private_pgp_key_encrypted
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?,
+                            ?, 1, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?
+                        )
+                    """, (
+                        user_id,
+                        user.get("given_name") or user.get("display_name") or "",
+                        user.get("surname"),
+                        user.get("middle_names"),
+                        user.get("prefix"),
+                        user.get("suffix"),
+                        user.get("display_name"),
+                        user.get("nickname"),
+                        user.get("phones"),
+                        emails_json_str,
+                        user.get("addresses"),
+                        user.get("call_signs"),
+                        user.get("x_handles"),
+                        user.get("websites"),
+                        user.get("has_signal", 0),
+                        user.get("signal_username"),
+                        user.get("pgp_key"),
+                        user.get("color"),
+                        user.get("organization"),
+                        user.get("social_context"),
+                        user.get("notes"),
+                        user.get("tags"),
+                        user.get("profile_image_url"),
+                        user.get("created_datetime") or now,
+                        now,
+                        user_id,  # owner_id = self
+                        user["username"],
+                        user["password_hash"],
+                        user.get("is_admin", 0),
+                        user.get("is_active", 1),
+                        user.get("private_pgp_key_encrypted"),
+                    ))
+
+                logger.info(f"Migrated user '{user['username']}' (id={user_id}) into contacts")
+
+            # ── 4. Ensure all user-contacts have shared_to_vault = 1 ─────
+            cursor.execute(
+                "UPDATE contacts SET shared_to_vault = 1 WHERE username IS NOT NULL"
+            )
+
+            # ── 5. Rename users table to users_deprecated ────────────────
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='users_deprecated'"
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "ALTER TABLE users RENAME TO users_deprecated"
+                )
+                logger.info("Renamed users table to users_deprecated")
+            else:
+                # Already renamed in a previous partial run — drop the leftover users table
+                cursor.execute("DROP TABLE IF EXISTS users")
+                logger.info("users_deprecated already exists; dropped leftover users table")
+
+        conn.commit()
+        logger.info("Unified user-contacts migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_unify_users_contacts: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Email Thread ID: migration ───────────────────────────────────────────
+
+def migrate_add_email_thread_id():
+    """Add thread_id column to chits table and backfill existing email chits.
+
+    The thread_id groups emails into conversations. It's computed as:
+    1. The root message-ID from the References header (first entry)
+    2. Fallback: the In-Reply-To message-ID
+    3. Fallback: the email's own Message-ID (it's the thread root)
+
+    This allows the mobile app to do a simple groupBy(threadId) instead of
+    expensive O(n²) client-side threading.
+    """
+    import re
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Add column if missing
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "thread_id" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN thread_id TEXT")
+            logger.info("Added thread_id column to chits table")
+
+        # Backfill: compute thread_id for all email chits that don't have one
+        cursor.execute(
+            """SELECT id, email_message_id, email_in_reply_to, email_references
+               FROM chits
+               WHERE email_message_id IS NOT NULL
+                 AND email_message_id != ''
+                 AND (thread_id IS NULL OR thread_id = '')"""
+        )
+        rows = cursor.fetchall()
+        if rows:
+            logger.info(f"Backfilling thread_id for {len(rows)} email chits")
+
+            # First pass: compute thread_id for each email based on its own headers
+            # thread_id = first reference (root of chain), or in_reply_to, or own message_id
+            thread_ids = {}  # chit_id -> thread_id
+            msg_id_to_thread = {}  # message_id -> thread_id (for unification)
+
+            for row in rows:
+                chit_id, message_id, in_reply_to, references = row
+                message_id = (message_id or "").strip()
+                in_reply_to = (in_reply_to or "").strip()
+                references = (references or "").strip()
+
+                # Parse references to find the root message-ID
+                root_id = None
+                if references:
+                    # References header contains space-separated message-IDs, oldest first
+                    refs = references.split()
+                    if refs:
+                        root_id = refs[0].strip()
+
+                if not root_id and in_reply_to:
+                    root_id = in_reply_to
+
+                if not root_id:
+                    root_id = message_id
+
+                thread_ids[chit_id] = root_id
+
+            # Second pass: unify threads — if a message's own ID is used as
+            # another message's root, they share the same thread
+            # Build message_id -> computed thread_id mapping
+            for row in rows:
+                chit_id, message_id, _, _ = row
+                message_id = (message_id or "").strip()
+                if message_id:
+                    msg_id_to_thread[message_id] = thread_ids[chit_id]
+
+            # Resolve chains: follow thread_id references until stable
+            # (handles case where root_id points to another message that has its own root)
+            def resolve_thread(tid):
+                seen = set()
+                current = tid
+                while current in msg_id_to_thread and current != msg_id_to_thread.get(current) and current not in seen:
+                    seen.add(current)
+                    current = msg_id_to_thread[current]
+                return current
+
+            # Update all chits with resolved thread_ids
+            for chit_id, tid in thread_ids.items():
+                resolved = resolve_thread(tid)
+                cursor.execute(
+                    "UPDATE chits SET thread_id = ? WHERE id = ?",
+                    (resolved, chit_id),
+                )
+
+            logger.info(f"Backfilled thread_id for {len(rows)} email chits")
+
+        # Create index for fast groupBy queries
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chits_thread_id ON chits (thread_id)"
+        )
+
+        conn.commit()
+        logger.info("Email thread_id migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_thread_id: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Email ESC Quick Exit setting: migration ──────────────────────────────
+
+def migrate_add_email_esc_quick_exit():
+    """Add email_esc_quick_exit column to settings table.
+
+    When '1', pressing ESC in the expanded email viewer also exits the chit editor.
+    Default '0' = just closes the viewer.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [col[1] for col in cursor.fetchall()]
+        if "email_esc_quick_exit" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_esc_quick_exit TEXT DEFAULT '0'")
+            logger.info("Added email_esc_quick_exit column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_esc_quick_exit: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# ── Cleanup: remove stale email-type notifications ───────────────────────
+
+def migrate_cleanup_email_notifications():
+    """Remove all notification_type='email' notifications.
+
+    These were incorrectly created for every incoming email. Only calendar
+    invites should generate accept/decline notifications. This one-time
+    cleanup removes the stale entries.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM notifications WHERE notification_type = 'email'")
+        deleted = cursor.rowcount
+        if deleted:
+            logger.info(f"Cleaned up {deleted} stale email-type notifications")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_cleanup_email_notifications: {str(e)}")
     finally:
         if conn:
             conn.close()

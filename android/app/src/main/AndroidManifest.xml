@@ -65,6 +65,11 @@
             android:name=".notification.AlarmReceiver"
             android:exported="false" />
 
+        <!-- Email notification action receiver (Trash, Archive, Mark Read, Snooze buttons) -->
+        <receiver
+            android:name=".notification.EmailNotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Boot receiver to re-register alarms after device reboot -->
         <receiver
             android:name=".notification.BootReceiver"

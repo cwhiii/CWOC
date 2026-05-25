@@ -182,8 +182,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT s.token, s.user_id, s.expires_datetime, s.last_active_datetime, "
-                    "u.username, u.is_active "
-                    "FROM sessions s JOIN users u ON s.user_id = u.id "
+                    "c.username, c.is_active "
+                    "FROM sessions s JOIN contacts c ON s.user_id = c.id AND c.username IS NOT NULL "
                     "WHERE s.token = ?",
                     (token,),
                 ).fetchone()
@@ -270,8 +270,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 conn.execute("PRAGMA busy_timeout=5000")
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
-                    "SELECT dt.id AS device_id, dt.user_id, dt.revoked, u.username, u.is_active "
-                    "FROM device_tokens dt JOIN users u ON dt.user_id = u.id "
+                    "SELECT dt.id AS device_id, dt.user_id, dt.revoked, c.username, c.is_active "
+                    "FROM device_tokens dt JOIN contacts c ON dt.user_id = c.id AND c.username IS NOT NULL "
                     "WHERE dt.token_hash = ?",
                     (token_hash,),
                 ).fetchone()

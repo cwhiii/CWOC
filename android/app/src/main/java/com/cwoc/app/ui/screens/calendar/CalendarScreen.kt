@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.WeatherIndicator
 import com.cwoc.app.ui.components.LocationIndicator
 import com.cwoc.app.ui.components.CwocChitCardStyle
@@ -71,6 +73,7 @@ fun CalendarScreen(
     chitRepository: ChitRepository? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
 
     // Apply all display filters (habits, complete, declined, snoozed, email, etc.)
@@ -193,6 +196,9 @@ fun CalendarScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+            filteredEvents.isEmpty() && syncState == SyncState.SYNCING -> {
+                LoadingChitsState()
             }
             filteredEvents.isEmpty() -> {
                 Box(

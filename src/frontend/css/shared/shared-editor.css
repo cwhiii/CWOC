@@ -420,11 +420,15 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+    background-color: inherit;
 }
 
-/* Grid children must not overflow their column horizontally */
+/* Grid children must not overflow their column horizontally.
+   background-color: inherit prevents sub-pixel grid-line artifacts
+   (thin white lines) when the editor has a solid background color. */
 .main-zones-grid > * {
     min-width: 0;
+    background-color: inherit;
 }
 
 /* ── Toggle Switch (reusable on/off toggle) ────────────────────────────── */

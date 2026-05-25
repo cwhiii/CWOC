@@ -215,7 +215,7 @@ def _require_admin(user_id: str):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+            "SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,)
         ).fetchone()
         if not row or not row["is_admin"]:
             raise HTTPException(status_code=403, detail="Admin access required")

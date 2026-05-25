@@ -349,6 +349,11 @@ function _mobileShowZone(idx) {
           content.style.display = '';
         }
       });
+
+      // Show notes toolbar if notes zone is visible for new chit
+      if (sourceTab === 'Notes' && typeof _showMobileNotesToolbar === 'function') {
+        _showMobileNotesToolbar();
+      }
     } else {
       // Existing chit: show the Overview panel — compact read-only summary of populated fields
       if (titleContainer) {
@@ -402,6 +407,13 @@ function _mobileShowZone(idx) {
 
   // Update zone list active state
   _updateMobileZoneListActive(activeZone.id);
+
+  // Show/hide mobile notes bottom toolbar based on active zone
+  if (activeZone.id === 'notesSection' && typeof _showMobileNotesToolbar === 'function') {
+    _showMobileNotesToolbar();
+  } else if (typeof _hideMobileNotesToolbar === 'function') {
+    _hideMobileNotesToolbar();
+  }
 
   // Scroll editor to top
   var editorEl = document.getElementById('mainEditor');
@@ -928,6 +940,74 @@ function _renderMobileOverview(container) {
   }
 
   container.appendChild(panel);
+
+  // Apply contrast colors if chit has a custom color
+  _applyMobileOverviewContrast(panel);
+}
+
+/**
+ * Apply contrast-safe text colors to the mobile overview panel
+ * when the chit has a custom background color.
+ */
+function _applyMobileOverviewContrast(panel) {
+  if (!panel) panel = document.querySelector('.mobile-overview-panel');
+  if (!panel) return;
+
+  var colorInput = document.getElementById('color');
+  var bgColor = (colorInput && colorInput.value && colorInput.value !== 'transparent')
+    ? colorInput.value : '';
+
+  if (bgColor && typeof contrastColorForBg === 'function') {
+    var textColor = contrastColorForBg(bgColor);
+    // Determine if text color is light (white-ish) or dark
+    var isLightText = textColor === '#ffffff' || textColor === '#fff' || textColor === 'white';
+    var secondaryColor = isLightText ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)';
+    var borderColor = isLightText ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)';
+    var activeColor = isLightText ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+
+    // Style all overview rows
+    var rows = panel.querySelectorAll('.mobile-overview-row');
+    rows.forEach(function(row) {
+      row.style.borderBottomColor = borderColor;
+      // Text elements
+      var textEl = row.querySelector('.mobile-overview-text');
+      if (textEl) textEl.style.color = textColor;
+      // Arrow elements
+      var arrowEl = row.querySelector('.mobile-overview-arrow');
+      if (arrowEl) arrowEl.style.color = secondaryColor;
+      // Icon stays as emoji (no color change needed)
+    });
+
+    // Style the title row specifically
+    var titleRow = panel.querySelector('.mobile-overview-title-row');
+    if (titleRow) {
+      titleRow.style.borderBottomColor = borderColor;
+      var titleText = titleRow.querySelector('.mobile-overview-text');
+      if (titleText) titleText.style.color = textColor;
+    }
+
+    // Style the empty hint
+    var emptyHint = panel.querySelector('.mobile-overview-empty');
+    if (emptyHint) emptyHint.style.color = secondaryColor;
+  } else {
+    // Reset to default CSS colors
+    var rows = panel.querySelectorAll('.mobile-overview-row');
+    rows.forEach(function(row) {
+      row.style.borderBottomColor = '';
+      var textEl = row.querySelector('.mobile-overview-text');
+      if (textEl) textEl.style.color = '';
+      var arrowEl = row.querySelector('.mobile-overview-arrow');
+      if (arrowEl) arrowEl.style.color = '';
+    });
+    var titleRow = panel.querySelector('.mobile-overview-title-row');
+    if (titleRow) {
+      titleRow.style.borderBottomColor = '';
+      var titleText = titleRow.querySelector('.mobile-overview-text');
+      if (titleText) titleText.style.color = '';
+    }
+    var emptyHint = panel.querySelector('.mobile-overview-empty');
+    if (emptyHint) emptyHint.style.color = '';
+  }
 }
 
 /**
@@ -1486,6 +1566,9 @@ function _deactivateMobileZoneMode() {
 
   // Hide mobile zone header
   if (_mobileZoneHeaderEl) _mobileZoneHeaderEl.style.display = 'none';
+
+  // Hide mobile notes toolbar
+  if (typeof _hideMobileNotesToolbar === 'function') _hideMobileNotesToolbar();
 
   // Close zone list if open
   _closeMobileZoneList();

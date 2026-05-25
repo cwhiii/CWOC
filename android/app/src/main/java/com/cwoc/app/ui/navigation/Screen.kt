@@ -57,9 +57,18 @@ sealed class Screen(val route: String) {
         }
     }
 
-    data object RuleEditor : Screen("rule-editor/{ruleId}") {
+    data object RuleEditor : Screen("rule-editor/{ruleId}?trigger={trigger}&prefill_field={prefill_field}&prefill_operator={prefill_operator}&prefill_value={prefill_value}") {
         const val NEW_RULE_ID = "new"
         fun createRoute(ruleId: String) = "rule-editor/$ruleId"
+        fun createRouteWithPrefill(
+            trigger: String,
+            prefillField: String,
+            prefillOperator: String,
+            prefillValue: String
+        ): String {
+            val encodedValue = java.net.URLEncoder.encode(prefillValue, "UTF-8")
+            return "rule-editor/new?trigger=$trigger&prefill_field=$prefillField&prefill_operator=$prefillOperator&prefill_value=$encodedValue"
+        }
     }
 
     data object Editor : Screen("editor/{chitId}?start={start}&end={end}&sourceTab={sourceTab}") {

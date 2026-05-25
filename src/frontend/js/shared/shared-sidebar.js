@@ -179,10 +179,11 @@ function _cwocInjectSidebar() {
   /* 3e. Tasks view mode toggle (only visible on Tasks tab) */
   html += '<div class="sidebar-section" id="section-tasks-mode" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
-  html += '  <div style="display:flex;gap:4px;">';
-  html += '    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode(\'tasks\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📋 Tasks</button>';
-  html += '    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode(\'habits\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🎯 Habits</button>';
-  html += '    <button class="action-button" id="tasks-mode-assigned" onclick="_setTasksMode(\'assigned\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📌 Assigned</button>';
+  html += '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">';
+  html += '    <button class="action-button" id="tasks-mode-timeline" onclick="_setTasksMode(\'timeline\')" style="margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;" title="Visual dependency timeline">🔗 Timeline</button>';
+  html += '    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode(\'tasks\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Standard task list view">📋 List</button>';
+  html += '    <button class="action-button" id="tasks-mode-assigned" onclick="_setTasksMode(\'assigned\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Tasks assigned to others">📌 Assigned</button>';
+  html += '    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode(\'habits\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Habit tracking view">🎯 Habits</button>';
   html += '  </div>';
   html += '  <!-- Habits success window (only visible in habits mode) -->';
   html += '  <div id="habits-window-wrap" style="display:none;margin-top:8px;">';
@@ -199,6 +200,18 @@ function _cwocInjectSidebar() {
   html += '      Include in success rate';
   html += '    </label>';
   html += '  </div>';
+  html += '</div>';
+
+  /* 3e-ii. Timeline controls (only visible in timeline mode) */
+  html += '<div class="sidebar-section" id="section-timeline-controls" style="display:none;">';
+  html += '  <label class="sidebar-section-label">Timeline Controls</label>';
+  html += '  <div class="cwoc-2val-toggle" id="tl-order-toggle" style="margin-bottom:8px;" title="Switch between date-ordered and dependency-depth layout">';
+  html += '    <input type="hidden" id="tl-order-val" value="date" />';
+  html += '    <span data-val="date" class="active">By Date</span>';
+  html += '    <span data-val="dependency">By Dependency</span>';
+  html += '  </div>';
+  html += '  <button class="action-button" id="tl-link-mode-btn" style="width:100%;margin-bottom:6px;font-size:0.85em;padding:6px;" title="Click two tasks in sequence to create a dependency between them (first becomes prerequisite of second)">🔗 Link Mode</button>';
+  html += '  <button class="action-button" id="tl-critical-path-btn" style="width:100%;margin-bottom:0;font-size:0.85em;padding:6px;" title="Highlight the longest dependency chain to identify bottlenecks">⚡ Critical Path</button>';
   html += '</div>';
 
   /* 3d. Indicators time range (only visible on Indicators tab) */
@@ -1060,6 +1073,45 @@ function _renderNotifInbox() {
       dismissBtn.addEventListener('click', function() { _dismissNotification(notif.id); });
       actions.appendChild(dismissBtn);
       card.appendChild(actions);
+      list.appendChild(card);
+      return;
+    }
+
+    // Email / calendar invite notifications — show link + Dismiss (no Accept/Decline)
+    if (notif.notification_type === 'email' || notif.notification_type === 'calendar_invite') {
+      var emailTitleLink = document.createElement('a');
+      emailTitleLink.className = 'cwoc-notif-title';
+      emailTitleLink.textContent = notif.chit_title || '(Untitled email)';
+      emailTitleLink.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+      emailTitleLink.title = 'Open in editor';
+      emailTitleLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = this.href;
+      });
+      card.appendChild(emailTitleLink);
+
+      var emailActions = document.createElement('div');
+      emailActions.className = 'cwoc-notif-actions';
+      if (notif.notification_type === 'calendar_invite') {
+        var acceptBtn = document.createElement('button');
+        acceptBtn.className = 'cwoc-notif-accept-btn';
+        acceptBtn.textContent = 'Accept';
+        acceptBtn.addEventListener('click', function() { _respondNotification(notif.id, 'accepted'); });
+        emailActions.appendChild(acceptBtn);
+        var declineBtn = document.createElement('button');
+        declineBtn.className = 'cwoc-notif-decline-btn';
+        declineBtn.textContent = 'Decline';
+        declineBtn.addEventListener('click', function() { _respondNotification(notif.id, 'declined'); });
+        emailActions.appendChild(declineBtn);
+      } else {
+        var emailDismissBtn = document.createElement('button');
+        emailDismissBtn.className = 'cwoc-notif-decline-btn';
+        emailDismissBtn.textContent = 'Dismiss';
+        emailDismissBtn.addEventListener('click', function() { _dismissNotification(notif.id); });
+        emailActions.appendChild(emailDismissBtn);
+      }
+      card.appendChild(emailActions);
       list.appendChild(card);
       return;
     }

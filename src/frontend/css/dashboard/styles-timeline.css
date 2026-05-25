@@ -1,0 +1,547 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Dashboard — Timeline View
+   Task Timeline sub-mode: nodes, lanes, dependency lines, zoom levels,
+   toolbar, context menu, critical path, hover/focus states, and responsive.
+
+   Requirements: 11.1–11.7, 12.1–12.5, 13.4, 14.1–14.2, 16.5–16.6, 18.2
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Timeline Container — full-height flex column ─────────────────────────── */
+.timeline-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: 'Lora', Georgia, serif;
+    color: #2b1e0f;
+}
+
+/* ── Toolbar — row with toggle and action buttons ─────────────────────────── */
+.timeline-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 2px solid rgba(139, 90, 43, 0.25);
+    background: rgba(253, 245, 230, 0.6);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.timeline-toolbar .action-button {
+    width: auto;
+    margin-bottom: 0;
+    padding: 6px 14px;
+    font-size: 0.9em;
+    height: 36px;
+}
+
+.timeline-toolbar .action-button.active {
+    background-color: #4a2c2a;
+    border-color: #4a2c2a;
+    color: #fdf5e6;
+}
+
+/* ── Viewport — scrollable overflow container ─────────────────────────────── */
+.timeline-viewport {
+    flex: 1 1 auto;
+    overflow: auto;
+    position: relative;
+    min-height: 0;
+    cursor: grab;
+    overscroll-behavior: contain;
+}
+
+.timeline-viewport:active {
+    cursor: grabbing;
+}
+
+/* ── Canvas — positioned container for lanes and SVG ──────────────────────── */
+.timeline-canvas {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
+    transform-origin: 0 0;
+    transition: transform 0.1s ease;
+}
+
+/* ── Lane Layout ──────────────────────────────────────────────────────────── */
+.timeline-lane {
+    position: relative;
+    min-height: 80px;
+    padding: 28px 24px 16px 24px;
+    box-sizing: border-box;
+}
+
+.timeline-dated-lane {
+    min-height: 80px;
+    overflow: visible;
+}
+
+.timeline-undated-lane {
+    min-height: 80px;
+    overflow: visible;
+}
+
+/* ── Lane Labels ──────────────────────────────────────────────────────────── */
+.tl-lane-label {
+    padding: 6px 16px 2px 16px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    opacity: 0.7;
+    letter-spacing: 0.03em;
+}
+
+/* ── Lane Divider — visible horizontal separator ──────────────────────────── */
+.timeline-lane-divider {
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--aged-brown-light, #a0522d) 10%,
+        var(--aged-brown-medium, #8b4513) 50%,
+        var(--aged-brown-light, #a0522d) 90%,
+        transparent 100%
+    );
+    opacity: 0.6;
+    margin: 0 16px;
+    flex-shrink: 0;
+}
+
+/* ── Timeline Node — absolutely positioned card ───────────────────────────── */
+.timeline-node {
+    position: absolute;
+    width: 180px;
+    height: 52px;
+    padding: 6px 10px;
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    background-color: ivory;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    line-height: 1.3;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    z-index: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.timeline-node:hover {
+    box-shadow: 0 3px 12px rgba(107, 66, 38, 0.25);
+    z-index: 10;
+}
+
+.timeline-node.selected {
+    outline: 3px solid var(--aged-brown-dark, #4a2c2a);
+    outline-offset: 2px;
+    z-index: 11;
+}
+
+/* Node title */
+.timeline-node-title {
+    font-weight: bold;
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #1a1208;
+}
+
+/* Node status text */
+.timeline-node-status {
+    font-size: 0.8em;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+
+/* Node detail (dates, tags, description preview — visible at close zoom) */
+.timeline-node-detail {
+    font-size: 0.78em;
+    opacity: 0.75;
+    margin-top: 4px;
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+/* ── Status Border Colors ─────────────────────────────────────────────────── */
+/* Req 11.1: ToDo — brown (neutral parchment-brown) */
+.tl-node-todo {
+    border-color: var(--aged-brown-medium, #8b4513);
+}
+
+/* Req 11.2: In Progress — green */
+.tl-node-inprogress {
+    border-color: #2e7d32;
+}
+
+/* Req 11.3: Blocked — red */
+.tl-node-blocked {
+    border-color: #c0392b;
+}
+
+/* Req 11.4, 14.1: Complete — solid gray (not translucent) */
+.tl-node-complete {
+    background-color: #d4d4d4 !important;
+    border-color: #999 !important;
+    color: #666 !important;
+}
+
+/* ── SVG Overlay — dependency line container ──────────────────────────────── */
+.timeline-svg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+}
+
+/* Dependency line paths — pointer-events on individual paths for click detection */
+.timeline-svg-overlay path {
+    pointer-events: stroke;
+    fill: none;
+    stroke: var(--aged-brown-medium, #8b4513);
+    stroke-width: 2px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    cursor: pointer;
+    transition: stroke-width 0.15s ease, opacity 0.15s ease, stroke 0.15s ease;
+}
+
+/* Req 14.2: Both-complete dependency lines — dashed at 0.4 opacity */
+.timeline-svg-overlay path.tl-line-complete {
+    stroke-dasharray: 6 4;
+    opacity: 0.4;
+}
+
+/* ── Zoom Level Detail Visibility ─────────────────────────────────────────── */
+/* Req 16.5–16.6: Three zoom levels control what's visible on nodes */
+
+/* Far zoom (25%–60%): dot + title only */
+.tl-zoom-far .timeline-node {
+    width: 120px;
+    min-height: 32px;
+    padding: 4px 8px;
+}
+
+.tl-zoom-far .timeline-node-status,
+.tl-zoom-far .timeline-node-detail {
+    display: none;
+}
+
+/* Medium zoom (61%–150%): card with title + status */
+.tl-zoom-medium .timeline-node {
+    width: 180px;
+    min-height: 48px;
+}
+
+.tl-zoom-medium .timeline-node-detail {
+    display: none;
+}
+
+/* Close zoom (151%–300%): full detail */
+.tl-zoom-close .timeline-node {
+    width: 220px;
+    min-height: 64px;
+}
+
+.tl-zoom-close .timeline-node-detail {
+    display: -webkit-box;
+}
+
+/* ── Date Marker — vertical date line + label ─────────────────────────────── */
+.tl-date-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(139, 90, 43, 0.3);
+    z-index: 0;
+}
+
+.tl-date-marker-label {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    transform: none;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    white-space: nowrap;
+    background: rgba(253, 245, 230, 0.95);
+    padding: 1px 4px;
+    border-radius: 3px;
+    z-index: 10;
+}
+
+/* ── Link Mode Active — cursor crosshair ──────────────────────────────────── */
+.tl-link-mode-active .timeline-viewport {
+    cursor: crosshair;
+}
+
+.tl-link-mode-active .timeline-node {
+    cursor: crosshair;
+}
+
+.tl-link-mode-active .timeline-node.tl-link-source {
+    outline: 3px solid #d4af37;
+    outline-offset: 2px;
+    box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+}
+
+/* ── Hover/Focus Highlighting States ──────────────────────────────────────── */
+/* Req 12.1: Highlighted elements at full opacity + 2x line width */
+.tl-node-highlighted {
+    opacity: 1 !important;
+    box-shadow: 0 4px 16px rgba(107, 66, 38, 0.35);
+    z-index: 20;
+}
+
+/* Req 12.2: Dimmed elements at 0.3 opacity */
+.tl-node-dimmed {
+    opacity: 0.3 !important;
+    transition: opacity 0.15s ease;
+}
+
+/* Highlighted lines — full opacity, 2x width */
+.timeline-svg-overlay path.tl-line-highlighted {
+    stroke-width: 4px;
+    opacity: 1;
+    stroke: var(--aged-brown-dark, #4a2c2a);
+}
+
+/* Dimmed lines — 0.3 opacity */
+.timeline-svg-overlay path.tl-line-dimmed {
+    opacity: 0.3;
+}
+
+/* ── Critical Path Highlight Styles ───────────────────────────────────────── */
+/* Req 13.4: Critical path at 2x line thickness + distinct color */
+.timeline-svg-overlay path.tl-critical-path-line {
+    stroke: #d4af37;
+    stroke-width: 4px;
+    opacity: 1;
+}
+
+.tl-critical-path-node {
+    border-color: #d4af37 !important;
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+/* Non-critical elements when critical path is active — ≤50% opacity */
+/* Req 13.5: 300ms transition for restore on deactivate */
+.tl-critical-path-active .timeline-node:not(.tl-critical-path-node) {
+    opacity: 0.4;
+    transition: opacity 0.3s ease;
+}
+
+.tl-critical-path-active .timeline-svg-overlay path:not(.tl-critical-path-line) {
+    opacity: 0.35;
+    transition: opacity 0.3s ease;
+}
+
+/* ── Selection Rectangle — drag-select ────────────────────────────────────── */
+.tl-selection-rect {
+    position: absolute;
+    border: 2px dashed var(--aged-brown-medium, #8b4513);
+    background: rgba(139, 90, 43, 0.08);
+    pointer-events: none;
+    z-index: 50;
+    border-radius: 2px;
+}
+
+/* ── Context Menu — right-click / long-press ──────────────────────────────── */
+.tl-context-menu {
+    position: fixed;
+    z-index: 2000;
+    min-width: 180px;
+    background: #fffaf0;
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    padding: 4px 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+}
+
+.tl-context-menu-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    color: #1a1208;
+    transition: background 0.12s ease;
+}
+
+.tl-context-menu-item:hover {
+    background: rgba(139, 90, 43, 0.12);
+}
+
+.tl-context-menu-item:first-child {
+    border-radius: 4px 4px 0 0;
+}
+
+.tl-context-menu-item:last-child {
+    border-radius: 0 0 4px 4px;
+}
+
+.tl-context-menu-divider {
+    height: 1px;
+    background: rgba(139, 90, 43, 0.2);
+    margin: 4px 0;
+}
+
+/* ── Zoom Controls (bottom-right corner) ──────────────────────────────────── */
+.tl-zoom-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 100;
+}
+
+.tl-zoom-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    background: rgba(253, 245, 230, 0.95);
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Lora', Georgia, serif;
+    transition: background 0.12s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.tl-zoom-btn:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+.tl-zoom-btn:active {
+    background: rgba(139, 90, 43, 0.25);
+}
+
+/* ── Empty State ──────────────────────────────────────────────────────────── */
+/* Req 18.2: Uses .cwoc-empty class for consistent empty state styling */
+.timeline-container .cwoc-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: 2em;
+    font-size: 1em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    opacity: 0.7;
+}
+
+/* ── Drag connector line (visual feedback during drag-to-link) ────────────── */
+.tl-drag-connector {
+    pointer-events: none;
+    z-index: 100;
+}
+
+.tl-drag-connector line {
+    stroke: var(--aged-brown-dark, #4a2c2a);
+    stroke-width: 2px;
+    stroke-dasharray: 6 4;
+    opacity: 0.7;
+}
+
+/* ── Responsive — Mobile (touch-friendly sizes, toolbar stacking) ─────────── */
+@media (max-width: 768px) {
+    .timeline-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        padding: 6px 8px;
+    }
+
+    .timeline-toolbar .action-button {
+        width: 100%;
+        height: 44px;
+        font-size: 1em;
+    }
+
+    .timeline-toolbar .cwoc-2val-toggle {
+        align-self: center;
+    }
+
+    .timeline-node {
+        width: 160px;
+        min-height: 52px;
+        padding: 10px 12px;
+    }
+
+    /* Touch-friendly: larger tap targets */
+    .tl-zoom-far .timeline-node {
+        width: 140px;
+        min-height: 44px;
+        padding: 8px 10px;
+    }
+
+    .tl-zoom-medium .timeline-node {
+        width: 170px;
+        min-height: 56px;
+    }
+
+    .tl-zoom-close .timeline-node {
+        width: 200px;
+        min-height: 72px;
+    }
+
+    .tl-context-menu {
+        min-width: 200px;
+    }
+
+    .tl-context-menu-item {
+        padding: 14px 16px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    .tl-date-marker-label {
+        font-size: 0.7em;
+        padding: 3px 5px;
+    }
+}
+
+@media (max-width: 480px) {
+    .timeline-toolbar {
+        padding: 4px 6px;
+        gap: 4px;
+    }
+
+    .timeline-node {
+        width: 140px;
+        font-size: 0.85em;
+    }
+
+    .timeline-lane {
+        padding: 10px 8px;
+    }
+
+    .timeline-lane-divider {
+        margin: 0 8px;
+    }
+}

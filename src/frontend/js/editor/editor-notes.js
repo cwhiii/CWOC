@@ -347,6 +347,10 @@ function toggleNotesViewMode(event) {
     textarea.style.display = "none";
     _setNotesRenderToggleLabel(true, "main");
   }
+
+  // Sync mobile toolbar state
+  _mobileNotesIsPreview = !isCurrentlyRendered;
+  if (typeof _updateMobileNotesToolbarState === 'function') _updateMobileNotesToolbarState();
 }
 
 function copyNotesToClipboard(event, source) {
@@ -596,4 +600,386 @@ function _notesFormatBtn(action) {
 /** Alias so the onkeydown handler in the HTML can reference it */
 function _getNotesFormatAction(e) {
   return _getEmailFormatAction(e);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// MOBILE BOTTOM-PINNED NOTES TOOLBAR (matches Android app)
+// ══════════════════════════════════════════════════════════════════════════
+
+var _mobileNotesToolbarEl = null;
+var _mobileNotesDataMenu = null;
+var _mobileNotesHeadingMenu = null;
+var _mobileNotesBlockMenu = null;
+var _mobileNotesIsPreview = false;
+var _mobileNotesKeyboardOpen = false;
+
+/**
+ * Create and inject the mobile bottom toolbar for the Notes zone.
+ * Called when mobile zone mode activates and the notes zone is shown.
+ */
+function _createMobileNotesToolbar() {
+  if (_mobileNotesToolbarEl) return; // already created
+
+  var toolbar = document.createElement('div');
+  toolbar.className = 'mobile-notes-bottom-toolbar';
+  toolbar.id = 'mobileNotesBottomToolbar';
+  toolbar.style.display = 'none'; // hidden until keyboard opens
+
+  // ── Data menu button (⋮)
+  var dataBtn = document.createElement('button');
+  dataBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+  dataBtn.title = 'Data actions';
+  dataBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  dataBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  dataBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _toggleMobileNotesDropdown('data');
+  });
+  toolbar.appendChild(dataBtn);
+
+  // ── Preview/Edit toggle
+  var previewBtn = document.createElement('button');
+  previewBtn.id = 'mobileNotesPreviewBtn';
+  previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+  previewBtn.title = 'Preview';
+  previewBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  previewBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  previewBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _mobileNotesTogglePreview();
+  });
+  toolbar.appendChild(previewBtn);
+
+  // ── Undo
+  var undoBtn = document.createElement('button');
+  undoBtn.id = 'mobileNotesUndoBtn';
+  undoBtn.innerHTML = '<i class="fas fa-undo"></i>';
+  undoBtn.title = 'Undo';
+  undoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  undoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  undoBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _notesUndo(e);
+  });
+  toolbar.appendChild(undoBtn);
+
+  // ── Redo
+  var redoBtn = document.createElement('button');
+  redoBtn.id = 'mobileNotesRedoBtn';
+  redoBtn.innerHTML = '<i class="fas fa-redo"></i>';
+  redoBtn.title = 'Redo';
+  redoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+  redoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  redoBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _notesRedo(e);
+  });
+  toolbar.appendChild(redoBtn);
+
+  // ── Separator
+  var sep = document.createElement('span');
+  sep.className = 'notes-mobile-tb-sep';
+  toolbar.appendChild(sep);
+
+  // ── Scrollable formatting buttons
+  var scroll = document.createElement('div');
+  scroll.className = 'notes-mobile-tb-scroll';
+
+  var fmtButtons = [
+    { label: '<b>B</b>', title: 'Bold', action: 'b' },
+    { label: '<i>I</i>', title: 'Italic', action: 'i' },
+    { label: '<s>S</s>', title: 'Strikethrough', action: 's' },
+    { label: '🔗', title: 'Link', action: 'k' },
+    { label: 'H▾', title: 'Heading', action: 'heading-dropdown' },
+    { label: '•', title: 'Bullet List', action: 'ul' },
+    { label: '1.', title: 'Numbered List', action: 'ol' },
+    { label: '❝▾', title: 'Block formatting', action: 'block-dropdown' },
+  ];
+
+  fmtButtons.forEach(function(btn) {
+    var el = document.createElement('button');
+    el.innerHTML = btn.label;
+    el.title = btn.title;
+    // Prevent blur on the textarea when tapping toolbar buttons
+    el.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    el.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (btn.action === 'heading-dropdown') {
+        _toggleMobileNotesDropdown('heading');
+      } else if (btn.action === 'block-dropdown') {
+        _toggleMobileNotesDropdown('block');
+      } else {
+        _notesFormatBtn(btn.action);
+      }
+    });
+    scroll.appendChild(el);
+  });
+
+  toolbar.appendChild(scroll);
+
+  // ── Create dropdown menus
+  _mobileNotesDataMenu = _createMobileNotesDropdown('data', [
+    { icon: '📋', label: 'Copy to clipboard', action: function() { copyNotesToClipboard(null, 'main'); } },
+    { icon: '⬇️', label: 'Download as file', action: function() { downloadNotes(null, 'main'); } },
+    { icon: '📤', label: 'Send to another chit', action: function() { if (typeof _openSendContentModal === 'function') _openSendContentModal(null, 'notes'); } },
+    { icon: '☑️', label: 'Move to checklist', action: function() { if (typeof _noteToChecklistFromHeader === 'function') _noteToChecklistFromHeader(null); } },
+    { icon: '🔗', label: 'Share', action: function() { _mobileNotesShare(); } },
+  ]);
+
+  _mobileNotesHeadingMenu = _createMobileNotesDropdown('heading', [
+    { icon: '', label: 'H1 — Large Heading', action: function() { _notesFormatBtn('h1'); } },
+    { icon: '', label: 'H2 — Medium Heading', action: function() { _notesFormatBtn('h2'); } },
+    { icon: '', label: 'H3 — Small Heading', action: function() { _notesFormatBtn('h3'); } },
+  ]);
+
+  _mobileNotesBlockMenu = _createMobileNotesDropdown('block', [
+    { icon: '❝', label: 'Blockquote', action: function() { _notesFormatBtn('q'); } },
+    { icon: '⟨⟩', label: 'Inline Code', action: function() { _notesFormatBtn('code'); } },
+    { icon: '—', label: 'Horizontal Rule', action: function() { _notesFormatBtn('hr'); } },
+  ]);
+
+  document.body.appendChild(toolbar);
+  document.body.appendChild(_mobileNotesDataMenu);
+  document.body.appendChild(_mobileNotesHeadingMenu);
+  document.body.appendChild(_mobileNotesBlockMenu);
+
+  _mobileNotesToolbarEl = toolbar;
+}
+
+/**
+ * Create a dropdown menu for the mobile notes toolbar.
+ */
+function _createMobileNotesDropdown(type, items) {
+  var menu = document.createElement('div');
+  menu.className = 'mobile-notes-tb-dropdown';
+  menu.id = 'mobileNotesTbDropdown_' + type;
+
+  items.forEach(function(item) {
+    var btn = document.createElement('button');
+    btn.innerHTML = (item.icon ? item.icon + ' ' : '') + item.label;
+    btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _closeMobileNotesDropdowns();
+      item.action();
+      // Re-focus textarea after action
+      var noteEl = document.getElementById('note');
+      if (noteEl) noteEl.focus();
+    });
+    menu.appendChild(btn);
+  });
+
+  return menu;
+}
+
+/**
+ * Toggle a specific dropdown menu from the mobile notes toolbar.
+ */
+function _toggleMobileNotesDropdown(type) {
+  var menu = document.getElementById('mobileNotesTbDropdown_' + type);
+  if (!menu) return;
+
+  var isOpen = menu.classList.contains('active');
+  _closeMobileNotesDropdowns();
+
+  if (!isOpen) {
+    // Position dropdown just above the toolbar
+    if (_mobileNotesToolbarEl) {
+      var tbTop = parseInt(_mobileNotesToolbarEl.style.top) || 0;
+      menu.style.bottom = 'auto';
+      menu.style.top = 'auto';
+      // Place it above the toolbar
+      menu.style.bottom = (window.innerHeight - tbTop) + 'px';
+    }
+    menu.classList.add('active');
+    // Close on next tap outside
+    setTimeout(function() {
+      document.addEventListener('click', _closeMobileNotesDropdowns, { once: true });
+    }, 0);
+  }
+}
+
+/**
+ * Close all mobile notes toolbar dropdowns.
+ */
+function _closeMobileNotesDropdowns() {
+  var menus = document.querySelectorAll('.mobile-notes-tb-dropdown.active');
+  menus.forEach(function(m) { m.classList.remove('active'); });
+}
+
+/**
+ * Toggle preview/edit mode from the mobile toolbar.
+ */
+function _mobileNotesTogglePreview() {
+  toggleNotesViewMode(null);
+  // State is synced by toggleNotesViewMode itself
+}
+
+/**
+ * Update the mobile toolbar button states (preview icon, disabled states).
+ */
+function _updateMobileNotesToolbarState() {
+  var previewBtn = document.getElementById('mobileNotesPreviewBtn');
+  if (previewBtn) {
+    if (_mobileNotesIsPreview) {
+      previewBtn.innerHTML = '<i class="fas fa-edit"></i>';
+      previewBtn.title = 'Edit';
+    } else {
+      previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+      previewBtn.title = 'Preview';
+    }
+  }
+
+  // Disable formatting buttons when in preview mode
+  var scroll = _mobileNotesToolbarEl ? _mobileNotesToolbarEl.querySelector('.notes-mobile-tb-scroll') : null;
+  if (scroll) {
+    var btns = scroll.querySelectorAll('button');
+    btns.forEach(function(b) {
+      if (_mobileNotesIsPreview) {
+        b.classList.add('disabled');
+      } else {
+        b.classList.remove('disabled');
+      }
+    });
+  }
+}
+
+/**
+ * Share notes content via Web Share API (mobile equivalent of Android share intent).
+ */
+function _mobileNotesShare() {
+  var textarea = document.getElementById('note');
+  var text = textarea ? textarea.value : '';
+  if (!text.trim()) return;
+
+  if (navigator.share) {
+    navigator.share({ text: text }).catch(function() {});
+  } else {
+    // Fallback: copy to clipboard
+    navigator.clipboard.writeText(text).then(function() {
+      if (typeof cwocToast === 'function') cwocToast('Copied to clipboard', 'success');
+    }).catch(function() {});
+  }
+}
+
+/**
+ * Show the mobile notes toolbar (called when notes zone becomes active).
+ * The toolbar only actually appears when the keyboard is open (textarea focused).
+ */
+function _showMobileNotesToolbar() {
+  _createMobileNotesToolbar();
+  _mobileNotesZoneActive = true;
+
+  // Listen for focus/blur on the notes textarea to show/hide toolbar
+  var noteEl = document.getElementById('note');
+  if (noteEl && !noteEl._mobileToolbarWired) {
+    noteEl._mobileToolbarWired = true;
+    noteEl.addEventListener('focus', _onNotesTextareaFocus);
+    noteEl.addEventListener('blur', _onNotesTextareaBlur);
+  }
+
+  // Also use visualViewport resize to detect keyboard open/close
+  if (window.visualViewport && !window._mobileNotesVVWired) {
+    window._mobileNotesVVWired = true;
+    window.visualViewport.addEventListener('resize', _onMobileNotesViewportResize);
+    window.visualViewport.addEventListener('scroll', _onMobileNotesViewportResize);
+  }
+
+  // If textarea is already focused (e.g. auto-focus on new chit), show now
+  if (noteEl && document.activeElement === noteEl) {
+    _onNotesTextareaFocus();
+  }
+
+  // Sync preview state
+  var rendered = document.getElementById('notes-rendered-output');
+  _mobileNotesIsPreview = rendered && rendered.style.display !== 'none';
+  _updateMobileNotesToolbarState();
+}
+
+/** Track whether the notes zone is currently the active mobile zone */
+var _mobileNotesZoneActive = false;
+
+/**
+ * Hide the mobile notes toolbar (called when navigating away from notes zone).
+ */
+function _hideMobileNotesToolbar() {
+  _mobileNotesZoneActive = false;
+  if (_mobileNotesToolbarEl) {
+    _mobileNotesToolbarEl.style.display = 'none';
+  }
+  _closeMobileNotesDropdowns();
+  _mobileNotesKeyboardOpen = false;
+}
+
+/**
+ * Called when the notes textarea gains focus (keyboard opening).
+ */
+function _onNotesTextareaFocus() {
+  if (!_mobileNotesZoneActive) return;
+  _mobileNotesKeyboardOpen = true;
+  if (_mobileNotesToolbarEl) {
+    _mobileNotesToolbarEl.style.display = 'flex';
+    // Position above keyboard using visualViewport
+    _positionToolbarAboveKeyboard();
+  }
+}
+
+/**
+ * Called when the notes textarea loses focus (keyboard closing).
+ * Uses a short delay to allow tapping toolbar buttons without hiding.
+ */
+function _onNotesTextareaBlur() {
+  // Delay to check if focus moved to a toolbar button
+  setTimeout(function() {
+    var active = document.activeElement;
+    // If focus moved to something inside the toolbar or a dropdown, keep it visible
+    if (_mobileNotesToolbarEl && _mobileNotesToolbarEl.contains(active)) return;
+    var dropdowns = document.querySelectorAll('.mobile-notes-tb-dropdown');
+    for (var i = 0; i < dropdowns.length; i++) {
+      if (dropdowns[i].contains(active)) return;
+    }
+    // If the note textarea still has focus somehow, keep visible
+    var noteEl = document.getElementById('note');
+    if (active === noteEl) return;
+
+    _mobileNotesKeyboardOpen = false;
+    if (_mobileNotesToolbarEl) {
+      _mobileNotesToolbarEl.style.display = 'none';
+    }
+    _closeMobileNotesDropdowns();
+  }, 150);
+}
+
+/**
+ * Position the toolbar above the keyboard using visualViewport.
+ * On mobile, position:fixed + bottom:0 puts it behind the keyboard.
+ * Instead, we use top positioning based on visualViewport height.
+ */
+function _positionToolbarAboveKeyboard() {
+  if (!_mobileNotesToolbarEl) return;
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    // The toolbar should sit at the bottom of the visual viewport
+    // visualViewport.height = visible area height (excludes keyboard)
+    // visualViewport.offsetTop = scroll offset of visual viewport relative to layout viewport
+    var toolbarHeight = _mobileNotesToolbarEl.offsetHeight || 46;
+    var topPos = vv.offsetTop + vv.height - toolbarHeight;
+    _mobileNotesToolbarEl.style.position = 'fixed';
+    _mobileNotesToolbarEl.style.top = topPos + 'px';
+    _mobileNotesToolbarEl.style.bottom = 'auto';
+  } else {
+    _mobileNotesToolbarEl.style.position = 'fixed';
+    _mobileNotesToolbarEl.style.top = 'auto';
+    _mobileNotesToolbarEl.style.bottom = '0px';
+  }
+}
+
+/**
+ * Handle visualViewport resize/scroll (keyboard open/close, page scroll).
+ */
+function _onMobileNotesViewportResize() {
+  if (!_mobileNotesZoneActive || !_mobileNotesKeyboardOpen) return;
+  _positionToolbarAboveKeyboard();
 }

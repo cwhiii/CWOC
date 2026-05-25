@@ -1312,6 +1312,7 @@
                         <div class="setting-inline">
                             <label for="default-view-select">Landing view</label>
                             <select id="default-view-select" onchange="setSaveButtonUnsaved();">
+                                <option value="Last Viewed">Last Viewed</option>
                                 <option value="Omni">Omni</option>
                                 <option value="Calendar">Calendar</option>
                                 <option value="Checklists">Checklists</option>
@@ -1323,7 +1324,7 @@
                                 <option value="Indicators">Indicators</option>
                             </select>
                         </div>
-                        <p class="setting-hint">The view shown when you first open the site. Does not apply when returning from the editor or other pages.</p>
+                        <p class="setting-hint">The view shown when you first open the site. "Last Viewed" remembers whichever view you used most recently. Does not apply when returning from the editor or other pages.</p>
 
                         <label class="setting-subheader">View Order</label>
                         <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
@@ -1747,6 +1748,12 @@
                             <input type="checkbox" id="emailPaginate" />
                             <span class="setting-hint" style="margin:0;font-size:0.8em;">Load 50 at a time with "Load More" button</span>
                         </div>
+
+                        <div class="setting-inline">
+                            <label for="emailEscQuickExit">Quick exit: ESC closes email and exits chit</label>
+                            <input type="checkbox" id="emailEscQuickExit" />
+                        </div>
+                        <p class="setting-hint">When viewing an email in full screen, pressing ESC will close the viewer and exit the chit editor in one step</p>
 
                         <label class="setting-subheader">📦 Bundles</label>
                         <div class="setting-inline">

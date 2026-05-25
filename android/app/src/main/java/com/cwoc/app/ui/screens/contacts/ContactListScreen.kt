@@ -4,9 +4,6 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +30,7 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.AlertDialog
@@ -43,7 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,14 +64,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.cwoc.app.data.local.entity.ContactEntity
-import com.cwoc.app.data.remote.SwitchableUserDto
 import com.cwoc.app.ui.components.PeopleSectionHeader
 import com.cwoc.app.ui.components.ContactQrCodeDialog
 import com.cwoc.app.ui.components.firstMultiValue
 import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 import com.cwoc.app.ui.theme.CwocDialogDefaults
-import androidx.compose.material3.Button
 import com.cwoc.app.ui.components.CwocPagePanel
 import com.cwoc.app.ui.theme.CwocInputDefaults
 
@@ -86,7 +81,6 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
 fun ContactListScreen(
     onNavigateToContact: (String) -> Unit,
     onNavigateToTrash: () -> Unit = {},
-    onNavigateToProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ContactListViewModel = hiltViewModel()
 ) {
@@ -224,7 +218,7 @@ fun ContactListScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // ─── Contact List ───────────────────────────────────────────────────
-        if (contacts.isEmpty() && uiState.users.isEmpty()) {
+        if (contacts.isEmpty()) {
             // Empty state
             Column(
                 modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -245,19 +239,14 @@ fun ContactListScreen(
                 contacts = contacts,
                 serverUrl = serverUrl,
                 onContactTap = { onNavigateToContact(it) },
-                onUserTap = { onNavigateToProfile(it) },
                 onToggleFavorite = { viewModel.toggleFavorite(it) },
-                onToggleUserFavorite = { viewModel.toggleUserFavorite(it) },
                 onToggleSection = { viewModel.toggleSection(it) },
                 isSectionCollapsed = { viewModel.isSectionCollapsed(it) },
-                isUserFavorite = { viewModel.isUserFavorite(it) },
                 onShareQr = { qrContact = it }
             )
         } else {
-            // Ungrouped flat list — includes both contacts AND users (matching web)
+            // Ungrouped flat list
             LazyColumn {
-                // Merge users into the flat list
-                val allUsers = uiState.users
                 items(contacts, key = { it.id }) { contact ->
                     ContactRow(
                         contact = contact,
@@ -265,16 +254,6 @@ fun ContactListScreen(
                         onTap = { onNavigateToContact(contact.id) },
                         onToggleFavorite = { viewModel.toggleFavorite(contact.id) },
                         onShareQr = { qrContact = contact }
-                    )
-                }
-                // Also show users in flat mode
-                items(allUsers, key = { "user_${it.id}" }) { user ->
-                    UserRow(
-                        user = user,
-                        serverUrl = serverUrl,
-                        onTap = { onNavigateToProfile(user.id) },
-                        isFavorite = viewModel.isUserFavorite(user.id),
-                        onToggleFavorite = { viewModel.toggleUserFavorite(user.id) }
                     )
                 }
             }
@@ -330,22 +309,18 @@ private fun GroupedContactList(
     contacts: List<ContactEntity>,
     serverUrl: String,
     onContactTap: (String) -> Unit,
-    onUserTap: (String) -> Unit,
     onToggleFavorite: (String) -> Unit,
-    onToggleUserFavorite: (String) -> Unit,
     onToggleSection: (String) -> Unit,
     isSectionCollapsed: (String) -> Boolean,
-    isUserFavorite: (String) -> Boolean,
     onShareQr: (ContactEntity) -> Unit
 ) {
     LazyColumn {
-        // ★ Favorites (contacts + favorited users)
-        val favUsers = uiState.users.filter { isUserFavorite(it.id) }
-        if (uiState.favorites.isNotEmpty() || favUsers.isNotEmpty()) {
+        // ★ Favorites
+        if (uiState.favorites.isNotEmpty()) {
             item(key = "header_favorites") {
                 PeopleSectionHeader(
                     label = "★ Favorites",
-                    count = uiState.favorites.size + favUsers.size,
+                    count = uiState.favorites.size,
                     isExpanded = !isSectionCollapsed("favorites"),
                     onToggle = { onToggleSection("favorites") }
                 )
@@ -353,28 +328,6 @@ private fun GroupedContactList(
             if (!isSectionCollapsed("favorites")) {
                 items(uiState.favorites, key = { "fav_${it.id}" }) { contact ->
                     ContactRow(contact, serverUrl, { onContactTap(contact.id) }, { onToggleFavorite(contact.id) }, { onShareQr(contact) })
-                }
-                // Favorited users also appear in this section (matching web)
-                items(favUsers, key = { "favuser_${it.id}" }) { user ->
-                    UserRow(user, serverUrl, { onUserTap(user.id) }, true, { onToggleUserFavorite(user.id) })
-                }
-            }
-        }
-
-        // Users (non-favorited only)
-        val nonFavUsers = uiState.users.filter { !isUserFavorite(it.id) }
-        if (nonFavUsers.isNotEmpty()) {
-            item(key = "header_users") {
-                PeopleSectionHeader(
-                    label = "Users",
-                    count = nonFavUsers.size,
-                    isExpanded = !isSectionCollapsed("users"),
-                    onToggle = { onToggleSection("users") }
-                )
-            }
-            if (!isSectionCollapsed("users")) {
-                items(nonFavUsers, key = { "user_${it.id}" }) { user ->
-                    UserRow(user, serverUrl, { onUserTap(user.id) }, isUserFavorite(user.id), { onToggleUserFavorite(user.id) })
                 }
             }
         }
@@ -487,14 +440,28 @@ private fun ContactRow(
 
         // Name + detail column
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = contact.displayName ?: contact.givenName.ifBlank { "(unnamed)" },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (contact.favorite) FontWeight.Bold else FontWeight.Normal,
-                color = colorPair?.second ?: MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = contact.displayName ?: contact.givenName.ifBlank { "(unnamed)" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (contact.favorite) FontWeight.Bold else FontWeight.Normal,
+                    color = colorPair?.second ?: MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                // User badge — shown when contact is a user (has username or isUser flag)
+                if (contact.isUser || contact.username != null) {
+                    Icon(
+                        imageVector = Icons.Default.VerifiedUser,
+                        contentDescription = "User",
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(14.dp),
+                        tint = Color(0xFF5C8A4D)
+                    )
+                }
+            }
 
             // Detail line: first email · first phone · org
             val details = buildList {
@@ -525,81 +492,4 @@ private fun ContactRow(
     }
 }
 
-// ─── User Row ───────────────────────────────────────────────────────────────────
 
-@Composable
-private fun UserRow(
-    user: SwitchableUserDto,
-    serverUrl: String,
-    onTap: () -> Unit,
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onTap() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Star toggle
-        Text(
-            text = if (isFavorite) "★" else "☆",
-            fontSize = 20.sp,
-            color = if (isFavorite) Color(0xFFE3B23C) else Color(0xFF8B7355),
-            modifier = Modifier
-                .clickable { onToggleFavorite() }
-                .padding(end = 8.dp)
-        )
-
-        // Thumbnail
-        val imageUrl = user.profileImageUrl?.let { url ->
-            if (url.startsWith("http")) url else "$serverUrl$url"
-        }
-        if (imageUrl != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, Color(0xFF8B5A2B), CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE3F2FD))
-                    .border(1.dp, Color(0xFF90CAF9), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp), tint = Color(0xFF2196F3))
-            }
-        }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        // Name + username
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = user.displayName ?: user.username,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isFavorite) FontWeight.Bold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = "@${user.username}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}

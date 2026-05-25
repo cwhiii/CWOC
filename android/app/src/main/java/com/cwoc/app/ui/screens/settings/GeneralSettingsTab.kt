@@ -537,6 +537,7 @@ fun GeneralSettingsTab(
             SettingsDropdown(
                 selectedValue = formState.landingView,
                 options = listOf(
+                    "Last Viewed",
                     "Omni",
                     "Calendar",
                     "Checklists",
@@ -552,7 +553,7 @@ fun GeneralSettingsTab(
                 }
             )
             Text(
-                text = "Applies only on fresh app open, not when returning from the editor or other pages.",
+                text = "Applies only on fresh app open, not when returning from the editor or other pages. \"Last Viewed\" remembers whichever view you used most recently.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)

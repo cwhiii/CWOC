@@ -1,14 +1,20 @@
 package com.cwoc.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.ui.components.CreateRuleFromChitDialog
 import com.cwoc.app.ui.screens.alerts.AlertsScreen
 import com.cwoc.app.ui.screens.attachments.AttachmentsScreen
 import com.cwoc.app.ui.screens.auditlog.AuditLogScreen
@@ -51,6 +57,24 @@ fun CwocNavGraph(
 ) {
     val startDestination = if (isAuthenticated) Screen.Tasks.route else Screen.Login.route
 
+    // Shared "Create Rule from Chit" dialog state
+    var createRuleChit by remember { mutableStateOf<ChitEntity?>(null) }
+    val onCreateRule: (ChitEntity) -> Unit = { chit -> createRuleChit = chit }
+
+    // Show the dialog when a chit is selected for rule creation
+    if (createRuleChit != null) {
+        CreateRuleFromChitDialog(
+            chit = createRuleChit!!,
+            onDismiss = { createRuleChit = null },
+            onFieldSelected = { trigger, field, operator, value ->
+                createRuleChit = null
+                navController.navigate(
+                    Screen.RuleEditor.createRouteWithPrefill(trigger, field, operator, value)
+                )
+            }
+        )
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -67,6 +91,7 @@ fun CwocNavGraph(
         }
 
         composable(Screen.Tasks.route) {
+            android.util.Log.d("PERF", "[NavGraph] Tasks composable ENTERED")
             TasksScreen(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
@@ -74,18 +99,21 @@ fun CwocNavGraph(
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
                 sidebarStateViewModel = sidebarStateViewModel,
-                onQuickAlert = onQuickAlert
+                onQuickAlert = onQuickAlert,
+                onCreateRule = onCreateRule
             )
         }
 
         composable(Screen.Notes.route) {
+            android.util.Log.d("PERF", "[NavGraph] Notes composable ENTERED")
             NotesScreen(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
-                onQuickAlert = onQuickAlert
+                onQuickAlert = onQuickAlert,
+                onCreateRule = onCreateRule
             )
         }
 
@@ -101,6 +129,7 @@ fun CwocNavGraph(
         }
 
         composable(Screen.Calendar.route) {
+            android.util.Log.d("PERF", "[NavGraph] Calendar composable ENTERED")
             CalendarScreen(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
@@ -114,13 +143,15 @@ fun CwocNavGraph(
         }
 
         composable(Screen.Checklists.route) {
+            android.util.Log.d("PERF", "[NavGraph] Checklists composable ENTERED")
             ChecklistsScreen(
                 onNavigateToEditor = { chitId ->
                     navController.navigate(Screen.Editor.createRoute(chitId))
                 },
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
-                onQuickAlert = onQuickAlert
+                onQuickAlert = onQuickAlert,
+                onCreateRule = onCreateRule
             )
         }
 
@@ -132,7 +163,8 @@ fun CwocNavGraph(
                 filterSortViewModel = filterSortViewModel,
                 chitRepository = chitRepository,
                 settingsRepository = settingsRepository,
-                sidebarStateViewModel = sidebarStateViewModel
+                sidebarStateViewModel = sidebarStateViewModel,
+                onCreateRule = onCreateRule
             )
         }
 
@@ -164,9 +196,6 @@ fun CwocNavGraph(
                 },
                 onNavigateToTrash = {
                     navController.navigate(Screen.ContactTrash.route)
-                },
-                onNavigateToProfile = { userId ->
-                    navController.navigate(Screen.ContactEditor.createProfileRoute(userId))
                 }
             )
         }
@@ -349,12 +378,26 @@ fun CwocNavGraph(
 
         composable(
             route = Screen.RuleEditor.route,
-            arguments = listOf(navArgument("ruleId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("ruleId") { type = NavType.StringType },
+                navArgument("trigger") { type = NavType.StringType; defaultValue = "" },
+                navArgument("prefill_field") { type = NavType.StringType; defaultValue = "" },
+                navArgument("prefill_operator") { type = NavType.StringType; defaultValue = "" },
+                navArgument("prefill_value") { type = NavType.StringType; defaultValue = "" }
+            )
         ) { backStackEntry ->
             val ruleId = backStackEntry.arguments?.getString("ruleId") ?: return@composable
+            val prefillTrigger = backStackEntry.arguments?.getString("trigger") ?: ""
+            val prefillField = backStackEntry.arguments?.getString("prefill_field") ?: ""
+            val prefillOperator = backStackEntry.arguments?.getString("prefill_operator") ?: ""
+            val prefillValue = backStackEntry.arguments?.getString("prefill_value") ?: ""
             RuleEditorScreen(
                 ruleId = ruleId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                prefillTrigger = prefillTrigger,
+                prefillField = prefillField,
+                prefillOperator = prefillOperator,
+                prefillValue = prefillValue
             )
         }
 

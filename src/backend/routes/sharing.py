@@ -48,7 +48,7 @@ def _validate_user_ids_exist(cursor, user_ids: list) -> None:
     if not user_ids:
         return
     placeholders = ",".join("?" for _ in user_ids)
-    cursor.execute(f"SELECT id FROM users WHERE id IN ({placeholders})", user_ids)
+    cursor.execute(f"SELECT id FROM contacts WHERE username IS NOT NULL AND id IN ({placeholders})", user_ids)
     found_ids = {row[0] for row in cursor.fetchall()}
     missing = set(user_ids) - found_ids
     if missing:
@@ -91,7 +91,7 @@ def get_chit_shares(chit_id: str, request: Request):
             role = entry.get("role")
             display_name = ""
             if uid:
-                cursor.execute("SELECT display_name FROM users WHERE id = ?", (uid,))
+                cursor.execute("SELECT display_name FROM contacts WHERE id = ? AND username IS NOT NULL", (uid,))
                 user_row = cursor.fetchone()
                 if user_row:
                     display_name = user_row[0] or ""
@@ -293,7 +293,7 @@ def get_shared_tags(request: Request):
             for share in (tag_entry.get("shares") or []):
                 uid = share.get("user_id")
                 if uid:
-                    cursor.execute("SELECT display_name FROM users WHERE id = ?", (uid,))
+                    cursor.execute("SELECT display_name FROM contacts WHERE id = ? AND username IS NOT NULL", (uid,))
                     user_row = cursor.fetchone()
                     share["display_name"] = user_row["display_name"] if user_row else ""
 

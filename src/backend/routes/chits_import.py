@@ -171,7 +171,7 @@ def import_chits(req: ImportRequest, request: Request):
 
         # Look up owner info for imported chits
         cursor = conn.cursor()
-        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT display_name, username FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,))
         user_row = cursor.fetchone()
         owner_display_name = user_row[0] if user_row else ""
         owner_username = user_row[1] if user_row else request.state.username
@@ -673,7 +673,7 @@ def import_all(req: ImportRequest, request: Request):
 
         # Look up owner info for imported data
         cur = conn.cursor()
-        cur.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        cur.execute("SELECT display_name, username FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,))
         user_row = cur.fetchone()
         owner_display_name = user_row[0] if user_row else ""
         owner_username = user_row[1] if user_row else request.state.username

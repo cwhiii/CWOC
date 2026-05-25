@@ -106,6 +106,10 @@ function displayOmniView(filteredChits) {
                         var def = _omniDefaultLayout.find(function(d) { return d.id === item.id; });
                         item.hideWhenEmpty = def ? def.hideWhenEmpty : true;
                     }
+                    // Reminders must always hide when empty (corrects stale saved setting)
+                    if (item.id === 'reminders') {
+                        item.hideWhenEmpty = true;
+                    }
                 });
             }
         } catch (e) {
@@ -853,7 +857,6 @@ function _updateOmniTimeUntilBadges(contentEl) {
 
 function _renderOmniReminders(contentEl, reminderChits, viSettings) {
     if (!reminderChits || reminderChits.length === 0) {
-        contentEl.innerHTML = '<div class="omni-empty">No reminders for today.</div>';
         return;
     }
 

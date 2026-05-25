@@ -56,7 +56,7 @@ def create_device_token(body: DeviceTokenRequest):
         # Validate credentials (same logic as login)
         row = conn.execute(
             "SELECT id, username, password_hash, is_active "
-            "FROM users WHERE LOWER(username) = ?",
+            "FROM contacts WHERE LOWER(username) = ? AND username IS NOT NULL",
             (username,),
         ).fetchone()
 

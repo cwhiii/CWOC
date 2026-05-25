@@ -68,6 +68,8 @@ import kotlin.math.roundToInt
  * @param totalCount Total number of visible emails.
  * @param onSelectAll Callback for Select All action.
  * @param onDeselectAll Callback for Deselect All action.
+ * @param onCycleSelectMode Callback for cycling through select modes.
+ * @param selectModeLabel Current select mode label (null when hidden).
  * @param onArchiveSelected Callback for bulk archive action.
  * @param onTagSelected Callback for bulk tag action.
  * @param onToggleReadSelected Callback for bulk read/unread toggle.
@@ -86,6 +88,8 @@ fun BundleToolbar(
     totalCount: Int,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
+    onCycleSelectMode: () -> Unit,
+    selectModeLabel: String?,
     onArchiveSelected: () -> Unit,
     onTagSelected: () -> Unit,
     onToggleReadSelected: () -> Unit,
@@ -110,6 +114,8 @@ fun BundleToolbar(
                 isMultiSelectMode = isMultiSelectMode,
                 onSelectAll = onSelectAll,
                 onDeselectAll = onDeselectAll,
+                onCycleSelectMode = onCycleSelectMode,
+                selectModeLabel = selectModeLabel,
                 onArchive = onArchiveSelected,
                 onTag = onTagSelected,
                 onToggleRead = onToggleReadSelected,

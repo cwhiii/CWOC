@@ -12,7 +12,7 @@
  *   Everything else  → network fetch (no cache)
  */
 
-const CACHE_NAME = 'cwoc-shell-v3';
+const CACHE_NAME = 'cwoc-shell-v4';
 
 const APP_SHELL_URLS = [
     // ── HTML pages ──
@@ -213,6 +213,11 @@ self.addEventListener('push', (event) => {
         data: data.data || {}
     };
 
+    // Add notification actions for email notifications
+    if (data.actions && Array.isArray(data.actions)) {
+        options.actions = data.actions;
+    }
+
     event.waitUntil(
         self.registration.showNotification(title, options)
     );
@@ -221,9 +226,52 @@ self.addEventListener('push', (event) => {
 // ─── Notification click: focus/open app, navigate to chit ───────────────────
 
 self.addEventListener('notificationclick', (event) => {
+    const action = event.action;
+    const notifData = event.notification.data || {};
+
     event.notification.close();
 
-    const notifData = event.notification.data || {};
+    // Handle email notification action buttons
+    if (action && notifData.chitId) {
+        const chitId = notifData.chitId;
+        let apiUrl = '';
+        let method = 'PATCH';
+        let body = null;
+
+        switch (action) {
+            case 'trash':
+                apiUrl = '/api/chits/' + chitId + '/fields';
+                body = JSON.stringify({ email_folder: 'trash' });
+                break;
+            case 'archive':
+                apiUrl = '/api/chits/' + chitId + '/fields';
+                body = JSON.stringify({ archived: true });
+                break;
+            case 'markread':
+                apiUrl = '/api/email/' + chitId + '/read';
+                body = JSON.stringify({ read: true });
+                break;
+            case 'snooze':
+                apiUrl = '/api/chits/' + chitId + '/fields';
+                var snoozeUntil = new Date(Date.now() + 3600000).toISOString();
+                body = JSON.stringify({ snoozed_until: snoozeUntil });
+                break;
+        }
+
+        if (apiUrl) {
+            event.waitUntil(
+                fetch(apiUrl, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: body,
+                    credentials: 'include'
+                }).catch(function() { /* silently fail if offline */ })
+            );
+            return;
+        }
+    }
+
+    // Default: open/focus the app and navigate
     const targetUrl = notifData.url || '/';
 
     event.waitUntil(

@@ -61,5 +61,15 @@ data class ContactEntity(
     val deleted: Boolean = false,
     @ColumnInfo(defaultValue = "0")
     val hasUnviewedConflict: Boolean = false,
-    val conflictFields: String? = null
+    val conflictFields: String? = null,
+
+    // Unified user-contacts — display-only fields from sync
+    @ColumnInfo(name = "username")
+    val username: String? = null,
+    @ColumnInfo(name = "is_admin", defaultValue = "0")
+    val isAdmin: Boolean = false,
+    @ColumnInfo(name = "is_active", defaultValue = "1")
+    val isActive: Boolean = true,
+    @ColumnInfo(name = "is_user", defaultValue = "0")
+    val isUser: Boolean = false
 )

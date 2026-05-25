@@ -273,6 +273,7 @@ class ChitEditorViewModel @Inject constructor(
         loadRecentTags()
         loadContactNames()
         loadIndicatorObjects()
+        loadAvailableChitsForPicker() // Eager async load for instant send-to-chit picker
     }
 
     /**
@@ -528,6 +529,43 @@ class ChitEditorViewModel @Inject constructor(
             if (mode == "move") {
                 updateForm(_formState.value.copy(note = ""))
             }
+        }
+    }
+
+    /**
+     * Send checklist items to another chit (move mode — appends items to target's checklist).
+     * Fetches the target chit, appends the items, saves it, and marks it dirty for sync.
+     */
+    fun sendChecklistItemsToChit(targetChitId: String, items: List<com.cwoc.app.domain.checklist.ChecklistItemV2>) {
+        viewModelScope.launch {
+            if (items.isEmpty()) return@launch
+
+            val targetEntity = chitDao.getById(targetChitId) ?: return@launch
+
+            // Parse existing checklist from target
+            val existingChecklist: List<Map<String, Any?>> = try {
+                val type = object : TypeToken<List<Map<String, Any?>>>() {}.type
+                if (targetEntity.checklist.isNullOrBlank()) emptyList()
+                else Gson().fromJson(targetEntity.checklist, type)
+            } catch (e: Exception) { emptyList() }
+
+            // Convert items to maps for JSON serialization
+            val newItemMaps = items.map { item ->
+                mapOf(
+                    "id" to UUID.randomUUID().toString(),
+                    "text" to item.text,
+                    "level" to item.level,
+                    "checked" to item.checked,
+                    "parent" to item.parent
+                )
+            }
+
+            val updatedChecklist = existingChecklist + newItemMaps
+            val updatedJson = Gson().toJson(updatedChecklist)
+
+            chitDao.upsert(targetEntity.copy(checklist = updatedJson, modifiedDatetime = Instant.now().toString()))
+            dirtyTracker.markDirty(targetChitId, setOf("checklist"))
+            syncPushEngine.pushSingle(targetChitId)
         }
     }
 

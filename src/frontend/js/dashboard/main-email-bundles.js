@@ -10,6 +10,12 @@
 
 /* ── State ────────────────────────────────────────────────────────────────── */
 
+/** Select-all cycle state: cycles through modes on each click */
+var _emailSelectCycleMode = -1; // starts at -1 so first click advances to 0 (all)
+
+/** Flag to prevent _bundleUpdateActionStates from resetting cycle during a cycle click */
+var _emailCycleInProgress = false;
+
 /** Active bundle name (null = no bundle filter, show all) */
 var _emailActiveBundle = null;
 
@@ -344,15 +350,21 @@ function _renderBundleToolbar(emailChits) {
     var row1 = document.createElement('div');
     row1.className = 'bundle-toolbar-actions';
 
-    var selectAllCb = document.createElement('input');
-    selectAllCb.type = 'checkbox';
-    selectAllCb.className = 'bundle-select-all';
-    selectAllCb.id = 'bundleSelectAllCb';
-    selectAllCb.title = 'Select All';
-    selectAllCb.addEventListener('change', function() {
-        _emailBundleSelectAll(this.checked);
+    var selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.className = 'bundle-select-all-cycle';
+    selectAllBtn.id = 'bundleSelectAllBtn';
+    selectAllBtn.title = 'Select All';
+    selectAllBtn.innerHTML = '<i class="far fa-square"></i>';
+    selectAllBtn.addEventListener('click', function() {
+        _emailCycleSelectMode();
     });
-    row1.appendChild(selectAllCb);
+    row1.appendChild(selectAllBtn);
+
+    var selectLabel = document.createElement('span');
+    selectLabel.className = 'bundle-select-label';
+    selectLabel.id = 'bundleSelectLabel';
+    row1.appendChild(selectLabel);
 
     var archiveBtn = document.createElement('button');
     archiveBtn.type = 'button';
@@ -627,6 +639,9 @@ function _checkBundleOverflow(row) {
 function _setActiveBundle(bundleId) {
     _emailActiveBundle = bundleId;
 
+    // Invalidate DOM cache — bundle filter change means cached DOM is stale
+    if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
+
     // Persist to localStorage
     _persistActiveBundle();
 
@@ -688,34 +703,126 @@ function _bundleOnSubFilterChange(newFilter) {
 /* ── Bulk Action State Updates ────────────────────────────────────────────── */
 
 /**
- * Select all / deselect all visible email cards via the bundle toolbar checkbox.
- * @param {boolean} checked — whether the checkbox is now checked
+ * Cycle through select modes: All → None → Read → Unread → All → ...
+ * Shows a brief label indicating the current mode.
+ */
+function _emailCycleSelectMode() {
+    // Cycle: All → None → Read → Unread → All → ...
+    var modes = ['all', 'none', 'read', 'unread'];
+    _emailSelectCycleMode = (_emailSelectCycleMode + 1) % modes.length;
+    var mode = modes[_emailSelectCycleMode];
+
+    var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
+    _emailSelectedIds = [];
+
+    allCbs.forEach(function(cb) {
+        var card = cb.closest('.email-card');
+        var shouldSelect = false;
+
+        if (mode === 'all') {
+            shouldSelect = true;
+        } else if (mode === 'none') {
+            shouldSelect = false;
+        } else if (mode === 'read') {
+            // Select read emails (cards WITHOUT email-unread class)
+            shouldSelect = card && !card.classList.contains('email-unread');
+        } else if (mode === 'unread') {
+            // Select unread emails (cards WITH email-unread class)
+            shouldSelect = card && card.classList.contains('email-unread');
+        }
+
+        cb.checked = shouldSelect;
+        var wrap = cb.closest('.email-cb-wrap');
+        if (wrap) wrap.classList.toggle('email-cb-checked', shouldSelect);
+        if (shouldSelect && cb.dataset.chitId) _emailSelectedIds.push(cb.dataset.chitId);
+    });
+
+    // Prevent _bundleUpdateActionStates from resetting cycle index
+    _emailCycleInProgress = true;
+    _bundleUpdateActionStates();
+    if (typeof _emailUpdateBulkBar === 'function') _emailUpdateBulkBar();
+    _emailCycleInProgress = false;
+
+    // Update the button icon
+    _updateSelectAllIcon(mode);
+
+    // Show the mode label briefly
+    _showSelectModeLabel(mode);
+}
+
+/**
+ * Update the select-all button icon based on current mode.
+ */
+function _updateSelectAllIcon(mode) {
+    var btn = document.getElementById('bundleSelectAllBtn');
+    if (!btn) return;
+    if (mode === 'all') {
+        btn.innerHTML = '<i class="fas fa-check-square"></i>';
+        btn.title = 'All Selected — click for None';
+    } else if (mode === 'none') {
+        btn.innerHTML = '<i class="far fa-square"></i>';
+        btn.title = 'None Selected — click for Read';
+    } else if (mode === 'read') {
+        btn.innerHTML = '<i class="fas fa-envelope-open"></i>';
+        btn.title = 'Read Selected — click for Unread';
+    } else if (mode === 'unread') {
+        btn.innerHTML = '<i class="fas fa-envelope"></i>';
+        btn.title = 'Unread Selected — click for All';
+    }
+}
+
+/** Timer for fading the select mode label */
+var _selectModeLabelTimer = null;
+
+/**
+ * Show a brief label next to the select button indicating the mode.
+ * Fades away after a few seconds.
+ */
+function _showSelectModeLabel(mode) {
+    var label = document.getElementById('bundleSelectLabel');
+    if (!label) return;
+
+    var text = '';
+    if (mode === 'all') text = 'All';
+    else if (mode === 'none') text = 'None';
+    else if (mode === 'read') text = 'Read';
+    else if (mode === 'unread') text = 'Unread';
+
+    label.textContent = text;
+    label.classList.add('visible');
+    label.classList.remove('fading');
+
+    if (_selectModeLabelTimer) clearTimeout(_selectModeLabelTimer);
+    _selectModeLabelTimer = setTimeout(function() {
+        label.classList.add('fading');
+        setTimeout(function() {
+            label.classList.remove('visible', 'fading');
+            label.textContent = '';
+        }, 400);
+    }, 2000);
+}
+
+/**
+ * Legacy select all / deselect all (kept for compatibility with _emailBulkSelectAll calls).
+ * @param {boolean} checked — whether to select all or deselect all
  */
 function _emailBundleSelectAll(checked) {
-    var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
-
     if (checked) {
-        // Select all
-        _emailSelectedIds = [];
-        allCbs.forEach(function(cb) {
-            cb.checked = true;
-            var wrap = cb.closest('.email-cb-wrap');
-            if (wrap) wrap.classList.add('email-cb-checked');
-            if (cb.dataset.chitId) _emailSelectedIds.push(cb.dataset.chitId);
-        });
+        _emailSelectCycleMode = -1; // will advance to 0 (all)
+        _emailCycleSelectMode();
     } else {
-        // Deselect all
+        _emailSelectCycleMode = -1; // reset
+        var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
         _emailSelectedIds = [];
         allCbs.forEach(function(cb) {
             cb.checked = false;
             var wrap = cb.closest('.email-cb-wrap');
             if (wrap) wrap.classList.remove('email-cb-checked');
         });
+        _bundleUpdateActionStates();
+        if (typeof _emailUpdateBulkBar === 'function') _emailUpdateBulkBar();
+        _updateSelectAllIcon('none');
     }
-
-    _bundleUpdateActionStates();
-    // Also update the old bulk bar if it exists
-    if (typeof _emailUpdateBulkBar === 'function') _emailUpdateBulkBar();
 }
 
 /**
@@ -731,7 +838,6 @@ function _bundleUpdateActionStates() {
     var readBtn = document.getElementById('bundleReadBtn');
     var deleteBtn = document.getElementById('bundleDeleteBtn');
     var countEl = document.getElementById('bundleSelectedCount');
-    var selectAllCb = document.getElementById('bundleSelectAllCb');
 
     // Toggle active/inactive class on action buttons
     var btns = [archiveBtn, tagBtn, readBtn, deleteBtn];
@@ -751,10 +857,15 @@ function _bundleUpdateActionStates() {
         countEl.textContent = hasSelection ? count + ' selected' : '';
     }
 
-    // Update select-all checkbox state
-    if (selectAllCb) {
-        var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
-        selectAllCb.checked = hasSelection && count === allCbs.length;
+    // Update select-all button icon based on selection state (only reset cycle if not mid-cycle)
+    var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
+    if (!_emailCycleInProgress) {
+        if (!hasSelection) {
+            _emailSelectCycleMode = -1;
+            _updateSelectAllIcon('none');
+        } else if (count === allCbs.length) {
+            _updateSelectAllIcon('all');
+        }
     }
 }
 
@@ -843,24 +954,24 @@ function _openBundleModal(editBundle) {
             rulesBtn.style.marginLeft = 'auto';
             rulesBtn.addEventListener('click', function() {
                 var bundleId = _bundleModalEditBundle.id;
-                var ruleIds = _bundleModalEditBundle.rule_ids || [];
                 _closeBundleModal();
                 try { localStorage.setItem('cwoc_bundle_needs_reclassify', '1'); } catch(e) {}
-                var ruleEditorUrl;
-                if (ruleIds.length > 0) {
-                    // Bundle has a rule — open the rule editor for that rule
-                    ruleEditorUrl = '/frontend/html/rule-editor.html'
-                        + '?id=' + encodeURIComponent(ruleIds[0])
-                        + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
-                } else {
-                    // Bundle has no rule — open rule editor in create mode
-                    ruleEditorUrl = '/frontend/html/rule-editor.html'
-                        + '?new=1'
-                        + '&trigger=email_received'
-                        + '&bundle_id=' + encodeURIComponent(bundleId)
-                        + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
-                }
-                window.location.href = ruleEditorUrl;
+                // Consolidate rules into one, then open the rule editor for it
+                fetch('/api/bundles/' + encodeURIComponent(bundleId) + '/consolidate-rules', { method: 'POST' })
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('Failed to consolidate rules');
+                        return r.json();
+                    })
+                    .then(function(data) {
+                        var ruleEditorUrl = '/frontend/html/rule-editor.html'
+                            + '?id=' + encodeURIComponent(data.rule_id)
+                            + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
+                        window.location.href = ruleEditorUrl;
+                    })
+                    .catch(function(err) {
+                        console.error('[Bundles] Consolidate failed:', err);
+                        cwocToast('Failed to open rules editor', 'error');
+                    });
             });
             actionsDiv.insertBefore(rulesBtn, defineBtn);
 
@@ -1600,3 +1711,4 @@ function _disableBundleReorder() {
     }
     document.removeEventListener('click', _bundleReorderFinishOnClick, true);
 }
+

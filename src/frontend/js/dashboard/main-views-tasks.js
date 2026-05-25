@@ -10,7 +10,7 @@
  */
 
 // ── Tasks View Mode (Tasks list vs Habits view) ─────────────────────────────
-let _tasksViewMode = localStorage.getItem('cwoc_tasksViewMode') || 'tasks'; // 'tasks' | 'habits'
+let _tasksViewMode = localStorage.getItem('cwoc_tasksViewMode') || 'timeline'; // 'timeline' | 'tasks' | 'habits' | 'assigned'
 
 
 function displayTasksView(chitsToDisplay) {
@@ -19,6 +19,9 @@ function displayTasksView(chitsToDisplay) {
   }
   if (_tasksViewMode === 'assigned') {
     return displayAssignedToMeView(chitsToDisplay);
+  }
+  if (_tasksViewMode === 'timeline') {
+    return displayTimelineView(chitsToDisplay);
   }
 
   const chitList = document.getElementById("chit-list");
@@ -338,16 +341,24 @@ function displayAssignedToMeView(chitsToDisplay) {
 
 
 function _setTasksMode(mode) {
+  // Clean up timeline resize listener when leaving timeline mode
+  if (_tasksViewMode === 'timeline' && mode !== 'timeline' && typeof _tlDetachResizeListener === 'function') {
+    _tlDetachResizeListener();
+  }
   _tasksViewMode = mode;
   localStorage.setItem('cwoc_tasksViewMode', mode);
   _updateUrlHash();
   var tasksBtn = document.getElementById('tasks-mode-tasks');
   var habitsBtn = document.getElementById('tasks-mode-habits');
   var assignedBtn = document.getElementById('tasks-mode-assigned');
+  var timelineBtn = document.getElementById('tasks-mode-timeline');
   var habitsWindowWrap = document.getElementById('habits-window-wrap');
   if (tasksBtn) { tasksBtn.style.background = mode === 'tasks' ? 'ivory' : ''; tasksBtn.style.color = mode === 'tasks' ? '#3b1f0a' : ''; }
   if (habitsBtn) { habitsBtn.style.background = mode === 'habits' ? 'ivory' : ''; habitsBtn.style.color = mode === 'habits' ? '#3b1f0a' : ''; }
   if (assignedBtn) { assignedBtn.style.background = mode === 'assigned' ? 'ivory' : ''; assignedBtn.style.color = mode === 'assigned' ? '#3b1f0a' : ''; }
+  if (timelineBtn) { timelineBtn.style.background = mode === 'timeline' ? 'ivory' : ''; timelineBtn.style.color = mode === 'timeline' ? '#3b1f0a' : ''; }
   if (habitsWindowWrap) habitsWindowWrap.style.display = mode === 'habits' ? '' : 'none';
+  var timelineControls = document.getElementById('section-timeline-controls');
+  if (timelineControls) timelineControls.style.display = mode === 'timeline' ? '' : 'none';
   displayChits();
 }

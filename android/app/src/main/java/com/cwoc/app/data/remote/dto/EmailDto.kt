@@ -64,3 +64,27 @@ data class PgpKeyResponse(
 data class MarkReadRequest(
     val read: Boolean
 )
+
+/**
+ * Request body for POST /api/bundles/{bundleId}/drop-email.
+ * Unified endpoint for moving an email to a bundle with optional rule creation.
+ */
+data class DropEmailRequest(
+    @SerializedName("chit_id") val chitId: String,
+    val mode: String, // "move_once", "always_sender", "always_subject", "always_recipient"
+    @SerializedName("match_value") val matchValue: String = "",
+    @SerializedName("apply_retroactively") val applyRetroactively: Boolean = false
+)
+
+/**
+ * Response from POST /api/bundles/{bundleId}/drop-email.
+ */
+data class DropEmailResponse(
+    val success: Boolean = false,
+    val mode: String? = null,
+    @SerializedName("bundle_id") val bundleId: String? = null,
+    @SerializedName("bundle_name") val bundleName: String? = null,
+    @SerializedName("rule_id") val ruleId: String? = null,
+    @SerializedName("rule_name") val ruleName: String? = null,
+    @SerializedName("reclassified_count") val reclassifiedCount: Int = 0
+)

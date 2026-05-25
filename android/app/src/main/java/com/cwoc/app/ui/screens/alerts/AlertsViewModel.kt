@@ -15,6 +15,8 @@ import com.cwoc.app.data.repository.SyncRepository
 import com.cwoc.app.data.sync.ConnectivityMonitor
 import com.cwoc.app.data.sync.DirtyTracker
 import com.cwoc.app.data.sync.SyncPushEngine
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.data.sync.SyncStateManager
 import com.cwoc.app.domain.alerts.StopwatchRuntime
 import com.cwoc.app.domain.alerts.TimerRuntime
 import com.cwoc.app.notification.TimerNotificationHelper
@@ -59,8 +61,12 @@ class AlertsViewModel @Inject constructor(
     private val syncPushEngine: SyncPushEngine,
     private val connectivityMonitor: ConnectivityMonitor,
     private val timerNotificationHelper: TimerNotificationHelper,
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val syncStateManager: SyncStateManager
 ) : ViewModel() {
+
+    /** Aggregated sync state for the UI indicator. */
+    val syncState: StateFlow<SyncState> = syncStateManager.syncState
 
     companion object {
         private const val PREF_KEY_MODE = "sidebar_alarms_mode"

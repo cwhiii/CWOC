@@ -8,7 +8,9 @@ The top bar switches between six views: Calendar, Checklists, Alerts, Projects, 
 
 ## Default View
 
-By default, the dashboard opens to the Calendar view when you first visit the site. You can change this in [Settings → Default View](/frontend/html/settings.html#default-view) to any of the available views: Calendar, Checklists, Tasks, Projects, Notes, Notebook, Email, Indicators, Alerts, or Omni.
+By default, the dashboard opens to the Calendar view when you first visit the site. You can change this in [Settings → Default View](/frontend/html/settings.html#default-view) to any of the available views: Calendar, Checklists, Tasks, Projects, Notes, Notebook, Email, Indicators, Alerts, Omni, or **Last Viewed**.
+
+**Last Viewed** remembers whichever view (tab) you used most recently and opens to that view on your next visit. This tracks views only — not individual chits, editor states, or filter settings.
 
 This setting only applies on a **fresh site entry** — when you navigate directly to the dashboard without any prior session state. It does not override the view you were on when returning from the chit editor, settings, or other pages (those always restore your previous position).
 
@@ -34,10 +36,10 @@ The sidebar is organized top-to-bottom:
 - **People & Settings** — Navigation to People and Settings pages
 - **Clock, Weather, Reference, Help** — Four compact buttons at the bottom. Clock opens a modal. Weather navigates to the full page (Shift+click for quick modal). Reference and Help open their respective overlays/pages
 
-The Alerts and Projects views have a **View Mode** toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).
+The Alerts and Projects views have a **View Mode** toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit). The **Tasks** view has a **[Timeline](/frontend/html/help.html#timeline-view)** sub-mode that visualizes tasks as nodes with dependency lines on a horizontal scrolling canvas.
 
 The **Checklists** and **Notes** views both use a masonry column layout on desktop — cards are arranged in multiple columns and can be dragged between columns to organize them. On mobile, they collapse to a single-column list with drag-to-reorder.
 
 ---
 
-**See also:** [Omni View](/frontend/html/help.html#omni-view) · [Calendar](/frontend/html/help.html#calendar) · [Notes](/frontend/html/help.html#notes) · [Habits](/frontend/html/help.html#habits) · [Indicators](/frontend/html/help.html#indicators) · [Maps](/maps) · [Email](/frontend/html/help.html#email) · [Global Search](/frontend/html/help.html#global-search) · [Trash](/frontend/html/trash.html) · [Kiosk](/frontend/html/help.html#kiosk)
+**See also:** [Omni View](/frontend/html/help.html#omni-view) · [Calendar](/frontend/html/help.html#calendar) · [Notes](/frontend/html/help.html#notes) · [Habits](/frontend/html/help.html#habits) · [Indicators](/frontend/html/help.html#indicators) · [Timeline View](/frontend/html/help.html#timeline-view) · [Maps](/maps) · [Email](/frontend/html/help.html#email) · [Global Search](/frontend/html/help.html#global-search) · [Trash](/frontend/html/trash.html) · [Kiosk](/frontend/html/help.html#kiosk)

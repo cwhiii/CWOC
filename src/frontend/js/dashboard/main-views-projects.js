@@ -149,6 +149,16 @@ function _showProjectQuickMenu(e, project) {
       });
       snoozeRow.appendChild(circleBtn);
     });
+    // Custom date/time "X" button
+    var customBtn = document.createElement('button');
+    customBtn.className = 'cwoc-ctx-snooze-circle';
+    customBtn.textContent = 'X';
+    customBtn.title = 'Pick date & time';
+    customBtn.addEventListener('click', function() {
+      _close();
+      _showSnoozeCustomPicker(project.id, project, function() { if (typeof displayChits === 'function') displayChits(); });
+    });
+    snoozeRow.appendChild(customBtn);
     menu.appendChild(snoozeRow);
   }
 

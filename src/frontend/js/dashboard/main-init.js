@@ -475,6 +475,17 @@ function _restoreUIState() {
     if (alarmsSectionRestore) alarmsSectionRestore.style.display = (currentTab === 'Alarms') ? '' : 'none';
     const tasksSectionRestore = document.getElementById('section-tasks-mode');
     if (tasksSectionRestore) tasksSectionRestore.style.display = (currentTab === 'Tasks') ? '' : 'none';
+    // Sync tasks mode button highlighting to match restored _tasksViewMode
+    if (currentTab === 'Tasks' && typeof _tasksViewMode !== 'undefined' && _tasksViewMode !== 'tasks') {
+      var _tmBtnsR = ['tasks', 'habits', 'assigned', 'timeline'];
+      _tmBtnsR.forEach(function(m) {
+        var btn = document.getElementById('tasks-mode-' + m);
+        if (btn) { btn.style.background = (m === _tasksViewMode) ? 'ivory' : ''; btn.style.color = (m === _tasksViewMode) ? '#3b1f0a' : ''; }
+      });
+    }
+    // Show timeline controls if in timeline mode
+    var _tlCtrlRestore = document.getElementById('section-timeline-controls');
+    if (_tlCtrlRestore) _tlCtrlRestore.style.display = (currentTab === 'Tasks' && typeof _tasksViewMode !== 'undefined' && _tasksViewMode === 'timeline') ? '' : 'none';
     // Restore email sidebar visibility
     if (typeof _updateEmailSidebarVisibility === 'function') _updateEmailSidebarVisibility(currentTab);
 
@@ -516,11 +527,15 @@ function _checkPendingDeleteUndo() {
  * Returns a Promise that resolves once both are ready (or after a timeout).
  */
 function _waitForSortPrefs() {
+  var _wsStart = performance.now();
   var prefs = window._sortPrefsReady || Promise.resolve();
   var orders = window._sortOrdersReady || Promise.resolve();
   // Race against a timeout so we never block rendering for more than 2s
   var timeout = new Promise(function(resolve) { setTimeout(resolve, 2000); });
-  return Promise.race([Promise.all([prefs, orders]), timeout]);
+  return Promise.race([Promise.all([prefs, orders]), timeout]).then(function(result) {
+    console.log('[PERF] _waitForSortPrefs resolved in ' + (performance.now() - _wsStart).toFixed(0) + 'ms' + (result === undefined ? ' (TIMEOUT!)' : ''));
+    return result;
+  });
 }
 
 /**
@@ -557,6 +572,8 @@ function _syncPatchSingleChit(chitId) {
         var idx = chits.findIndex(function(c) { return c.id === chitId; });
         if (idx !== -1) {
           chits.splice(idx, 1);
+          if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+          if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
           _syncRemoveChitFromDOM(chitId);
         }
         return;
@@ -577,6 +594,8 @@ function _syncPatchSingleChit(chitId) {
         // New chit — add to array and re-render
         chits.push(updatedChit);
         _computePrerequisiteFlags(chits);
+        if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+        if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
         _syncDisplayChitsPreserved();
         return;
       }
@@ -593,6 +612,10 @@ function _syncPatchSingleChit(chitId) {
       if (existing._isBirthday) updatedChit._isBirthday = true;
       chits[idx] = updatedChit;
       _computePrerequisiteFlags(chits);
+
+      // Invalidate email thread cache — chit data changed
+      if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+      if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
 
       // Re-render with scroll position preserved
       _syncDisplayChitsPreserved();
@@ -742,12 +765,13 @@ function _syncChitUnchanged(existing, updated) {
 
 /* ── Data loading and display orchestration ──────────────────────────────── */
 function fetchChits() {
-  console.debug("Fetching chits...");
+  var _fetchStart = performance.now();
+  console.log('[PERF] fetchChits START at ' + _fetchStart.toFixed(0) + 'ms');
 
   // If this tab is a follower, don't fetch from the API — ask the leader to fetch and broadcast.
   // Exception: on initial page load (chits.length === 0), always fetch to avoid blank screen.
   if (typeof cwocTabSyncIsLeader === 'function' && !cwocTabSyncIsLeader() && chits.length > 0) {
-    console.debug('[fetchChits] Follower tab — requesting leader to broadcast');
+    console.log('[PERF] fetchChits → FOLLOWER tab, requesting leader broadcast');
     if (typeof cwocTabSyncInvalidate === 'function') cwocTabSyncInvalidate();
     return;
   }
@@ -758,13 +782,20 @@ function fetchChits() {
     listEl.innerHTML = '<div style="text-align:center;padding:3em;opacity:0.5;font-size:1.2em;">⏳ Loading chits…</div>';
   }
 
+  console.log('[PERF] fetchChits → starting 3 parallel fetches');
+
   // Fetch owned chits and shared chits in parallel
   Promise.all([
     fetch("/api/chits").then(function(r) {
+      console.log('[PERF] /api/chits response received: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms, status=' + r.status);
       if (!r.ok) throw new Error('HTTP error! Status: ' + r.status);
-      return r.json();
+      return r.json().then(function(data) {
+        console.log('[PERF] /api/chits JSON parsed: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms, ' + (Array.isArray(data) ? data.length : '?') + ' items');
+        return data;
+      });
     }),
     fetch("/api/shared-chits").then(function(r) {
+      console.log('[PERF] /api/shared-chits response received: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms, status=' + r.status);
       if (!r.ok) {
         console.error('[fetchChits] /api/shared-chits returned', r.status);
         return r.text().then(function(t) { console.error('[fetchChits] shared-chits error:', t); return []; });
@@ -772,11 +803,13 @@ function fetchChits() {
       return r.json();
     }).catch(function(err) { console.error('[fetchChits] shared-chits fetch error:', err); return []; }),
     fetch("/api/contacts/birthdays").then(function(r) {
+      console.log('[PERF] /api/contacts/birthdays response received: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms, status=' + r.status);
       if (!r.ok) return [];
       return r.json();
     }).catch(function(err) { console.error('[fetchChits] birthdays fetch error:', err); return []; })
   ])
     .then(function(results) {
+      console.log('[PERF] All 3 fetches complete: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
       var ownedChits = Array.isArray(results[0]) ? results[0] : [];
       var sharedChits = Array.isArray(results[1]) ? results[1] : [];
       var birthdayChits = Array.isArray(results[2]) ? results[2] : [];
@@ -802,6 +835,7 @@ function fetchChits() {
 
       chits = ownedChits;
       window._projectChildNotFound = null; // Reset missing-child cache on fresh fetch
+      console.log('[PERF] Merge complete, starting timezone conversion for ' + chits.length + ' chits: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
       chits.forEach(function(chit) {
         // Apply timezone conversion for display
         if (_currentTimezone && typeof getChitDisplayTime === 'function') {
@@ -841,15 +875,23 @@ function fetchChits() {
             chit.end_datetime_obj = new Date(chit.end_datetime);
         }
       });
+      console.log('[PERF] Timezone conversion done: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
 
       // Compute _hasIncompletePrereqs flag for prerequisite chain indicator
       _computePrerequisiteFlags(chits);
+      console.log('[PERF] Prereq flags done: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
 
       console.debug("Fetched chits:", chits.length, "(including", sharedChits.length, "shared)");
       if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
       updateDateRange();
       _populateProjectFilter();
+      // Invalidate email thread cache — fresh data requires recomputation
+      if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+      // Invalidate email DOM cache — fresh data means cached DOM may be stale
+      if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
+      console.log('[PERF] Pre-displayChits prep done: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
       displayChits();
+      console.log('[PERF] displayChits returned: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
       restoreSidebarState();
       // Re-check notifications immediately after chits refresh
       if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
@@ -861,6 +903,7 @@ function fetchChits() {
       _executeWeatherFlash();
       // Broadcast chit data to other tabs (leader only)
       if (typeof cwocTabSyncBroadcastChits === 'function') cwocTabSyncBroadcastChits(chits);
+      console.log('[PERF] fetchChits TOTAL COMPLETE: ' + (performance.now() - _fetchStart).toFixed(0) + 'ms');
     })
     .catch(function(err) {
       cwocNetFail();
@@ -878,6 +921,7 @@ function fetchChits() {
 /* ── updateDateRange is in main-calendar.js ──────────────────────────────── */
 
 function displayChits() {
+  var _dcPerfStart = performance.now();
   const listContainer = document.getElementById("chit-list");
   if (!listContainer) {
     console.error("Chit list container not found");
@@ -900,6 +944,7 @@ function displayChits() {
   let filteredChits = chits.filter((chit) => {
     return chitMatchesSearch(chit, searchText);
   });
+  console.log('[PERF] displayChits search filter: ' + (performance.now() - _dcPerfStart).toFixed(1) + 'ms (' + chits.length + ' → ' + filteredChits.length + ' chits)');
 
   // Apply multi-select filters (status, label, priority)
   filteredChits = _applyMultiSelectFilters(filteredChits);
@@ -1005,6 +1050,31 @@ function displayChits() {
   // Tag the container with the current view for CSS scoping
   listContainer.dataset.view = currentTab.toLowerCase();
 
+  // DOM cache: before any view clears the container, detach email DOM if present
+  // This preserves the rendered email list for instant reattach on tab switch back
+  if (typeof _emailDomCache !== 'undefined') {
+    var existingScrollWrap = listContainer.querySelector('.email-scroll-wrap');
+    if (existingScrollWrap) {
+      _emailDomCache.scrollTop = existingScrollWrap.scrollTop;
+      _emailDomCache.dom = existingScrollWrap;
+      existingScrollWrap.remove();
+      // Also detach bundle toolbar if present
+      var existingBundleToolbar = listContainer.querySelector('.bundle-toolbar');
+      if (existingBundleToolbar) {
+        _emailDomCache.bundleToolbar = existingBundleToolbar;
+        existingBundleToolbar.remove();
+      }
+    }
+    // Cancel any in-progress progressive render when switching away from Email
+    if (currentTab !== 'Email' && typeof _emailRenderRafId !== 'undefined' && _emailRenderRafId) {
+      cancelAnimationFrame(_emailRenderRafId);
+      _emailRenderRafId = null;
+    }
+  }
+
+  console.log('[PERF] displayChits all filters done: ' + (performance.now() - _dcPerfStart).toFixed(1) + 'ms (' + filteredChits.length + ' chits to render for ' + currentTab + ')');
+  var _dcRenderStart = performance.now();
+
   switch (currentTab) {
     case "Calendar":
       if (currentView === "Week") displayWeekView(filteredChits, { hourStart: _allViewStartHour, hourEnd: _allViewEndHour });
@@ -1053,6 +1123,7 @@ function displayChits() {
 
   // Post-render: apply chit display options (fade past, highlight overdue)
   _applyChitDisplayOptions();
+  console.log('[PERF] displayChits render: ' + (performance.now() - _dcRenderStart).toFixed(1) + 'ms | TOTAL: ' + (performance.now() - _dcPerfStart).toFixed(1) + 'ms (tab=' + currentTab + ')');
 
   // Update tab counts based on currently filtered chits (after search, filters, archive)
   _updateTabCounts(filteredChits);
@@ -1210,9 +1281,195 @@ function _applyChitDisplayOptions() {
 }
 
 
+/* ── Editor Return Single-Chit Refresh ────────────────────────────────────── */
+// When returning from the editor after viewing/editing an email, skip the full
+// fetchChits() and instead restore the chits snapshot + fetch only the edited chit.
+
+/**
+ * Attempt editor return optimization: restore chits from snapshot and fetch
+ * only the single edited chit. Returns true if handled, false if full fetch needed.
+ */
+function _tryEditorReturnRefresh() {
+  var chitId = localStorage.getItem('cwoc_editor_return_chit_id');
+  var syncOccurred = localStorage.getItem('cwoc_sync_occurred_during_edit');
+  var savedScrollTop = localStorage.getItem('cwoc_email_scroll_top');
+
+  // Clean up all keys immediately after reading
+  localStorage.removeItem('cwoc_editor_return_chit_id');
+  localStorage.removeItem('cwoc_sync_occurred_during_edit');
+  localStorage.removeItem('cwoc_email_scroll_top');
+
+  // No editor return signal — do normal fetch
+  if (!chitId) {
+    // Also clean up any stale snapshot
+    try { sessionStorage.removeItem('cwoc_chits_snapshot'); } catch(e) {}
+    return false;
+  }
+
+  // If a sync event occurred while in the editor, fall back to full fetch
+  if (syncOccurred) {
+    console.debug('[EditorReturn] Sync occurred during edit — doing full fetchChits()');
+    try { sessionStorage.removeItem('cwoc_chits_snapshot'); } catch(e) {}
+    fetchChits();
+    return true;
+  }
+
+  // Try to restore chits from snapshot
+  var snapshotRaw = null;
+  try { snapshotRaw = sessionStorage.getItem('cwoc_chits_snapshot'); } catch(e) {}
+  try { sessionStorage.removeItem('cwoc_chits_snapshot'); } catch(e) {}
+
+  if (!snapshotRaw) {
+    console.debug('[EditorReturn] No chits snapshot — doing full fetchChits()');
+    fetchChits();
+    return true;
+  }
+
+  var restoredChits;
+  try {
+    restoredChits = JSON.parse(snapshotRaw);
+  } catch(e) {
+    console.warn('[EditorReturn] Failed to parse chits snapshot:', e);
+    fetchChits();
+    return true;
+  }
+
+  if (!Array.isArray(restoredChits) || restoredChits.length === 0) {
+    console.debug('[EditorReturn] Empty or invalid snapshot — doing full fetchChits()');
+    fetchChits();
+    return true;
+  }
+
+  // Restore chits array from snapshot
+  chits = restoredChits;
+
+  // Apply timezone conversions (same as fetchChits does)
+  chits.forEach(function(chit) {
+    if (_currentTimezone && typeof getChitDisplayTime === 'function') {
+      if (chit.start_datetime) {
+        var startResult = getChitDisplayTime(chit, 'start_datetime', _currentTimezone);
+        if (startResult) {
+          chit.start_datetime_obj = startResult.date;
+          if (startResult.warning) chit._tzWarning = true;
+        } else {
+          chit.start_datetime_obj = new Date(chit.start_datetime);
+        }
+      }
+      if (chit.end_datetime) {
+        var endResult = getChitDisplayTime(chit, 'end_datetime', _currentTimezone);
+        if (endResult) {
+          chit.end_datetime_obj = endResult.date;
+          if (endResult.warning) chit._tzWarning = true;
+        } else {
+          chit.end_datetime_obj = new Date(chit.end_datetime);
+        }
+      }
+      if (chit.due_datetime) {
+        var dueResult = getChitDisplayTime(chit, 'due_datetime', _currentTimezone);
+        if (dueResult) {
+          chit._due_datetime_obj = dueResult.date;
+          if (dueResult.warning) chit._tzWarning = true;
+        }
+      }
+    } else {
+      if (chit.start_datetime) chit.start_datetime_obj = new Date(chit.start_datetime);
+      if (chit.end_datetime) chit.end_datetime_obj = new Date(chit.end_datetime);
+    }
+  });
+
+  // Compute prerequisite flags
+  if (typeof _computePrerequisiteFlags === 'function') _computePrerequisiteFlags(chits);
+
+  console.debug('[EditorReturn] Restored ' + chits.length + ' chits from snapshot, fetching single chit: ' + chitId);
+
+  // Invalidate caches before rendering (data may have changed)
+  if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+  if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
+
+  // Render immediately with snapshot data (instant perceived load)
+  if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
+  updateDateRange();
+  displayChits();
+
+  // Now fetch the single edited chit and patch it in
+  fetch('/api/chit/' + encodeURIComponent(chitId))
+    .then(function(r) {
+      if (r.status === 404) {
+        // Chit was deleted — remove from array and re-render
+        var idx = chits.findIndex(function(c) { return c.id === chitId; });
+        if (idx !== -1) {
+          chits.splice(idx, 1);
+          if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+          if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
+          displayChits();
+        }
+        return null;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(updatedChit) {
+      if (!updatedChit) return;
+
+      // Apply timezone conversion
+      _syncApplyTimezone(updatedChit);
+
+      // Find existing chit in array
+      var idx = chits.findIndex(function(c) { return c.id === chitId; });
+
+      if (idx === -1) {
+        // New chit (created in editor) — append
+        chits.push(updatedChit);
+      } else {
+        // Existing chit — replace with updated data
+        var existing = chits[idx];
+        if (existing._shared) updatedChit._shared = true;
+        if (existing._isBirthday) updatedChit._isBirthday = true;
+        chits[idx] = updatedChit;
+      }
+
+      // Recompute prerequisite flags
+      if (typeof _computePrerequisiteFlags === 'function') _computePrerequisiteFlags(chits);
+
+      // Invalidate caches and re-render with updated data
+      if (typeof _emailInvalidateThreadCache === 'function') _emailInvalidateThreadCache();
+      if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
+      displayChits();
+
+      // Restore email scroll position after render
+      var scrollTopVal = parseInt(savedScrollTop, 10) || 0;
+      if (scrollTopVal > 0) {
+        requestAnimationFrame(function() {
+          var scrollWrap = document.querySelector('.email-scroll-wrap');
+          if (scrollWrap) scrollWrap.scrollTop = scrollTopVal;
+        });
+      }
+
+      // Update email unread badge
+      if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+    })
+    .catch(function(e) {
+      console.warn('[EditorReturn] Single-chit fetch failed, falling back to full fetchChits():', e);
+      fetchChits();
+    });
+
+  // Restore scroll position for the initial snapshot render too
+  var initialScrollTop = parseInt(savedScrollTop, 10) || 0;
+  if (initialScrollTop > 0) {
+    requestAnimationFrame(function() {
+      var scrollWrap = document.querySelector('.email-scroll-wrap');
+      if (scrollWrap) scrollWrap.scrollTop = initialScrollTop;
+    });
+  }
+
+  return true;
+}
+
+
 /* ── DOMContentLoaded — initialization and keyboard event dispatcher ─────── */
 document.addEventListener("DOMContentLoaded", function () {
-  console.debug("DOM fully loaded, initializing...");
+  var _domLoadStart = performance.now();
+  console.log('[PERF] DOMContentLoaded START');
 
   // Initialize the shared sidebar with dashboard-specific callbacks
   // (handles: mobile sidebar, topbar restore, version fetch, tag/people filters, notifications)
@@ -1279,6 +1536,17 @@ document.addEventListener("DOMContentLoaded", function () {
   if (alarmsSection) alarmsSection.style.display = (currentTab === 'Alarms') ? '' : 'none';
   const tasksSection = document.getElementById('section-tasks-mode');
   if (tasksSection) tasksSection.style.display = (currentTab === 'Tasks') ? '' : 'none';
+  // Sync tasks mode button highlighting to match restored _tasksViewMode
+  if (currentTab === 'Tasks' && typeof _tasksViewMode !== 'undefined' && _tasksViewMode !== 'tasks') {
+    var _tmBtns = ['tasks', 'habits', 'assigned', 'timeline'];
+    _tmBtns.forEach(function(m) {
+      var btn = document.getElementById('tasks-mode-' + m);
+      if (btn) { btn.style.background = (m === _tasksViewMode) ? 'ivory' : ''; btn.style.color = (m === _tasksViewMode) ? '#3b1f0a' : ''; }
+    });
+  }
+  // Show timeline controls if in timeline mode on load
+  var _tlCtrlInit = document.getElementById('section-timeline-controls');
+  if (_tlCtrlInit) _tlCtrlInit.style.display = (currentTab === 'Tasks' && typeof _tasksViewMode !== 'undefined' && _tasksViewMode === 'timeline') ? '' : 'none';
   const indSection = document.getElementById('section-indicators');
   if (indSection) indSection.style.display = (currentTab === 'Indicators') ? '' : 'none';
   if (currentTab === 'Indicators') {
@@ -1311,7 +1579,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Pre-load week start day setting before rendering calendar
+  console.log('[PERF] DOMContentLoaded pre-settings: ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
   getCachedSettings().then(s => {
+    console.log('[PERF] getCachedSettings resolved: ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
     if (s.week_start_day !== undefined) _weekStartDay = parseInt(s.week_start_day) || 0;
     if (s.work_start_hour !== undefined) _workStartHour = parseInt(s.work_start_hour) || 8;
     if (s.work_end_hour !== undefined) _workEndHour = parseInt(s.work_end_hour) || 17;
@@ -1361,7 +1631,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Apply user's default view preference (only on fresh site entry, not editor return)
     if (!restored && s.default_view) {
-      currentTab = s.default_view;
+      if (s.default_view === 'Last Viewed') {
+        // Use the last viewed tab from localStorage, fall back to Calendar
+        var lastTab = null;
+        try { lastTab = localStorage.getItem('cwoc_last_viewed_tab'); } catch (e) { /* ignore */ }
+        currentTab = lastTab || 'Calendar';
+      } else {
+        currentTab = s.default_view;
+      }
       // Update tab highlight for the new default
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       if (currentTab === 'Omni') {
@@ -1511,24 +1788,26 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Resolve the user's current timezone before fetching chits
+    console.log('[PERF] Starting timezone resolution: ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
     if (typeof getCurrentTimezone === 'function') {
       getCurrentTimezone().then(function(tz) {
         _currentTimezone = tz;
-        console.debug('[Timezone] Resolved current timezone:', _currentTimezone);
+        console.log('[PERF] Timezone resolved (' + tz + '): ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
         return _waitForSortPrefs();
       }).then(function() {
+        console.log('[PERF] Sort prefs loaded, calling fetchChits: ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
         _applySortPrefForCurrentTab();
-        fetchChits();
+        if (!_tryEditorReturnRefresh()) fetchChits();
       }).catch(function() {
         _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-        console.debug('[Timezone] Fallback timezone:', _currentTimezone);
+        console.log('[PERF] Timezone fallback, calling fetchChits: ' + (performance.now() - _domLoadStart).toFixed(0) + 'ms');
         _applySortPrefForCurrentTab();
-        fetchChits();
+        if (!_tryEditorReturnRefresh()) fetchChits();
       });
     } else {
       _waitForSortPrefs().then(function() {
         _applySortPrefForCurrentTab();
-        fetchChits();
+        if (!_tryEditorReturnRefresh()) fetchChits();
       });
     }
     updateDateRange();
@@ -1574,14 +1853,14 @@ document.addEventListener("DOMContentLoaded", function () {
     if (typeof getCurrentTimezone === 'function') {
       getCurrentTimezone().then(function(tz) {
         _currentTimezone = tz;
-        fetchChits();
+        if (!_tryEditorReturnRefresh()) fetchChits();
       }).catch(function() {
         _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-        fetchChits();
+        if (!_tryEditorReturnRefresh()) fetchChits();
       });
     } else {
       _currentTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      fetchChits();
+      if (!_tryEditorReturnRefresh()) fetchChits();
     }
     updateDateRange();
   });
@@ -1595,6 +1874,8 @@ document.addEventListener("DOMContentLoaded", function () {
     omniTrigger.addEventListener('click', function() {
       _omniViewActive = true;
       currentTab = 'Omni';
+      // Persist last viewed tab for "Last Viewed" default view setting
+      try { localStorage.setItem('cwoc_last_viewed_tab', 'Omni'); } catch (e) { /* ignore */ }
       // Remove .active from all C CAPTN tabs — Omni View has no tab highlight
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
       // Update favicon to the general CWOC icon for Omni View

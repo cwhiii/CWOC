@@ -248,7 +248,8 @@ class OmniViewViewModel @Inject constructor(
                                     type = sectionType,
                                     visible = config.visible,
                                     order = config.position,
-                                    hideWhenEmpty = config.hideWhenEmpty
+                                    // Reminders must always hide when empty (corrects stale saved setting)
+                                    hideWhenEmpty = if (sectionType == OmniSectionType.REMINDERS) true else config.hideWhenEmpty
                                 )
                             }.sortedBy { it.order }
                             return@launch

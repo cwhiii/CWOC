@@ -24,3 +24,5 @@ Before starting implementation on ANY spec or task:
 - Feature requests in conversation
 
 **No exceptions.** Even if it "seems obvious," confirm the platform scope before writing code.
+
+**Exception — Settings page changes are ALWAYS universal (all platforms).** If the user talks about the settings page, that applies to web, mobile, and app. No need to ask.

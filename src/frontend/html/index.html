@@ -30,6 +30,7 @@
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-responsive.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-omni.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles.css" />
+        <link rel="stylesheet" href="/frontend/css/dashboard/styles-timeline.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-email-bundles.css" />
         <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
         <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
@@ -362,6 +363,15 @@
             </div>
         </div>
         <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 C.W.&rsquo;s Omni Chits</span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+        <!-- ── Timeline Node Template ─────────────────────────────────────── -->
+        <template id="tmpl-timeline-node">
+            <div class="timeline-node">
+                <div class="timeline-node-title"></div>
+                <div class="timeline-node-status"></div>
+                <div class="timeline-node-detail"></div>
+            </div>
+        </template>
+
         <!-- ── Bundle Modal Template ──────────────────────────────────────── -->
         <template id="tmpl-bundle-modal">
             <div class="cwoc-modal-overlay" id="bundleModalOverlay">
@@ -439,6 +449,8 @@
         <script src="/frontend/js/dashboard/main-email.js"></script>
         <script src="/frontend/js/dashboard/main-email-bundles.js"></script>
         <script src="/frontend/js/dashboard/main-email-bundle-drop.js"></script>
+        <script src="/frontend/js/dashboard/main-timeline-algo.js"></script>
+        <script src="/frontend/js/dashboard/main-timeline.js"></script>
         <script src="/frontend/js/dashboard/main.js"></script>
         <script>
         /* Populate profile menu button tooltip with username once auth is ready */

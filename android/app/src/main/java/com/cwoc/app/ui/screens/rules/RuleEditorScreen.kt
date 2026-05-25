@@ -152,6 +152,10 @@ private fun getFieldsForTrigger(triggerType: String, eventType: String): List<Fi
 fun RuleEditorScreen(
     ruleId: String,
     onNavigateBack: () -> Unit,
+    prefillTrigger: String = "",
+    prefillField: String = "",
+    prefillOperator: String = "",
+    prefillValue: String = "",
     viewModel: RuleEditorViewModel = hiltViewModel()
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
@@ -197,6 +201,14 @@ fun RuleEditorScreen(
     // Load rule on first composition
     LaunchedEffect(ruleId) {
         viewModel.loadRule(ruleId)
+        // Pre-fill condition from "Create a Rule" context menu
+        if (ruleId == "new" && prefillField.isNotBlank()) {
+            if (prefillTrigger.isNotBlank()) {
+                viewModel.setTriggerType("event")
+                viewModel.setEventType(prefillTrigger)
+            }
+            viewModel.prefillCondition(prefillField, prefillOperator, prefillValue)
+        }
     }
 
     // Show snackbar for action messages

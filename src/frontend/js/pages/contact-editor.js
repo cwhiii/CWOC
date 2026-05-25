@@ -19,6 +19,7 @@
     var _isProfileMode = false;
     var _profileUserId = null;       // user_id when viewing another user's profile
     var _viewingOtherUser = false;   // true = read-only view of another user
+    var _isAdmin = false;            // true if current user is admin (from /api/auth/me)
 
     // ── Contact Tags State ──────────────────────────────────────────────
     var _contactTags = [];
@@ -1733,6 +1734,7 @@
                 if (!resp.ok) { console.error('[Profile] Failed to load user profile:', resp.status); return; }
                 var user = await resp.json();
                 if (user.is_self) { _viewingOtherUser = false; }
+                _isAdmin = !!user.is_admin;
                 _populateProfileForm(user);
                 if (_viewingOtherUser) _applyReadOnlyMode(user.display_name || user.username);
             } catch (err) { console.error('[Profile] Error loading user profile:', err); }
@@ -1742,6 +1744,8 @@
                 var resp = await fetch('/api/auth/me');
                 if (!resp.ok) { console.error('[Profile] Failed to load profile:', resp.status); return; }
                 var user = await resp.json();
+                _isAdmin = !!user.is_admin;
+                _contactId = user.user_id || null;
                 _populateProfileForm(user);
             } catch (err) { console.error('[Profile] Error loading profile:', err); }
         }
@@ -1775,11 +1779,17 @@
 
         // Multi-value fields
         _setMultiValueEntries('phones', user.phones);
-        _setMultiValueEntries('emails', user.emails_json);
+        // Use 'emails' (unified contacts field) — falls back to emails_json for backward compat
+        _setMultiValueEntries('emails', user.emails || user.emails_json);
         _setMultiValueEntries('addresses', user.addresses);
         _setMultiValueEntries('callSigns', user.call_signs);
         _setMultiValueEntries('xHandles', user.x_handles);
         _setMultiValueEntries('websites', user.websites);
+
+        // Apply System email protection for non-admin users in profile mode
+        if (_isProfileMode && !_isAdmin) {
+            _applySystemEmailProtection();
+        }
 
         // Security
         var signalCb = document.getElementById('hasSignal');
@@ -1803,7 +1813,7 @@
         if (user.color) _selectColor(user.color);
 
         // Image
-        _setProfileImage(user.profile_image_url || null);
+        _setProfileImage(user.image_url || user.profile_image_url || null);
 
         // Display name header
         var header = document.getElementById('displayNameHeader');
@@ -1822,7 +1832,67 @@
     }
 
     /**
+     * Apply read-only styling to System email entries for non-admin users.
+     * The System email (login email) cannot be edited by non-admins — only admins
+     * can change it via the user admin page.
+     */
+    function _applySystemEmailProtection() {
+        // Protect the Account section email field (the System email)
+        var accountEmailEl = document.getElementById('accountEmail');
+        if (accountEmailEl) {
+            accountEmailEl.readOnly = true;
+            accountEmailEl.disabled = true;
+            accountEmailEl.style.opacity = '0.7';
+            accountEmailEl.style.cursor = 'not-allowed';
+            accountEmailEl.style.background = 'rgba(139,90,43,0.08)';
+            // Add a hint label
+            var emailLabel = document.querySelector('label[for="accountEmail"]');
+            if (emailLabel && !emailLabel.querySelector('.system-email-lock')) {
+                var lockHint = document.createElement('span');
+                lockHint.className = 'system-email-lock';
+                lockHint.innerHTML = ' <i class="fas fa-lock"></i>';
+                lockHint.title = 'System email — only admins can modify this';
+                lockHint.style.cssText = 'color:#8b5a2b;opacity:0.6;font-size:0.85em;';
+                emailLabel.appendChild(lockHint);
+            }
+        }
+
+        // Protect System email entries in the multi-value emails section
+        var container = document.getElementById('emailsEntries');
+        if (!container) return;
+        var rows = container.querySelectorAll('.multi-value-row');
+        for (var i = 0; i < rows.length; i++) {
+            var labelInput = rows[i].querySelector('.mv-label');
+            var valueInput = rows[i].querySelector('.mv-value');
+            if (labelInput && labelInput.value === 'System') {
+                // Make both label and value read-only
+                labelInput.readOnly = true;
+                labelInput.disabled = true;
+                labelInput.style.opacity = '0.7';
+                labelInput.style.cursor = 'not-allowed';
+                labelInput.style.background = 'rgba(139,90,43,0.08)';
+                valueInput.readOnly = true;
+                valueInput.disabled = true;
+                valueInput.style.opacity = '0.7';
+                valueInput.style.cursor = 'not-allowed';
+                valueInput.style.background = 'rgba(139,90,43,0.08)';
+                // Hide the remove button for System email
+                var removeBtn = rows[i].querySelector('.remove-entry-btn');
+                if (removeBtn) removeBtn.style.display = 'none';
+                // Add a lock icon indicator
+                var lockIcon = document.createElement('span');
+                lockIcon.className = 'system-email-lock';
+                lockIcon.innerHTML = '<i class="fas fa-lock"></i>';
+                lockIcon.title = 'System email — only admins can modify this';
+                lockIcon.style.cssText = 'color:#8b5a2b;opacity:0.6;font-size:0.85em;margin-left:4px;';
+                rows[i].appendChild(lockIcon);
+            }
+        }
+    }
+
+    /**
      * Save profile data via PUT /api/auth/profile.
+     * Writes directly to the user's contact record.
      */
     async function _saveProfile() {
         var payload = {};

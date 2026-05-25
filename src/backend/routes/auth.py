@@ -148,8 +148,8 @@ def login(body: LoginRequest):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT id, username, display_name, email, password_hash, is_admin, is_active "
-            "FROM users WHERE LOWER(username) = ?",
+            "SELECT id, username, display_name, password_hash, is_admin, is_active "
+            "FROM contacts WHERE LOWER(username) = ? AND username IS NOT NULL AND is_active = 1",
             (username_lower,),
         ).fetchone()
 
@@ -224,21 +224,39 @@ def logout(request: Request):
 # ── User profile helper ────────────────────────────────────────────────────
 
 def _user_profile_dict(row, is_self=None):
-    """Convert a user DB row to a full profile dict with all contact-like fields."""
+    """Convert a contact DB row to a full profile dict.
+
+    Works with the unified contacts table column names:
+    - image_url (not profile_image_url)
+    - emails (JSON array, not emails_json)
+    - email extracted from the 'System' label entry in emails JSON
+
+    NEVER includes password_hash or private_pgp_key_encrypted in output.
+    """
     from src.backend.db import deserialize_json_field
     keys = row.keys() if hasattr(row, 'keys') else []
     def _get(field, default=None):
         return row[field] if field in keys else default
+
+    # Parse emails JSON array and extract the System email
+    emails_list = deserialize_json_field(_get("emails"))
+    system_email = None
+    if emails_list:
+        for entry in emails_list:
+            if isinstance(entry, dict) and entry.get("label") == "System":
+                system_email = entry.get("value")
+                break
+
     result = {
         "user_id": row["id"],
-        "username": row["username"],
-        "display_name": row["display_name"],
-        "email": row["email"],
-        "is_admin": bool(row["is_admin"]),
-        "profile_image_url": _get("profile_image_url"),
+        "username": _get("username"),
+        "display_name": _get("display_name"),
+        "email": system_email,
+        "is_admin": bool(_get("is_admin")),
+        "image_url": _get("image_url"),
         "created_datetime": _get("created_datetime"),
         "phones": deserialize_json_field(_get("phones")),
-        "emails_json": deserialize_json_field(_get("emails_json")),
+        "emails": emails_list,
         "addresses": deserialize_json_field(_get("addresses")),
         "call_signs": deserialize_json_field(_get("call_signs")),
         "x_handles": deserialize_json_field(_get("x_handles")),
@@ -277,12 +295,18 @@ def get_me(request: Request):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = conn.execute("SELECT * FROM contacts WHERE id = ?", (user_id,)).fetchone()
 
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return _user_profile_dict(row)
+        result = _user_profile_dict(row)
+        # Strip sensitive fields — NEVER send to clients
+        result.pop("password_hash", None)
+        result.pop("private_pgp_key_encrypted", None)
+        # Add is_user flag
+        result["is_user"] = True
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -295,9 +319,30 @@ def get_me(request: Request):
 
 # ── PUT /api/auth/profile ─────────────────────────────────────────────────
 
+def _enforce_system_email_protection(existing_emails: list, new_emails: list, is_admin: bool) -> list:
+    """Prevent non-admins from modifying the 'System' email on user-contacts.
+
+    If the user is admin, the new emails are returned as-is.
+    Otherwise, the original System email entry is preserved unchanged.
+    """
+    if is_admin:
+        return new_emails
+
+    # Find the existing System email entry
+    system_email = next((e for e in existing_emails if e.get("label") == "System"), None)
+
+    if system_email is None:
+        return new_emails
+
+    # Remove any System email from the new list and re-add the original
+    filtered = [e for e in new_emails if e.get("label") != "System"]
+    filtered.insert(0, system_email)
+    return filtered
+
+
 @auth_router.put("/profile")
 def update_profile(body: ProfileUpdate, request: Request):
-    """Update display_name and/or email for the authenticated user."""
+    """Update the authenticated user's own contact record directly."""
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -307,15 +352,37 @@ def update_profile(body: ProfileUpdate, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
+        # Fetch existing contact to check admin status and current emails for System protection
+        existing = conn.execute(
+            "SELECT is_admin, emails FROM contacts WHERE id = ?", (user_id,)
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        is_admin = bool(existing["is_admin"])
+
+        from src.backend.db import serialize_json_field, deserialize_json_field
+
         # Build dynamic update
         updates = []
         params = []
         if body.display_name is not None:
             updates.append("display_name = ?")
             params.append(body.display_name)
+
+        # Handle the legacy 'email' field — update the System entry in the emails JSON array
         if body.email is not None:
-            updates.append("email = ?")
-            params.append(body.email)
+            existing_emails = deserialize_json_field(existing["emails"]) or []
+            # Build the new System email entry
+            new_system_entry = {"label": "System", "value": body.email}
+            # Replace or add the System entry
+            other_emails = [e for e in existing_emails if e.get("label") != "System"]
+            proposed_emails = [new_system_entry] + other_emails
+            # Enforce System email protection for non-admins
+            final_emails = _enforce_system_email_protection(existing_emails, proposed_emails, is_admin)
+            updates.append("emails = ?")
+            params.append(serialize_json_field(final_emails))
+
         if body.nickname is not None:
             updates.append("nickname = ?")
             params.append(body.nickname)
@@ -329,13 +396,15 @@ def update_profile(body: ProfileUpdate, request: Request):
             updates.append("notes = ?")
             params.append(body.notes)
 
-        from src.backend.db import serialize_json_field
         if body.phones is not None:
             updates.append("phones = ?")
             params.append(serialize_json_field(body.phones))
         if body.emails_json is not None:
-            updates.append("emails_json = ?")
-            params.append(serialize_json_field(body.emails_json))
+            # emails_json maps to the contacts 'emails' column — enforce System email protection
+            existing_emails = deserialize_json_field(existing["emails"]) or []
+            final_emails = _enforce_system_email_protection(existing_emails, body.emails_json, is_admin)
+            updates.append("emails = ?")
+            params.append(serialize_json_field(final_emails))
         if body.addresses is not None:
             updates.append("addresses = ?")
             params.append(serialize_json_field(body.addresses))
@@ -388,18 +457,20 @@ def update_profile(body: ProfileUpdate, request: Request):
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
 
+        # Always bump sync_version and modified_datetime
+        updates.append("sync_version = sync_version + 1")
         updates.append("modified_datetime = ?")
         params.append(utcnow_iso())
         params.append(user_id)
 
         conn.execute(
-            f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+            f"UPDATE contacts SET {', '.join(updates)} WHERE id = ?",
             params,
         )
         conn.commit()
 
         # Return updated profile
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = conn.execute("SELECT * FROM contacts WHERE id = ?", (user_id,)).fetchone()
         return _user_profile_dict(row)
     except HTTPException:
         raise
@@ -425,7 +496,7 @@ def change_password(body: PasswordChange, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT password_hash FROM users WHERE id = ?",
+            "SELECT password_hash FROM contacts WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -437,7 +508,7 @@ def change_password(body: PasswordChange, request: Request):
 
         new_hash = hash_password(body.new_password)
         conn.execute(
-            "UPDATE users SET password_hash = ?, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET password_hash = ?, modified_datetime = ? WHERE id = ?",
             (new_hash, utcnow_iso(), user_id),
         )
         conn.commit()
@@ -471,7 +542,7 @@ def get_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT password_hash, private_pgp_key_encrypted FROM users WHERE id = ?",
+            "SELECT password_hash, private_pgp_key_encrypted FROM contacts WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -523,7 +594,7 @@ def save_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT password_hash FROM users WHERE id = ?",
+            "SELECT password_hash FROM contacts WHERE id = ?",
             (user_id,),
         ).fetchone()
 
@@ -540,7 +611,7 @@ def save_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
             encrypted_value = _encrypt_password(body.private_pgp_key.strip())
 
         conn.execute(
-            "UPDATE users SET private_pgp_key_encrypted = ?, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET private_pgp_key_encrypted = ?, modified_datetime = ? WHERE id = ?",
             (encrypted_value, utcnow_iso(), user_id),
         )
         conn.commit()
@@ -581,8 +652,8 @@ def switch_user(body: LoginRequest, request: Request):
 
         # Validate target user credentials
         row = conn.execute(
-            "SELECT id, username, display_name, email, password_hash, is_admin, is_active "
-            "FROM users WHERE LOWER(username) = ?",
+            "SELECT id, username, display_name, password_hash, is_admin, is_active "
+            "FROM contacts WHERE LOWER(username) = ? AND username IS NOT NULL",
             (username_lower,),
         ).fetchone()
 
@@ -641,7 +712,7 @@ def list_switchable_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, email, emails_json, profile_image_url, color FROM users WHERE is_active = 1 ORDER BY display_name ASC"
+            "SELECT id, username, display_name, emails, image_url, color FROM contacts WHERE username IS NOT NULL AND is_active = 1 ORDER BY display_name ASC"
         ).fetchall()
 
         return [
@@ -649,9 +720,8 @@ def list_switchable_users(request: Request):
                 "id": row["id"],
                 "username": row["username"],
                 "display_name": row["display_name"],
-                "email": row["email"] if "email" in row.keys() else None,
-                "emails_json": deserialize_json_field(row["emails_json"] if "emails_json" in row.keys() else None),
-                "profile_image_url": row["profile_image_url"] if "profile_image_url" in row.keys() else None,
+                "emails": deserialize_json_field(row["emails"] if "emails" in row.keys() else None),
+                "image_url": row["image_url"] if "image_url" in row.keys() else None,
                 "color": row["color"] if "color" in row.keys() else None,
             }
             for row in rows
@@ -698,12 +768,12 @@ async def upload_profile_image(request: Request, file: UploadFile = File(...)):
 
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
-            "UPDATE users SET profile_image_url = ?, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET image_url = ?, modified_datetime = ? WHERE id = ?",
             (image_url, datetime.utcnow().isoformat() + "Z", user_id),
         )
         conn.commit()
 
-        return {"profile_image_url": image_url}
+        return {"image_url": image_url}
     except HTTPException:
         raise
     except Exception as e:
@@ -727,16 +797,16 @@ def delete_profile_image(request: Request):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT profile_image_url FROM users WHERE id = ?", (user_id,)).fetchone()
+        row = conn.execute("SELECT image_url FROM contacts WHERE id = ?", (user_id,)).fetchone()
 
-        if row and row["profile_image_url"]:
+        if row and row["image_url"]:
             # Delete the file
-            filepath = "/app" + row["profile_image_url"]
+            filepath = "/app" + row["image_url"]
             if os.path.exists(filepath):
                 os.remove(filepath)
 
         conn.execute(
-            "UPDATE users SET profile_image_url = NULL, modified_datetime = ? WHERE id = ?",
+            "UPDATE contacts SET image_url = NULL, modified_datetime = ? WHERE id = ?",
             (datetime.utcnow().isoformat() + "Z", user_id),
         )
         conn.commit()
@@ -764,7 +834,7 @@ def get_user_profile(target_user_id: str, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT * FROM users WHERE id = ? AND is_active = 1",
+            "SELECT * FROM contacts WHERE id = ? AND username IS NOT NULL AND is_active = 1",
             (target_user_id,),
         ).fetchone()
 
@@ -816,7 +886,7 @@ def save_login_message(body: dict, request: Request):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        user = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT is_admin FROM contacts WHERE id = ? AND username IS NOT NULL", (user_id,)).fetchone()
         if not user or not user["is_admin"]:
             raise HTTPException(status_code=403, detail="Admin access required")
         message = body.get("message", "")

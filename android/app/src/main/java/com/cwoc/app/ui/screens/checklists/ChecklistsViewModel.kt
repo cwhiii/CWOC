@@ -6,6 +6,8 @@ import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.data.sync.SyncState
+import com.cwoc.app.data.sync.SyncStateManager
 import com.cwoc.app.domain.checklist.ChecklistItem
 import com.cwoc.app.domain.checklist.ChecklistOperations
 import com.cwoc.app.domain.sort.ChitReorderHelper
@@ -28,8 +30,14 @@ class ChecklistsViewModel @Inject constructor(
     private val chitRepository: ChitRepository,
     private val chitDao: ChitDao,
     private val chitReorderHelper: ChitReorderHelper,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val syncStateManager: SyncStateManager
 ) : ViewModel() {
+
+    private val vmCreatedAt = System.nanoTime()
+
+    /** Aggregated sync state for the UI indicator. */
+    val syncState: StateFlow<SyncState> = syncStateManager.syncState
 
     val checklistChits: StateFlow<List<ChitEntity>> = chitRepository.getChecklistChits()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -43,10 +51,20 @@ class ChecklistsViewModel @Inject constructor(
     val calendarSnap: StateFlow<Int> = _calendarSnap.asStateFlow()
 
     init {
+        android.util.Log.d("PERF", "[ChecklistsVM] init START")
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _timeFormat.value = settings.timeFormat ?: "12hour"
                 _calendarSnap.value = settings.calendarSnap?.toIntOrNull() ?: 5
+            }
+        }
+        // Monitor when checklistChits first emits non-empty data
+        viewModelScope.launch {
+            checklistChits.collect { chits ->
+                if (chits.isNotEmpty()) {
+                    val elapsed = (System.nanoTime() - vmCreatedAt) / 1_000_000
+                    android.util.Log.d("PERF", "[ChecklistsVM] *** First non-empty emission: ${chits.size} chits, ${elapsed}ms since VM created ***")
+                }
             }
         }
     }

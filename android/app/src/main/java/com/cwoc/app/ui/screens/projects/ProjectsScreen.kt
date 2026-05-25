@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.SyncState
 import com.cwoc.app.domain.filter.FilterEngine
 import com.cwoc.app.domain.filter.FilterState
 import com.cwoc.app.domain.sort.SortEngine
@@ -63,6 +64,7 @@ import com.cwoc.app.domain.sort.SortField
 import com.cwoc.app.domain.sort.SortState
 import com.cwoc.app.ui.components.CwocChitCardStyle
 import com.cwoc.app.ui.components.CwocPromptDialog
+import com.cwoc.app.ui.components.LoadingChitsState
 import com.cwoc.app.ui.components.ReorderableStaggeredGrid
 import com.cwoc.app.ui.components.parseHexColor
 import com.cwoc.app.ui.viewmodel.FilterSortViewModel
@@ -87,6 +89,7 @@ fun ProjectsScreen(
 ) {
     val projects by viewModel.projects.collectAsState()
     val expandedIds by viewModel.expandedProjects.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     // Projects view mode: read from sidebar state (controlled by sidebar buttons)
     val projectsMode = sidebarStateViewModel?.state?.collectAsState()?.value?.projectsViewMode ?: "kanban"
@@ -136,6 +139,9 @@ fun ProjectsScreen(
                 FilteredEmptyState(
                     onClearFilters = { filterSortViewModel?.clearFilters() }
                 )
+            }
+            projects.isEmpty() && syncState == SyncState.SYNCING -> {
+                LoadingChitsState()
             }
             projects.isEmpty() -> {
                 EmptyProjectsState()

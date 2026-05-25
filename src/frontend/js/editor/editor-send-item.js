@@ -2,7 +2,7 @@
  * editor-send-item.js — Send a single checklist item (+ children) to another chit.
  *
  * Shows a small popup near the item with:
- *   - The 3 most recently edited chits (quick picks)
+ *   - The 5 most recently edited chits (quick picks)
  *   - A "Search..." button to open the full send-content modal
  * Supports Copy and Move modes.
  *
@@ -25,16 +25,17 @@
 var _sendItemPopup = null;
 var _sendItemPopupOpen = false;
 var _sendItemTarget = null; // { item, checklist }
-var _sendItemRecentChits = []; // cached recent chits
+var _sendItemRecentChits = []; // cached recent chits (top 5)
 var _sendItemChitsCache = null; // cached full chit list for popup/search
 var _sendItemChitsCacheTime = 0; // timestamp of last cache
 var _SEND_ITEM_CACHE_TTL = 120000; // 2 minutes cache TTL
+var _SEND_ITEM_RECENT_COUNT = 5; // number of recent chits to show in quick-pick
 
 /* ── Pre-fetch chit list for instant popup loading ────────────────────────── */
 
 /**
  * Pre-fetch the chit list in the background so the send-item popup opens instantly.
- * Called after editor initialization completes.
+ * Called immediately on script load (async, non-blocking).
  */
 function _prefetchSendItemChits() {
   if (_sendItemChitsCache && (Date.now() - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) return;
@@ -49,8 +50,8 @@ function _prefetchSendItemChits() {
   }).catch(function() { /* silent — non-critical prefetch */ });
 }
 
-// Pre-fetch after a short delay to not block page load
-setTimeout(_prefetchSendItemChits, 2000);
+// Pre-fetch immediately on chit load (async, won't block anything)
+_prefetchSendItemChits();
 
 /* ── Open the per-item send popup ─────────────────────────────────────────── */
 
@@ -84,11 +85,12 @@ function _openSendItemPopup(e, item, checklist) {
   // Fetch recent chits
   _fetchRecentChitsForItem();
 
-  // Close on outside click (delayed to avoid immediate close)
+  // Close on outside click (delayed to avoid immediate close from the same
+  // mousedown→mouseup→click sequence that opened the popup)
   setTimeout(function() {
-    document.addEventListener('click', _sendItemOutsideClick, true);
+    document.addEventListener('mousedown', _sendItemOutsideClick, true);
     document.addEventListener('keydown', _sendItemEscHandler, true);
-  }, 10);
+  }, 50);
 }
 
 function _sendItemOutsideClick(ev) {
@@ -112,7 +114,7 @@ function _closeSendItemPopup() {
   }
   _sendItemPopupOpen = false;
   _sendItemTarget = null;
-  document.removeEventListener('click', _sendItemOutsideClick, true);
+  document.removeEventListener('mousedown', _sendItemOutsideClick, true);
   document.removeEventListener('keydown', _sendItemEscHandler, true);
 }
 
@@ -121,20 +123,54 @@ function _closeSendItemPopup() {
 async function _fetchRecentChitsForItem() {
   try {
     var now = Date.now();
-    var allChits;
 
-    // Use cache if fresh
-    if (_sendItemChitsCache && (now - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) {
-      allChits = _sendItemChitsCache;
-    } else {
-      var response = await fetch('/api/chits');
-      if (!response.ok) throw new Error('Failed to fetch chits');
-      allChits = await response.json();
-      _sendItemChitsCache = allChits;
-      _sendItemChitsCacheTime = now;
+    // If we have cached data, render immediately from cache (instant display)
+    if (_sendItemChitsCache) {
+      var cachedAvailable = _sendItemChitsCache
+        .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+        .sort(function(a, b) {
+          var aDate = a.modified_datetime || a.created_datetime || '';
+          var bDate = b.modified_datetime || b.created_datetime || '';
+          return bDate.localeCompare(aDate);
+        });
+      _sendItemRecentChits = cachedAvailable.slice(0, _SEND_ITEM_RECENT_COUNT);
+      _renderSendItemPopup(cachedAvailable);
+
+      // If cache is still fresh, we're done
+      if ((now - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) return;
+
+      // Cache is stale — refresh in background and update the popup
+      fetch('/api/chits').then(function(resp) {
+        if (resp.ok) return resp.json();
+        return null;
+      }).then(function(data) {
+        if (data) {
+          _sendItemChitsCache = data;
+          _sendItemChitsCacheTime = Date.now();
+          // Re-render popup with fresh data if still open
+          if (_sendItemPopupOpen && _sendItemPopup) {
+            var freshAvailable = data
+              .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+              .sort(function(a, b) {
+                var aDate = a.modified_datetime || a.created_datetime || '';
+                var bDate = b.modified_datetime || b.created_datetime || '';
+                return bDate.localeCompare(aDate);
+              });
+            _sendItemRecentChits = freshAvailable.slice(0, _SEND_ITEM_RECENT_COUNT);
+            _renderSendItemPopup(freshAvailable);
+          }
+        }
+      }).catch(function() { /* silent background refresh */ });
+      return;
     }
 
-    // Exclude current chit, sort by modified_datetime descending
+    // No cache at all — must fetch synchronously (first time)
+    var response = await fetch('/api/chits');
+    if (!response.ok) throw new Error('Failed to fetch chits');
+    var allChits = await response.json();
+    _sendItemChitsCache = allChits;
+    _sendItemChitsCacheTime = now;
+
     var available = allChits
       .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
       .sort(function(a, b) {
@@ -143,7 +179,7 @@ async function _fetchRecentChitsForItem() {
         return bDate.localeCompare(aDate);
       });
 
-    _sendItemRecentChits = available.slice(0, 3);
+    _sendItemRecentChits = available.slice(0, _SEND_ITEM_RECENT_COUNT);
     _renderSendItemPopup(available);
   } catch (err) {
     console.error('Error fetching chits for send-item popup:', err);
@@ -403,26 +439,55 @@ function _closeSendItemSearchModal() {
 async function _fetchChitsForItemSearch() {
   try {
     var now = Date.now();
-    var allChits;
 
-    // Use cache if fresh
-    if (_sendItemChitsCache && (now - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) {
-      allChits = _sendItemChitsCache;
+    // If we have cached data, render immediately (instant display)
+    if (_sendItemChitsCache) {
+      var cachedAvailable = _sendItemChitsCache
+        .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+        .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+      _sendItemSearchModal._availableChits = cachedAvailable;
+      _sendItemSearchRenderChits(cachedAvailable);
+      var titleEl = document.getElementById('sendItemSearchTitle');
+      if (titleEl) titleEl.textContent = 'Send Item To (' + cachedAvailable.length + ' available)';
+
+      // If cache is stale, refresh in background
+      if ((now - _sendItemChitsCacheTime) >= _SEND_ITEM_CACHE_TTL) {
+        fetch('/api/chits').then(function(resp) {
+          if (resp.ok) return resp.json();
+          return null;
+        }).then(function(data) {
+          if (data) {
+            _sendItemChitsCache = data;
+            _sendItemChitsCacheTime = Date.now();
+            // Re-render if modal still open
+            if (_sendItemSearchModalOpen && _sendItemSearchModal) {
+              var freshAvailable = data
+                .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+                .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+              _sendItemSearchModal._availableChits = freshAvailable;
+              _sendItemSearchRenderChits(freshAvailable);
+              var titleEl2 = document.getElementById('sendItemSearchTitle');
+              if (titleEl2) titleEl2.textContent = 'Send Item To (' + freshAvailable.length + ' available)';
+            }
+          }
+        }).catch(function() { /* silent */ });
+      }
     } else {
+      // No cache — must fetch
       var response = await fetch('/api/chits');
       if (!response.ok) throw new Error('Failed to fetch chits');
-      allChits = await response.json();
+      var allChits = await response.json();
       _sendItemChitsCache = allChits;
       _sendItemChitsCacheTime = now;
-    }
 
-    var available = allChits
-      .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
-      .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
-    _sendItemSearchModal._availableChits = available;
-    _sendItemSearchRenderChits(available);
-    var titleEl = document.getElementById('sendItemSearchTitle');
-    if (titleEl) titleEl.textContent = 'Send Item To (' + available.length + ' available)';
+      var available = allChits
+        .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
+        .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+      _sendItemSearchModal._availableChits = available;
+      _sendItemSearchRenderChits(available);
+      var titleEl = document.getElementById('sendItemSearchTitle');
+      if (titleEl) titleEl.textContent = 'Send Item To (' + available.length + ' available)';
+    }
   } catch (err) {
     console.error('Error fetching chits for send-item search:', err);
     cwocToast('Failed to load chits.', 'error');

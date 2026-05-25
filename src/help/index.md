@@ -12,6 +12,7 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Indicators](/frontend/html/help.html#indicators) — Health data calendar, log, and charts
 - [Maps](/maps) — Interactive map with chit and people markers
 - [Email](/frontend/html/help.html#email) — Multi-account email client, bundles, threading, PGP
+- [Timeline View](/frontend/html/help.html#timeline-view) — Dependency visualization, drag-to-link, critical path
 - [Global Search](/frontend/html/help.html#global-search) — Boolean search, field-scoped queries
 - [Trash](/frontend/html/trash.html) — Soft-delete, restore, permanent delete
 - [Kiosk](/frontend/html/help.html#kiosk) — Read-only wall display for shared screens

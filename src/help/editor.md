@@ -12,6 +12,8 @@
 
 Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see [Habits](/frontend/html/help.html#habits)). An "📜 [Audit Log](/frontend/html/audit-log.html)" button at the bottom links to the filtered [audit log](/frontend/html/audit-log.html) for the current chit. 📱 QR button generates data or link QR codes.
 
+The **Options menu** (⋮ button in the editor header) provides quick access to: Hide in Calendar, Mark as Reminder, Nest into Thread, Audit Log, QR Code, Make Email, Print Chit, Snooze, Archive, and Delete. The **😴 Snooze** option opens a modal with preset durations (15 min, 30 min, 1 hour, 4 hours, 8 hours, 1 day, 3 days, 1 week) plus a custom date/time picker for snoozing until any specific moment. Snoozed chits are hidden from all views until the snooze expires.
+
 When creating a new chit, the [editor](/editor) pre-opens zones based on which view you came from — see [Zone Prefill](#zone-prefill) below for the full mapping. If you have a default saved location, it's auto-applied to new chits. Creating from the [Indicators view](/frontend/html/help.html#indicators) auto-sets Point in Time to the current date/time and marks the chit Complete.
 
 ## Zone Prefill
@@ -163,7 +165,9 @@ The chit list is pre-cached for instant popup loading.
 
 The notes zone provides a **markdown editor** with a format toolbar and render toggle. Write in markdown and switch between edit and rendered views. The underlying data is standard markdown.
 
-**Format Toolbar:** Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On mobile, the toolbar scrolls horizontally.
+**Format Toolbar:** Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On desktop, the toolbar sits at the top of the zone body.
+
+**Mobile Toolbar:** On mobile, the format toolbar is pinned to the bottom of the screen (above the keyboard), matching the Android app layout. From left to right: Data menu (⋮), Preview/Edit toggle, Undo, Redo, then a scrollable row of formatting buttons (Bold, Italic, Strikethrough, Link, Heading dropdown, Bullet List, Numbered List, Block dropdown with Blockquote/Code/Horizontal Rule). The Data menu includes Copy to clipboard, Download as file, Send to another chit, Move to checklist, and Share. In preview mode, formatting buttons are disabled.
 
 **Keyboard Shortcuts:**
 
@@ -175,9 +179,11 @@ The notes zone provides a **markdown editor** with a format toolbar and render t
 - `Ctrl+Z` / `Cmd+Z` — Undo
 - `Ctrl+Shift+Z` / `Cmd+Shift+Z` — Redo
 
+**No-Selection Formatting:** All formatting buttons work with or without text selected. With a selection, the formatting wraps the selected text. Without a selection, the formatting delimiters are inserted at the cursor position (e.g., `****` with cursor between for bold).
+
 **Chit Link Autocomplete:** Type `[[` to trigger an autocomplete dropdown showing matching chit titles. Use Arrow keys to navigate, Enter to select, Escape to dismiss. The selected title is inserted as `[[title]]`.
 
-**Expand to Modal:** Click the Expand button in the zone header to open a full-screen editing modal. Click "Done" to save changes back to the main editor.
+**Expand to Modal:** Click the Expand button in the zone header to open a full-screen editing modal (desktop only — on mobile the zone already fills the screen). Click "Done" to save changes back to the main editor.
 
 The **← Checklist** button appends all checklist items to the notes as markdown checklist lines (`- [ ] item` / `- [x] item`). Both conversions are additive — they don't remove existing content from either zone.
 

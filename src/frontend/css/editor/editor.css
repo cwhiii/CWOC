@@ -701,6 +701,21 @@ input.error {
     background-color: var(--parchment-light);
 }
 
+/* Email expand modal — truly fullscreen, no margins */
+#emailExpandModal.modal-overlay {
+    background-color: transparent;
+}
+
+#emailExpandModal .modal-contentFull.email-expand-fullscreen {
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+#emailExpandModal .modal-header {
+    border-radius: 0;
+}
+
 .modal-overlay-new {
     position: fixed;
     top: 0;
@@ -1846,7 +1861,8 @@ mark {
     max-width: 280px;
     max-height: 260px;
     overflow-y: auto;
-    background: #fffaf0;
+    background: url("/static/images/parchment.jpg") center/cover;
+    background-color: #fffaf0;
     border: 2px solid #8b5a2b;
     border-radius: 6px;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
@@ -2836,7 +2852,8 @@ mark {
     position: absolute;
     top: 100%;
     right: 0;
-    background: var(--parchment-light);
+    background: url("/static/images/parchment.jpg") center/cover;
+    background-color: var(--parchment-light);
     border: 1px solid var(--aged-brown-medium);
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
     z-index: 1000;
@@ -5232,7 +5249,8 @@ input.location {
     top: 100%;
     right: 0;
     z-index: 100;
-    background: var(--parchment-light, #fdf5e6);
+    background: url("/static/images/parchment.jpg") center/cover;
+    background-color: var(--parchment-light, #fdf5e6);
     border: 2px solid var(--aged-brown-medium, #8b5a2b);
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -5316,7 +5334,8 @@ input.location {
 .send-item-popup {
     position: fixed;
     z-index: 1100;
-    background: var(--parchment-light, #fdf5e6);
+    background: url("/static/images/parchment.jpg") center/cover;
+    background-color: var(--parchment-light, #fdf5e6);
     border: 2px solid var(--aged-brown-medium, #8b5a2b);
     border-radius: 8px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
@@ -6938,13 +6957,130 @@ input.location {
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-       MOBILE: Notes format toolbar always visible inline (no fullscreen)
+       MOBILE: Notes format toolbar — HIDDEN (replaced by bottom-pinned toolbar)
        ═══════════════════════════════════════════════════════════════════════ */
     body.mobile-zone-mode #notesFormatToolbar {
-        display: flex !important;
-        flex-wrap: wrap;
-        gap: 2px;
-        padding: 4px;
+        display: none !important;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Notes zone header actions — HIDDEN (moved into bottom toolbar)
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode #notesSection .zone-header .zone-actions {
+        display: none !important;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Bottom-pinned notes toolbar (matches Android app)
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        z-index: 150;
+        align-items: center;
+        background: #f5f0e8;
+        border-top: 1px solid rgba(139, 90, 43, 0.25);
+        padding: 4px 2px;
+        padding-bottom: max(4px, env(safe-area-inset-bottom));
+        gap: 0;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar button {
+        background: none;
+        border: none;
+        padding: 8px;
+        font-size: 1.1em;
+        cursor: pointer;
+        color: #2a1a0a;
+        min-width: 38px;
+        min-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        flex-shrink: 0;
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar button:active {
+        background: rgba(139, 90, 43, 0.15);
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar button.disabled {
+        opacity: 0.35;
+        pointer-events: none;
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar .notes-mobile-tb-sep {
+        width: 1px;
+        height: 24px;
+        background: rgba(139, 90, 43, 0.2);
+        margin: 0 2px;
+        flex-shrink: 0;
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar .notes-mobile-tb-scroll {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex: 1;
+        min-width: 0;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    body.mobile-zone-mode .mobile-notes-bottom-toolbar .notes-mobile-tb-scroll::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Dropdown menus from the bottom toolbar */
+    body.mobile-zone-mode .mobile-notes-tb-dropdown {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        z-index: 2000;
+        background: #fff8e1;
+        border: 1px solid rgba(139, 90, 43, 0.3);
+        border-radius: 8px;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        padding: 6px 0;
+        display: none;
+    }
+
+    body.mobile-zone-mode .mobile-notes-tb-dropdown.active {
+        display: block;
+    }
+
+    body.mobile-zone-mode .mobile-notes-tb-dropdown button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px 16px;
+        min-height: 44px;
+        font-size: 1em;
+        background: none;
+        border: none;
+        border-bottom: 1px solid rgba(139, 90, 43, 0.1);
+        color: #2a1a0a;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    body.mobile-zone-mode .mobile-notes-tb-dropdown button:last-child {
+        border-bottom: none;
+    }
+
+    body.mobile-zone-mode .mobile-notes-tb-dropdown button:active {
+        background: rgba(139, 90, 43, 0.1);
+    }
+
+    /* Adjust notes content when toolbar is visible (keyboard open) */
+    body.mobile-zone-mode #notesContent {
+        padding-bottom: 0 !important;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
