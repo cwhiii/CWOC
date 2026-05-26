@@ -221,19 +221,27 @@ function _isZoneEmpty(zoneInfo) {
  * Get the starting zone index based on the source tab.
  */
 function _getMobileStartZoneIdx() {
-  // On refresh, restore the zone the user was viewing (existing chits only)
   var params = new URLSearchParams(window.location.search);
   if (params.get('id')) {
+    // Only restore saved zone on page refresh (not fresh navigation from dashboard)
+    var isReload = false;
     try {
-      var savedZoneId = sessionStorage.getItem('cwoc_mobile_zone_' + params.get('id'));
-      if (savedZoneId) {
-        var visibleZones = _getMobileVisibleZones();
-        for (var i = 0; i < visibleZones.length; i++) {
-          if (visibleZones[i].id === savedZoneId) return i;
-        }
-      }
+      var navEntries = performance.getEntriesByType('navigation');
+      if (navEntries.length > 0 && navEntries[0].type === 'reload') isReload = true;
     } catch (e) { /* ignore */ }
-    // Existing chit with no saved session zone — start on Overview (index 0)
+
+    if (isReload) {
+      try {
+        var savedZoneId = sessionStorage.getItem('cwoc_mobile_zone_' + params.get('id'));
+        if (savedZoneId) {
+          var visibleZones = _getMobileVisibleZones();
+          for (var i = 0; i < visibleZones.length; i++) {
+            if (visibleZones[i].id === savedZoneId) return i;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    // Fresh navigation or no saved zone — start on Overview (index 0)
     return 0;
   }
 

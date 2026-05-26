@@ -2,6 +2,10 @@
 
 Fixed checklist not showing in editor overview zone on mobile web and Android app. Mobile web: the overview panel was rendering before chit data loaded from the API, so the checklist container was empty — now re-renders the overview after data loads. Android app: the overview now parses checklist JSON and shows actual item text (incomplete items with counts) instead of just "Checklist items" static text.
 
+## cwoc_server-20260525_1952
+
+Fixed editor opening to wrong zone on mobile/app — when opening a chit from any dashboard view, it now always starts on Overview instead of restoring the last-viewed zone from sessionStorage. Zone restore is now limited to actual page refreshes only (detected via Navigation Timing API).
+
 ## cwoc_server-20260525_1636
 
 Fixed checklist overview in mobile/app editor — items were showing empty drag-handle bars with no text. The selector was looking for a non-existent `.checklist-item-text` class and falling back to the drag handle span instead of the actual `.checklist-text` element.

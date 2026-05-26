@@ -4958,6 +4958,39 @@ input.location {
     font-size: 0.9em;
 }
 
+/* Habit day-of-week pill buttons */
+.habit-byday-pills {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.habit-day-pill {
+    width: 32px;
+    height: 28px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--parchment-light, #fff8e1);
+    color: var(--text-color);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    cursor: pointer;
+    padding: 0;
+    text-align: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.habit-day-pill:hover {
+    background: #e8d8b8;
+}
+
+.habit-day-pill.active {
+    background: #008080;
+    color: #fff8e1;
+    border-color: #006060;
+}
+
 .habit-log-inline-input {
     width: 50px;
     padding: 2px 4px;
@@ -6498,6 +6531,47 @@ input.location {
         color: #8b7355;
         font-style: italic;
         font-size: 0.9em;
+    }
+
+    /* ── Overview Checklist (interactive checkboxes) ──────────────────────── */
+    body.mobile-zone-mode .mobile-overview-checklist {
+        align-items: flex-start;
+        cursor: default;
+    }
+
+    body.mobile-zone-mode .mobile-overview-checklist:active {
+        background: transparent;
+    }
+
+    body.mobile-zone-mode .mobile-overview-check-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 0;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.mobile-zone-mode .mobile-overview-check-item input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        accent-color: #6b4e31;
+        cursor: pointer;
+    }
+
+    body.mobile-zone-mode .mobile-overview-check-item span {
+        font-size: 0.9em;
+        color: #3e2b1a;
+        line-height: 1.3;
+    }
+
+    body.mobile-zone-mode .mobile-overview-check-more {
+        display: block;
+        padding: 3px 0;
+        font-size: 0.85em;
+        opacity: 0.5;
+        color: #3e2b1a;
     }
 
     /* ── Notes Zone: textarea fills all available space ───────────────────── */

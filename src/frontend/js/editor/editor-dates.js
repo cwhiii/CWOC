@@ -265,11 +265,18 @@ function onRecurrenceChange() {
   const customRow = document.getElementById('recurrenceCustomRow');
   const block = document.getElementById('repeatOptionsBlock');
   const icon = document.getElementById('recurrenceIcon');
+  const habitCb = document.getElementById('habitEnabled');
+  const isHabit = habitCb && habitCb.checked;
 
   const isCustom = sel && sel.value === 'CUSTOM';
-  if (customRow) customRow.style.display = isCustom ? '' : 'none';
-  // Show/hide the custom details block
-  if (block) block.style.display = isCustom ? 'table-row-group' : 'none';
+  // When habit mode is active, keep the repeat options block hidden — habit has its own byDay pills
+  if (isHabit) {
+    if (customRow) customRow.style.display = 'none';
+    if (block) block.style.display = 'none';
+  } else {
+    if (customRow) customRow.style.display = isCustom ? '' : 'none';
+    if (block) block.style.display = isCustom ? 'table-row-group' : 'none';
+  }
   const intervalEl = document.getElementById('recurrenceInterval');
   const freqEl = document.getElementById('recurrenceFreq');
   if (intervalEl) intervalEl.style.display = isCustom ? '' : 'none';
@@ -523,15 +530,7 @@ function onHabitToggle() {
 
     // Hide the repeat row entirely — habit controls row subsumes it
     if (repeatRow) repeatRow.style.display = 'none';
-    // Only hide the custom recurrence block if frequency is not WEEKLY (byDay needs it visible)
-    var _recSel = document.getElementById('recurrence');
-    if (repeatBlock && (!_recSel || _recSel.value !== 'CUSTOM')) {
-      repeatBlock.style.display = 'none';
-    } else if (repeatBlock && _recSel && _recSel.value === 'CUSTOM') {
-      // Show the custom block and byDay checkboxes
-      repeatBlock.style.display = '';
-      onRecurrenceChange();
-    }
+    if (repeatBlock) repeatBlock.style.display = 'none';
 
     // Show habit controls row and calendar row
     if (controlsRow) controlsRow.style.display = '';
@@ -561,6 +560,10 @@ function onHabitToggle() {
     if (resetRow) resetRow.style.display = (cycleFreq === 'DAILY') ? 'none' : '';
     var hideOverallRow = document.getElementById('habitHideOverallRow');
     if (hideOverallRow) hideOverallRow.style.display = '';
+
+    // Show byDay row if frequency is WEEKLY
+    var byDayRow = document.getElementById('habitByDayRow');
+    if (byDayRow) byDayRow.style.display = (cycleFreq === 'WEEKLY') ? '' : 'none';
 
     // Update reset unit options based on cycle frequency
     _updateResetUnitOptions();
@@ -630,6 +633,9 @@ function onHabitToggle() {
     if (resetRow) resetRow.style.display = 'none';
     var hideOverallRow = document.getElementById('habitHideOverallRow');
     if (hideOverallRow) hideOverallRow.style.display = 'none';
+    // Hide byDay row
+    var byDayRow = document.getElementById('habitByDayRow');
+    if (byDayRow) byDayRow.style.display = 'none';
 
     // Restore recurrence labels to normal format
     _updateRecurrenceLabels();
@@ -654,17 +660,29 @@ function onHabitToggle() {
 function onHabitFrequencyChange() {
   var habitFreqSel = document.getElementById('habitFrequency');
   var recurrenceSel = document.getElementById('recurrence');
+  var byDayRow = document.getElementById('habitByDayRow');
 
+  // Show/hide day-of-week picker for WEEKLY
+  if (byDayRow) byDayRow.style.display = (habitFreqSel && habitFreqSel.value === 'WEEKLY') ? '' : 'none';
+
+  // Sync to hidden recurrence dropdown
   if (habitFreqSel && recurrenceSel) {
     if (habitFreqSel.value === 'WEEKLY') {
-      // Show the custom recurrence block so the byDay checkboxes are visible
-      recurrenceSel.value = 'CUSTOM';
-      var freqEl = document.getElementById('recurrenceFreq');
-      var intervalEl = document.getElementById('recurrenceInterval');
-      if (freqEl) freqEl.value = 'WEEKLY';
-      if (intervalEl) intervalEl.value = '1';
+      var selectedDays = _getHabitByDaySelection();
+      if (selectedDays.length > 0) {
+        recurrenceSel.value = 'CUSTOM';
+        var freqEl = document.getElementById('recurrenceFreq');
+        var intervalEl = document.getElementById('recurrenceInterval');
+        if (freqEl) freqEl.value = 'WEEKLY';
+        if (intervalEl) intervalEl.value = '1';
+        _syncHabitByDayToRecurrence(selectedDays);
+      } else {
+        recurrenceSel.value = 'WEEKLY';
+      }
     } else {
       recurrenceSel.value = habitFreqSel.value;
+      // Clear hidden byDay checkboxes when not WEEKLY
+      _syncHabitByDayToRecurrence([]);
     }
     onRecurrenceChange();
   }
@@ -678,6 +696,42 @@ function onHabitFrequencyChange() {
     renderNotificationsContainer();
   }
   setSaveButtonUnsaved();
+}
+
+/**
+ * Get the currently selected days from the habit byDay pill buttons.
+ * @returns {string[]} Array of day codes like ["MO", "WE", "FR"]
+ */
+function _getHabitByDaySelection() {
+  var pills = document.querySelectorAll('#habitByDayPills .habit-day-pill.active');
+  var days = [];
+  pills.forEach(function(pill) { days.push(pill.dataset.day); });
+  return days;
+}
+
+/**
+ * Sync the habit byDay pill selection to the hidden recurrence byDay checkboxes.
+ * @param {string[]} days - Array of day codes
+ */
+function _syncHabitByDayToRecurrence(days) {
+  document.querySelectorAll('#recurrenceByDay input[type="checkbox"]').forEach(function(cb) {
+    cb.checked = days.indexOf(cb.value) !== -1;
+  });
+}
+
+/**
+ * Initialize the habit byDay pill click handlers.
+ */
+function _initHabitByDayPills() {
+  var container = document.getElementById('habitByDayPills');
+  if (!container) return;
+  container.addEventListener('click', function(e) {
+    var pill = e.target.closest('.habit-day-pill');
+    if (!pill) return;
+    pill.classList.toggle('active');
+    // Re-sync to recurrence
+    onHabitFrequencyChange();
+  });
 }
 
 /**

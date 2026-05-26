@@ -551,6 +551,15 @@ async function loadChitData(chitId) {
           var cb = document.querySelector('#recurrenceByDay input[value="' + d + '"]');
           if (cb) cb.checked = true;
         });
+        // Activate the habit day pills
+        var pills = document.querySelectorAll('#habitByDayPills .habit-day-pill');
+        pills.forEach(function(pill) {
+          if (chit.recurrence_rule.byDay.indexOf(pill.dataset.day) !== -1) {
+            pill.classList.add('active');
+          } else {
+            pill.classList.remove('active');
+          }
+        });
       }
     }
     // Apply habit toggle state (reveal/hide controls, hide repeat row)
@@ -957,12 +966,34 @@ async function loadChitData(chitId) {
     setTimeout(() => markEditorSaved(), 500);
 
     // Refresh mobile overview now that all data is loaded (checklist, notes, etc.)
+    // Try immediately if zone mode is already active
+    var _logMsg = '[loadChitData][v2022] Overview refresh check: _mobileZoneModeActive=' + (typeof _mobileZoneModeActive !== 'undefined' ? _mobileZoneModeActive : 'UNDEFINED') + ', _mobileCurrentZoneIdx=' + (typeof _mobileCurrentZoneIdx !== 'undefined' ? _mobileCurrentZoneIdx : 'UNDEFINED');
+    _logMsg += ' | Status="' + (document.getElementById('status') ? document.getElementById('status').value : 'NO EL') + '"';
+    _logMsg += ' | habitEnabled.checked=' + (document.getElementById('habitEnabled') ? document.getElementById('habitEnabled').checked : 'NO EL');
+    _logMsg += ' | habitGoal=' + (document.getElementById('habitGoal') ? document.getElementById('habitGoal').value : 'NO EL');
+    _logMsg += ' | _currentHabitSuccess=' + window._currentHabitSuccess;
+    fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: _logMsg, source: 'mobile-overview', level: 'debug'}) });
     if (typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive && _mobileCurrentZoneIdx === 0) {
+      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Rendering overview NOW (zone mode active, on zone 0)', source: 'mobile-overview', level: 'debug'}) });
       var titleContainer = document.getElementById('titleWeatherContainer');
       if (titleContainer && typeof _renderMobileOverview === 'function') {
         _renderMobileOverview(titleContainer);
       }
+    } else {
+      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Skipping immediate render — will try delayed', source: 'mobile-overview', level: 'debug'}) });
     }
+    // Also schedule a delayed re-render in case zone mode activates after data loads
+    setTimeout(function() {
+      var _dMsg = '[loadChitData] Delayed (350ms): _mobileZoneModeActive=' + (typeof _mobileZoneModeActive !== 'undefined' ? _mobileZoneModeActive : 'UNDEFINED') + ', _mobileCurrentZoneIdx=' + (typeof _mobileCurrentZoneIdx !== 'undefined' ? _mobileCurrentZoneIdx : 'UNDEFINED');
+      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: _dMsg, source: 'mobile-overview', level: 'debug'}) });
+      if (typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive && _mobileCurrentZoneIdx === 0) {
+        fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Delayed render: rendering overview now', source: 'mobile-overview', level: 'debug'}) });
+        var tc = document.getElementById('titleWeatherContainer');
+        if (tc && typeof _renderMobileOverview === 'function') {
+          _renderMobileOverview(tc);
+        }
+      }
+    }, 350);
 
     if (window._editingInstance && chit.recurrence_rule) {
       _showInstanceBanner(window._editingInstance);
@@ -1365,6 +1396,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load snap setting
   _loadSnapSetting();
+
+  // Initialize habit day-of-week pill buttons
+  if (typeof _initHabitByDayPills === 'function') _initHabitByDayPills();
 
   // Wire up auto-deselect of All Day when a time is picked
   _wireAllDayAutoDeselect();

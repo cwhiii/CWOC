@@ -339,10 +339,23 @@ function _tlRenderNodes(chits, positions) {
   existingNodes = undatedLane.querySelectorAll('.timeline-node');
   for (var i = 0; i < existingNodes.length; i++) existingNodes[i].remove();
 
+  // In dependency mode: hide lane labels and divider, use single section
+  var laneLabels = _tlContainer ? _tlContainer.querySelectorAll('.tl-lane-label') : [];
+  var divider = document.getElementById('tl-lane-divider');
+  if (_tlOrderMode === 'dependency') {
+    for (var i = 0; i < laneLabels.length; i++) laneLabels[i].style.display = 'none';
+    if (divider) divider.style.display = 'none';
+    if (undatedLane) undatedLane.style.display = 'none';
+  } else {
+    for (var i = 0; i < laneLabels.length; i++) laneLabels[i].style.display = '';
+    if (divider) divider.style.display = '';
+    if (undatedLane) undatedLane.style.display = '';
+  }
+
   // Determine zoom level for detail rendering
   var zoomLevel = _tlGetZoomLevel();
 
-  // Place nodes in their correct lane
+  // Place nodes
   for (var i = 0; i < chits.length; i++) {
     var chit = chits[i];
     var pos = positions.get(chit.id);
@@ -352,7 +365,10 @@ function _tlRenderNodes(chits, positions) {
     node.style.left = pos.x + 'px';
     node.style.top = pos.y + 'px';
 
-    if (pos.lane === 'undated') {
+    // In dependency mode: everything in one lane (dated lane)
+    if (_tlOrderMode === 'dependency') {
+      datedLane.appendChild(node);
+    } else if (pos.lane === 'undated') {
       undatedLane.appendChild(node);
     } else {
       datedLane.appendChild(node);
@@ -2902,73 +2918,8 @@ async function _tlAttemptCreateDependency(sourceId, targetId) {
  * @param {MouseEvent} e - The mouseup event that was determined to be a click
  */
 function _tlOnCanvasClick(e) {
-  // Don't create chits while Link Mode is active
-  if (_tlLinkMode) return;
-
-  // Don't fire if clicking on a node, toolbar, button, or SVG path
-  var target = e.target;
-  if (target.closest && (
-    target.closest('.timeline-node') ||
-    target.closest('.timeline-toolbar') ||
-    target.tagName === 'path' ||
-    target.tagName === 'BUTTON'
-  )) {
-    return;
-  }
-
-  // Determine which lane was clicked
-  var datedLane = document.getElementById('tl-dated-lane');
-  var undatedLane = document.getElementById('tl-undated-lane');
-
-  if (!datedLane && !undatedLane) return;
-
-  // Check if the click target is within the dated lane or undated lane
-  var inDatedLane = datedLane && (target === datedLane || datedLane.contains(target));
-  var inUndatedLane = undatedLane && (target === undatedLane || undatedLane.contains(target));
-
-  // If not in either lane (e.g., clicked on the divider or canvas padding), check by Y position
-  if (!inDatedLane && !inUndatedLane) {
-    var canvas = document.getElementById('tl-canvas');
-    if (!canvas) return;
-
-    var canvasRect = canvas.getBoundingClientRect();
-    var clickY = (e.clientY - canvasRect.top) / _tlZoom;
-
-    // Determine lane by comparing click Y to lane boundaries
-    if (datedLane) {
-      var datedRect = datedLane.getBoundingClientRect();
-      var datedTop = (datedRect.top - canvasRect.top) / _tlZoom;
-      var datedBottom = (datedRect.bottom - canvasRect.top) / _tlZoom;
-      if (clickY >= datedTop && clickY <= datedBottom) {
-        inDatedLane = true;
-      }
-    }
-    if (!inDatedLane && undatedLane) {
-      var undatedRect = undatedLane.getBoundingClientRect();
-      var undatedTop = (undatedRect.top - canvasRect.top) / _tlZoom;
-      var undatedBottom = (undatedRect.bottom - canvasRect.top) / _tlZoom;
-      if (clickY >= undatedTop && clickY <= undatedBottom) {
-        inUndatedLane = true;
-      }
-    }
-  }
-
-  if (inDatedLane) {
-    // Find the nearest date marker to the click X position
-    var nearestDate = _tlFindNearestDateAtClick(e);
-    if (nearestDate) {
-      // Navigate to editor with start date pre-filled (Req 17.1)
-      // The editor uses ?start= param to pre-populate start_datetime
-      window.location.href = '/editor?start=' + encodeURIComponent(nearestDate + 'T00:00:00') + '&allday=1&from=' + encodeURIComponent(window.location.pathname + window.location.hash);
-    } else {
-      // Clicked in dated lane but no date markers exist — navigate without date
-      window.location.href = '/editor?from=' + encodeURIComponent(window.location.pathname + window.location.hash);
-    }
-  } else if (inUndatedLane) {
-    // Navigate to editor with no date pre-filled (Req 17.2)
-    window.location.href = '/editor?from=' + encodeURIComponent(window.location.pathname + window.location.hash);
-  }
-  // If neither lane was identified, do nothing (clicked on divider or outside lanes)
+  // Disabled — clicking background no longer creates chits
+  return;
 }
 
 /**
