@@ -822,9 +822,11 @@ function _restoreViewModeButtons() {
   const tTasksBtn = document.getElementById('tasks-mode-tasks');
   const tHabitsBtn = document.getElementById('tasks-mode-habits');
   const tAssignedBtn = document.getElementById('tasks-mode-assigned');
+  const tTimelineBtn = document.getElementById('tasks-mode-timeline');
   if (tTasksBtn) { tTasksBtn.style.background = _tasksViewMode === 'tasks' ? 'ivory' : ''; tTasksBtn.style.color = _tasksViewMode === 'tasks' ? '#3b1f0a' : ''; }
   if (tHabitsBtn) { tHabitsBtn.style.background = _tasksViewMode === 'habits' ? 'ivory' : ''; tHabitsBtn.style.color = _tasksViewMode === 'habits' ? '#3b1f0a' : ''; }
   if (tAssignedBtn) { tAssignedBtn.style.background = _tasksViewMode === 'assigned' ? 'ivory' : ''; tAssignedBtn.style.color = _tasksViewMode === 'assigned' ? '#3b1f0a' : ''; }
+  if (tTimelineBtn) { tTimelineBtn.style.background = _tasksViewMode === 'timeline' ? 'ivory' : ''; tTimelineBtn.style.color = _tasksViewMode === 'timeline' ? '#3b1f0a' : ''; }
 }
 
 // ─── Favicon per view ───

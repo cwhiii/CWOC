@@ -788,7 +788,7 @@ function _renderMobileOverview(container) {
       allItems.forEach(function(item) {
         var cb = item.querySelector('input[type="checkbox"]');
         if (cb && !cb.checked) {
-          var textEl = item.querySelector('.checklist-item-text, span');
+          var textEl = item.querySelector('.checklist-text');
           var text = textEl ? textEl.textContent.trim() : '';
           if (text) incomplete.push(text);
         }

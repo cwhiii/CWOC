@@ -24,6 +24,7 @@ The **🎯 Habit** button lives in the Task zone header (visible even when the z
 - **Auto-enables Repeat** — If the chit doesn't already have a recurrence rule, Repeat is automatically turned on with a default of Daily
 - **Locks Repeat** — While habit is active, the Repeat checkbox is locked on (turn off the habit first to disable Repeat)
 - **Reveals habit controls** — A Goal input and progress display (X / Y) appear on a dedicated row. A separate "📅 Calendar" row shows the "Show on calendar" toggle
+- **Day-of-week picker** — When the frequency is set to "Week", a row of day pills (Su Mo Tu We Th Fr Sa) appears. Tap one or more days to set which days the habit is due. For example, select "We" for a habit due every Wednesday. If no days are selected, the habit repeats every 7 days from the start date
 - **Forces All Day** — Habits are always all-day events. The "📅 All Day" button shows active and is disabled while habit is on
 - **Shows 🎯 icon** — Habit chits display the 🎯 target icon instead of the 🔁 repeat icon everywhere: editor title bar, calendar events, quick-edit modal, and tooltips
 - **Auto-tags** — The system automatically adds `Habits` and `Habits/[title]` tags to the chit
@@ -36,6 +37,8 @@ When habit mode is active, the Dates zone offers three radio options (the "None"
 - **🗓️ Start/End** — Set a start and end date range for the habit
 - **⏳ Due** — "Do X times before date Y." Translates to start = now, end = the due date
 - **♾️ Perpetual** — Starts now, continues forever with no end date. This is a radio option in the date mode selector, not a separate checkbox
+
+When the frequency is set to **Week**, a custom recurrence block appears with day-of-week checkboxes (Su, Mo, Tu, We, Th, Fr, Sa). Check the specific days you want the habit to recur on — for example, check only "We" for a habit due every Wednesday. If no days are checked, the habit recurs every 7 days from the start date.
 
 ## Goal and Progress
 

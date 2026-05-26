@@ -174,11 +174,45 @@ fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List
 
     // Checklist
     if (!formState.checklist.isNullOrBlank()) {
-        rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
-            icon = "☑️",
-            text = "Checklist items",
-            targetZoneId = "checklistSection"
-        ))
+        try {
+            val items = org.json.JSONArray(formState.checklist)
+            val incomplete = mutableListOf<String>()
+            var totalChecked = 0
+            for (i in 0 until items.length()) {
+                val item = items.getJSONObject(i)
+                val checked = item.optBoolean("checked", false)
+                if (checked) {
+                    totalChecked++
+                } else {
+                    val text = item.optString("text", "").trim()
+                    if (text.isNotEmpty()) incomplete.add(text)
+                }
+            }
+            val previewText = if (incomplete.isNotEmpty()) {
+                val lines = incomplete.take(4).map { t ->
+                    "☐ " + if (t.length > 50) t.take(50) + "…" else t
+                }.toMutableList()
+                if (incomplete.size > 4) lines.add("…${incomplete.size - 4} more")
+                if (totalChecked > 0) lines.add("✓ $totalChecked completed")
+                lines.joinToString("\n")
+            } else if (totalChecked > 0) {
+                "✓ All $totalChecked items complete"
+            } else {
+                "Checklist items"
+            }
+            rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+                icon = "☑️",
+                text = previewText,
+                targetZoneId = "checklistSection",
+                isMultiLine = incomplete.size > 1
+            ))
+        } catch (e: Exception) {
+            rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+                icon = "☑️",
+                text = "Checklist items",
+                targetZoneId = "checklistSection"
+            ))
+        }
     }
 
     // Tags (filter out system tags for display)

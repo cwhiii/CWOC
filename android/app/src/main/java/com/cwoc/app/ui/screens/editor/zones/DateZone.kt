@@ -1130,7 +1130,12 @@ private fun InlineRecurrenceRow(
                     buildContextualFreqOptions(activeDate)
                 }
                 val currentFreqLabel = if (showCustomBlock) {
-                    "Custom…"
+                    // In habit mode with WEEKLY freq, show "Weekly" not "Custom…"
+                    if (habitActive && parsedRule.freq.uppercase() == "WEEKLY") {
+                        "Weekly"
+                    } else {
+                        "Custom…"
+                    }
                 } else {
                     freqOptions.find { it.second == parsedRule.freq.uppercase() }?.first
                         ?: parsedRule.freq.lowercase().replaceFirstChar { it.uppercase() }
@@ -1178,6 +1183,18 @@ private fun InlineRecurrenceRow(
                                         if (parsedRule.interval == 1 && parsedRule.freq.uppercase() in listOf("DAILY", "WEEKLY", "MONTHLY", "YEARLY")) {
                                             val updated = parsedRule.copy(freq = "WEEKLY")
                                             onRecurrenceRuleChanged(Gson().toJson(updated))
+                                        }
+                                    } else if (habitActive && freq == "WEEKLY") {
+                                        // Habit mode + Weekly: show custom block so byDay checkboxes are visible
+                                        showCustomBlock = true
+                                        val updated = parsedRule.copy(
+                                            freq = "WEEKLY",
+                                            interval = 1
+                                        )
+                                        onRecurrenceRuleChanged(Gson().toJson(updated))
+                                        // 13.13: Bidirectional sync
+                                        if (onHabitResetPeriodChange != null) {
+                                            onHabitResetPeriodChange("weekly")
                                         }
                                     } else {
                                         showCustomBlock = false

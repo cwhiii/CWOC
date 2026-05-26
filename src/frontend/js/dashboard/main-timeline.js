@@ -457,6 +457,17 @@ function _tlBuildNodeHTML(chit, zoomLevel) {
     window.location.href = '/editor?id=' + chit.id;
   });
 
+  // Double-tap for touch devices (dblclick doesn't fire on mobile)
+  var _lastTapTime = 0;
+  node.addEventListener('touchend', function(e) {
+    var now = Date.now();
+    if (now - _lastTapTime < 350) {
+      e.preventDefault();
+      window.location.href = '/editor?id=' + chit.id;
+    }
+    _lastTapTime = now;
+  });
+
   // Attach hover/focus highlighting listeners (Req 12.1–12.5)
   _tlAttachHoverListeners(node);
 
@@ -2026,6 +2037,7 @@ async function _tlCreateLinkModeDependency(sourceId, targetId) {
     try { prereqs = JSON.parse(prereqs); } catch (ex) { prereqs = []; }
   }
   if (!Array.isArray(prereqs)) prereqs = [];
+  var oldPrereqs = prereqs.slice();
   prereqs.push(sourceId);
 
   // Clear source selection immediately for responsive UX
@@ -2044,6 +2056,9 @@ async function _tlCreateLinkModeDependency(sourceId, targetId) {
 
     // Update the local chit data
     targetChit.prerequisites = prereqs;
+
+    // Push to undo stack
+    _tlPushUndo({ chitId: targetId, oldPrereqs: oldPrereqs, newPrereqs: prereqs.slice() });
 
     // Re-render the timeline to show the new dependency line
     _tlRender(_tlCurrentChits);
@@ -3373,6 +3388,7 @@ async function _tlLinkAsChain() {
       try { prereqs = JSON.parse(prereqs); } catch (ex) { prereqs = []; }
     }
     if (!Array.isArray(prereqs)) prereqs = [];
+    var oldPrereqs = prereqs.slice();
     prereqs.push(link.fromId);
 
     // Update local state immediately
@@ -3389,6 +3405,8 @@ async function _tlLinkAsChain() {
       if (!resp.ok) {
         console.error('[Timeline] Failed to persist chain link:', link.fromId, '→', link.toId, resp.status);
         allSucceeded = false;
+      } else {
+        _tlPushUndo({ chitId: link.toId, oldPrereqs: oldPrereqs, newPrereqs: prereqs.slice() });
       }
     } catch (err) {
       console.error('[Timeline] Exception persisting chain link:', err);
@@ -3462,6 +3480,20 @@ function _tlShowContextMenu(chitId, x, y) {
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
 
+  // "Quick Edit" option (first item in menu)
+  var quickEditItem = document.createElement('div');
+  quickEditItem.className = 'tl-context-menu-item';
+  quickEditItem.textContent = '✏️ Quick Edit';
+  quickEditItem.addEventListener('click', function() {
+    _tlDismissContextMenu();
+    if (typeof showQuickEdit === 'function') {
+      showQuickEdit(chitId);
+    } else {
+      window.location.href = '/editor?id=' + chitId;
+    }
+  });
+  menu.appendChild(quickEditItem);
+
   // "Add prerequisite..." option
   var addItem = document.createElement('div');
   addItem.className = 'tl-context-menu-item';
@@ -3501,19 +3533,6 @@ function _tlShowContextMenu(chitId, x, y) {
   var editDivider = document.createElement('div');
   editDivider.className = 'tl-context-menu-divider';
   menu.appendChild(editDivider);
-
-  // "Quick Edit" option
-  var quickEditItem = document.createElement('div');
-  quickEditItem.className = 'tl-context-menu-item';
-  quickEditItem.textContent = '✏️ Quick Edit';
-  quickEditItem.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _tlDismissContextMenu();
-    if (typeof openQuickEdit === 'function') {
-      openQuickEdit(chitId);
-    }
-  });
-  menu.appendChild(quickEditItem);
 
   // "Edit Chit" option (full editor)
   var editItem = document.createElement('div');
@@ -3945,6 +3964,7 @@ async function _tlConfirmChitPickerSelections(targetChitId, selectedIds) {
   if (validIds.length === 0) return;
 
   // Add valid prerequisites
+  var oldPrereqs = prereqs.slice();
   for (var v = 0; v < validIds.length; v++) {
     prereqs.push(validIds[v]);
   }
@@ -3961,6 +3981,9 @@ async function _tlConfirmChitPickerSelections(targetChitId, selectedIds) {
     if (!resp.ok) {
       throw new Error('API returned ' + resp.status);
     }
+
+    // Push to undo stack
+    _tlPushUndo({ chitId: targetChitId, oldPrereqs: oldPrereqs, newPrereqs: prereqs.slice() });
 
     // Re-render to show new dependency lines
     _tlRender(_tlCurrentChits);

@@ -2507,6 +2507,7 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `onHabitToggle()` | Handle 🎯 Habit button toggle in the Task zone header — when checked: auto-enable Repeat with Daily if not already on, reveal habit controls, lock Repeat, force all-day, hide "None" date option; when unchecked: hide controls, unlock Repeat, restore date options |
 | `_updateHabitProgressDisplay()` | Update the habit progress "X / Y" display from current `habit_success` and `habit_goal` values |
 | `onHabitGoalChange()` | Handle habit goal input change — enforce minimum of 1, update progress display, mark unsaved |
+| `onHabitFrequencyChange()` | Handle habit frequency dropdown change — when WEEKLY is selected, sets recurrence to CUSTOM so the byDay checkboxes appear for day-of-week selection; syncs to hidden recurrence dropdown for other frequencies |
 | `_toggleAllDayBtn()` | Toggle the All Day button — mirrors the hidden checkbox and calls `toggleAllDay()` |
 | `_updateAllDayBtnState()` | Sync the All Day button appearance (teal active, disabled when habit forces all-day) from the hidden checkbox state |
 | `onPerpetualToggle()` | Handle ♾️ Perpetual radio option — sets start date to today, disables end date, continues forever. Perpetual is now a radio option in dateMode, not a separate checkbox |

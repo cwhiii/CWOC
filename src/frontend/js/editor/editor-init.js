@@ -538,6 +538,20 @@ async function loadChitData(chitId) {
       if (['DAILY','WEEKLY','MONTHLY','YEARLY'].indexOf(freq) !== -1) {
         habitFreqSel.value = freq;
       }
+      // If WEEKLY with byDay, set up CUSTOM recurrence so byDay checkboxes show
+      if (freq === 'WEEKLY' && chit.recurrence_rule.byDay && chit.recurrence_rule.byDay.length > 0) {
+        var recSel = document.getElementById('recurrence');
+        var freqEl = document.getElementById('recurrenceFreq');
+        var intervalEl = document.getElementById('recurrenceInterval');
+        if (recSel) recSel.value = 'CUSTOM';
+        if (freqEl) freqEl.value = 'WEEKLY';
+        if (intervalEl) intervalEl.value = chit.recurrence_rule.interval || '1';
+        // Check the byDay checkboxes
+        chit.recurrence_rule.byDay.forEach(function(d) {
+          var cb = document.querySelector('#recurrenceByDay input[value="' + d + '"]');
+          if (cb) cb.checked = true;
+        });
+      }
     }
     // Apply habit toggle state (reveal/hide controls, hide repeat row)
     // onHabitToggle() toggles the hidden checkbox, so set it to the opposite first
@@ -941,6 +955,14 @@ async function loadChitData(chitId) {
     markEditorSaved();
     setTimeout(() => markEditorSaved(), 200);
     setTimeout(() => markEditorSaved(), 500);
+
+    // Refresh mobile overview now that all data is loaded (checklist, notes, etc.)
+    if (typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive && _mobileCurrentZoneIdx === 0) {
+      var titleContainer = document.getElementById('titleWeatherContainer');
+      if (titleContainer && typeof _renderMobileOverview === 'function') {
+        _renderMobileOverview(titleContainer);
+      }
+    }
 
     if (window._editingInstance && chit.recurrence_rule) {
       _showInstanceBanner(window._editingInstance);

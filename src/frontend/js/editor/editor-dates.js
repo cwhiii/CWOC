@@ -78,7 +78,12 @@ function onDateModeChange() {
   const repeatRow = document.getElementById('repeatCheckboxRow');
   const repeatOptions = document.getElementById('repeatOptionsBlock');
   if (repeatRow) repeatRow.style.display = (mode === 'none' || mode === 'pointintime' || _isHabitOn) ? 'none' : '';
-  if ((mode === 'none' || mode === 'pointintime' || _isHabitOn) && repeatOptions) repeatOptions.style.display = 'none';
+  if ((mode === 'none' || mode === 'pointintime') && repeatOptions) repeatOptions.style.display = 'none';
+  // When habit is on, let onHabitFrequencyChange manage repeatOptionsBlock visibility
+  if (_isHabitOn && repeatOptions) {
+    var recSel = document.getElementById('recurrence');
+    if (recSel && recSel.value !== 'CUSTOM') repeatOptions.style.display = 'none';
+  }
 
   // Re-apply all-day visibility for the active mode
   const allDayCheckbox = document.getElementById("allDay");
@@ -518,7 +523,15 @@ function onHabitToggle() {
 
     // Hide the repeat row entirely — habit controls row subsumes it
     if (repeatRow) repeatRow.style.display = 'none';
-    if (repeatBlock) repeatBlock.style.display = 'none';
+    // Only hide the custom recurrence block if frequency is not WEEKLY (byDay needs it visible)
+    var _recSel = document.getElementById('recurrence');
+    if (repeatBlock && (!_recSel || _recSel.value !== 'CUSTOM')) {
+      repeatBlock.style.display = 'none';
+    } else if (repeatBlock && _recSel && _recSel.value === 'CUSTOM') {
+      // Show the custom block and byDay checkboxes
+      repeatBlock.style.display = '';
+      onRecurrenceChange();
+    }
 
     // Show habit controls row and calendar row
     if (controlsRow) controlsRow.style.display = '';
@@ -641,8 +654,18 @@ function onHabitToggle() {
 function onHabitFrequencyChange() {
   var habitFreqSel = document.getElementById('habitFrequency');
   var recurrenceSel = document.getElementById('recurrence');
+
   if (habitFreqSel && recurrenceSel) {
-    recurrenceSel.value = habitFreqSel.value;
+    if (habitFreqSel.value === 'WEEKLY') {
+      // Show the custom recurrence block so the byDay checkboxes are visible
+      recurrenceSel.value = 'CUSTOM';
+      var freqEl = document.getElementById('recurrenceFreq');
+      var intervalEl = document.getElementById('recurrenceInterval');
+      if (freqEl) freqEl.value = 'WEEKLY';
+      if (intervalEl) intervalEl.value = '1';
+    } else {
+      recurrenceSel.value = habitFreqSel.value;
+    }
     onRecurrenceChange();
   }
   // Update reset unit options — limit to one level smaller than cycle

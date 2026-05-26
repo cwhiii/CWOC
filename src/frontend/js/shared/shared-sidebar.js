@@ -180,7 +180,7 @@ function _cwocInjectSidebar() {
   html += '<div class="sidebar-section" id="section-tasks-mode" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
   html += '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">';
-  html += '    <button class="action-button" id="tasks-mode-timeline" onclick="_setTasksMode(\'timeline\')" style="margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;" title="Visual dependency timeline">🔗 Timeline</button>';
+  html += '    <button class="action-button" id="tasks-mode-timeline" onclick="_setTasksMode(\'timeline\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Visual dependency timeline">🔗 Timeline</button>';
   html += '    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode(\'tasks\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Standard task list view">📋 List</button>';
   html += '    <button class="action-button" id="tasks-mode-assigned" onclick="_setTasksMode(\'assigned\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Tasks assigned to others">📌 Assigned</button>';
   html += '    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode(\'habits\')" style="margin-bottom:0;font-size:0.8em;padding:6px;" title="Habit tracking view">🎯 Habits</button>';

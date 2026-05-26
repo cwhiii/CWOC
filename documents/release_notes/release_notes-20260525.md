@@ -1,3 +1,15 @@
+## cwoc_server-20260525_1642 / cwoc_app-20260525_1642
+
+Fixed checklist not showing in editor overview zone on mobile web and Android app. Mobile web: the overview panel was rendering before chit data loaded from the API, so the checklist container was empty — now re-renders the overview after data loads. Android app: the overview now parses checklist JSON and shows actual item text (incomplete items with counts) instead of just "Checklist items" static text.
+
+## cwoc_server-20260525_1636
+
+Fixed checklist overview in mobile/app editor — items were showing empty drag-handle bars with no text. The selector was looking for a non-existent `.checklist-item-text` class and falling back to the drag handle span instead of the actual `.checklist-text` element.
+
+## cwoc_server-20260525_1623 / cwoc_app-20260525_1623
+
+Habit weekly day-of-week selection — when a habit's frequency is set to "Week", the custom recurrence block now appears automatically showing day-of-week checkboxes (Su–Sa). This lets you set a habit to recur on specific days (e.g., every Wednesday) without manually selecting "Custom…". Works on web, mobile web, and Android app.
+
 ## cwoc_server-20260525_1419
 
 Reverted mobile web Email Zone Notes Parity changes — the implementation broke scrolling, button interactions, and layout on mobile. Restored original email zone behavior (zone-header buttons visible, proper body height, no auto-grow). Fixed pre-existing bug where the formatting toolbar (Bold/Italic/etc.) was incorrectly shown on received/sent emails on mobile.
