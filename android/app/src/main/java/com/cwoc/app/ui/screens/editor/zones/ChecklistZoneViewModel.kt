@@ -224,6 +224,13 @@ class ChecklistZoneViewModel(
         }
     }
 
+    fun importFileAsItems(text: String) {
+        val newItems = ChecklistOperationsV2.parseClipboardText(text)
+        if (newItems.isNotEmpty()) {
+            applyChange(items + newItems)
+        }
+    }
+
     // ── Multi-Select Operations ──────────────────────────────────────────────
 
     fun toggleSelectItem(itemId: String) {
@@ -304,6 +311,25 @@ class ChecklistZoneViewModel(
         items = current
         notifyChange()
         triggerAutoSave()
+    }
+
+    /**
+     * Get selected items formatted as markdown for clipboard copy.
+     * Returns null if no items are selected.
+     */
+    fun getSelectedAsMarkdown(): String? {
+        val selected = items.filter { it.id in selectedIds }
+        if (selected.isEmpty()) return null
+        return selected.joinToString("\n") { item ->
+            "${"  ".repeat(item.level)}- [ ] ${item.text}"
+        }
+    }
+
+    /**
+     * Get a single item's text for clipboard copy.
+     */
+    fun getItemText(itemId: String): String? {
+        return items.find { it.id == itemId }?.text
     }
 
     // ── Auto-Save ────────────────────────────────────────────────────────────

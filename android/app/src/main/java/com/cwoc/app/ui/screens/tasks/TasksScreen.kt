@@ -329,6 +329,13 @@ fun TasksScreen(
                                 )
                             }
                         }
+                        "timeline" -> {
+                            TimelineView(
+                                tasks = filteredSortedTasks,
+                                onOpenEditor = { onNavigateToEditor(it) },
+                                viewModel = viewModel
+                            )
+                        }
                     }
                 }
             }
@@ -944,7 +951,10 @@ private fun InlineChecklistSection(
                     },
                     modifier = Modifier.size(24.dp),
                     colors = CheckboxDefaults.colors(
-                        uncheckedColor = textColor.copy(alpha = 0.5f)
+                        uncheckedColor = textColor.copy(alpha = 0.7f),
+                        checkedColor = textColor.copy(alpha = 0.8f),
+                        checkmarkColor = if (textColor == Color(0xFF2B1E0F) || textColor == Color(0xFF1A1208))
+                            Color(0xFFFDF5E6) else Color(0xFF2B1E0F)
                     )
                 )
                 Spacer(modifier = Modifier.width(4.dp))

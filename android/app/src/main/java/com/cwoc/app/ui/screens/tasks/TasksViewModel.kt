@@ -1,5 +1,6 @@
 package com.cwoc.app.ui.screens.tasks
 
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cwoc.app.data.local.dao.ChitDao
@@ -125,6 +126,349 @@ class TasksViewModel @Inject constructor(
     val combinedSuccessRate: StateFlow<Int?> = combine(_uiState, _ruleHabits, _habitsSuccessWindow) { uiState, rules, window ->
         calculateCombinedSuccessRate(uiState.tasks, rules, window)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // ── Timeline State ───────────────────────────────────────────────────
+
+    /** Timeline zoom level (0.25x to 3.0x, default 1.0x). */
+    val timelineZoom = MutableStateFlow(1.0f)
+
+    /** Timeline pan offset for viewport positioning. */
+    val timelineOffset = MutableStateFlow(Offset.Zero)
+
+    /** Timeline layout order mode (BY_DATE or BY_DEPENDENCY). Persisted to SharedPreferences. */
+    val timelineOrderMode = MutableStateFlow(
+        try {
+            TimelineOrderMode.valueOf(prefs.getString("timeline_order_mode", null) ?: "BY_DATE")
+        } catch (_: Exception) { TimelineOrderMode.BY_DATE }
+    )
+
+    /** Set of node IDs currently highlighted (tapped node + its connected neighbors). */
+    val highlightedNodes = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Whether Link Mode is active (tap source then target to create dependency). */
+    val linkMode = MutableStateFlow(false)
+
+    /** The source node ID selected in Link Mode (first tap). */
+    val linkSource = MutableStateFlow<String?>(null)
+
+    /** Whether critical path highlighting is active. */
+    val criticalPathActive = MutableStateFlow(false)
+
+    /**
+     * Computed set of node IDs on the critical path.
+     * Empty when criticalPathActive is false; computed via TimelineAlgorithms.criticalPath() when true.
+     * Validates: Requirements 29.1, 29.2, 29.3, 29.4
+     */
+    val criticalPathNodes: StateFlow<Set<String>> = combine(criticalPathActive, _uiState) { active, state ->
+        if (active && state.tasks.isNotEmpty()) {
+            TimelineAlgorithms.criticalPath(state.tasks)
+        } else {
+            emptySet()
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    /** Undo stack for dependency changes (max 50 entries). */
+    val undoStack = MutableStateFlow<List<DependencyChange>>(emptyList())
+
+    /** Redo stack for dependency changes. */
+    val redoStack = MutableStateFlow<List<DependencyChange>>(emptyList())
+
+    /** Whether completed tasks are greyed out in the timeline. Persisted to SharedPreferences. */
+    val greyOutCompleted = MutableStateFlow(
+        prefs.getBoolean("timeline_grey_out_completed", false)
+    )
+
+    /** Current drag-to-link state. Non-null when user is dragging from a node to create a dependency. */
+    val dragLinkState = MutableStateFlow<DragLinkState?>(null)
+
+    // ── Drag-to-Link Operations ──────────────────────────────────────────
+
+    /**
+     * Start a drag-to-link operation from the given source node.
+     * Called when the user long-presses and begins dragging from a timeline node.
+     */
+    fun startDragLink(sourceNodeId: String, sourcePosition: Offset) {
+        dragLinkState.value = DragLinkState(
+            sourceNodeId = sourceNodeId,
+            sourcePosition = sourcePosition,
+            currentTouchPosition = sourcePosition
+        )
+    }
+
+    /**
+     * Update the current touch position during a drag-to-link operation.
+     * Called continuously as the user drags their finger.
+     */
+    fun updateDragLinkPosition(touchPosition: Offset) {
+        dragLinkState.update { current ->
+            current?.copy(currentTouchPosition = touchPosition)
+        }
+    }
+
+    /**
+     * Cancel the current drag-to-link operation without creating a dependency.
+     * Called when the user drops on empty space or the gesture is cancelled.
+     */
+    fun cancelDragLink() {
+        dragLinkState.value = null
+    }
+
+    /**
+     * Complete a drag-to-link operation by attempting to create a dependency.
+     * The source node becomes a prerequisite of the target node.
+     * Clears the drag state regardless of outcome.
+     *
+     * @param targetNodeId The ID of the node the user dropped on.
+     * @param onResult Callback with the result (SUCCESS or CYCLE_DETECTED).
+     */
+    fun completeDragLink(targetNodeId: String, onResult: ((AddDependencyResult) -> Unit)? = null) {
+        val state = dragLinkState.value ?: return
+        dragLinkState.value = null
+
+        // Source becomes prerequisite of target
+        addDependency(state.sourceNodeId, targetNodeId, onResult)
+    }
+
+    // ── Timeline Operations ──────────────────────────────────────────────
+
+    /**
+     * Set the timeline order mode and persist to SharedPreferences.
+     */
+    fun setTimelineOrderMode(mode: TimelineOrderMode) {
+        timelineOrderMode.value = mode
+        prefs.edit().putString("timeline_order_mode", mode.name).apply()
+    }
+
+    /**
+     * Set the grey-out-completed toggle and persist to SharedPreferences.
+     */
+    fun setGreyOutCompleted(enabled: Boolean) {
+        greyOutCompleted.value = enabled
+        prefs.edit().putBoolean("timeline_grey_out_completed", enabled).apply()
+    }
+
+    /**
+     * Result of an addDependency operation.
+     */
+    enum class AddDependencyResult {
+        SUCCESS,
+        CYCLE_DETECTED,
+        ALREADY_EXISTS,
+        NOT_FOUND
+    }
+
+    /**
+     * Add a dependency relationship (prereqId becomes a prerequisite of dependentId).
+     * Performs cycle detection before adding. Returns the result via callback.
+     * On success, pushes the change to the undo stack and clears the redo stack.
+     *
+     * @param onResult Callback invoked with the result of the operation (on main thread).
+     */
+    fun addDependency(prereqId: String, dependentId: String, onResult: ((AddDependencyResult) -> Unit)? = null) {
+        viewModelScope.launch {
+            val tasks = _uiState.value.tasks
+            val graph = TimelineAlgorithms.buildGraph(tasks)
+
+            // Check for cycle: adding prereqId → dependentId means dependentId depends on prereqId
+            // wouldCycle checks if prereqId can be reached from dependentId via forward edges
+            if (TimelineAlgorithms.wouldCycle(prereqId, dependentId, graph)) {
+                // Cycle detected — caller should show error toast
+                onResult?.invoke(AddDependencyResult.CYCLE_DETECTED)
+                return@launch
+            }
+
+            // Update the dependent chit's prerequisites list
+            val dependentChit = chitDao.getById(dependentId)
+            if (dependentChit == null) {
+                onResult?.invoke(AddDependencyResult.NOT_FOUND)
+                return@launch
+            }
+            val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: mutableListOf()
+            if (prereqId in currentPrereqs) {
+                onResult?.invoke(AddDependencyResult.ALREADY_EXISTS)
+                return@launch
+            }
+
+            currentPrereqs.add(prereqId)
+            val now = Instant.now().toString()
+            val updated = dependentChit.copy(prerequisites = currentPrereqs, modifiedDatetime = now)
+            chitDao.upsert(updated)
+            dirtyTracker.markDirty(dependentId, setOf("prerequisites"))
+            if (connectivityMonitor.isOnline.value) {
+                launch { syncPushEngine.pushSingle(dependentId) }
+            }
+
+            // Push to undo stack (limit 50)
+            val change = DependencyChange(
+                type = ChangeType.ADD,
+                prereqId = prereqId,
+                dependentId = dependentId
+            )
+            undoStack.update { stack ->
+                (stack + change).takeLast(50)
+            }
+            // Clear redo stack on new action
+            redoStack.value = emptyList()
+
+            onResult?.invoke(AddDependencyResult.SUCCESS)
+        }
+    }
+
+    /**
+     * Remove a dependency relationship (prereqId is removed from dependentId's prerequisites).
+     * Pushes the change to the undo stack and clears the redo stack.
+     */
+    fun removeDependency(prereqId: String, dependentId: String) {
+        viewModelScope.launch {
+            val dependentChit = chitDao.getById(dependentId) ?: return@launch
+            val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: return@launch
+            if (prereqId !in currentPrereqs) return@launch // Not present
+
+            currentPrereqs.remove(prereqId)
+            val now = Instant.now().toString()
+            val updated = dependentChit.copy(
+                prerequisites = if (currentPrereqs.isEmpty()) null else currentPrereqs,
+                modifiedDatetime = now
+            )
+            chitDao.upsert(updated)
+            dirtyTracker.markDirty(dependentId, setOf("prerequisites"))
+            if (connectivityMonitor.isOnline.value) {
+                launch { syncPushEngine.pushSingle(dependentId) }
+            }
+
+            // Push to undo stack (limit 50)
+            val change = DependencyChange(
+                type = ChangeType.REMOVE,
+                prereqId = prereqId,
+                dependentId = dependentId
+            )
+            undoStack.update { stack ->
+                (stack + change).takeLast(50)
+            }
+            // Clear redo stack on new action
+            redoStack.value = emptyList()
+        }
+    }
+
+    /**
+     * Undo the last dependency change. Reverses the operation and pushes it to the redo stack.
+     */
+    fun undo() {
+        val stack = undoStack.value
+        if (stack.isEmpty()) return
+
+        val lastChange = stack.last()
+        undoStack.value = stack.dropLast(1)
+
+        viewModelScope.launch {
+            when (lastChange.type) {
+                ChangeType.ADD -> {
+                    // Undo an ADD = remove the dependency
+                    val dependentChit = chitDao.getById(lastChange.dependentId) ?: return@launch
+                    val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: return@launch
+                    currentPrereqs.remove(lastChange.prereqId)
+                    val now = Instant.now().toString()
+                    val updated = dependentChit.copy(
+                        prerequisites = if (currentPrereqs.isEmpty()) null else currentPrereqs,
+                        modifiedDatetime = now
+                    )
+                    chitDao.upsert(updated)
+                    dirtyTracker.markDirty(lastChange.dependentId, setOf("prerequisites"))
+                    if (connectivityMonitor.isOnline.value) {
+                        launch { syncPushEngine.pushSingle(lastChange.dependentId) }
+                    }
+                }
+                ChangeType.REMOVE -> {
+                    // Undo a REMOVE = re-add the dependency
+                    val dependentChit = chitDao.getById(lastChange.dependentId) ?: return@launch
+                    val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: mutableListOf()
+                    if (lastChange.prereqId !in currentPrereqs) {
+                        currentPrereqs.add(lastChange.prereqId)
+                    }
+                    val now = Instant.now().toString()
+                    val updated = dependentChit.copy(prerequisites = currentPrereqs, modifiedDatetime = now)
+                    chitDao.upsert(updated)
+                    dirtyTracker.markDirty(lastChange.dependentId, setOf("prerequisites"))
+                    if (connectivityMonitor.isOnline.value) {
+                        launch { syncPushEngine.pushSingle(lastChange.dependentId) }
+                    }
+                }
+            }
+
+            // Push to redo stack
+            redoStack.update { it + lastChange }
+        }
+    }
+
+    /**
+     * Redo the last undone dependency change. Re-applies the operation and pushes it back to the undo stack.
+     */
+    fun redo() {
+        val stack = redoStack.value
+        if (stack.isEmpty()) return
+
+        val lastChange = stack.last()
+        redoStack.value = stack.dropLast(1)
+
+        viewModelScope.launch {
+            when (lastChange.type) {
+                ChangeType.ADD -> {
+                    // Redo an ADD = re-add the dependency
+                    val dependentChit = chitDao.getById(lastChange.dependentId) ?: return@launch
+                    val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: mutableListOf()
+                    if (lastChange.prereqId !in currentPrereqs) {
+                        currentPrereqs.add(lastChange.prereqId)
+                    }
+                    val now = Instant.now().toString()
+                    val updated = dependentChit.copy(prerequisites = currentPrereqs, modifiedDatetime = now)
+                    chitDao.upsert(updated)
+                    dirtyTracker.markDirty(lastChange.dependentId, setOf("prerequisites"))
+                    if (connectivityMonitor.isOnline.value) {
+                        launch { syncPushEngine.pushSingle(lastChange.dependentId) }
+                    }
+                }
+                ChangeType.REMOVE -> {
+                    // Redo a REMOVE = remove the dependency again
+                    val dependentChit = chitDao.getById(lastChange.dependentId) ?: return@launch
+                    val currentPrereqs = dependentChit.prerequisites?.toMutableList() ?: return@launch
+                    currentPrereqs.remove(lastChange.prereqId)
+                    val now = Instant.now().toString()
+                    val updated = dependentChit.copy(
+                        prerequisites = if (currentPrereqs.isEmpty()) null else currentPrereqs,
+                        modifiedDatetime = now
+                    )
+                    chitDao.upsert(updated)
+                    dirtyTracker.markDirty(lastChange.dependentId, setOf("prerequisites"))
+                    if (connectivityMonitor.isOnline.value) {
+                        launch { syncPushEngine.pushSingle(lastChange.dependentId) }
+                    }
+                }
+            }
+
+            // Push back to undo stack (limit 50)
+            undoStack.update { stack ->
+                (stack + lastChange).takeLast(50)
+            }
+        }
+    }
+
+    /**
+     * Highlight a node and all its directly connected neighbors (prerequisites + dependents).
+     * Uses TimelineAlgorithms.connectedNodes() to find the connected set.
+     */
+    fun highlightNode(nodeId: String) {
+        val tasks = _uiState.value.tasks
+        val graph = TimelineAlgorithms.buildGraph(tasks)
+        val connected = TimelineAlgorithms.connectedNodes(nodeId, graph)
+        highlightedNodes.value = connected + nodeId
+    }
+
+    /**
+     * Clear all node highlighting.
+     */
+    fun clearHighlight() {
+        highlightedNodes.value = emptySet()
+    }
 
     init {
         val initStart = System.nanoTime()

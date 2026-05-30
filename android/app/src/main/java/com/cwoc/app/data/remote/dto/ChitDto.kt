@@ -9,7 +9,7 @@ data class ChitDto(
     val id: String,
     val title: String?,
     val note: String?,
-    val tags: List<String>?,
+    val tags: Any?,
     val start_datetime: String?,
     val end_datetime: String?,
     val due_datetime: String?,

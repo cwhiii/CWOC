@@ -333,7 +333,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   // ── Build footer (matches original .author-info structure) ──
   var footer = document.createElement('div');
   footer.className = 'author-info';
-  footer.innerHTML = '<span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W.\'s Omni Chits</a></span> &middot; <span id="cwoc-footer-version"></span>';
+  footer.innerHTML = '<span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 <a href="#" onclick="event.preventDefault();_cwocShowAboutModal();" style="color:inherit;text-decoration:none;cursor:pointer;">C.W.\'s Omni Chits</a></span> &middot; <span id="cwoc-footer-version"></span>';
   panel.parentNode.insertBefore(footer, panel.nextSibling);
 
   // Fetch version for footer
@@ -347,8 +347,14 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   // ── ESC to go back (all secondary pages) ──────────────────────────────
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    // Don't navigate if a modal or nav panel is open
-    if (document.querySelector('.modal[style*="flex"], .qr-modal[style*="flex"], .image-modal[style*="flex"], .import-modal[style*="flex"]')) return;
+    // Close the topmost open modal first
+    var openModal = document.querySelector('.modal[style*="flex"], .qr-modal[style*="flex"], .image-modal[style*="flex"], .import-modal[style*="flex"]');
+    if (openModal) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      openModal.style.display = 'none';
+      return;
+    }
     if (document.getElementById('cwoc-nav-overlay')) return;
     if (document.getElementById('cwoc-confirm-modal')) return;
     var active = document.activeElement;
@@ -860,6 +866,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     { key: '8', icon: '👤', label: 'Profile',     href: '/profile' },
     { key: '9', icon: '🗺️', label: 'Maps',        href: '/maps' },
     { key: '',  icon: '🧊', label: 'Custom Objects', href: '/frontend/html/custom-objects-editor.html' },
+    { key: '',  icon: 'ℹ️', label: 'About',          href: '/about' },
   ];
 
   // Conditionally add User Admin for admin users

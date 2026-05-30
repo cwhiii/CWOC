@@ -10,20 +10,24 @@ No authentication required (device diagnostics need to work pre-auth).
 
 import logging
 import os
+import sqlite3
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from src.backend.db import DB_PATH
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Log file path — same /app/data/ directory as the database
+# Log file paths — same /app/data/ directory as the database
 CLIENT_LOG_PATH = "/app/data/client-log.txt"
+UPDATE_LOG_PATH = "/app/data/update.log"
 MAX_RETURN_LINES = 500
-MAX_FILE_LINES = 5000  # Rotate when file exceeds this many lines
+MAX_FILE_LINES = 5000  # Fallback line limit if settings unavailable
 
 
 class ClientLogEntry(BaseModel):
@@ -110,12 +114,92 @@ async def get_server_log(grep: str = None):
 
 
 def _maybe_rotate():
-    """If the log file exceeds MAX_FILE_LINES, trim to the last MAX_FILE_LINES."""
+    """Prune the client log based on settings (max age and max size).
+
+    Falls back to line-count rotation if settings are unavailable.
+    Also prunes the update log using the same limits.
+    """
     try:
-        with open(CLIENT_LOG_PATH, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        if len(lines) > MAX_FILE_LINES:
-            with open(CLIENT_LOG_PATH, "w", encoding="utf-8") as f:
-                f.writelines(lines[-MAX_FILE_LINES:])
+        max_days, max_mb = _get_log_limits()
+        _prune_log_file(CLIENT_LOG_PATH, max_days, max_mb)
+        _prune_log_file(UPDATE_LOG_PATH, max_days, max_mb)
+    except Exception:
+        # Fallback: simple line-count trim
+        try:
+            with open(CLIENT_LOG_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            if len(lines) > MAX_FILE_LINES:
+                with open(CLIENT_LOG_PATH, "w", encoding="utf-8") as f:
+                    f.writelines(lines[-MAX_FILE_LINES:])
+        except Exception:
+            pass
+
+
+def _get_log_limits():
+    """Read log_max_days and log_max_mb from settings. Returns (days, mb) or defaults."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT log_max_days, log_max_mb FROM settings WHERE user_id = 'default_user'")
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            days = row[0] if row[0] is not None else 30
+            mb = row[1] if row[1] is not None else 5
+            return (days, mb)
     except Exception:
         pass
+    return (30, 5)
+
+
+def _prune_log_file(path, max_days, max_mb):
+    """Prune a log file by age and size limits.
+
+    Removes lines older than max_days, then trims from the top if file exceeds max_mb.
+    If both limits are None/0, pruning is disabled.
+    """
+    if not os.path.exists(path):
+        return
+
+    if not max_days and not max_mb:
+        return  # Pruning disabled
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines:
+            return
+
+        pruned = lines
+
+        # Age-based pruning: remove lines older than max_days
+        if max_days and max_days > 0:
+            cutoff = datetime.utcnow() - timedelta(days=max_days)
+            cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+            # Lines are formatted as [YYYY-MM-DD HH:MM:SS] ...
+            # Keep lines where the timestamp is >= cutoff
+            new_lines = []
+            for line in pruned:
+                if line.startswith("[") and "]" in line:
+                    ts_str = line[1:line.index("]")]
+                    if ts_str >= cutoff_str:
+                        new_lines.append(line)
+                else:
+                    new_lines.append(line)  # Keep lines without timestamps
+            pruned = new_lines
+
+        # Size-based pruning: trim from the top if file exceeds max_mb
+        if max_mb and max_mb > 0:
+            max_bytes = max_mb * 1024 * 1024
+            total_size = sum(len(l.encode("utf-8")) for l in pruned)
+            while total_size > max_bytes and len(pruned) > 1:
+                removed = pruned.pop(0)
+                total_size -= len(removed.encode("utf-8"))
+
+        # Only rewrite if we actually pruned something
+        if len(pruned) < len(lines):
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(pruned)
+    except Exception as e:
+        logger.warning("Failed to prune log file %s: %s", path, e)

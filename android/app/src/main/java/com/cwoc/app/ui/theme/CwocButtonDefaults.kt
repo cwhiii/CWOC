@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Shared button styling defaults for the CWOC parchment theme.
- * Provides outset (raised/embossed) and danger button configurations.
+ * Provides outset (raised/embossed), zone-button, and danger button configurations.
  */
 object CwocButtonDefaults {
 
@@ -23,6 +23,19 @@ object CwocButtonDefaults {
     val outsetBorder = BorderStroke(2.dp, CwocOutsetBorder)
 
     val outsetShape = RoundedCornerShape(4.dp)
+
+    /** Matches web .zone-button: brown bg (#a0522d), parchment text, outset border */
+    @Composable
+    fun zoneButtonColors(): ButtonColors = ButtonColors(
+        containerColor = CwocAgedBrownLight,
+        contentColor = CwocBackground,
+        disabledContainerColor = CwocAgedBrownLight.copy(alpha = 0.4f),
+        disabledContentColor = CwocBackground.copy(alpha = 0.5f)
+    )
+
+    val zoneButtonBorder = BorderStroke(1.dp, CwocAgedBrownMedium)
+
+    val zoneButtonShape = RoundedCornerShape(4.dp)
 
     @Composable
     fun dangerColors(): ButtonColors = ButtonColors(

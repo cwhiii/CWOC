@@ -76,6 +76,13 @@ fun CalendarScreen(
     val syncState by viewModel.syncState.collectAsState()
     val filterState = filterSortViewModel?.filterState?.collectAsState()?.value ?: FilterState()
 
+    // Get current user ID for permission checks (viewer role detection)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currentUserId = remember {
+        context.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("user_id", "") ?: ""
+    }
+
     // Apply all display filters (habits, complete, declined, snoozed, email, etc.)
     // This matches the web's filter pipeline applied before calendar rendering.
     val filteredEvents = remember(uiState.events, filterState) {
@@ -232,6 +239,7 @@ fun CalendarScreen(
                             snapMinutes = uiState.calendarSnap,
                             hourStart = uiState.allViewStartHour,
                             hourEnd = uiState.allViewEndHour,
+                            currentUserId = currentUserId,
                             onEventTap = { event -> onNavigateToEditor(resolveChitId(event.id)) },
                             onEventLongPress = { event -> quickEditChit = event },
                             onEventDragEnd = handleDragEnd,

@@ -2156,15 +2156,18 @@ function _renderColorSwatches(currentValue, onChange) {
     var wrapper = document.createElement('div');
     wrapper.className = 'smart-input-color-swatches';
 
-    // Combine default palette + custom colors
-    var colors = (_cwocDefaultColors || []).slice();
+    // Separate default and custom colors
+    var defaultColors = (_cwocDefaultColors || []).slice();
+    var customColorsList = [];
     var settings = window._cwocSettings || {};
     var customColors = settings.custom_colors;
     if (Array.isArray(customColors)) {
         customColors.forEach(function(c) {
             var hex = (typeof c === 'string') ? c : (c.hex || c.color || '');
             var name = (typeof c === 'string') ? c : (c.name || c.hex || '');
-            if (hex) colors.push({ hex: hex, name: name });
+            if (hex && !defaultColors.find(function(d) { return d.hex.toLowerCase() === hex.toLowerCase(); })) {
+                customColorsList.push({ hex: hex, name: name });
+            }
         });
     }
 
@@ -2188,8 +2191,17 @@ function _renderColorSwatches(currentValue, onChange) {
         });
     }
 
-    // Render each swatch
-    colors.forEach(function(c) {
+    // Helper: section label
+    function makeLabel(text) {
+        var label = document.createElement('div');
+        label.style.cssText = 'width:100%;font-size:0.7em;text-transform:uppercase;letter-spacing:0.5px;color:#8b5a2b;font-weight:600;opacity:0.8;margin:4px 0 2px;';
+        label.textContent = text;
+        return label;
+    }
+
+    // ── Default section ──
+    swatchGrid.appendChild(makeLabel('Default'));
+    defaultColors.forEach(function(c) {
         var swatch = document.createElement('button');
         swatch.type = 'button';
         swatch.className = 'smart-input-swatch';
@@ -2206,6 +2218,28 @@ function _renderColorSwatches(currentValue, onChange) {
         });
         swatchGrid.appendChild(swatch);
     });
+
+    // ── Custom section ──
+    if (customColorsList.length > 0) {
+        swatchGrid.appendChild(makeLabel('Custom'));
+        customColorsList.forEach(function(c) {
+            var swatch = document.createElement('button');
+            swatch.type = 'button';
+            swatch.className = 'smart-input-swatch';
+            swatch.style.backgroundColor = c.hex;
+            swatch.title = c.name || c.hex;
+            swatch.dataset.hex = c.hex;
+            if (c.hex.toLowerCase() === (currentValue || '').toLowerCase()) {
+                swatch.classList.add('smart-input-swatch-selected');
+            }
+            swatch.addEventListener('click', function() {
+                hexInput.value = c.hex;
+                updateSelection(c.hex);
+                onChange(c.hex);
+            });
+            swatchGrid.appendChild(swatch);
+        });
+    }
 
     // Hex input change handler
     hexInput.oninput = function() {

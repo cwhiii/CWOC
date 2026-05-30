@@ -91,7 +91,7 @@ function _renderPrereqList() {
 
     html += '<div class="prereq-item" style="background:' + _escHtml(bgColor) + ';color:' + textColor + ';" ondblclick="_openPrereqChit(\'' + _escHtml(id) + '\')" title="Double-click to open">';
     html += '<span class="prereq-item-title">' + _escHtml(title) + '</span>';
-    html += '<select class="prereq-item-status-select" data-prereq-id="' + _escHtml(id) + '" onchange="_onPrereqStatusChange(this)" style="color:' + textColor + ';">';
+    html += '<select class="prereq-item-status-select" data-prereq-id="' + _escHtml(id) + '" onchange="_onPrereqStatusChange(this)">';
     html += '<option value=""' + (!status ? ' selected' : '') + '>—</option>';
     html += '<option value="ToDo"' + (status === 'ToDo' ? ' selected' : '') + '>ToDo</option>';
     html += '<option value="In Progress"' + (status === 'In Progress' ? ' selected' : '') + '>In Progress</option>';

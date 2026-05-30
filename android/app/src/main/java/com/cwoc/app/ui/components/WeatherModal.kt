@@ -42,6 +42,7 @@ import okhttp3.Request
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import androidx.compose.material3.Button
 import com.cwoc.app.ui.theme.CwocInputDefaults
+import java.time.LocalDate
 
 /**
  * Weather modal — quick peek at current weather conditions for a saved location.
@@ -51,7 +52,10 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
  * - "Full Forecast" button to navigate to weather screen
  * - Close button
  *
+ * Uses cached weather data from Room when available, falls back to direct API fetch.
+ *
  * @param savedLocations JSON string of saved locations from settings
+ * @param cachedForecasts Cached weather forecast JSON map (locationLabel → dailyJson) from Room
  * @param onDismiss Callback when modal is closed
  * @param onFullForecast Callback to navigate to the full weather screen
  */
@@ -59,6 +63,7 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
 @Composable
 fun WeatherModal(
     savedLocations: String?,
+    cachedForecasts: Map<String, String?> = emptyMap(),
     serverUrl: String,
     authToken: String,
     okHttpClient: OkHttpClient,
@@ -87,10 +92,21 @@ fun WeatherModal(
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Fetch weather for the selected location
-    fun fetchWeather(address: String) {
+    // Fetch weather for the selected location — try cache first, then API
+    fun fetchWeather(label: String, address: String) {
         isLoading = true
         errorMsg = null
+        // Try to use cached forecast data
+        val cachedJson = cachedForecasts[label]
+        if (cachedJson != null) {
+            val result = parseCachedWeatherForToday(cachedJson, gson)
+            if (result != null) {
+                weatherData = result
+                isLoading = false
+                return
+            }
+        }
+        // Fallback: fetch from API
         coroutineScope.launch {
             val result = fetchWeatherData(serverUrl, authToken, address, okHttpClient)
             weatherData = result.first
@@ -102,7 +118,7 @@ fun WeatherModal(
     // Initial fetch
     LaunchedEffect(selectedIndex) {
         if (locations.isNotEmpty() && selectedIndex < locations.size) {
-            fetchWeather(locations[selectedIndex].second)
+            fetchWeather(locations[selectedIndex].first, locations[selectedIndex].second)
         } else {
             isLoading = false
             errorMsg = "No saved locations configured."
@@ -276,6 +292,54 @@ private fun weatherCodeToDescription(code: Int): String = when (code) {
     80, 81, 82 -> "Rain showers"; 85, 86 -> "Snow showers"
     95 -> "Thunderstorm"; 96, 99 -> "Thunderstorm with hail"
     else -> "Unknown"
+}
+
+// ─── Parse Cached Weather for Today ─────────────────────────────────────────────
+
+/**
+ * Parse cached daily forecast JSON and extract today's weather data.
+ * Returns WeatherModalData if today's date is found in the cached data, null otherwise.
+ */
+private fun parseCachedWeatherForToday(dailyJson: String, gson: Gson): WeatherModalData? {
+    return try {
+        val daily: Map<String, Any> = gson.fromJson(dailyJson, object : TypeToken<Map<String, Any>>() {}.type)
+            ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val times = daily["time"] as? List<String> ?: return null
+        val today = LocalDate.now().toString()
+        val todayIndex = times.indexOf(today)
+        if (todayIndex < 0) return null
+
+        @Suppress("UNCHECKED_CAST")
+        val codes = daily["weathercode"] as? List<Double?>
+        @Suppress("UNCHECKED_CAST")
+        val maxTemps = daily["temperature_2m_max"] as? List<Double?>
+        @Suppress("UNCHECKED_CAST")
+        val minTemps = daily["temperature_2m_min"] as? List<Double?>
+        @Suppress("UNCHECKED_CAST")
+        val precips = daily["precipitation_sum"] as? List<Double?>
+        @Suppress("UNCHECKED_CAST")
+        val winds = daily["wind_speed_10m_max"] as? List<Double?>
+
+        val code = codes?.getOrNull(todayIndex)?.toInt() ?: 0
+        val high = maxTemps?.getOrNull(todayIndex) ?: 0.0
+        val low = minTemps?.getOrNull(todayIndex) ?: 0.0
+        val precip = precips?.getOrNull(todayIndex) ?: 0.0
+        val wind = winds?.getOrNull(todayIndex) ?: 0.0
+        val isSnow = code in listOf(71, 73, 75, 77, 85, 86)
+
+        WeatherModalData(
+            icon = weatherCodeToIcon(code),
+            description = weatherCodeToDescription(code),
+            tempHigh = high.toInt(),
+            tempLow = low.toInt(),
+            precip = precip,
+            precipIcon = if (isSnow) "❄️" else "💧",
+            wind = wind
+        )
+    } catch (_: Exception) {
+        null
+    }
 }
 
 // ─── Fetch Weather Data ─────────────────────────────────────────────────────────

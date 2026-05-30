@@ -9,23 +9,32 @@ Deep technical reference for C.W.'s Omni Chits. For an overview of what CWOC is,
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Browser (Vanilla JS / HTML / CSS)                  │
-│  index.html  ← main dashboard (C CAPTN E tabs)    │
+│  index.html  ← main dashboard (C CAPTN E tabs)     │
 │  editor.html ← chit editor (collapsible zones)     │
-│  settings.html ← settings panel                    │
-│  + people, contacts, weather, trash, audit log...   │
+│  settings.html ← settings panel (5 tabs)           │
+│  + 22 more pages (maps, badges, rules, kiosk...)   │
 └────────────────────┬────────────────────────────────┘
                      │ REST API (JSON) + WebSocket
 ┌────────────────────▼────────────────────────────────┐
 │  FastAPI (Python 3) — src/backend/main.py           │
 │  Uvicorn on port 3333                               │
+│  33 route modules under src/backend/routes/         │
 │  SQLite3 — data/app.db                              │
+└────────────────────┬────────────────────────────────┘
+                     │ Bidirectional Sync (delta + full)
+┌────────────────────▼────────────────────────────────┐
+│  Android App (Kotlin / Jetpack Compose)             │
+│  32 screens — full offline support via Room         │
+│  Push notifications via Ntfy                        │
+│  Tailscale network fallback                         │
 └─────────────────────────────────────────────────────┘
 ```
 
-- **Backend:** FastAPI + Uvicorn (Python 3), modular under `src/backend/` — main.py (entry point), routes/ (8 route modules), models.py, db.py, migrations.py, schedulers.py, serializers.py
-- **Database:** SQLite3 via Python stdlib — single file, no ORM
-- **Frontend:** Pure vanilla JS, HTML5, CSS3 — no framework, no build step. All JS loaded via `<script>` tags in HTML (load order matters)
-- **External CDN libs:** Flatpickr (date picker), Font Awesome 6 (icons), marked.js (markdown), qrcode-generator, DOMPurify 3.0.6 (HTML email sanitization)
+- **Backend:** FastAPI + Uvicorn (Python 3), modular under `src/backend/` — main.py (entry point), routes/ (33 route modules), models.py, db.py, migrations.py, weather.py, serializers.py
+- **Database:** SQLite3 via Python stdlib — single file, no ORM, FTS5 full-text search
+- **Frontend:** Pure vanilla JS, HTML5, CSS3 — no framework, no build step. All JS loaded via `<script>` tags in HTML (load order matters). 25 HTML pages.
+- **Android:** Kotlin + Jetpack Compose, Room for offline caching, Hilt DI, OkHttp + Retrofit, 32 screens
+- **External CDN libs:** Flatpickr (date picker), Font Awesome 6 (icons), marked.js (markdown), qrcode-generator, DOMPurify 3.0.6 (HTML email sanitization), Leaflet (maps)
 - **External APIs:** OpenStreetMap Nominatim (geocoding), Open-Meteo (weather)
 - **Deployment:** Proxmox LXC container with systemd + nginx HTTPS reverse proxy
 
@@ -47,16 +56,24 @@ Real-time sync between browser tabs uses WebSocket (`/ws/sync`) with a polling f
 | Validation | Pydantic v1 |
 | Email | Python stdlib (`imaplib`, `smtplib`, `email`) |
 | Encryption | cryptography.fernet.Fernet (server-only; base64 fallback on dev) |
+| Backup | Restic (encrypted, deduplicated — local/SFTP/S3/B2/Azure/GCS/REST/rclone) |
 | Frontend | Vanilla JS, HTML5, CSS3 |
-| Date Picker | Flatpickr (CDN) |
-| Icons | Font Awesome 6 (CDN) |
-| Markdown | marked.js (CDN) |
-| HTML Sanitization | DOMPurify 3.0.6 (CDN) |
-| QR Codes | qrcode-generator (CDN) |
+| Maps | Leaflet + OpenStreetMap tiles |
+| Date Picker | Flatpickr (vendored) |
+| Icons | Font Awesome 6 (vendored) |
+| Markdown | marked.js (vendored) |
+| HTML Sanitization | DOMPurify 3.0.6 (vendored) |
+| QR Codes | qrcode-generator (vendored) |
 | Geocoding | OpenStreetMap Nominatim |
 | Weather | Open-Meteo API |
 | Reverse Proxy | nginx with self-signed SSL |
 | Process Manager | systemd |
+| Android | Kotlin + Jetpack Compose |
+| Android DB | Room (SQLite abstraction with offline caching) |
+| Android DI | Hilt (Dagger) |
+| Android Network | OkHttp + Retrofit |
+| Android Push | Ntfy (Firebase-free) |
+| VPN / Remote Access | Tailscale (optional) |
 
 ---
 
@@ -283,7 +300,7 @@ Prototypes/                # Historical prototypes and experiments (not producti
 - `shared-utils.js` must load first among all shared sub-scripts
 - The dashboard (`index.html` + `main.js` + dashboard CSS) has its own independent styling
 - All JS is vanilla — no modules, no imports, just `<script>` tags in HTML load order
-- Backend is modular: `main.py` (entry point) + `routes/` (8 route modules) + `db.py` + `models.py` + `migrations.py` + `weather.py` + `serializers.py`
+- Backend is modular: `main.py` (entry point) + `routes/` (33 route modules) + `db.py` + `models.py` + `migrations.py` + `weather.py` + `serializers.py`
 - See `src/INDEX.md` for the complete code index with every function, class, and route
 
 ---
@@ -458,6 +475,111 @@ All endpoints are under `/api/` and follow REST conventions — JSON in, JSON ou
 | WS | `/ws/sync` | WebSocket for real-time sync |
 | GET | `/health` | Health check |
 
+### Authentication & Users
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/login` | Login with username/password |
+| POST | `/api/auth/logout` | Logout current session |
+| POST | `/api/auth/switch` | Switch to another user (password required) |
+| GET | `/api/auth/switchable-users` | List users available for switching |
+| GET | `/api/auth/me` | Get current authenticated user |
+| GET | `/api/users` | List all users (admin only) |
+| POST | `/api/users` | Create a new user (admin only) |
+| PUT | `/api/users/{id}` | Update user (admin only) |
+| DELETE | `/api/users/{id}` | Delete user (admin only) |
+
+### Sharing
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/sharing/chit` | Share a chit with another user |
+| DELETE | `/api/sharing/chit/{share_id}` | Revoke chit share |
+| POST | `/api/sharing/tag` | Share a tag with another user |
+| DELETE | `/api/sharing/tag/{share_id}` | Revoke tag share |
+| PATCH | `/api/sharing/{share_id}/rsvp` | Accept/decline a shared chit |
+
+### Notifications
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/notifications` | List notifications (filterable by device) |
+| PATCH | `/api/notifications/{id}` | Update notification status (dismiss, accept, etc.) |
+| POST | `/api/notifications/{id}/snooze` | Snooze a notification |
+
+### Rules
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/rules` | List all rules |
+| GET | `/api/rules/{id}` | Get single rule |
+| POST | `/api/rules` | Create a rule |
+| PUT | `/api/rules/{id}` | Update a rule |
+| DELETE | `/api/rules/{id}` | Delete a rule |
+| POST | `/api/rules/{id}/toggle` | Enable/disable a rule |
+
+### Badges
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/badges` | List all active badges |
+| POST | `/api/badges/refresh` | Re-scan emails for badge detection |
+| DELETE | `/api/badges/{id}` | Dismiss a badge |
+
+### Custom Objects
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/custom-objects` | List custom object schemas |
+| POST | `/api/custom-objects` | Create a custom object schema |
+| PUT | `/api/custom-objects/{id}` | Update a custom object schema |
+| DELETE | `/api/custom-objects/{id}` | Delete a custom object schema |
+
+### Backup (Restic)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/backup/targets` | List backup targets |
+| POST | `/api/backup/targets` | Create a backup target |
+| PUT | `/api/backup/targets/{id}` | Update a backup target |
+| DELETE | `/api/backup/targets/{id}` | Delete a backup target |
+| POST | `/api/backup/targets/{id}/backup` | Run backup now |
+| POST | `/api/backup/targets/{id}/restore` | Restore from snapshot |
+| GET | `/api/backup/targets/{id}/snapshots` | List snapshots |
+| POST | `/api/backup/targets/{id}/prune` | Prune old snapshots |
+| GET | `/api/backup/targets/{id}/status` | Get backup status |
+
+### Bundles (Email)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/bundles` | List email bundle configurations |
+| POST | `/api/bundles` | Create a bundle |
+| PUT | `/api/bundles/{id}` | Update a bundle |
+| DELETE | `/api/bundles/{id}` | Delete a bundle |
+
+### Help / Documentation
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/docs` | List all help topics |
+| GET | `/api/docs/{slug}` | Get a single help document |
+| GET | `/api/docs-search?q=` | Search across all help files |
+
+### Release Notes
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/release-notes` | List daily release note files |
+
+### Client/Server Logs
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/client-log` | Get client-side logs |
+| POST | `/api/client-log` | Submit a client log entry |
+| GET | `/api/server-log` | Get server-side logs |
+
 ---
 
 ## Frontend Components
@@ -610,6 +732,6 @@ No SSH, no file copying required.
 
 ## Visual Theme
 
-1940s parchment/magic aesthetic with brown tones, Courier New font, and parchment background textures. CSS variables are defined in:
+1940s parchment/magic aesthetic with brown tones, Lora serif font (self-hosted variable font in `static/fonts/lora/`), and parchment background textures. CSS variables are defined in:
 - `frontend/css/shared/shared-page.css` — for secondary pages
 - `frontend/css/dashboard/styles-variables.css` — for the dashboard

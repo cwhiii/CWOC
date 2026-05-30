@@ -34,6 +34,7 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
  * Data class representing a tag available for filtering.
  */
 data class TagItem(
+    val id: String? = null, // UUID from tag registry (null for legacy/unsynced tags)
     val name: String,       // full path e.g. "Work/Projects/CWOC"
     val color: String?,     // hex color or null
     val favorite: Boolean
@@ -43,6 +44,7 @@ data class TagItem(
  * Internal tree node for hierarchical tag rendering.
  */
 private data class TagTreeNode(
+    val id: String?,            // UUID from tag registry (null for intermediate/unsynced nodes)
     val segment: String,        // leaf segment (e.g., "CWOC")
     val fullPath: String,       // full path (e.g., "Work/Projects/CWOC")
     val color: String?,
@@ -78,6 +80,7 @@ private fun buildTagTree(tags: List<TagItem>): List<TagTreeNode> {
             }
 
             TagTreeNode(
+                id = exactMatch?.item?.id,
                 segment = segment,
                 fullPath = fullPath,
                 color = exactMatch?.item?.color,
@@ -106,7 +109,7 @@ fun TagTreeFilter(
     var searchQuery by remember { mutableStateOf("") }
     val expandedNodes = remember { mutableStateMapOf<String, Boolean>() }
 
-    val allTagNames = remember(tags) { tags.map { it.name }.toSet() }
+    val allTagNames = remember(tags) { tags.map { it.id ?: it.name }.toSet() }
     val allSelected = allTagNames.isNotEmpty() && allTagNames == selectedTags
     val tree = remember(tags) { buildTagTree(tags) }
 
@@ -206,13 +209,15 @@ private fun TagTreeLevel(
         val childrenMatchSearch = node.children.any { childMatchesSearch(it, searchQuery) }
 
         if (matchesSearch || childrenMatchSearch) {
+            // Use tag ID if available, otherwise fall back to fullPath
+            val tagIdentifier = node.id ?: node.fullPath
             TagTreeRow(
                 node = node,
                 depth = depth,
-                isSelected = node.fullPath in selectedTags,
+                isSelected = tagIdentifier in selectedTags || node.fullPath in selectedTags,
                 isExpanded = expandedNodes[node.fullPath] ?: (searchQuery.isNotEmpty()),
                 hasChildren = node.children.isNotEmpty(),
-                onTap = { onToggleSelection(node.fullPath) },
+                onTap = { onToggleSelection(tagIdentifier) },
                 onExpandToggle = { onToggleExpand(node.fullPath) }
             )
 

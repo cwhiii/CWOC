@@ -11,6 +11,7 @@ import com.google.gson.reflect.TypeToken
  * those paths and creating intermediate parent nodes as needed.
  */
 data class TagNode(
+    val id: String? = null,
     val name: String,
     val fullPath: String,
     var color: String?,
@@ -36,6 +37,7 @@ object TagTreeParser {
      * Raw tag data as stored in the settings JSON.
      */
     private data class RawTag(
+        val id: String? = null,
         val name: String?,
         val color: String? = null,
         val fontColor: String? = null,
@@ -79,6 +81,7 @@ object TagTreeParser {
                 if (!nodeMap.containsKey(pathSoFar)) {
                     val isLeaf = index == parts.size - 1
                     val node = TagNode(
+                        id = if (isLeaf) tag.id else null,
                         name = part,
                         fullPath = pathSoFar,
                         color = if (isLeaf) tag.color else null,

@@ -2049,6 +2049,105 @@ def _email_poll_sync_all_users():
             conn.close()
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Badge Completion Scheduler — date-based auto-completion for badges
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Mapping of badge category → which chit datetime field determines completion
+_BADGE_COMPLETION_FIELD = {
+    "Flight": "start_datetime",   # Flight complete when departure has passed
+    "Hotel": "end_datetime",      # Hotel complete when checkout has passed
+    "Event": "start_datetime",    # Event complete when event date has passed
+    "Rental": "end_datetime",     # Rental complete when return date has passed
+}
+
+
+async def _badge_completion_loop():
+    """Background task: auto-complete date-based badges every 60 minutes (same as weather).
+
+    Checks all active badges with categories Flight, Hotel, Event, Rental.
+    For each, looks up the associated chit's relevant datetime field.
+    If that datetime has passed, sets badge status='completed' and completed_at=now.
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600)  # 60 minutes — same interval as weather hourly
+            logger.info("Badge completion loop: starting check")
+
+            now = datetime.utcnow()
+            now_iso = now.isoformat()
+            completed_count = 0
+
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+
+            # Get all active badges in date-completable categories
+            categories = tuple(_BADGE_COMPLETION_FIELD.keys())
+            placeholders = ",".join("?" for _ in categories)
+            cursor.execute(
+                f"SELECT b.id, b.chit_id, b.category "
+                f"FROM badges b "
+                f"WHERE b.status = 'active' AND b.category IN ({placeholders})",
+                categories
+            )
+            active_badges = cursor.fetchall()
+
+            if not active_badges:
+                conn.close()
+                logger.info("Badge completion loop: no eligible active badges")
+                continue
+
+            for badge_id, chit_id, category in active_badges:
+                # Determine which datetime field to check
+                dt_field = _BADGE_COMPLETION_FIELD.get(category)
+                if not dt_field:
+                    continue
+
+                # Look up the chit's datetime
+                cursor.execute(
+                    f"SELECT {dt_field} FROM chits WHERE id = ?",
+                    (chit_id,)
+                )
+                row = cursor.fetchone()
+                if not row or not row[0]:
+                    continue
+
+                chit_dt_str = row[0]
+
+                # Parse the datetime and check if it has passed
+                try:
+                    # Handle various ISO formats (with/without Z, with/without timezone)
+                    chit_dt = datetime.fromisoformat(
+                        chit_dt_str.replace("Z", "+00:00").split("+")[0]
+                    )
+                except (ValueError, TypeError):
+                    # Try parsing just the date portion
+                    try:
+                        chit_dt = datetime.strptime(chit_dt_str[:10], "%Y-%m-%d")
+                        # For date-only, treat as end of day
+                        chit_dt = chit_dt.replace(hour=23, minute=59, second=59)
+                    except (ValueError, TypeError):
+                        continue
+
+                # If the datetime has passed, mark badge as completed
+                if chit_dt < now:
+                    cursor.execute(
+                        "UPDATE badges SET status = 'completed', completed_at = ?, last_updated_at = ? "
+                        "WHERE id = ? AND status = 'active'",
+                        (now_iso, now_iso, badge_id)
+                    )
+                    completed_count += 1
+
+            conn.commit()
+            conn.close()
+            logger.info(f"Badge completion loop: completed {completed_count} badge(s)")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Badge completion loop unexpected error: {e}")
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -2068,7 +2167,8 @@ async def start_weather_schedulers():
     asyncio.create_task(_email_send_later_loop())
     asyncio.create_task(_timezone_change_detection_loop())
     asyncio.create_task(_email_poll_loop())
-    logger.info("Background tasks started (weather + alerts + snooze + email send-later + timezone detection + email polling)")
+    asyncio.create_task(_badge_completion_loop())
+    logger.info("Background tasks started (weather + alerts + snooze + email send-later + timezone detection + email polling + badge completion)")
 
 
 # ══════════════════════════════════════════════════════════════════════════

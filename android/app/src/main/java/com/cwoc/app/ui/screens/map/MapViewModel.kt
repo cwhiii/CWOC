@@ -9,6 +9,7 @@ import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.domain.tags.TagTreeParser
 import com.cwoc.app.ui.util.GeocodingUtil
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -40,6 +41,31 @@ data class ChitMarker(
 )
 
 /**
+ * Sealed class representing the data displayed in a marker popup overlay.
+ */
+sealed class MarkerPopupData {
+    data class ChitPopup(
+        val chitId: String,
+        val title: String,
+        val formattedDate: String?,
+        val status: String?,
+        val isOverdue: Boolean,
+        val hasPriority: Boolean,
+        val hasChecklist: Boolean,
+        val hasAlarm: Boolean,
+        val hasRecurrence: Boolean,
+        val hasPeople: Boolean,
+        val hasLocation: Boolean
+    ) : MarkerPopupData()
+
+    data class ContactPopup(
+        val contactId: String,
+        val displayName: String,
+        val address: String?
+    ) : MarkerPopupData()
+}
+
+/**
  * Map display mode — Chits only, People only, or Both.
  */
 enum class MapMode(val label: String) {
@@ -53,9 +79,13 @@ enum class MapMode(val label: String) {
  */
 enum class MapPeriod(val label: String) {
     ALL("All Time"),
+    NEXT_HOUR("Next Hour"),
     TODAY("Today"),
+    DAY("Day"),
     WEEK("Week"),
+    NEXT_X_DAYS("Next X Days"),
     MONTH("Month"),
+    QUARTER("Quarter"),
     YEAR("Year")
 }
 
@@ -131,8 +161,28 @@ class MapViewModel @Inject constructor(
     private val _tagFilters = MutableStateFlow<Set<String>>(emptySet())
     val tagFilters: StateFlow<Set<String>> = _tagFilters.asStateFlow()
 
+    private val _availableTags = MutableStateFlow<List<String>>(emptyList())
+    val availableTags: StateFlow<List<String>> = _availableTags.asStateFlow()
+
+    private val _availablePeople = MutableStateFlow<List<String>>(emptyList())
+    val availablePeople: StateFlow<List<String>> = _availablePeople.asStateFlow()
+
     private val _peopleFilters = MutableStateFlow<Set<String>>(emptySet())
     val peopleFilters: StateFlow<Set<String>> = _peopleFilters.asStateFlow()
+
+    // ─── People Filter Panel State ──────────────────────────────────────────
+
+    private val _peopleSearchText = MutableStateFlow("")
+    val peopleSearchText: StateFlow<String> = _peopleSearchText.asStateFlow()
+
+    private val _peopleFavoritesOnly = MutableStateFlow(false)
+    val peopleFavoritesOnly: StateFlow<Boolean> = _peopleFavoritesOnly.asStateFlow()
+
+    private val _peopleSelectedTags = MutableStateFlow<Set<String>>(emptySet())
+    val peopleSelectedTags: StateFlow<Set<String>> = _peopleSelectedTags.asStateFlow()
+
+    private val _allContactTags = MutableStateFlow<List<String>>(emptyList())
+    val allContactTags: StateFlow<List<String>> = _allContactTags.asStateFlow()
 
     // ─── "Go to" / Focus State ──────────────────────────────────────────────
 
@@ -142,6 +192,19 @@ class MapViewModel @Inject constructor(
     private val _goToError = MutableStateFlow<String?>(null)
     val goToError: StateFlow<String?> = _goToError.asStateFlow()
 
+    /** True when the map was opened with a focus address — skips auto-zoom-to-fit-all. */
+    private val _isFocusMode = MutableStateFlow(false)
+    val isFocusMode: StateFlow<Boolean> = _isFocusMode.asStateFlow()
+
+    /** The GeoPoint of the focused location for the highlight marker. */
+    private val _focusPoint = MutableStateFlow<GeoPoint?>(null)
+    val focusPoint: StateFlow<GeoPoint?> = _focusPoint.asStateFlow()
+
+    // ─── Marker Popup State ─────────────────────────────────────────────────
+
+    private val _selectedPopup = MutableStateFlow<MarkerPopupData?>(null)
+    val selectedPopup: StateFlow<MarkerPopupData?> = _selectedPopup.asStateFlow()
+
     // ─── Settings State ─────────────────────────────────────────────────────
 
     private val _autoZoomEnabled = MutableStateFlow(true)
@@ -149,6 +212,8 @@ class MapViewModel @Inject constructor(
 
     private val _preferGoogleMaps = MutableStateFlow(false)
     val preferGoogleMaps: StateFlow<Boolean> = _preferGoogleMaps.asStateFlow()
+
+    private val _customDaysCount = MutableStateFlow(7) // Default 7 days for "Next X Days"
 
     // ─── Marker State ───────────────────────────────────────────────────────
 
@@ -167,7 +232,7 @@ class MapViewModel @Inject constructor(
 
     // Internal caches for chit and contact markers (unfiltered)
     private var allChitMarkers: List<ChitMarkerWithEntity> = emptyList()
-    private var contactMarkers: List<ChitMarker> = emptyList()
+    private var allContactMarkersWithEntity: List<ContactMarkerWithEntity> = emptyList()
     private var savedLocationMarkers: List<ChitMarker> = emptyList()
 
     // Focus mode from navigation args
@@ -178,10 +243,12 @@ class MapViewModel @Inject constructor(
         loadSettings()
         loadChitMarkers()
         loadContactMarkers()
+        loadAvailablePeople()
 
         // Handle focus mode if address was passed via navigation
         if (!focusAddress.isNullOrBlank()) {
-            goToAddress(focusAddress)
+            _isFocusMode.value = true
+            goToFocusAddress(focusAddress)
         }
     }
 
@@ -224,6 +291,11 @@ class MapViewModel @Inject constructor(
                     } catch (_: Exception) {}
                 }
 
+                // Custom days count for "Next X Days" period filter
+                settings.customDaysCount?.toIntOrNull()?.let { days ->
+                    if (days > 0) _customDaysCount.value = days
+                }
+
                 // Saved locations as markers
                 if (!settings.savedLocations.isNullOrBlank()) {
                     try {
@@ -247,6 +319,11 @@ class MapViewModel @Inject constructor(
                         android.util.Log.e("CWOC_MAP", "Failed to parse saved locations: ${e.message}")
                     }
                 }
+
+                // Load available tags for tag filter chips
+                val tagTree = TagTreeParser.parseTagTree(settings.tags)
+                val flatTags = TagTreeParser.flattenTree(tagTree)
+                _availableTags.value = flatTags.map { it.fullPath }.sorted()
             }
         }
     }
@@ -277,7 +354,7 @@ class MapViewModel @Inject constructor(
     }
 
     fun previousPeriod() {
-        if (_period.value != MapPeriod.ALL) {
+        if (_period.value != MapPeriod.ALL && _period.value != MapPeriod.NEXT_HOUR) {
             _periodOffset.value -= 1
             updatePeriodLabel()
             updateVisibleMarkers()
@@ -285,7 +362,7 @@ class MapViewModel @Inject constructor(
     }
 
     fun nextPeriod() {
-        if (_period.value != MapPeriod.ALL) {
+        if (_period.value != MapPeriod.ALL && _period.value != MapPeriod.NEXT_HOUR) {
             _periodOffset.value += 1
             updatePeriodLabel()
             updateVisibleMarkers()
@@ -332,6 +409,32 @@ class MapViewModel @Inject constructor(
         updateVisibleMarkers()
     }
 
+    // ─── People Filter Panel API ────────────────────────────────────────────
+
+    fun setPeopleSearchText(text: String) {
+        _peopleSearchText.value = text
+        updateVisibleMarkers()
+    }
+
+    fun setPeopleFavoritesOnly(enabled: Boolean) {
+        _peopleFavoritesOnly.value = enabled
+        updateVisibleMarkers()
+    }
+
+    fun togglePeopleTag(tag: String) {
+        val current = _peopleSelectedTags.value.toMutableSet()
+        if (tag in current) current.remove(tag) else current.add(tag)
+        _peopleSelectedTags.value = current
+        updateVisibleMarkers()
+    }
+
+    fun clearPeopleFilters() {
+        _peopleSearchText.value = ""
+        _peopleFavoritesOnly.value = false
+        _peopleSelectedTags.value = emptySet()
+        updateVisibleMarkers()
+    }
+
     /**
      * "Go to" search — geocode an address and emit a flyToPoint for the map to animate to.
      */
@@ -355,12 +458,102 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Focus mode geocoding — geocodes the focus address and sets both flyToPoint and focusPoint.
+     * The focusPoint is used to render a distinct highlight marker at the focused location.
+     */
+    private fun goToFocusAddress(address: String) {
+        if (address.isBlank()) return
+        viewModelScope.launch {
+            _isSearching.value = true
+            _goToError.value = null
+            try {
+                val result = GeocodingUtil.geocode(address)
+                if (result != null) {
+                    val point = GeoPoint(result.lat, result.lon)
+                    _flyToPoint.value = point
+                    _focusPoint.value = point
+                } else {
+                    _goToError.value = "Location not found"
+                    _isFocusMode.value = false
+                }
+            } catch (e: Exception) {
+                _goToError.value = "Geocoding failed: ${e.message}"
+                _isFocusMode.value = false
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
     fun clearFlyTo() {
         _flyToPoint.value = null
     }
 
     fun clearGoToError() {
         _goToError.value = null
+    }
+
+    // ─── Marker Popup API ───────────────────────────────────────────────────
+
+    /**
+     * Called when a marker is tapped. Fetches the full entity data and shows the popup.
+     */
+    fun onMarkerTapped(chitMarker: ChitMarker) {
+        viewModelScope.launch {
+            if (chitMarker.type == "contact") {
+                val contact = contactDao.getById(chitMarker.chitId)
+                if (contact != null) {
+                    val displayName = contact.displayName
+                        ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ")
+                    val address = extractFirstAddress(contact.addresses)
+                    _selectedPopup.value = MarkerPopupData.ContactPopup(
+                        contactId = contact.id,
+                        displayName = displayName.ifBlank { "Unnamed Contact" },
+                        address = address
+                    )
+                }
+            } else if (chitMarker.type != "saved") {
+                val chit = chitRepository.getById(chitMarker.chitId)
+                if (chit != null) {
+                    _selectedPopup.value = MarkerPopupData.ChitPopup(
+                        chitId = chit.id,
+                        title = chit.title ?: "Untitled",
+                        formattedDate = formatChitDate(chit),
+                        status = chit.status,
+                        isOverdue = isChitOverdue(chit),
+                        hasPriority = !chit.priority.isNullOrBlank(),
+                        hasChecklist = !chit.checklist.isNullOrBlank() && chit.checklist != "[]",
+                        hasAlarm = chit.alarm == true || chit.notification == true,
+                        hasRecurrence = !chit.recurrenceRule.isNullOrBlank(),
+                        hasPeople = !chit.people.isNullOrEmpty(),
+                        hasLocation = !chit.location.isNullOrBlank()
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Dismiss the marker popup.
+     */
+    fun dismissPopup() {
+        _selectedPopup.value = null
+    }
+
+    /**
+     * Format a chit's most relevant date for display in the popup.
+     * Priority: due date > start date > point-in-time > created date.
+     */
+    private fun formatChitDate(chit: ChitEntity): String? {
+        val dateStr = chit.dueDatetime ?: chit.startDatetime ?: chit.pointInTime ?: return null
+        return try {
+            val date = LocalDate.parse(dateStr.take(10))
+            val months = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+            "${months[date.monthValue - 1]} ${date.dayOfMonth}, ${date.year}"
+        } catch (_: Exception) {
+            dateStr.take(10)
+        }
     }
 
     // ─── Private Loading ────────────────────────────────────────────────────
@@ -402,28 +595,76 @@ class MapViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val contacts = contactDao.getAllActive().first()
-                val markers = mutableListOf<ChitMarker>()
+                val markersWithEntity = mutableListOf<ContactMarkerWithEntity>()
+                val allTags = mutableSetOf<String>()
 
                 for (contact in contacts) {
+                    // Collect all contact tags for the filter panel
+                    contact.tags?.forEach { tag -> allTags.add(tag) }
+
                     val address = extractFirstAddress(contact.addresses)
                     if (address.isNullOrBlank()) continue
 
                     val coordResult = parseLatLng(address)
                     if (coordResult != null) {
-                        markers.add(createContactMarker(contact, GeoPoint(coordResult.first, coordResult.second)))
+                        markersWithEntity.add(ContactMarkerWithEntity(
+                            marker = createContactMarker(contact, GeoPoint(coordResult.first, coordResult.second)),
+                            entity = contact
+                        ))
                         continue
                     }
 
                     val geoResult = GeocodingUtil.geocode(address)
                     if (geoResult != null) {
-                        markers.add(createContactMarker(contact, GeoPoint(geoResult.lat, geoResult.lon)))
+                        markersWithEntity.add(ContactMarkerWithEntity(
+                            marker = createContactMarker(contact, GeoPoint(geoResult.lat, geoResult.lon)),
+                            entity = contact
+                        ))
                     }
                 }
 
-                contactMarkers = markers
+                allContactMarkersWithEntity = markersWithEntity
+                _allContactTags.value = allTags.sorted()
                 updateVisibleMarkers()
             } catch (e: Exception) {
                 android.util.Log.e("CWOC_MAP", "Failed to load contact markers: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Load available people names from contacts + system users for the people filter chips.
+     * Merges contact display names with system user names (deduplicated, case-insensitive).
+     */
+    private fun loadAvailablePeople() {
+        viewModelScope.launch {
+            try {
+                val contacts = contactDao.getAllActive().first()
+                val systemUsers = contactDao.getSystemUsers()
+
+                val peopleNames = mutableSetOf<String>()
+                val seenLower = mutableSetOf<String>()
+
+                // Add contact display names
+                for (contact in contacts) {
+                    val name = contact.displayName
+                        ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ")
+                    if (name.isNotBlank() && seenLower.add(name.lowercase())) {
+                        peopleNames.add(name)
+                    }
+                }
+
+                // Add system users (deduplicated against contacts)
+                for (user in systemUsers) {
+                    val name = user.displayName ?: user.username ?: continue
+                    if (name.isNotBlank() && seenLower.add(name.lowercase())) {
+                        peopleNames.add(name)
+                    }
+                }
+
+                _availablePeople.value = peopleNames.sorted()
+            } catch (e: Exception) {
+                android.util.Log.e("CWOC_MAP", "Failed to load available people: ${e.message}")
             }
         }
     }
@@ -445,19 +686,64 @@ class MapViewModel @Inject constructor(
     /**
      * Apply all active filters (search, period, status) to chit markers
      * and combine with contact markers based on mode.
+     * When "All People" is checked, bypass people filter panel filters.
+     * When in focus mode, skip auto-zoom-to-fit-all (don't update bounds).
      */
     private fun updateVisibleMarkers() {
         val filteredChits = applyChitFilters(allChitMarkers)
+        val filteredContacts = applyPeopleFilters(allContactMarkersWithEntity)
 
         val visible = when (_mapMode.value) {
             MapMode.CHITS -> savedLocationMarkers + filteredChits
-            MapMode.PEOPLE -> contactMarkers
-            MapMode.BOTH -> savedLocationMarkers + filteredChits + contactMarkers
+            MapMode.PEOPLE -> filteredContacts
+            MapMode.BOTH -> savedLocationMarkers + filteredChits + filteredContacts
         }
         _markers.value = visible
-        if (_autoZoomEnabled.value) {
+        // Skip auto-zoom-to-fit-all when in focus mode — maintain focus on the target location
+        if (_autoZoomEnabled.value && !_isFocusMode.value) {
             _bounds.value = computeBounds(visible)
         }
+    }
+
+    /**
+     * Apply people filter panel filters (search text, favorites, tags) to contact markers.
+     * When "All People" checkbox is checked, bypass all people filter panel filters.
+     */
+    private fun applyPeopleFilters(markers: List<ContactMarkerWithEntity>): List<ChitMarker> {
+        // When "All People" is checked, show all contacts without filtering
+        if (_allPeople.value) {
+            return markers.map { it.marker }
+        }
+
+        var filtered = markers.asSequence()
+
+        // Text search filter (case-insensitive, matches display name)
+        val searchText = _peopleSearchText.value.trim().lowercase()
+        if (searchText.isNotBlank()) {
+            filtered = filtered.filter { item ->
+                val contact = item.entity
+                val displayName = contact.displayName
+                    ?: listOfNotNull(contact.givenName, contact.surname).joinToString(" ")
+                displayName.lowercase().contains(searchText)
+            }
+        }
+
+        // Favorites-only filter
+        if (_peopleFavoritesOnly.value) {
+            filtered = filtered.filter { it.entity.favorite }
+        }
+
+        // Tag filter (show contacts having at least one of the selected tags)
+        val selectedTags = _peopleSelectedTags.value
+        if (selectedTags.isNotEmpty()) {
+            filtered = filtered.filter { item ->
+                val contactTags = item.entity.tags
+                if (contactTags.isNullOrEmpty()) false
+                else contactTags.any { it in selectedTags }
+            }
+        }
+
+        return filtered.map { it.marker }.toList()
     }
 
     private fun applyChitFilters(markers: List<ChitMarkerWithEntity>): List<ChitMarker> {
@@ -512,7 +798,16 @@ class MapViewModel @Inject constructor(
             val offset = _periodOffset.value
             val now = LocalDate.now()
             val (start, end) = when (period) {
+                MapPeriod.NEXT_HOUR -> {
+                    // Next hour: show chits with dates within the next 60 minutes from now
+                    // We approximate by using today's date (hour-level filtering done below)
+                    now to now
+                }
                 MapPeriod.TODAY -> {
+                    val day = now.plusDays(offset.toLong())
+                    day to day
+                }
+                MapPeriod.DAY -> {
                     val day = now.plusDays(offset.toLong())
                     day to day
                 }
@@ -520,9 +815,19 @@ class MapViewModel @Inject constructor(
                     val startOfWeek = now.minusDays(now.dayOfWeek.value.toLong() % 7).plusWeeks(offset.toLong())
                     startOfWeek to startOfWeek.plusDays(6)
                 }
+                MapPeriod.NEXT_X_DAYS -> {
+                    val days = _customDaysCount.value
+                    val startDay = now.plusDays((offset * days).toLong())
+                    startDay to startDay.plusDays(days.toLong() - 1)
+                }
                 MapPeriod.MONTH -> {
                     val monthStart = now.withDayOfMonth(1).plusMonths(offset.toLong())
                     monthStart to monthStart.plusMonths(1).minusDays(1)
+                }
+                MapPeriod.QUARTER -> {
+                    val currentQuarterStart = now.withDayOfMonth(1).withMonth(((now.monthValue - 1) / 3) * 3 + 1)
+                    val quarterStart = currentQuarterStart.plusMonths((offset * 3).toLong())
+                    quarterStart to quarterStart.plusMonths(3).minusDays(1)
                 }
                 MapPeriod.YEAR -> {
                     val yearStart = LocalDate.of(now.year + offset, 1, 1)
@@ -530,7 +835,15 @@ class MapViewModel @Inject constructor(
                 }
                 else -> null to null
             }
-            if (start != null && end != null) {
+
+            if (period == MapPeriod.NEXT_HOUR) {
+                // For NEXT_HOUR, filter by actual datetime within the next 60 minutes
+                val nowInstant = Instant.now()
+                val oneHourLater = nowInstant.plus(1, ChronoUnit.HOURS)
+                filtered = filtered.filter { item ->
+                    chitInTimeRange(item.entity, nowInstant, oneHourLater)
+                }
+            } else if (start != null && end != null) {
                 filtered = filtered.filter { item ->
                     chitInDateRange(item.entity, start, end)
                 }
@@ -554,6 +867,37 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Check if a chit falls within a specific time range (used for NEXT_HOUR filter).
+     * Parses datetime strings and checks if any fall between start and end instants.
+     */
+    private fun chitInTimeRange(chit: ChitEntity, start: Instant, end: Instant): Boolean {
+        val dates = listOfNotNull(chit.startDatetime, chit.dueDatetime, chit.pointInTime)
+        if (dates.isEmpty()) return false // No dates = don't show for time-specific filter
+
+        return dates.any { dateStr ->
+            try {
+                val instant = Instant.parse(dateStr)
+                !instant.isBefore(start) && !instant.isAfter(end)
+            } catch (_: Exception) {
+                try {
+                    // Try parsing as LocalDateTime and converting to instant in system zone
+                    val ldt = LocalDateTime.parse(dateStr.take(19))
+                    val instant = ldt.atZone(ZoneId.systemDefault()).toInstant()
+                    !instant.isBefore(start) && !instant.isAfter(end)
+                } catch (_: Exception) {
+                    // Fall back to date-only check: if date is today, include it
+                    try {
+                        val date = LocalDate.parse(dateStr.take(10))
+                        date == LocalDate.now()
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+            }
+        }
+    }
+
     private fun updatePeriodLabel() {
         val period = _period.value
         val offset = _periodOffset.value
@@ -562,7 +906,12 @@ class MapViewModel @Inject constructor(
 
         _periodLabel.value = when (period) {
             MapPeriod.ALL -> "All Time"
+            MapPeriod.NEXT_HOUR -> "Next Hour"
             MapPeriod.TODAY -> {
+                val day = now.plusDays(offset.toLong())
+                "${months[day.monthValue - 1]} ${day.dayOfMonth}"
+            }
+            MapPeriod.DAY -> {
                 val day = now.plusDays(offset.toLong())
                 "${months[day.monthValue - 1]} ${day.dayOfMonth}"
             }
@@ -571,9 +920,22 @@ class MapViewModel @Inject constructor(
                 val endOfWeek = startOfWeek.plusDays(6)
                 "${months[startOfWeek.monthValue - 1]} ${startOfWeek.dayOfMonth} — ${months[endOfWeek.monthValue - 1]} ${endOfWeek.dayOfMonth}"
             }
+            MapPeriod.NEXT_X_DAYS -> {
+                val days = _customDaysCount.value
+                val startDay = now.plusDays((offset * days).toLong())
+                val endDay = startDay.plusDays(days.toLong() - 1)
+                "${months[startDay.monthValue - 1]} ${startDay.dayOfMonth} — ${months[endDay.monthValue - 1]} ${endDay.dayOfMonth} (${days}d)"
+            }
             MapPeriod.MONTH -> {
                 val monthStart = now.withDayOfMonth(1).plusMonths(offset.toLong())
                 "${months[monthStart.monthValue - 1]} ${monthStart.year}"
+            }
+            MapPeriod.QUARTER -> {
+                val currentQuarterStart = now.withDayOfMonth(1).withMonth(((now.monthValue - 1) / 3) * 3 + 1)
+                val quarterStart = currentQuarterStart.plusMonths((offset * 3).toLong())
+                val quarterEnd = quarterStart.plusMonths(3).minusDays(1)
+                val qNum = ((quarterStart.monthValue - 1) / 3) + 1
+                "Q$qNum ${quarterStart.year} (${months[quarterStart.monthValue - 1]} — ${months[quarterEnd.monthValue - 1]})"
             }
             MapPeriod.YEAR -> {
                 "${now.year + offset}"
@@ -748,4 +1110,12 @@ class MapViewModel @Inject constructor(
 private data class ChitMarkerWithEntity(
     val marker: ChitMarker,
     val entity: ChitEntity
+)
+
+/**
+ * Internal wrapper that pairs a ChitMarker (contact type) with its source ContactEntity for filtering.
+ */
+private data class ContactMarkerWithEntity(
+    val marker: ChitMarker,
+    val entity: ContactEntity
 )

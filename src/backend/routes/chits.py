@@ -19,6 +19,7 @@ from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
     compute_system_tags, _build_export_envelope, ensure_tags_in_settings,
     get_next_sync_version, get_db_connection, chit_cache,
+    resolve_tag_ids, get_tag_registry, is_tag_id, is_system_tag,
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
@@ -165,9 +166,10 @@ def _validate_nest_thread_id(cursor, chit):
 
 
 def _strip_reserved_tags(tags):
-    """Remove any user-submitted tags that start with CWOC_System/ (case-insensitive).
+    """Remove any user-submitted tags that start with CWOC_System/ or Habits/ (system tags).
 
     Tags can be either strings or dicts with a "name" key — handles both formats.
+    Uses is_system_tag() for consistent detection.
     """
     if not tags or not isinstance(tags, list):
         return tags
@@ -175,14 +177,73 @@ def _strip_reserved_tags(tags):
     for t in tags:
         if isinstance(t, dict):
             name = t.get("name", "")
-            if not str(name).lower().startswith(RESERVED_TAG_PREFIX):
+            if not is_system_tag(str(name)):
                 result.append(t)
         elif isinstance(t, str):
-            if not t.lower().startswith(RESERVED_TAG_PREFIX):
+            if not is_system_tag(t):
                 result.append(t)
         else:
             result.append(t)
     return result
+
+
+def _process_incoming_tags(conn, user_id: str, tags, chit, tag_registry: list = None):
+    """Process incoming tags from frontend for chit save/update.
+
+    Input: tags as a mixed array of UUIDs and new name strings (e.g. ["uuid1", "uuid2", "NewTag"])
+    Processing:
+      A. Strip system tags (CWOC_System/, Habits/) — computed by backend, not submitted
+      B. Separate UUIDs from name strings
+      C. Auto-create registry entries for new names via ensure_tags_in_settings()
+      D. Build final user tag ID list (existing UUIDs + newly created IDs), deduplicated
+      E. Set chit.tags to user IDs (for compute_system_tags to use)
+      F. Merge with computed system tags
+    Returns: final combined list (user tag UUIDs + system tag name strings)
+    """
+    if not tags or not isinstance(tags, list):
+        # No user tags — just compute system tags
+        chit.tags = []
+        return compute_system_tags(chit, tag_registry)
+
+    # A. Strip system tags
+    stripped = [t for t in tags if isinstance(t, str) and not is_system_tag(t)]
+
+    # B. Separate UUIDs from name strings
+    existing_ids = []
+    new_names = []
+    for t in stripped:
+        if is_tag_id(t):
+            existing_ids.append(t)
+        else:
+            new_names.append(t)
+
+    # C. Auto-create registry entries for new names
+    name_to_id = {}
+    if new_names:
+        name_to_id = ensure_tags_in_settings(conn, user_id, new_names)
+
+    # D. Build final user tag ID list, deduplicated
+    final_user_ids = list(existing_ids)
+    for name in new_names:
+        tag_id = name_to_id.get(name)
+        if tag_id:
+            final_user_ids.append(tag_id)
+    # Deduplicate while preserving order
+    seen = set()
+    deduped_ids = []
+    for tid in final_user_ids:
+        if tid not in seen:
+            seen.add(tid)
+            deduped_ids.append(tid)
+
+    # E. Set chit.tags to user IDs so compute_system_tags can evaluate them
+    chit.tags = deduped_ids
+
+    # F. Merge with computed system tags (returns user IDs + system tag strings)
+    # Reload registry if we created new entries
+    if name_to_id and tag_registry is not None:
+        tag_registry = get_tag_registry(conn, user_id)
+    return compute_system_tags(chit, tag_registry)
 
 
 def _validate_tag_name(name):
@@ -368,12 +429,17 @@ def _build_chit_list_for_user(user_id: str) -> list:
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Load tag registry ONCE for the entire list (avoids N+1 queries)
+        tag_registry = get_tag_registry(conn, user_id)
+
         cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         chits = []
         columns = [col[0] for col in cursor.description]
         for row in cursor.fetchall():
             chit = dict(zip(columns, row))
-            chit["tags"] = deserialize_json_field(chit["tags"])
+            raw_tags = deserialize_json_field(chit["tags"])
+            chit["tags"] = resolve_tag_ids(raw_tags, tag_registry) if raw_tags else []
             chit["checklist"] = deserialize_json_field(chit["checklist"])
             chit["people"] = deserialize_json_field(chit["people"])
             chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
@@ -398,13 +464,15 @@ def _build_chit_list_for_user(user_id: str) -> list:
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
             # Email fields — strip heavy body content (not needed for card rendering)
-            # Keep a short preview of email_body_text for the email card preview line
+            # Keep enough body text for smart link detection (tracking numbers, etc. can appear
+            # deep in the body — 3000 chars covers virtually all real-world cases) and the
+            # preview line. Full body is only loaded in the editor.
             chit["email_to"] = deserialize_json_field(chit.get("email_to"))
             chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
             chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
             body_text = chit.get("email_body_text") or ""
-            chit["email_body_text"] = body_text[:200] if body_text else None
+            chit["email_body_text"] = body_text[:3000] if body_text else None
             chit.pop("email_body_html", None)
             chit["snoozed_until"] = chit.get("snoozed_until")
             chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
@@ -439,9 +507,12 @@ def create_chit(chit: Chit, request: Request):
         owner_username = user_row[1] if user_row else request.state.username
 
         current_time = datetime.utcnow().isoformat()
-        # Strip any reserved CWOC_System/ tags from user-submitted tags before computing system tags
-        chit.tags = _strip_reserved_tags(chit.tags)
-        chit_tags = compute_system_tags(chit)
+        # Process incoming tags: strip system tags, separate UUIDs from names,
+        # auto-create registry entries for new names, deduplicate, merge with system tags
+        tag_registry = get_tag_registry(conn, user_id)
+        chit_tags = _process_incoming_tags(conn, user_id, chit.tags, chit, tag_registry)
+        # Reload registry in case new entries were created
+        tag_registry = get_tag_registry(conn, user_id)
 
         # Auto-set status to "ToDo" when assigned_to is set and no status exists
         if chit.assigned_to and not chit.status:
@@ -576,6 +647,13 @@ def create_chit(chit: Chit, request: Request):
         conn.commit()
         chit_cache.invalidate(user_id)
         chit_data = {
+            **chit.dict(), "id": chit_id, "tags": resolve_tag_ids(chit_tags, tag_registry),
+            "created_datetime": current_time, "modified_datetime": current_time,
+            "owner_id": user_id, "owner_display_name": owner_display_name, "owner_username": owner_username,
+            "sync_version": sync_version, "has_unviewed_conflict": False,
+        }
+        # For rules engine dispatch, use raw tags (UUIDs + system strings) not resolved format
+        chit_data_for_rules = {
             **chit.dict(), "id": chit_id, "tags": chit_tags,
             "created_datetime": current_time, "modified_datetime": current_time,
             "owner_id": user_id, "owner_display_name": owner_display_name, "owner_username": owner_username,
@@ -586,11 +664,20 @@ def create_chit(chit: Chit, request: Request):
             logger.info("Firing rules engine trigger: chit_created for chit %s, owner %s", chit_id, user_id)
             threading.Thread(
                 target=dispatch_trigger,
-                args=("chit_created", "chit", chit_data, user_id),
+                args=("chit_created", "chit", chit_data_for_rules, user_id),
                 daemon=True,
             ).start()
         except Exception:
             pass  # Never block the API response for rules engine
+
+        # Badge detection: scan email chits for trackable smart links
+        try:
+            if chit.email_message_id or chit.email_status:
+                from src.backend.badge_integration import process_badges_for_chit
+                process_badges_for_chit(chit_data_for_rules, user_id)
+        except Exception as e:
+            logger.warning(f"Badge detection failed for new chit {chit_id} (best-effort): {e}")
+
         return chit_data
     except HTTPException:
         raise
@@ -628,7 +715,11 @@ def get_chit(chit_id: str, request: Request):
         effective_role = resolve_effective_role(chit, user_id, owner_settings)
         if effective_role is None:
             raise HTTPException(status_code=404, detail="Chit not found")
-        chit["tags"] = deserialize_json_field(chit["tags"])
+        # Resolve tags: load the owner's tag registry and convert raw IDs to [{id, name}]
+        raw_tags = deserialize_json_field(chit["tags"])
+        tag_owner_id = chit_owner_id or user_id
+        tag_registry = get_tag_registry(conn, tag_owner_id)
+        chit["tags"] = resolve_tag_ids(raw_tags, tag_registry) if raw_tags else []
         chit["checklist"] = deserialize_json_field(chit["checklist"])
         chit["people"] = deserialize_json_field(chit["people"])
         chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
@@ -709,9 +800,12 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
         existing = cursor.fetchone()
         current_time = datetime.utcnow().isoformat()
-        # Strip any reserved CWOC_System/ tags from user-submitted tags before computing system tags
-        chit.tags = _strip_reserved_tags(chit.tags)
-        chit_tags = compute_system_tags(chit)
+        # Process incoming tags: strip system tags, separate UUIDs from names,
+        # auto-create registry entries for new names, deduplicate, merge with system tags
+        tag_registry = get_tag_registry(conn, user_id)
+        chit_tags = _process_incoming_tags(conn, user_id, chit.tags, chit, tag_registry)
+        # Reload registry in case new entries were created
+        tag_registry = get_tag_registry(conn, user_id)
         if existing:
             existing_dict_check = dict(zip([col[0] for col in cursor.description], existing))
 
@@ -1125,14 +1219,16 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         except Exception as e:
             logger.error(f"Auto-complete revert cascade failed (best-effort): {str(e)}")
 
-        chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time, "sync_version": sync_version, "has_unviewed_conflict": False}
+        chit_data = {**chit.dict(), "id": chit_id, "tags": resolve_tag_ids(chit_tags, tag_registry), "modified_datetime": current_time, "sync_version": sync_version, "has_unviewed_conflict": False}
+        # For rules engine dispatch, use raw tags (UUIDs + system strings) not resolved format
+        chit_data_for_rules = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time, "sync_version": sync_version, "has_unviewed_conflict": False}
         # Fire-and-forget: dispatch rules engine trigger for chit update or creation
         try:
             trigger = "chit_updated" if existing else "chit_created"
             logger.info("Firing rules engine trigger: %s for chit %s, owner %s", trigger, chit_id, user_id)
             threading.Thread(
                 target=dispatch_trigger,
-                args=(trigger, "chit", chit_data, user_id),
+                args=(trigger, "chit", chit_data_for_rules, user_id),
                 daemon=True,
             ).start()
         except Exception:
@@ -1147,9 +1243,17 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 # Habit achieved: success just reached goal
                 if new_success >= goal and old_success < goal:
                     from src.backend.schedulers import _fire_chit_habit_trigger
-                    _fire_chit_habit_trigger("habit_achieved", chit_data, user_id)
+                    _fire_chit_habit_trigger("habit_achieved", chit_data_for_rules, user_id)
         except Exception:
             pass  # Never block the API response for habit triggers
+
+        # Badge detection: scan email chits for trackable smart links
+        try:
+            if chit.email_message_id or chit.email_status:
+                from src.backend.badge_integration import process_badges_for_chit
+                process_badges_for_chit(chit_data_for_rules, user_id)
+        except Exception as e:
+            logger.warning(f"Badge detection failed for chit {chit_id} (best-effort): {e}")
 
         return chit_data
     except HTTPException:

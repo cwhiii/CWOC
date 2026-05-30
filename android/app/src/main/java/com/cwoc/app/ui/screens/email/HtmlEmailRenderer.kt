@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -245,13 +244,13 @@ private fun ExternalContentBanner(
  * - JavaScript disabled
  * - Links open in device browser
  * - Auto-resizes height between 200-800dp based on content
+ * - Uses base64 encoding for robust HTML loading
  */
 @Composable
 private fun HtmlWebView(
     html: String,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     var webViewHeight by remember { mutableIntStateOf(200) }
 
@@ -262,14 +261,23 @@ private fun HtmlWebView(
             append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0\">")
             append("<style>")
             append("body { margin: 0; padding: 8px; font-family: sans-serif; font-size: 14px; ")
-            append("word-wrap: break-word; overflow-wrap: break-word; }")
+            append("word-wrap: break-word; overflow-wrap: break-word; color: #1a1208; }")
             append("img { max-width: 100%; height: auto; }")
             append("table { max-width: 100%; }")
             append("pre { white-space: pre-wrap; word-wrap: break-word; }")
+            append("a { color: #6b4e31; }")
             append("</style></head><body>")
             append(html)
             append("</body></html>")
         }
+    }
+
+    // Encode as base64 for robust loading (handles special chars like %, #, etc.)
+    val base64Html = remember(wrappedHtml) {
+        android.util.Base64.encodeToString(
+            wrappedHtml.toByteArray(Charsets.UTF_8),
+            android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+        )
     }
 
     Box(
@@ -320,24 +328,12 @@ private fun HtmlWebView(
                         }
                     }
 
-                    // Load the sanitized HTML
-                    loadDataWithBaseURL(
-                        null,
-                        wrappedHtml,
-                        "text/html",
-                        "UTF-8",
-                        null
-                    )
+                    // Load the sanitized HTML using base64 encoding for robustness
+                    loadData(base64Html, "text/html; charset=UTF-8", "base64")
                 }
             },
             update = { webView ->
-                webView.loadDataWithBaseURL(
-                    null,
-                    wrappedHtml,
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
+                webView.loadData(base64Html, "text/html; charset=UTF-8", "base64")
             },
             modifier = Modifier
                 .fillMaxWidth()

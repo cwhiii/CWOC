@@ -226,14 +226,7 @@ function _wxApplyDateFilter() {
       }
       // Tag filter
       if (hasTagFilter) {
-        var chitTags = chit.tags;
-        if (typeof chitTags === 'string') { try { chitTags = JSON.parse(chitTags); } catch(e) { chitTags = []; } }
-        if (!Array.isArray(chitTags)) chitTags = [];
-        var tagMatch = false;
-        for (var ti = 0; ti < window._sidebarTagSelection.length; ti++) {
-          if (chitTags.indexOf(window._sidebarTagSelection[ti]) !== -1) { tagMatch = true; break; }
-        }
-        if (!tagMatch) continue;
+        if (!cwocChitPassesTagFilter(chit.tags)) continue;
       }
       // People filter
       if (hasPeopleFilter) {

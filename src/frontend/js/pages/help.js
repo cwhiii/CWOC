@@ -31,6 +31,7 @@
                 { file: 'indicators.md', title: 'Indicators' },
                 { file: 'maps.md', title: 'Maps' },
                 { file: 'email.md', title: 'Email' },
+                { file: 'badges.md', title: 'Badges Page' },
                 { file: 'global-search.md', title: 'Global Search' },
                 { file: 'trash.md', title: 'Trash' },
                 { file: 'kiosk.md', title: 'Kiosk' }
@@ -98,6 +99,7 @@
     function _buildTocHtml() {
         var html = '<h2 style="margin-top:0;">CWOC Help Guide</h2>';
         html += '<p>Welcome to the C.W.\'s Omni Chits documentation. Browse topics below or use the search bar to find what you need across all help files.</p>';
+        html += '<div style="margin-bottom:1.5em;text-align:center;"><a href="/frontend/html/about.html" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(#d4a373,#c8965a);color:#2b1e0f;border-radius:6px;text-decoration:none;font-size:0.95em;font-weight:600;font-family:Lora,Georgia,serif;box-shadow:0 2px 4px rgba(0,0,0,0.15);">ℹ️ About CWOC &amp; Support</a></div>';
         html += '<div class="index"><strong>Contents</strong><div class="index-columns">';
 
         // Split categories into two columns

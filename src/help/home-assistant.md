@@ -10,7 +10,7 @@
 - [HA State Change Trigger](#ha-state-change-trigger)
 
 
-CWOC integrates bidirectionally with **Home Assistant** (HA). You can display chit counts on HA dashboards, create or update chits from HA automations, trigger HA scenes from CWOC rules, and fire HA events when chit state changes.
+CWOC integrates bidirectionally with **[Home Assistant](https://www.home-assistant.io/)** (HA). You can display chit counts on HA dashboards, create or update chits from HA automations, trigger HA scenes from CWOC rules, and fire HA events when chit state changes.
 
 ## Setup Overview
 

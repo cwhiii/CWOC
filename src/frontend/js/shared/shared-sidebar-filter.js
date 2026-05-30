@@ -10,11 +10,12 @@
  * CwocSidebarFilter — reusable filter panel for sidebar.
  * @param {Object} config
  * @param {string} config.containerId — DOM element ID for the panel
- * @param {Array}  config.items — [{name, favorite, color?}]
- * @param {Array}  config.selection — current selected names (mutated in place)
+ * @param {Array}  config.items — [{id, name, favorite, color?}]
+ * @param {Array}  config.selection — current selected Tag_IDs (mutated in place)
  * @param {Function} config.onChange — called when selection changes
  * @param {string} [config.searchPlaceholder] — e.g. "Search tags..."
  * @param {boolean} [config.showColorBadge] — show colored badge (tags) vs plain text (people)
+ * @param {boolean} [config.useIdSelection] — if true, selection stores item.id instead of item.name
  */
 function CwocSidebarFilter(config) {
   var container = document.getElementById(config.containerId);
@@ -26,6 +27,7 @@ function CwocSidebarFilter(config) {
   var onChange = config.onChange || function() {};
   var placeholder = config.searchPlaceholder || 'Search...';
   var showColorBadge = !!config.showColorBadge;
+  var useIdSelection = !!config.useIdSelection;
 
   // Search input
   var searchInput = document.createElement('input');
@@ -45,6 +47,11 @@ function CwocSidebarFilter(config) {
     return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
   });
 
+  /** Get the selection key for an item (Tag_ID if useIdSelection, else name) */
+  function getItemKey(item) {
+    return (useIdSelection && item.id) ? item.id : item.name;
+  }
+
   function renderList(query) {
     listDiv.innerHTML = '';
     var shown = 0;
@@ -52,7 +59,8 @@ function CwocSidebarFilter(config) {
       if (query && !(item.name || '').toLowerCase().includes(query)) return;
 
       shown++;
-      var isSelected = selection.includes(item.name);
+      var itemKey = getItemKey(item);
+      var isSelected = selection.includes(itemKey);
 
       var div = document.createElement('div');
       div.className = 'hotkey-panel-option' + (isSelected ? ' selected' : '');
@@ -73,7 +81,7 @@ function CwocSidebarFilter(config) {
         div.appendChild(star);
       }
 
-      // Label — colored badge or plain text
+      // Label — colored badge or plain text (always shows name, never ID)
       var label = document.createElement('span');
       label.className = 'panel-label';
       label.textContent = item.name;
@@ -97,11 +105,11 @@ function CwocSidebarFilter(config) {
         if (e.shiftKey) {
           // Shift+Click: select ONLY this item, deselect all others
           selection.length = 0;
-          selection.push(item.name);
+          selection.push(itemKey);
         } else {
-          var idx = selection.indexOf(item.name);
+          var idx = selection.indexOf(itemKey);
           if (idx === -1) {
-            selection.push(item.name);
+            selection.push(itemKey);
           } else {
             selection.splice(idx, 1);
           }
@@ -201,12 +209,13 @@ async function cwocLoadTagFilter(config) {
   toggleBtn.style.cssText = 'width:100%;';
   toggleBtn.addEventListener('click', function() {
     var s = window._sidebarTagSelection;
-    var allNames = allTags.map(function(t) { return t.name; });
+    // Use Tag_IDs for selection (fall back to name if no id)
+    var allIds = allTags.map(function(t) { return t.id || t.name; });
     // If all are selected, deselect all. Otherwise select all.
-    var allSelected = allNames.length > 0 && allNames.every(function(n) { return s.includes(n); });
+    var allSelected = allIds.length > 0 && allIds.every(function(id) { return s.includes(id); });
     s.length = 0;
     if (!allSelected) {
-      allNames.forEach(function(n) { s.push(n); });
+      allIds.forEach(function(id) { s.push(id); });
     }
     _cwocUpdateTagToggleBtn(allTags);
     _cwocRerenderTagList(container, tagObjects, onChange);
@@ -258,20 +267,20 @@ function _cwocRenderTagList(container, tagObjects, onChange) {
 
   var tree = buildTagTree(allTags);
 
-  function onToggle(fullPath, isNowSelected) {
+  function onToggle(tagId, isNowSelected) {
     var s = window._sidebarTagSelection;
-    var idx = s.indexOf(fullPath);
-    if (isNowSelected && idx === -1) s.push(fullPath);
+    var idx = s.indexOf(tagId);
+    if (isNowSelected && idx === -1) s.push(tagId);
     else if (!isNowSelected && idx !== -1) s.splice(idx, 1);
     _cwocUpdateTagVirtualOptions();
     onChange();
   }
 
-  function onSelectOnly(fullPath) {
+  function onSelectOnly(tagId) {
     // Shift+Click: select only this tag
     var s = window._sidebarTagSelection;
     s.length = 0;
-    s.push(fullPath);
+    s.push(tagId);
     _cwocUpdateTagVirtualOptions();
     // Re-render tree to update checkbox visuals
     renderTagTree(treeContainer, tree, s, onToggle, { onSelectOnly: onSelectOnly });
@@ -320,9 +329,10 @@ function _cwocRerenderTagList(container, tagObjects, onChange) {
 function _cwocUpdateTagToggleBtn(allTags) {
   var btn = document.getElementById('tag-filter-toggle-all');
   if (!btn) return;
-  var allNames = (allTags || []).map(function(t) { return t.name; });
+  // Use Tag_IDs for comparison (fall back to name if no id)
+  var allIds = (allTags || []).map(function(t) { return t.id || t.name; });
   var sel = window._sidebarTagSelection || [];
-  var allSelected = allNames.length > 0 && allNames.every(function(n) { return sel.includes(n); });
+  var allSelected = allIds.length > 0 && allIds.every(function(id) { return sel.includes(id); });
   btn.textContent = allSelected ? 'Select None' : 'Select All';
   btn.classList.toggle('active', allSelected);
 }
@@ -350,8 +360,9 @@ function cwocClearTagFilter() {
  * Apply the current tag filter to a chit's tags. Returns true if the chit passes.
  * Empty selection = no filtering (all chits pass).
  * When tags are selected, only chits matching those tags pass.
+ * Uses matchesTagFilter() which handles [{id, name}] chit tags and Tag_ID filter arrays.
  *
- * @param {string[]|string|null} chitTags — the chit's tags (array, JSON string, or null)
+ * @param {Array|string|null} chitTags — the chit's tags (array of {id, name} objects, JSON string, or null)
  * @returns {boolean} — true if the chit passes the tag filter
  */
 function cwocChitPassesTagFilter(chitTags) {
@@ -365,11 +376,8 @@ function cwocChitPassesTagFilter(chitTags) {
     try { chitTags = JSON.parse(chitTags); } catch (e) { chitTags = [chitTags]; }
   }
   if (!Array.isArray(chitTags)) chitTags = [];
+  if (chitTags.length === 0) return false;
 
-  // Must match at least one selected tag (including descendants)
-  return sel.some(function(filterTag) {
-    return chitTags.some(function(t) {
-      return t === filterTag || t.indexOf(filterTag + '/') === 0;
-    });
-  });
+  // Use the shared matchesTagFilter which handles {id, name} objects and Tag_ID filter arrays
+  return matchesTagFilter(chitTags, sel);
 }

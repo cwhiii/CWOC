@@ -19,6 +19,7 @@ var cwocTagModal = (function() {
 
   // ── State ──────────────────────────────────────────────────────────────────
   var _currentTagName = null;   // Original tag name being edited (null = new tag)
+  var _editingTagId = null;     // Tag_ID (UUID) of the tag being edited (null = new tag)
   var _currentTagData = null;   // { name, color, fontColor, favorite }
   var _isNewTag = false;
   var _onSave = null;           // Callback: function(tagData, oldName)
@@ -49,6 +50,16 @@ var cwocTagModal = (function() {
     { bg: '#f5e6cc', fg: '#4a2c2a' },
     { bg: '#fff8e1', fg: '#4a2c2a' },
   ];
+
+  // Also include the shared default palette colors (with auto-contrast fg)
+  // so tags can use any color from the unified bank
+  (typeof _cwocDefaultColors !== 'undefined' ? _cwocDefaultColors : []).forEach(function(c) {
+    var alreadyInPalette = _tagColorPalette.some(function(p) { return p.bg.toLowerCase() === c.hex.toLowerCase(); });
+    if (!alreadyInPalette) {
+      var fg = (typeof contrastColorForBg === 'function') ? contrastColorForBg(c.hex) : '#2b1e0f';
+      _tagColorPalette.push({ bg: c.hex, fg: fg });
+    }
+  });
 
 
   // ── Modal HTML ─────────────────────────────────────────────────────────────
@@ -162,6 +173,7 @@ var cwocTagModal = (function() {
    * Open the tag modal for editing or creating a tag.
    * @param {string|null} tagName — name of existing tag to edit, or null for new
    * @param {Object} opts
+   *   tagId — Tag_ID (UUID) of the tag to edit (preferred over tagName for lookup)
    *   onSave(tagData, oldName) — called after save with { name, color, fontColor, favorite }
    *   onDelete(tagName) — called after delete
    *   onClose() — called when modal closes
@@ -183,8 +195,9 @@ var cwocTagModal = (function() {
     var deleteBtn = document.getElementById('cwoc-tag-modal-delete-btn');
 
     // Determine if new or edit
-    _isNewTag = !tagName;
+    _isNewTag = !tagName && !opts.tagId;
     _currentTagName = tagName || null;
+    _editingTagId = opts.tagId || null;
 
     // Load tag data
     var allTags = opts.allTags || [];
@@ -203,9 +216,21 @@ var cwocTagModal = (function() {
       if (title) title.textContent = 'Create Tag';
       if (deleteBtn) deleteBtn.style.display = 'none';
     } else {
-      var existing = allTags.find(function(t) { return t.name === tagName; });
+      // Look up by ID first (preferred), fall back to name
+      var existing = null;
+      if (_editingTagId) {
+        existing = allTags.find(function(t) { return t.id === _editingTagId; });
+      }
+      if (!existing && tagName) {
+        existing = allTags.find(function(t) { return t.name === tagName; });
+      }
+      // If we found the tag, capture its ID
+      if (existing && existing.id) {
+        _editingTagId = existing.id;
+      }
+      _currentTagName = (existing && existing.name) || tagName;
       _currentTagData = {
-        name: tagName,
+        name: _currentTagName,
         color: (existing && existing.color) || '#d4c4b0',
         fontColor: (existing && existing.fontColor) || '#5c3317',
         favorite: (existing && existing.favorite) || false,
@@ -230,7 +255,7 @@ var cwocTagModal = (function() {
     _updatePreview();
 
     // Sharing
-    await _initSharing(_currentTagData.name);
+    await _initSharing(_editingTagId, _currentTagData.name);
 
     // Show modal
     var modal = document.getElementById('cwoc-tag-modal');
@@ -243,6 +268,7 @@ var cwocTagModal = (function() {
     var modal = document.getElementById('cwoc-tag-modal');
     if (modal) modal.style.display = 'none';
     _currentTagName = null;
+    _editingTagId = null;
     _currentTagData = null;
     _currentTagShares = [];
     if (_onClose) _onClose();
@@ -268,18 +294,22 @@ var cwocTagModal = (function() {
       return;
     }
 
-    // Check for duplicates (excluding current tag being edited)
+    // Invalidate cache to get fresh data for duplicate check
+    _invalidateSettingsCache();
     var settings = null;
     try { settings = await getCachedSettings(); } catch (e) { settings = {}; }
     var existingTags = Array.isArray(settings.tags) ? settings.tags : [];
     var isDuplicate = existingTags.some(function(t) {
       var tName = (typeof t === 'string') ? t : (t.name || '');
-      if (_currentTagName && tName.toLowerCase() === _currentTagName.toLowerCase()) return false;
+      // Skip the tag we're currently editing (identified by ID)
+      if (_editingTagId && t.id === _editingTagId) return false;
+      // Fallback: skip by name if no ID match
+      if (!_editingTagId && _currentTagName && tName.toLowerCase() === _currentTagName.toLowerCase()) return false;
       return tName.toLowerCase() === newName.toLowerCase();
     });
 
     if (isDuplicate) {
-      cwocToast('Duplicate tag not created.', 'info');
+      cwocToast('A tag with that name already exists.', 'info');
       return;
     }
 
@@ -291,10 +321,14 @@ var cwocTagModal = (function() {
     };
 
     // Persist to settings
-    await _persistTag(tagData, _currentTagName);
+    var saved = await _persistTag(tagData);
+    if (!saved) {
+      cwocToast('Failed to save tag. Please try again.', 'error');
+      return;
+    }
 
-    // Save sharing config
-    await _saveSharingConfig(tagData.name, _currentTagName);
+    // Save sharing config (by tag ID for existing tags)
+    await _saveSharingConfig(_editingTagId, tagData.name);
 
     // Callback
     if (_onSave) _onSave(tagData, _currentTagName);
@@ -305,12 +339,14 @@ var cwocTagModal = (function() {
   // ── Delete ─────────────────────────────────────────────────────────────────
 
   async function _handleDelete() {
-    if (!_currentTagName) { close(); return; }
+    if (!_editingTagId && !_currentTagName) { close(); return; }
+
+    var displayName = _currentTagName || 'this tag';
 
     // Confirm
     var confirmed = false;
     if (typeof cwocConfirm === 'function') {
-      confirmed = await cwocConfirm('Delete tag "' + _currentTagName + '"? This removes it globally from all chits.', {
+      confirmed = await cwocConfirm('Delete tag "' + displayName + '"? This removes it globally from all chits.', {
         title: 'Delete Tag',
         confirmLabel: 'Delete',
         danger: true,
@@ -320,11 +356,11 @@ var cwocTagModal = (function() {
     }
     if (!confirmed) return;
 
-    // Remove from settings
-    await _deleteTagFromSettings(_currentTagName);
-    await _deleteSharingConfig(_currentTagName);
+    // Remove from settings by ID
+    await _deleteTagFromSettings(_editingTagId);
+    await _deleteSharingConfig(_editingTagId);
 
-    if (_onDelete) _onDelete(_currentTagName);
+    if (_onDelete) _onDelete(_editingTagId || _currentTagName);
     close();
   }
 
@@ -361,9 +397,27 @@ var cwocTagModal = (function() {
     var fgColor = document.getElementById('cwoc-tag-modal-fg-color');
     if (!container) return;
     container.innerHTML = '';
+    container.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin:8px 0;';
     var seen = new Set();
 
-    // Palette colors
+    // Helper: make a section label
+    function makeLabel(text) {
+      var label = document.createElement('div');
+      label.style.cssText = 'font-size:0.7em;text-transform:uppercase;letter-spacing:0.5px;color:#8b5a2b;font-weight:600;opacity:0.8;margin-top:4px;';
+      label.textContent = text;
+      return label;
+    }
+
+    // Helper: make a swatch row
+    function makeRow() {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+      return row;
+    }
+
+    // ── Default palette section ──
+    container.appendChild(makeLabel('Default'));
+    var defaultRow = makeRow();
     _tagColorPalette.forEach(function(c) {
       if (seen.has(c.bg)) return;
       seen.add(c.bg);
@@ -379,15 +433,51 @@ var cwocTagModal = (function() {
         _highlightBgSwatches();
         _highlightFgSwatches();
       });
-      container.appendChild(s);
+      defaultRow.appendChild(s);
     });
+    container.appendChild(defaultRow);
 
-    // Existing tag colors
+    // ── Custom colors from settings ──
+    var customColors = (window._cwocSettings || {}).custom_colors;
+    var hasCustom = false;
+    var customRow = makeRow();
+    if (Array.isArray(customColors)) {
+      customColors.forEach(function(c) {
+        var hex = (typeof c === 'string') ? c : (c.hex || '');
+        if (hex && !seen.has(hex) && !seen.has(hex.toLowerCase())) {
+          seen.add(hex.toLowerCase());
+          hasCustom = true;
+          var fg = (typeof contrastColorForBg === 'function') ? contrastColorForBg(hex) : '#2b1e0f';
+          var s = document.createElement('span');
+          s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
+          s.style.backgroundColor = hex;
+          s.title = hex;
+          if (bgColor && hex.toLowerCase() === bgColor.value.toLowerCase()) s.style.borderColor = '#4a2c2a';
+          s.addEventListener('click', function() {
+            if (bgColor) bgColor.value = hex;
+            if (fgColor) fgColor.value = fg;
+            _updatePreview();
+            _highlightBgSwatches();
+            _highlightFgSwatches();
+          });
+          customRow.appendChild(s);
+        }
+      });
+    }
+    if (hasCustom) {
+      container.appendChild(makeLabel('Custom'));
+      container.appendChild(customRow);
+    }
+
+    // ── Existing tag colors (from other tags) ──
+    var hasTagColors = false;
+    var tagRow = makeRow();
     if (allTags && allTags.length) {
       allTags.forEach(function(t) {
         var c = t.color;
-        if (c && !seen.has(c)) {
-          seen.add(c);
+        if (c && !seen.has(c) && !seen.has(c.toLowerCase())) {
+          seen.add(c.toLowerCase());
+          hasTagColors = true;
           var s = document.createElement('span');
           s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
           s.style.backgroundColor = c;
@@ -398,9 +488,13 @@ var cwocTagModal = (function() {
             _updatePreview();
             _highlightBgSwatches();
           });
-          container.appendChild(s);
+          tagRow.appendChild(s);
         }
       });
+    }
+    if (hasTagColors) {
+      container.appendChild(makeLabel('From Tags'));
+      container.appendChild(tagRow);
     }
   }
 
@@ -453,20 +547,37 @@ var cwocTagModal = (function() {
 
   /**
    * Save or update a tag in settings via shared-tags.js functions.
+   * For edits: calls updateTagInline(tagId, tagData) with the Tag_ID.
+   * For creates: calls createTagInline(name, opts) which returns the new UUID.
+   * @returns {Promise<boolean>} true if saved successfully
    */
-  async function _persistTag(tagData, oldName) {
-    if (oldName) {
-      await updateTagInline(oldName, tagData);
-    } else {
-      await createTagInline(tagData.name, { color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite });
+  async function _persistTag(tagData) {
+    try {
+      if (_editingTagId) {
+        // Editing existing tag — identify by ID
+        return await updateTagInline(_editingTagId, tagData);
+      } else {
+        // Creating new tag — send name, backend assigns UUID
+        var newId = await createTagInline(tagData.name, { color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite });
+        if (newId) {
+          _editingTagId = newId; // Capture the new ID for sharing config
+          return true;
+        }
+        return false;
+      }
+    } catch (e) {
+      console.error('[cwocTagModal] _persistTag failed:', e);
+      return false;
     }
   }
 
   /**
    * Delete a tag from settings via shared-tags.js deleteTagInline.
+   * @param {string} tagId — Tag_ID (UUID) to delete
    */
-  async function _deleteTagFromSettings(tagName) {
-    await deleteTagInline(tagName);
+  async function _deleteTagFromSettings(tagId) {
+    if (!tagId) return;
+    await deleteTagInline(tagId);
   }
 
   // ── Sharing ────────────────────────────────────────────────────────────────
@@ -501,21 +612,32 @@ var cwocTagModal = (function() {
     }
   }
 
-  function _getSharesForTag(tagName) {
-    if (!tagName || !_tagSharingConfig) return [];
-    for (var i = 0; i < _tagSharingConfig.length; i++) {
-      if (_tagSharingConfig[i].tag === tagName) {
-        return _tagSharingConfig[i].shares || [];
+  function _getSharesForTag(tagId, tagName) {
+    if (!_tagSharingConfig) return [];
+    // Look up by tag_id first (new format)
+    if (tagId) {
+      for (var i = 0; i < _tagSharingConfig.length; i++) {
+        if (_tagSharingConfig[i].tag === tagId || _tagSharingConfig[i].tag_id === tagId) {
+          return _tagSharingConfig[i].shares || [];
+        }
+      }
+    }
+    // Fallback: look up by name (legacy format)
+    if (tagName) {
+      for (var j = 0; j < _tagSharingConfig.length; j++) {
+        if (_tagSharingConfig[j].tag === tagName) {
+          return _tagSharingConfig[j].shares || [];
+        }
       }
     }
     return [];
   }
 
-  async function _initSharing(tagName) {
+  async function _initSharing(tagId, tagName) {
     await _loadSharingConfig();
     await _loadSharingUserList();
 
-    _currentTagShares = _getSharesForTag(tagName).map(function(s) {
+    _currentTagShares = _getSharesForTag(tagId, tagName).map(function(s) {
       return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view', display_name: s.display_name || '' };
     });
 
@@ -646,31 +768,21 @@ var cwocTagModal = (function() {
     _populateUserPicker();
   }
 
-  async function _saveSharingConfig(newName, oldName) {
-    // Update config if tag was renamed
-    if (oldName && oldName !== newName) {
-      for (var i = 0; i < _tagSharingConfig.length; i++) {
-        if (_tagSharingConfig[i].tag === oldName) {
-          _tagSharingConfig[i].tag = newName;
-          break;
-        }
-      }
-      // Also rename sub-tag sharing entries
-      var prefix = oldName + '/';
-      for (var j = 0; j < _tagSharingConfig.length; j++) {
-        if (_tagSharingConfig[j].tag.startsWith(prefix)) {
-          _tagSharingConfig[j].tag = newName + '/' + _tagSharingConfig[j].tag.substring(prefix.length);
-        }
-      }
-    }
+  async function _saveSharingConfig(tagId, tagName) {
+    // Use tag_id as the identifier in sharing config
+    var identifier = tagId || tagName;
+    if (!identifier) return;
 
-    // Update the entry for this tag
+    // Update the entry for this tag (by tag_id)
     var found = false;
     for (var k = 0; k < _tagSharingConfig.length; k++) {
-      if (_tagSharingConfig[k].tag === newName) {
+      var entry = _tagSharingConfig[k];
+      if (entry.tag === identifier || entry.tag_id === identifier) {
         if (_currentTagShares.length === 0) {
           _tagSharingConfig.splice(k, 1);
         } else {
+          // Store tag_id as the identifier
+          _tagSharingConfig[k].tag = tagId || tagName;
           _tagSharingConfig[k].shares = _currentTagShares.map(function(s) {
             return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
           });
@@ -681,15 +793,15 @@ var cwocTagModal = (function() {
     }
     if (!found && _currentTagShares.length > 0) {
       _tagSharingConfig.push({
-        tag: newName,
+        tag: tagId || tagName,
         shares: _currentTagShares.map(function(s) {
           return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
         }),
       });
     }
 
-    // Propagate to sub-tags
-    _propagateToSubTags(newName);
+    // Propagate to sub-tags (by ID)
+    _propagateToSubTags(tagId, tagName);
 
     // Save to server
     try {
@@ -706,10 +818,28 @@ var cwocTagModal = (function() {
     }
   }
 
-  async function _deleteSharingConfig(tagName) {
-    var prefix = tagName + '/';
+  async function _deleteSharingConfig(tagId) {
+    if (!tagId) return;
+
+    // Remove entries matching this tag_id
+    // Also remove child tags — look up the tag name to find children
+    var tagName = '';
+    if (typeof getTagById === 'function') {
+      var tagObj = getTagById(tagId);
+      if (tagObj) tagName = tagObj.name;
+    }
+
     _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
-      return entry.tag !== tagName && !entry.tag.startsWith(prefix);
+      // Remove exact match by ID
+      if (entry.tag === tagId || entry.tag_id === tagId) return false;
+      // Remove child tags by name prefix (if we know the name)
+      if (tagName) {
+        var prefix = tagName + '/';
+        // Check if entry references a child by name (legacy) or by ID of a child
+        if (entry.tag === tagName) return false;
+        if (typeof entry.tag === 'string' && entry.tag.startsWith(prefix)) return false;
+      }
+      return true;
     });
 
     try {
@@ -723,24 +853,38 @@ var cwocTagModal = (function() {
     }
   }
 
-  function _propagateToSubTags(parentTag) {
-    if (!parentTag) return;
+  function _propagateToSubTags(tagId, tagName) {
+    if (!tagId && !tagName) return;
+
+    // Find the parent shares
     var parentShares = null;
     for (var i = 0; i < _tagSharingConfig.length; i++) {
-      if (_tagSharingConfig[i].tag === parentTag) {
+      if (_tagSharingConfig[i].tag === tagId || _tagSharingConfig[i].tag === tagName) {
         parentShares = _tagSharingConfig[i].shares;
         break;
       }
     }
 
-    // Get all tag names from settings cache
+    // Resolve the tag name for prefix matching
+    var resolvedName = tagName;
+    if (!resolvedName && tagId && typeof getTagById === 'function') {
+      var tagObj = getTagById(tagId);
+      if (tagObj) resolvedName = tagObj.name;
+    }
+    if (!resolvedName) return;
+
+    // Get all tag objects from settings cache
     var settings = window._cwocSettings || {};
     var allTags = Array.isArray(settings.tags) ? settings.tags : [];
-    var prefix = parentTag + '/';
+    var prefix = resolvedName + '/';
 
     allTags.forEach(function(t) {
       var tName = (typeof t === 'string') ? t : (t.name || '');
+      var tId = (typeof t === 'object') ? t.id : null;
       if (!tName.startsWith(prefix)) return;
+
+      // Use the child's tag_id as the identifier
+      var childIdentifier = tId || tName;
 
       if (parentShares && parentShares.length > 0) {
         var subShares = parentShares.map(function(s) {
@@ -748,18 +892,18 @@ var cwocTagModal = (function() {
         });
         var found = false;
         for (var j = 0; j < _tagSharingConfig.length; j++) {
-          if (_tagSharingConfig[j].tag === tName) {
+          if (_tagSharingConfig[j].tag === childIdentifier) {
             _tagSharingConfig[j].shares = subShares;
             found = true;
             break;
           }
         }
         if (!found) {
-          _tagSharingConfig.push({ tag: tName, shares: subShares });
+          _tagSharingConfig.push({ tag: childIdentifier, shares: subShares });
         }
       } else {
         _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
-          return entry.tag !== tName;
+          return entry.tag !== childIdentifier;
         });
       }
     });

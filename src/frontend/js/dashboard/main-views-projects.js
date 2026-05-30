@@ -1020,11 +1020,11 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
     const projectBox = document.createElement("div");
     projectBox.className = "kanban-project-box";
     projectBox.dataset.chitId = project.id;
-    projectBox.draggable = true;
     projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;background:${projectColor};color:${projectFont};`;
 
     const header = document.createElement("div");
     header.className = "kanban-project-header";
+    header.draggable = true;
     header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFont};cursor:grab;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);display:flex;align-items:center;gap:0.5em;`;
 
     const dragGrip = document.createElement("span");
@@ -1129,26 +1129,14 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
       _showProjectQuickMenu(e, project);
     });
 
-    // Track where mousedown originated for dragstart filtering
-    var _projectDragOrigin = null;
-    projectBox.addEventListener("mousedown", function(e) {
-      _projectDragOrigin = e.target;
-    });
-
-    // Project-level drag for reorder
-    projectBox.addEventListener("dragstart", e => {
-      // Only start project reorder drag from the header grip area
-      var origin = _projectDragOrigin || e.target;
-      if (!origin.closest('.kanban-project-header')) {
-        e.preventDefault();
-        return;
-      }
+    // Project-level drag for reorder (initiated from the header)
+    header.addEventListener("dragstart", e => {
       e.dataTransfer.setData("application/x-project-reorder", project.id);
       e.dataTransfer.effectAllowed = "move";
       projectBox.classList.add('cwoc-dragging');
       _kanbanProjectDragActive = true;
     });
-    projectBox.addEventListener("dragend", () => {
+    header.addEventListener("dragend", () => {
       projectBox.classList.remove('cwoc-dragging');
       _kanbanProjectDragActive = false;
       _removeProjectPlaceholder();
@@ -1359,10 +1347,8 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
           e.dataTransfer.setData("application/x-kanban-card", JSON.stringify({ chitId: child.id, projectId: project.id, fromStatus: status }));
           e.dataTransfer.effectAllowed = "move";
           card.classList.add('cwoc-dragging');
-          // Hide the card after browser captures drag image so only the placeholder shows
-          requestAnimationFrame(function () { card.style.display = 'none'; });
         });
-        card.addEventListener("dragend", () => { card.style.display = ''; card.classList.remove('cwoc-dragging'); if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
+        card.addEventListener("dragend", () => { card.classList.remove('cwoc-dragging'); if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
 
         card.addEventListener("dblclick", () => {
           storePreviousState();

@@ -1878,6 +1878,8 @@ document.addEventListener("DOMContentLoaded", function () {
       try { localStorage.setItem('cwoc_last_viewed_tab', 'Omni'); } catch (e) { /* ignore */ }
       // Remove .active from all C CAPTN tabs — Omni View has no tab highlight
       document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      // Hide email sidebar controls (they only show on Email tab)
+      if (typeof _updateEmailSidebarVisibility === 'function') _updateEmailSidebarVisibility('Omni');
       // Update favicon to the general CWOC icon for Omni View
       _updateFavicon('Omni');
       displayChits();
@@ -2253,6 +2255,8 @@ document.addEventListener("DOMContentLoaded", function () {
         _pickNav(_navTargets[num - 1]);
       } else if (key === '0' && _navTargets.length >= 10) {
         _pickNav(_navTargets[9]);
+      } else if (keyLower === 'b') {
+        _pickNav('/frontend/html/badges.html');
       }
       return;
     }

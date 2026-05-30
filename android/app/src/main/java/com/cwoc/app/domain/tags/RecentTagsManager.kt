@@ -15,7 +15,7 @@ import javax.inject.Singleton
 
 /**
  * Manages the most-recently-used (MRU) tag list.
- * Maintains a list of up to 5 recently used tag paths, persists to settings
+ * Maintains a list of up to 5 recently used tag IDs (UUIDs), persists to settings
  * with a debounced save (1s delay) to avoid hammering the API on rapid tag usage.
  *
  * Validates: Requirements 9.1, 9.2, 9.5, 9.6
@@ -61,7 +61,7 @@ class RecentTagsManager @Inject constructor(
      * Tracks a tag as recently used. Moves it to the front of the MRU list,
      * caps at 5, and triggers a debounced save to settings.
      *
-     * @param path The full tag path (e.g. "Work/Projects/Alpha")
+     * @param path The tag identifier (UUID for user tags, or full path for legacy)
      * @param scope CoroutineScope to launch the debounced save in
      */
     fun trackTag(path: String, scope: CoroutineScope) {

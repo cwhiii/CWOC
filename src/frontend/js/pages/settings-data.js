@@ -2,6 +2,69 @@
 // Export/import chit data, user data, ICS calendars, and login message.
 // Extracted from settings.js for modularity.
 
+// ── Export/Import Modal Controls ─────────────────────────────────────────────
+
+/**
+ * Open the Export Data modal.
+ */
+function openExportDataModal() {
+  var modal = document.getElementById('export-data-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+/**
+ * Close the Export Data modal.
+ */
+function closeExportDataModal() {
+  var modal = document.getElementById('export-data-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Open the Import Data modal.
+ */
+function openImportDataModal() {
+  var modal = document.getElementById('import-data-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+/**
+ * Close the Import Data modal.
+ */
+function closeImportDataModal() {
+  var modal = document.getElementById('import-data-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// ── Click-outside-to-close for data modals ───────────────────────────────────
+(function() {
+  ['export-data-modal', 'import-data-modal', 'import-mode-modal', 'calendar-export-help-modal'].forEach(function(id) {
+    var modal = document.getElementById(id);
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    }
+  });
+})();
+
+/**
+ * Scroll to the Restic Backup section in settings.
+ */
+function scrollToResticBackup() {
+  var el = document.querySelector('[data-section="restic-backup"]');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Flash the button briefly to draw attention
+    var btn = document.getElementById('backup-toggle');
+    if (btn) {
+      btn.style.transition = 'background 0.3s';
+      btn.style.background = '#f5e6d3';
+      setTimeout(function() { btn.style.background = ''; }, 1500);
+    }
+  }
+}
+
 /**
  * Create a Blob from a data string and trigger a browser download.
  * @param {string} data - The JSON string to download

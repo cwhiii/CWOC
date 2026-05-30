@@ -13,6 +13,7 @@
             <meta name="apple-mobile-web-app-status-bar-style" content="default" />
             <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
             <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+            <link rel="stylesheet" href="/frontend/css/shared/shared-timepicker.css" />
             <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
             <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
             <style>
@@ -630,7 +631,9 @@
                 /* ── Network Access mobile fixes ── */
                 /* Prevent monospace URLs and long text from overflowing on mobile */
                 #ntfy-config-body .setting-inline,
-                #tailscale-config-body .setting-inline {
+                #tailscale-config-body .setting-inline,
+                #backup-body .setting-inline,
+                #backup-target-modal .setting-inline {
                     flex-wrap: wrap;
                     min-width: 0;
                 }
@@ -646,13 +649,19 @@
                 }
                 @media (max-width: 480px) {
                     #ntfy-config-body .setting-inline,
-                    #tailscale-config-body .setting-inline {
+                    #tailscale-config-body .setting-inline,
+                    #backup-body .setting-inline,
+                    #backup-target-modal .setting-inline {
                         flex-wrap: wrap;
                     }
                     #ntfy-config-body .setting-inline > label,
                     #tailscale-config-body .setting-inline > label,
+                    #backup-body .setting-inline > label,
+                    #backup-target-modal .setting-inline > label,
                     #ntfy-config-body .setting-inline > span:first-of-type,
-                    #tailscale-config-body .setting-inline > span:first-of-type {
+                    #tailscale-config-body .setting-inline > span:first-of-type,
+                    #backup-body .setting-inline > span:first-of-type,
+                    #backup-target-modal .setting-inline > span:first-of-type {
                         flex: 0 0 auto;
                     }
                     #ntfy-server-url-local,
@@ -716,6 +725,66 @@
                 }
                 .location-row .remove-location-btn:hover {
                     background: #8b4513;
+                }
+                .location-section-header {
+                    font-family: 'Lora', Georgia, serif;
+                    font-size: 0.9em;
+                    font-weight: 600;
+                    color: #5c4033;
+                    padding: 8px 4px 4px 4px;
+                    margin-top: 8px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    cursor: grab;
+                }
+                .location-section-header:hover {
+                    background: rgba(139, 90, 43, 0.1);
+                    border-radius: 4px;
+                }
+                .location-section-header:active {
+                    cursor: grabbing;
+                }
+                .location-section-header.dragging {
+                    opacity: 0.5;
+                    background: #e0d0b0;
+                }
+                .location-section-header.drop-target {
+                    border-bottom: 2px dashed #8b5a2b;
+                }
+                .location-section-divider {
+                    border: none;
+                    border-top: 1px dashed #8b5a2b;
+                    margin: 0;
+                    opacity: 0.5;
+                }
+                .location-divider-wrap {
+                    padding: 8px 0;
+                    margin: 4px 0;
+                    cursor: grab;
+                }
+                .location-divider-wrap:active {
+                    cursor: grabbing;
+                }
+                .location-divider-wrap.dragging {
+                    opacity: 0.5;
+                }
+                .location-divider-wrap.drop-target {
+                    background: rgba(139, 90, 43, 0.1);
+                    border-radius: 4px;
+                }
+                /* Drag-and-drop styles */
+                .location-row {
+                    cursor: grab;
+                }
+                .location-row:active {
+                    cursor: grabbing;
+                }
+                .location-row.dragging {
+                    opacity: 0.5;
+                    background: #e0d0b0;
+                }
+                .location-row.drop-target {
+                    border: 2px dashed #8b5a2b;
                 }
 
                 /* ── Update Modal Terminal ── */
@@ -938,6 +1007,7 @@
                 .omni-layout-card {
                     display: flex;
                     align-items: center;
+                    flex-wrap: wrap;
                     gap: 4px;
                     padding: 6px 8px;
                     background: #f5e6cc;
@@ -1028,11 +1098,103 @@
                         flex-direction: column;
                     }
                     .omni-layout-card {
-                        flex-wrap: wrap;
+                        flex-wrap: nowrap;
+                    }
+                    .omni-layout-card .omni-card-label {
+                        font-size: 0.8em;
                     }
                     .omni-layout-card .omni-card-controls {
-                        width: 100%;
-                        justify-content: flex-end;
+                        flex-shrink: 0;
+                    }
+                    .omni-layout-card .omni-card-controls .omni-hide-toggle {
+                        padding: 4px 8px;
+                    }
+                }
+                /* Omni Layout modal mobile scrollability */
+                #omni-layout-modal .modal-content {
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                .omni-layout-card-toggles {
+                    display: flex;
+                    gap: 12px;
+                    width: 100%;
+                    padding: 4px 0 0 24px;
+                    font-size: 0.8em;
+                    color: #6b4e31;
+                    font-family: 'Lora', serif;
+                }
+                .omni-layout-card-toggle {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .omni-layout-card-toggle input[type="checkbox"] {
+                    accent-color: #8b4513;
+                    cursor: pointer;
+                }
+                @media (max-width: 600px) {
+                    #omni-layout-modal .modal-content {
+                        width: 95vw !important;
+                        max-width: 95vw !important;
+                        padding: 12px;
+                    }
+                    .omni-layout-grid {
+                        padding: 6px;
+                    }
+                    .omni-layout-col-list {
+                        padding: 4px;
+                        gap: 4px;
+                    }
+                    .omni-layout-card {
+                        padding: 5px 6px;
+                        gap: 3px;
+                    }
+                    .omni-layout-card .omni-drag-handle {
+                        font-size: 0.9em;
+                    }
+                }
+                /* Arrange Views modal mobile scrollability */
+                #arrange-views-modal .modal-content {
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+                @media (max-width: 600px) {
+                    #arrange-views-modal .modal-content {
+                        width: 95vw !important;
+                        max-width: 95vw !important;
+                        padding: 12px;
+                    }
+                    .arrange-views-grid {
+                        flex-wrap: wrap;
+                        gap: 6px;
+                        padding: 8px;
+                    }
+                    .arrange-views-grid .view-tab-item {
+                        padding: 6px 8px;
+                        font-size: 0.8em;
+                    }
+                    .arrange-views-hidden {
+                        flex-wrap: wrap;
+                        gap: 6px;
+                        padding: 8px;
+                    }
+                    .arrange-views-hidden .view-tab-item {
+                        padding: 6px 8px;
+                        font-size: 0.8em;
+                    }
+                }
+                /* Clock format grid mobile */
+                @media (max-width: 600px) {
+                    .time-format-grid {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    .clocks-container {
+                        flex-direction: column !important;
                     }
                 }
 
@@ -1605,8 +1767,17 @@
                     <div class="setting-group">
                         <h3>🏷️ Tag Editor</h3>
                         <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
-                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
-                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
+                            <input type="text" id="new-tag" placeholder="New tag name" onkeydown="handleTagInput(event)" style="flex:1;min-width:0;" />
+                            <button onclick="handleInfoClick(event)" class="standard-button" title="Add tag (Shift+Click for expanded tag modal)">➕ Add</button>
+                        </div>
+                        <!-- Bulk action toolbar -->
+                        <div id="tag-bulk-toolbar" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+                            <button type="button" onclick="_tagBulkSelectAll()" class="standard-button" style="font-size:0.8em;padding:3px 8px;">☑ All</button>
+                            <button type="button" onclick="_tagBulkSelectNone()" class="standard-button" style="font-size:0.8em;padding:3px 8px;">☐ None</button>
+                            <span style="flex:1;"></span>
+                            <span id="tag-bulk-count" style="font-size:0.8em;color:#8b5a2b;display:none;">0 selected</span>
+                            <button type="button" id="tag-bulk-share-btn" onclick="_tagBulkShare()" class="standard-button" style="font-size:0.8em;padding:3px 8px;display:none;">🔗 Share</button>
+                            <button type="button" id="tag-bulk-delete-btn" onclick="_tagBulkDelete()" class="standard-button" style="font-size:0.8em;padding:3px 8px;background:#a0522d;color:#fdf5e6;display:none;">🗑️ Delete</button>
                         </div>
                         <div id="settings-tag-tree" class="tag-container" style="max-height:70vh;"></div>
                         <div id="tag-editor-hidden" style="display:none;"></div>
@@ -1632,8 +1803,13 @@
                     </div>
                     <div class="setting-group">
                         <h3>📍 Saved Locations</h3>
+                        <p class="setting-hint">Organize with section headers. Use optgroups in dropdowns.</p>
                         <div id="locations-list"></div>
-                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
+                        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" id="add-location-btn" class="standard-button" onclick="addLocationRow()">➕ Add Location</button>
+                            <button type="button" class="standard-button" onclick="addLocationSection()">📂 Add Section</button>
+                            <button type="button" class="standard-button" onclick="addLocationDivider()">➖ Add Divider</button>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>🔔 Default Notifications</h3>
@@ -1903,57 +2079,41 @@
                             </div>
                         </div>
                         <div class="setting-group">
-                            <h3>🛠️ Tools</h3>
-
-                            <label class="setting-subheader">📺 Kiosk</label>
-                            <p class="setting-hint">Select tags to display on the kiosk. Selecting a parent tag automatically includes all child tags.</p>
-                            <div id="kiosk-tag-list" style="max-height:200px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;margin-bottom:10px;"></div>
-                            <button onclick="_openKiosk()" class="standard-button" style="width:100%;">📺 Open Kiosk →</button>
+                            <h3>🔄 Version &amp; Updates</h3>
+                            <div style="margin-bottom:12px;font-size:0.9em;">
+                                <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
+                                <div style="margin-bottom:4px;">Updated: <span id="version-date">Loading...</span></div>
+                                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                                    <span>Disk: <span id="disk-usage-display">—</span></span>
+                                    <button type="button" id="disk-refresh-btn" onclick="refreshDiskUsage()" style="background:none;border:none;cursor:pointer;font-size:0.9em;padding:2px 4px;color:#8b5a2b;" title="Refresh disk usage">🔄</button>
+                                </div>
+                                <div>CWOC Data: <span id="cwoc-storage-display">—</span></div>
+                                <div style="padding-left:16px;font-size:0.85em;opacity:0.85;">App: <span id="app-storage-display">—</span></div>
+                                <div style="padding-left:16px;font-size:0.85em;opacity:0.85;">Backups: <span id="backup-storage-display">—</span></div>
+                            </div>
+                            <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
+                            <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
+                            <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
+                            <button id="release-notes-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="showReleaseNotes()">📋 Release Notes</button>
+                            <button id="restart-btn" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="restartCwoc()">🔁 Restart CWOC</button>
                         </div>
                         <div class="setting-group">
                             <h3>📦 Data Management</h3>
 
-                            <label class="setting-subheader">🌐 All Data</label>
-                            <p class="setting-hint">Everything: chits, settings, tags, colors, contacts, alerts.</p>
+                            <label class="setting-subheader">📤 Export & Import</label>
+                            <p class="setting-hint">Export your data as JSON files or import from a previous export. For automated encrypted backups, see <a href="#" onclick="scrollToResticBackup(); return false;" style="color:#6b4e31;text-decoration:underline;">Restic Backup</a> below.</p>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button onclick="exportAllData()" class="standard-button" style="flex:1;">📄 Export All</button>
-                                <button onclick="importAllData()" class="standard-button" style="flex:1;">📥 Import All</button>
-                                <input type="file" id="importAllFile" accept=".json" style="display:none" />
+                                <button onclick="openExportDataModal()" class="standard-button" style="flex:1;">📤 Export Data…</button>
+                                <button onclick="openImportDataModal()" class="standard-button" style="flex:1;">📥 Import Data…</button>
                             </div>
 
-                            <label class="setting-subheader">Chit Data</label>
-                            <p class="setting-hint">All chits including deleted chits.</p>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button onclick="exportChitData()" class="standard-button" style="flex:1;">📄 Export</button>
-                                <button onclick="importChitData()" class="standard-button" style="flex:1;">📥 Import</button>
-                                <input type="file" id="importChitFile" accept=".json" style="display:none" />
-                            </div>
-                            <label class="setting-subheader">User Data</label>
-                            <p class="setting-hint">Settings, tags, colors, locations, contacts.</p>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button onclick="exportUserData()" class="standard-button" style="flex:1;">📄 Export</button>
-                                <button onclick="importUserData()" class="standard-button" style="flex:1;">📥 Import</button>
-                                <input type="file" id="importUserFile" accept=".json" style="display:none" />
-                            </div>
-
-                            <label class="setting-subheader">📅 Calendar Import</label>
-                            <p class="setting-hint">Import events and tasks from Google Calendar, Apple Calendar, or Outlook. <a href="#" onclick="showCalendarExportHelp(); return false;" style="color:#6b4e31;text-decoration:underline;">How to export →</a></p>
-                            <div class="setting-inline" style="margin-bottom:8px;">
-                                <label for="ics-import-owner">Import as user</label>
-                                <select id="ics-import-owner" style="flex:1;max-width:200px;"></select>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button id="icsImportBtn" onclick="triggerIcsImport()" class="standard-button" style="flex:1;">📅 Import Calendar (.ics)</button>
-                                <input type="file" id="icsImportFile" accept=".ics" style="display:none" />
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button id="googleTasksImportBtn" onclick="triggerGoogleTasksImport()" class="standard-button" style="flex:1;">✅ Import Google Tasks (.json)</button>
-                                <input type="file" id="googleTasksImportFile" accept=".json" style="display:none" />
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                                <button id="googleKeepImportBtn" onclick="triggerGoogleKeepImport()" class="standard-button" style="flex:1;">📝 Import Google Keep (.json)</button>
-                                <input type="file" id="googleKeepImportFile" accept=".json" multiple style="display:none" />
-                            </div>
+                            <!-- Hidden file inputs (used by the modal) -->
+                            <input type="file" id="importAllFile" accept=".json" style="display:none" />
+                            <input type="file" id="importChitFile" accept=".json" style="display:none" />
+                            <input type="file" id="importUserFile" accept=".json" style="display:none" />
+                            <input type="file" id="icsImportFile" accept=".ics" style="display:none" />
+                            <input type="file" id="googleTasksImportFile" accept=".json" style="display:none" />
+                            <input type="file" id="googleKeepImportFile" accept=".json" multiple style="display:none" />
 
                             <div id="import-batches-section" style="display:none;margin-bottom:14px;">
                                 <label class="setting-subheader">📦 Import Batches</label>
@@ -1980,6 +2140,18 @@
                                 <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:80px;" />
                             </div>
                             <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
+
+                            <label class="setting-subheader">📋 Log Limits</label>
+                            <label><input type="checkbox" id="log-prune-enabled" checked onchange="toggleLogPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>
+                            <div class="setting-inline" style="margin-top:8px;">
+                                <label for="log-max-days">Max Age (days)</label>
+                                <input type="number" id="log-max-days" min="1" step="1" placeholder="30" style="width:80px;" />
+                            </div>
+                            <div class="setting-inline">
+                                <label for="log-max-mb">Max Size (MB)</label>
+                                <input type="number" id="log-max-mb" min="1" step="1" placeholder="5" style="width:80px;" />
+                            </div>
+                            <p class="setting-hint">Controls client log and update log pruning. Uncheck to disable. When either limit is reached, oldest entries are pruned first.</p>
 
                             <label class="setting-subheader" style="margin-top:14px;">📎 Attachment Limits</label>
                             <p class="setting-hint">Controls file attachment storage for all users. Applies to any chit (email or otherwise).</p>
@@ -2277,23 +2449,233 @@
                                 </div>
 
                             </div><!-- /ha-config-body -->
+
+                            <!-- ── Restic Backup (Multi-Target) ── -->
+
+                            <!-- Backup header — button and help icon are independent -->
+                            <div class="setting-subheader" data-section="restic-backup" style="display:flex;align-items:center;gap:8px;margin-top:16px;">
+                                <button type="button" id="backup-toggle" class="zone-button"
+                                        onclick="toggleBackupSection()"
+                                        style="cursor:pointer;font-size:14px;padding:6px 14px;font-family:Lora,Georgia,serif;">
+                                    Restic Backup &nbsp;<span id="backup-header-icon">⚪</span>
+                                </button>
+                                <i class="fa-regular fa-circle-question"
+                                   onclick="document.getElementById('backup-help').style.display = document.getElementById('backup-help').style.display === 'none' ? '' : 'none';"
+                                   style="cursor:pointer;font-size:1em;opacity:0.6;"
+                                   title="Show backup info"></i>
+                            </div>
+
+                            <!-- Help text (hidden by default) -->
+                            <div id="backup-help" style="display:none;font-size:0.88em;line-height:1.5;margin:4px 0 10px 0;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:4px;">
+                                <p style="margin:0;">Restic is an encrypted, deduplicated backup tool. Configure multiple backup targets to protect your CWOC data across local or remote storage.</p>
+                                <a href="/frontend/html/help.html#restic-backup" style="display:inline-block;margin-top:6px;">Full backup guide →</a>
+                            </div>
+
+                            <!-- Hidden checkbox for storing enabled state -->
+                            <input type="checkbox" id="backup-enabled" style="display:none;" />
+
+                            <!-- Collapsible Backup config body (hidden when disabled) -->
+                            <div id="backup-body" style="display:none;">
+
+                                <!-- Aggregate status panel -->
+                                <div id="backup-status-panel" style="font-size:0.88em;line-height:1.6;margin-bottom:12px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:4px;">
+                                    <div class="setting-inline" style="margin:0;padding:0;">
+                                        <span>Targets:</span>
+                                        <span id="backup-target-count" style="font-weight:bold;">0</span>
+                                    </div>
+                                    <div class="setting-inline" style="margin:0;padding:0;">
+                                        <span>Last backup:</span>
+                                        <span id="backup-last-time" style="font-weight:bold;">Never</span>
+                                    </div>
+                                    <div class="setting-inline" style="margin:0;padding:0;">
+                                        <span>Next scheduled:</span>
+                                        <span id="backup-next-time">Manual only</span>
+                                    </div>
+                                </div>
+
+                                <!-- Target list (rendered by JS) -->
+                                <div id="backup-target-list" style="margin-bottom:12px;"></div>
+
+                                <!-- Action buttons -->
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    <button class="standard-button" onclick="_openBackupTargetModal(null)" style="flex:1;min-width:0;">
+                                        ➕ Add Target
+                                    </button>
+                                    <button class="standard-button" id="backup-all-btn" onclick="_backupAllNow()" style="flex:1;min-width:0;">
+                                        ▶️ Backup All Now
+                                    </button>
+                                </div>
+
+                            </div><!-- /backup-body -->
+
+                            <!-- ── Backup Target Modal (full-screen overlay) ── -->
+                            <div id="backup-target-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;" class="cwoc-overlay">
+                                <div style="position:absolute;top:0;left:0;right:0;bottom:0;" onclick="_closeBackupTargetModal()"></div>
+                                <div id="backup-modal-content" style="position:relative;background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;max-width:600px;width:95%;max-height:90vh;overflow-y:auto;padding:20px;margin:5vh auto;">
+                                    <h3 id="backup-modal-title" style="margin:0 0 14px;text-align:center;font-family:Lora,Georgia,serif;color:#4a2c2a;">Add Backup Target</h3>
+                                    <!-- Hidden target ID -->
+                                    <input type="hidden" id="backup-target-id" value="" />
+                                    <!-- Target Name -->
+                                    <div class="setting-inline">
+                                        <label for="backup-target-name">Name <span class="backup-required-star" style="color:#c0392b;font-weight:bold;display:none;">*</span></label>
+                                        <input type="text" id="backup-target-name" placeholder="e.g. Local Backup, NAS Nightly" style="flex:1;min-width:0;" oninput="_backupClearFieldError(this)" />
+                                    </div>
+                                    <!-- Repository -->
+                                    <label class="setting-subheader backup-section-toggle" style="margin-top:14px;cursor:pointer;" onclick="_backupToggleSection(this)">Repository <span class="backup-toggle-arrow">▾</span></label>
+                                    <div class="setting-subsection-body backup-collapsible">
+                                        <div class="setting-inline">
+                                            <label for="backup-repo-type">Type</label>
+                                            <select id="backup-repo-type" onchange="onBackupRepoTypeChange()">
+                                                <option value="local">Local</option>
+                                                <option value="sftp">SFTP</option>
+                                                <option value="s3">Amazon S3 / S3-Compatible</option>
+                                                <option value="b2">Backblaze B2</option>
+                                                <option value="azure">Microsoft Azure Blob Storage</option>
+                                                <option value="gcs">Google Cloud Storage</option>
+                                                <option value="rest">REST Server</option>
+                                                <option value="rclone">rclone</option>
+                                            </select>
+                                        </div>
+                                        <div class="setting-inline" id="backup-repo-url-row" style="display:none;">
+                                            <label for="backup-repo-url" id="backup-repo-url-label">Destination <span class="backup-required-star" style="color:#c0392b;font-weight:bold;display:none;">*</span></label>
+                                            <input type="text" id="backup-repo-url" placeholder="/path/to/repo" style="flex:1;min-width:0;" oninput="_backupClearFieldError(this)" />
+                                        </div>
+                                        <div class="setting-inline">
+                                            <label for="backup-repo-password">Password <span class="backup-required-star" style="color:#c0392b;font-weight:bold;display:none;">*</span></label>
+                                            <input type="password" id="backup-repo-password" placeholder="Repository password" style="flex:1;min-width:0;" autocomplete="off" oninput="_backupClearFieldError(this)" />
+                                            <button type="button" class="standard-button" onclick="toggleBackupPasswordVisibility()" id="backup-pw-toggle" title="Show/hide password" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;">👁️</button>
+                                        </div>
+                                        <div id="backup-creds-sftp" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-sftp-user">Username</label><input type="text" id="backup-sftp-user" placeholder="root" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-sftp-host">Host <span class="backup-required-star" style="color:#c0392b;font-weight:bold;display:none;">*</span></label><input type="text" id="backup-sftp-host" placeholder="192.168.1.100" style="flex:1;min-width:0;" oninput="_backupClearFieldError(this)" /></div>
+                                            <div class="setting-inline"><label for="backup-sftp-port">Port</label><input type="number" id="backup-sftp-port" placeholder="22" value="22" style="width:80px;" min="1" max="65535" /></div>
+                                            <div class="setting-inline"><label for="backup-sftp-path">Remote Path</label><input type="text" id="backup-sftp-path" placeholder="/backups/cwoc" style="flex:1;min-width:0;" /></div>
+                                            <p class="setting-hint" style="margin:8px 0 4px;font-size:0.85em;color:#6b4e31;">Authentication method:</p>
+                                            <div style="display:flex;gap:12px;margin-bottom:8px;">
+                                                <label style="cursor:pointer;"><input type="radio" name="backup-sftp-auth" value="password" onchange="_backupSftpAuthChange()"> Password</label>
+                                                <label style="cursor:pointer;"><input type="radio" name="backup-sftp-auth" value="key" onchange="_backupSftpAuthChange()"> SSH Key</label>
+                                            </div>
+                                            <div id="backup-sftp-auth-password" class="setting-inline" style="display:none;"><label for="backup-sftp-password">Password</label><input type="password" id="backup-sftp-password" placeholder="SSH password" style="flex:1;min-width:0;" autocomplete="off" /></div>
+                                            <div id="backup-sftp-auth-key" class="setting-inline" style="display:none;"><label for="backup-sftp-key-path">SSH Key Path</label><input type="text" id="backup-sftp-key-path" placeholder="/root/.ssh/id_rsa" style="flex:1;min-width:0;" /></div>
+                                        </div>
+                                        <div id="backup-creds-s3" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-s3-access-key">Access Key ID</label><input type="text" id="backup-s3-access-key" placeholder="AKIAIOSFODNN7EXAMPLE" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-s3-secret-key">Secret Access Key</label><input type="password" id="backup-s3-secret-key" placeholder="Secret key" style="flex:1;min-width:0;" autocomplete="off" /></div>
+                                            <div class="setting-inline"><label for="backup-s3-region">Region</label><input type="text" id="backup-s3-region" placeholder="us-east-1" style="flex:1;min-width:0;" /></div>
+                                        </div>
+                                        <div id="backup-creds-b2" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-b2-account-id">Account ID</label><input type="text" id="backup-b2-account-id" placeholder="Account ID" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-b2-app-key">Application Key</label><input type="password" id="backup-b2-app-key" placeholder="Application key" style="flex:1;min-width:0;" autocomplete="off" /></div>
+                                        </div>
+                                        <div id="backup-creds-azure" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-azure-account-name">Account Name</label><input type="text" id="backup-azure-account-name" placeholder="Storage account name" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-azure-account-key">Account Key</label><input type="password" id="backup-azure-account-key" placeholder="Account key" style="flex:1;min-width:0;" autocomplete="off" /></div>
+                                        </div>
+                                        <div id="backup-creds-gcs" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-gcs-project-id">Project ID</label><input type="text" id="backup-gcs-project-id" placeholder="my-project-id" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-gcs-credentials-path">Credentials JSON Path</label><input type="text" id="backup-gcs-credentials-path" placeholder="/path/to/credentials.json" style="flex:1;min-width:0;" /></div>
+                                        </div>
+                                        <div id="backup-creds-rest" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-rest-username">Username</label><input type="text" id="backup-rest-username" placeholder="(optional)" style="flex:1;min-width:0;" /></div>
+                                            <div class="setting-inline"><label for="backup-rest-password">Password</label><input type="password" id="backup-rest-password" placeholder="(optional)" style="flex:1;min-width:0;" autocomplete="off" /></div>
+                                        </div>
+                                        <div id="backup-creds-rclone" class="backup-creds-section" style="display:none;">
+                                            <div class="setting-inline"><label for="backup-rclone-config">Config Name</label><input type="text" id="backup-rclone-config" placeholder="remote" style="flex:1;min-width:0;" /></div>
+                                        </div>
+                                    </div>
+                                    <!-- Data to Backup -->
+                                    <label class="setting-subheader backup-section-toggle" style="margin-top:14px;cursor:pointer;" onclick="_backupToggleSection(this)">Data to Backup <span class="backup-toggle-arrow">▸</span></label>
+                                    <div class="setting-subsection-body backup-collapsible" id="backup-paths-body" style="display:none;">
+                                        <p class="setting-hint">Select which data to include in backups.</p>
+                                        <label style="font-weight:bold;font-size:0.9em;color:#4a2c2a;display:block;margin:8px 0 4px;">Critical</label>
+                                        <div class="checkbox-list" style="margin-bottom:10px;">
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/tmp/cwoc-pre-backup.db" checked /> Database (pre-backup copy)</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/email.key" checked /> Encryption key</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/contacts/profile_pictures/" checked /> Contact profile pictures</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/users/profile_pictures/" checked /> User profile pictures</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/attachments/" checked /> Attachments</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/contacts/" checked /> Contact vCards</label>
+                                        </div>
+                                        <label style="font-weight:bold;font-size:0.9em;color:#4a2c2a;display:block;margin:8px 0 4px;">Important</label>
+                                        <div class="checkbox-list" style="margin-bottom:10px;">
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/etc/ssl/cwoc/" checked /> SSL certificates</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/etc/systemd/system/cwoc.service" checked /> Systemd service file</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/etc/nginx/sites-available/cwoc" checked /> Nginx config</label>
+                                        </div>
+                                        <label style="font-weight:bold;font-size:0.9em;color:#4a2c2a;display:block;margin:8px 0 4px;">Nice to Have</label>
+                                        <div class="checkbox-list" style="margin-bottom:10px;">
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/client-log.txt" /> Client log</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" class="backup-path-cb" value="/app/data/update.log" /> Update log</label>
+                                        </div>
+                                    </div>
+                                    <!-- Schedule -->
+                                    <label class="setting-subheader backup-section-toggle" style="margin-top:14px;cursor:pointer;" onclick="_backupToggleSection(this)">Schedule <span class="backup-toggle-arrow">▾</span></label>
+                                    <div class="setting-subsection-body backup-collapsible">
+                                        <div class="setting-inline">
+                                            <label for="backup-schedule-frequency">Frequency</label>
+                                            <select id="backup-schedule-frequency" onchange="onBackupScheduleChange()">
+                                                <option value="hourly">Hourly</option>
+                                                <option value="every_6_hours">Every 6 Hours</option>
+                                                <option value="daily" selected>Daily</option>
+                                                <option value="weekly">Weekly</option>
+                                                <option value="manual">Manual Only</option>
+                                            </select>
+                                        </div>
+                                        <div class="setting-inline" id="backup-time-row">
+                                            <label for="backup-schedule-time">Time</label>
+                                            <input type="text" id="backup-schedule-time" value="02:00" readonly style="width:80px;cursor:pointer;text-align:center;background:#f5e6cc;" onclick="_backupOpenTimePicker(this)" onchange="_backupFormatScheduleTime()" />
+                                        </div>
+                                    </div>
+                                    <!-- Retention -->
+                                    <label class="setting-subheader backup-section-toggle" style="margin-top:14px;cursor:pointer;" onclick="_backupToggleSection(this)">Retention Policy <span class="backup-toggle-arrow">▸</span></label>
+                                    <div class="setting-subsection-body backup-collapsible" style="display:none;">
+                                        <p class="setting-hint">How many snapshots to keep. Old snapshots are automatically pruned to this policy after each backup.</p>
+                                        <div class="setting-inline"><label for="backup-keep-last">Keep last</label><input type="number" id="backup-keep-last" min="0" value="5" style="width:60px;" /></div>
+                                        <div class="setting-inline"><label for="backup-keep-daily">Keep daily</label><input type="number" id="backup-keep-daily" min="0" value="7" style="width:60px;" /></div>
+                                        <div class="setting-inline"><label for="backup-keep-weekly">Keep weekly</label><input type="number" id="backup-keep-weekly" min="0" value="4" style="width:60px;" /></div>
+                                        <div class="setting-inline"><label for="backup-keep-monthly">Keep monthly</label><input type="number" id="backup-keep-monthly" min="0" value="6" style="width:60px;" /></div>
+                                        <div class="setting-inline"><label for="backup-keep-yearly">Keep yearly</label><input type="number" id="backup-keep-yearly" min="0" value="2" style="width:60px;" /></div>
+                                    </div>
+                                    <!-- Notifications -->
+                                    <label class="setting-subheader backup-section-toggle" style="margin-top:14px;cursor:pointer;" onclick="_backupToggleSection(this)">Notifications <span class="backup-toggle-arrow">▸</span></label>
+                                    <div class="setting-subsection-body backup-collapsible" style="display:none;">
+                                        <div class="setting-inline"><label for="backup-notify-admins">Notify</label><select id="backup-notify-admins"><option value="all">All Admins</option></select></div>
+                                        <div class="setting-inline"><label for="backup-notify-trigger">Trigger</label><select id="backup-notify-trigger"><option value="both" selected>Both (Success &amp; Failures)</option><option value="success">Success Only</option><option value="failure">Failures Only</option></select></div>
+                                        <div class="checkbox-list" style="margin-top:6px;">
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" id="backup-notify-transfer" checked /> Transfer notifications (backup/restore)</label>
+                                            <label class="cwoc-checkbox-label"><input type="checkbox" id="backup-notify-maintenance" checked /> Maintenance notifications (prune)</label>
+                                        </div>
+                                    </div>
+                                    <!-- Feedback & Results -->
+                                    <div id="backup-feedback" style="display:none;margin-top:8px;padding:8px 10px;border-radius:4px;font-size:0.88em;line-height:1.4;cursor:pointer;" onclick="this.style.display='none';"></div>
+                                    <div id="backup-results" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(0,0,0,0.03);border-radius:4px;font-size:0.85em;max-height:200px;overflow-y:auto;"></div>
+                                    <!-- Modal Action Buttons -->
+                                    <div style="margin-top:16px;border-top:1px solid rgba(139,90,43,0.3);padding-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                                        <button class="standard-button" id="backup-status-btn" onclick="checkBackupStatus()" style="height:38px;" title="Check if the backup repository is reachable and healthy">🩺 Status</button>
+                                        <button class="standard-button" id="backup-snapshots-btn" onclick="listBackupSnapshots()" style="height:38px;" title="List all snapshots in this repository with download and delete options">📋 Snapshots</button>
+                                        <button class="standard-button" style="height:38px;visibility:hidden;"></button>
+                                        <button class="standard-button" id="backup-run-btn" onclick="backupNow()" style="height:38px;" title="Run a backup immediately using the current configuration">▶️ Backup Now</button>
+                                        <button class="standard-button" id="backup-restore-btn" onclick="backupRestore()" style="height:38px;" title="Restore data from a previous snapshot — shows a list to pick from">♻️ Restore</button>
+                                        <button class="standard-button" id="backup-download-btn" onclick="backupDownloadList()" style="height:38px;" title="Download the most recent snapshot as a tar.gz archive">⬇️ Download</button>
+                                        <button class="standard-button" id="backup-prune-btn" onclick="backupPrune()" style="height:38px;color:#c0392b;" title="Manually remove old snapshots based on the retention policy — frees disk space">🗑️ Manual Prune</button>
+                                        <button class="standard-button" id="backup-remove-config-btn" onclick="_removeBackupConfig()" style="height:38px;color:#c0392b;" title="Remove this backup configuration from CWOC — all data and snapshots remain on disk untouched">🔌 Remove</button>
+                                        <button class="standard-button" id="backup-delete-btn" onclick="_deleteBackupTarget()" style="height:38px;color:#c0392b;" title="Permanently delete this configuration AND all repository data — every snapshot is destroyed forever">💀 Remove &amp; Delete</button>
+                                    </div>
+                                    <div style="margin-top:14px;display:flex;justify-content:center;gap:8px;">
+                                        <button class="standard-button" onclick="_cancelBackupTargetModal()" style="height:38px;width:120px;" title="Discard all changes and close this panel">✗ Cancel</button>
+                                        <button class="standard-button" id="backup-save-btn" onclick="_doneBackupTargetModal()" style="height:38px;width:120px;" title="Keep changes and close — saves when you save the settings page">✓ Done</button>
+                                    </div>
+                                </div>
+                            </div><!-- /backup-target-modal -->
+
                         </div>
                         <div class="setting-group">
-                            <h3>🔄 Version &amp; Updates</h3>
-                            <div style="margin-bottom:12px;font-size:0.9em;">
-                                <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
-                                <div style="margin-bottom:4px;">Updated: <span id="version-date">Loading...</span></div>
-                                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                                    <span>Disk: <span id="disk-usage-display">—</span></span>
-                                    <button type="button" id="disk-refresh-btn" onclick="refreshDiskUsage()" style="background:none;border:none;cursor:pointer;font-size:0.9em;padding:2px 4px;color:#8b5a2b;" title="Refresh disk usage">🔄</button>
-                                </div>
-                                <div>CWOC Data: <span id="cwoc-storage-display">—</span></div>
-                            </div>
-                            <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
-                            <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
-                            <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
-                            <button id="release-notes-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="showReleaseNotes()">📋 Release Notes</button>
-                            <button id="restart-btn" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="restartCwoc()">🔁 Restart CWOC</button>
+                            <h3>🛠️ Tools</h3>
+
+                            <label class="setting-subheader">📺 Kiosk</label>
+                            <p class="setting-hint">Select tags to display on the kiosk. Selecting a parent tag automatically includes all child tags.</p>
+                            <div id="kiosk-tag-list" style="max-height:200px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;margin-bottom:10px;"></div>
+                            <button onclick="_openKiosk()" class="standard-button" style="width:100%;">📺 Open Kiosk →</button>
                         </div>
                     </div>
                 </div>
@@ -2405,6 +2787,107 @@
                 </div>
             </div>
             <!-- Email Account Delete Confirmation Modal -->
+            <!-- Export Data Modal -->
+            <div class="modal" id="export-data-modal">
+                <div class="modal-content" style="max-width:480px;max-height:80vh;overflow-y:auto;">
+                    <h3>📤 Export Data</h3>
+                    <p class="setting-hint" style="margin-top:0;">Download your data as JSON files for backup or migration to another server.</p>
+
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <button onclick="exportAllData(); closeExportDataModal();" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">🌐</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">All Data</span>
+                                <span class="modal-opt-desc">Chits, settings, tags, colors, contacts, alerts — everything in one file</span>
+                            </span>
+                        </button>
+                        <button onclick="exportChitData(); closeExportDataModal();" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">📝</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Chit Data Only</span>
+                                <span class="modal-opt-desc">All chits including deleted chits</span>
+                            </span>
+                        </button>
+                        <button onclick="exportUserData(); closeExportDataModal();" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">👤</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">User Data Only</span>
+                                <span class="modal-opt-desc">Settings, tags, colors, saved locations, contacts</span>
+                            </span>
+                        </button>
+                    </div>
+
+                    <div style="margin-top:16px;text-align:right;">
+                        <button class="standard-button" onclick="closeExportDataModal()">Close</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Import Data Modal -->
+            <div class="modal" id="import-data-modal">
+                <div class="modal-content" style="max-width:480px;max-height:80vh;overflow-y:auto;">
+                    <h3>📥 Import Data</h3>
+                    <p class="setting-hint" style="margin-top:0;">Restore from a previous CWOC export, or import from external apps.</p>
+
+                    <label class="setting-subheader" style="margin-top:0;">From CWOC Export</label>
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+                        <button onclick="importAllData()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">🌐</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Import All Data</span>
+                                <span class="modal-opt-desc">From a combined "All Data" export file</span>
+                            </span>
+                        </button>
+                        <button onclick="importChitData()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">📝</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Import Chit Data</span>
+                                <span class="modal-opt-desc">From a chit-only export file</span>
+                            </span>
+                        </button>
+                        <button onclick="importUserData()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">👤</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Import User Data</span>
+                                <span class="modal-opt-desc">From a user data export file</span>
+                            </span>
+                        </button>
+                    </div>
+
+                    <label class="setting-subheader">From External Apps</label>
+                    <div class="setting-inline" style="margin-bottom:8px;">
+                        <label for="ics-import-owner">Import as user</label>
+                        <select id="ics-import-owner" style="flex:1;max-width:200px;"></select>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <button id="icsImportBtn" onclick="triggerIcsImport()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">📅</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Calendar (.ics)</span>
+                                <span class="modal-opt-desc">Google Calendar, Apple Calendar, or Outlook</span>
+                            </span>
+                        </button>
+                        <button id="googleTasksImportBtn" onclick="triggerGoogleTasksImport()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">✅</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Google Tasks (.json)</span>
+                                <span class="modal-opt-desc">From Google Takeout export</span>
+                            </span>
+                        </button>
+                        <button id="googleKeepImportBtn" onclick="triggerGoogleKeepImport()" class="standard-button modal-option-btn">
+                            <span class="modal-opt-icon">📝</span>
+                            <span class="modal-opt-text">
+                                <span class="modal-opt-title">Google Keep (.json)</span>
+                                <span class="modal-opt-desc">From Google Takeout export (select multiple files)</span>
+                            </span>
+                        </button>
+                    </div>
+                    <p class="setting-hint" style="margin-top:10px;"><a href="#" onclick="closeImportDataModal(); showCalendarExportHelp(); return false;" style="color:#6b4e31;text-decoration:underline;">How to export from Google/Apple/Outlook →</a></p>
+
+                    <div style="margin-top:16px;text-align:right;">
+                        <button class="standard-button" onclick="closeImportDataModal()">Close</button>
+                    </div>
+                </div>
+            </div>
             <!-- Import Mode Dialog (Add / Replace choice) -->
             <div class="modal" id="import-mode-modal">
                 <div class="modal-content">
@@ -2488,7 +2971,7 @@
             </div>
             <!-- Omni Layout Modal -->
             <div class="modal" id="omni-layout-modal" style="display:none;">
-                <div class="modal-content" style="max-width:95vw;width:600px;text-align:center;overflow:hidden;">
+                <div class="modal-content" style="max-width:95vw;width:600px;text-align:center;overflow-y:auto;max-height:90vh;">
                     <h3 style="margin-bottom:12px;">🔮 Arrange Omni Layout</h3>
                     <p class="setting-hint" style="margin-bottom:12px;">Drag cards between zones to arrange. Drop into Full Width, Left, or Right columns.</p>
                     <div id="omni-layout-grid" class="omni-layout-grid"></div>
@@ -2519,6 +3002,7 @@
             <script src="/frontend/js/shared/shared-habits.js"></script>
             <script src="/frontend/js/shared/shared.js"></script>
             <script src="/frontend/js/shared/shared-calculator.js"></script>
+            <script src="/frontend/js/shared/shared-timepicker.js"></script>
             <script src="/frontend/js/shared/shared-smart-links.js"></script>
             <script src="/frontend/js/pages/shared-page.js"></script>
             <script src="/frontend/js/pages/shared-editor.js"></script>

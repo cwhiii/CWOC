@@ -174,8 +174,10 @@ fun EmailComposeZone(
             // ── Preview/Edit mode state ──
             // For received emails with HTML content, default to preview (HTML view)
             // For drafts, default to edit mode
+            // Key on hasHtmlContent so that when emailBodyHtml loads asynchronously
+            // (entity loaded from Room after initial composition), preview mode activates
             val hasHtmlContent = !formState.emailBodyHtml.isNullOrBlank()
-            var isPreviewMode by remember {
+            var isPreviewMode by remember(hasHtmlContent, emailStatus) {
                 mutableStateOf(
                     when (emailStatus) {
                         "received", "sent" -> hasHtmlContent
@@ -705,14 +707,28 @@ private fun EmailBodySection(
                 }
             }
             "received", "sent" -> {
-                if (isPreviewMode && !formState.emailBodyHtml.isNullOrBlank()) {
-                    // Preview mode: show HTML rendered view via WebView
-                    EmailHtmlWebView(
-                        html = formState.emailBodyHtml!!,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                if (!formState.emailBodyHtml.isNullOrBlank()) {
+                    // Always show HTML rendered view via WebView for received/sent emails
+                    // that have HTML content, regardless of preview mode toggle
+                    if (isPreviewMode) {
+                        EmailHtmlWebView(
+                            html = formState.emailBodyHtml!!,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        // Text mode: show plain text (stripped of any HTML)
+                        Text(
+                            text = formState.emailBodyText?.ifBlank { null }
+                                ?: stripHtmlForDisplay(formState.emailBodyHtml!!)
+                                ?: formState.note,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                        )
+                    }
                 } else {
-                    // Plain text view
+                    // No HTML content — show plain text body
                     Text(
                         text = formState.emailBodyText ?: formState.note,
                         style = MaterialTheme.typography.bodyMedium,
@@ -1255,6 +1271,7 @@ private fun DiscardConfirmationDialog(
  * - HTML sanitization (removes script, iframe, object, embed, form tags)
  * - Links open in device browser
  * - Auto-resize WebView height (clamped 200-800dp)
+ * - Uses base64 encoding for robust HTML loading (handles special characters)
  */
 @Composable
 private fun EmailHtmlWebView(
@@ -1272,14 +1289,23 @@ private fun EmailHtmlWebView(
             append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0\">")
             append("<style>")
             append("body { margin: 0; padding: 8px; font-family: sans-serif; font-size: 14px; ")
-            append("word-wrap: break-word; overflow-wrap: break-word; }")
+            append("word-wrap: break-word; overflow-wrap: break-word; color: #1a1208; }")
             append("img { max-width: 100%; height: auto; }")
             append("table { max-width: 100%; }")
             append("pre { white-space: pre-wrap; word-wrap: break-word; }")
+            append("a { color: #6b4e31; }")
             append("</style></head><body>")
             append(sanitized)
             append("</body></html>")
         }
+    }
+
+    // Encode as base64 for robust loading (handles special chars like %, #, etc.)
+    val base64Html = remember(wrappedHtml) {
+        android.util.Base64.encodeToString(
+            wrappedHtml.toByteArray(Charsets.UTF_8),
+            android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+        )
     }
 
     Box(
@@ -1324,17 +1350,46 @@ private fun EmailHtmlWebView(
                         }
                     }
 
-                    loadDataWithBaseURL(null, wrappedHtml, "text/html", "UTF-8", null)
+                    loadData(base64Html, "text/html; charset=UTF-8", "base64")
                 }
             },
             update = { webView ->
-                webView.loadDataWithBaseURL(null, wrappedHtml, "text/html", "UTF-8", null)
+                webView.loadData(base64Html, "text/html; charset=UTF-8", "base64")
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(webViewHeight.dp)
         )
     }
+}
+
+// ─── HTML to Plain Text Helper ──────────────────────────────────────────────────
+
+/**
+ * Strips HTML tags and decodes common entities for plain text display.
+ * Used as fallback when showing email body in text mode.
+ */
+private fun stripHtmlForDisplay(html: String): String {
+    var text = html
+    // Remove style/script blocks
+    text = text.replace(Regex("<style[^>]*>[\\s\\S]*?</style>", RegexOption.IGNORE_CASE), "")
+    text = text.replace(Regex("<script[^>]*>[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
+    // Replace <br> and block-level closing tags with newlines
+    text = text.replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+    text = text.replace(Regex("</(p|div|h[1-6]|li|tr)>", RegexOption.IGNORE_CASE), "\n")
+    // Strip all remaining tags
+    text = text.replace(Regex("<[^>]+>"), "")
+    // Decode common HTML entities
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&quot;", "\"")
+    text = text.replace("&#39;", "'")
+    // Collapse excessive whitespace
+    text = text.replace(Regex("\\n{3,}"), "\n\n")
+    text = text.replace(Regex("[ \\t]+"), " ")
+    return text.trim()
 }
 
 // ─── Recipient Chip Field ───────────────────────────────────────────────────────

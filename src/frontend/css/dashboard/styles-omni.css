@@ -115,6 +115,23 @@
     font-family: 'Lora', serif;
 }
 
+/* Omni Email Check Mail button (icon only) */
+.omni-email-check-btn {
+    background: none;
+    border: none;
+    color: #1a1208;
+    font-size: 0.55em;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 4px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.omni-email-check-btn:hover {
+    opacity: 1;
+}
+
 .omni-section-icon {
     font-style: normal;
     line-height: 1;
@@ -656,5 +673,6 @@
     right: 2px;
     height: 16px;
     border-radius: 0 0 4px 4px;
+    border-top: 1px solid #8b4513;
     z-index: 0;
 }

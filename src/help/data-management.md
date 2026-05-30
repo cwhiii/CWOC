@@ -1,7 +1,7 @@
 # Data Management
 
-- [Chit Data](#chit-data)
-- [User Data](#user-data)
+- [Export Data](#export-data)
+- [Import Data](#import-data)
 - [Import Modes](#import-modes)
 - [File Format](#file-format)
 - [📅 Calendar Import (.ics)](#calendar-import-ics)
@@ -20,15 +20,34 @@
   - [How it works](#how-it-works)
 
 
-The [Settings](/frontend/html/settings.html) page includes a **📦 Data Management** box for exporting and importing your data as JSON files. There are two data categories, each with its own Export and Import buttons:
+The [Settings → Data Management](/frontend/html/settings.html#data-management) section provides two buttons for managing your data:
 
-## Chit Data
+- **📤 Export Data** — Opens a modal with options to download your data as JSON files
+- **📥 Import Data** — Opens a modal with options to restore from a CWOC export or import from external apps
 
-Exports all chits (including deleted chits) as a JSON file. This captures every field on every chit — titles, notes, dates, tags, checklists, alerts, recurrence rules, and more.
+For automated, encrypted, scheduled backups, see [Restic Backup](/frontend/html/help.html#restic-backup).
 
-## User Data
+## Export Data
 
-Exports your settings, tags, custom colors, saved locations, and contacts as a JSON file. Use this to back up your configuration or replicate it on another CWOC instance.
+Click **📤 Export Data** to open the export modal. Three export options are available:
+
+- **🌐 All Data** — Everything in one file: chits, settings, tags, colors, contacts, alerts
+- **📝 Chit Data Only** — All chits including deleted chits. Captures every field on every chit — titles, notes, dates, tags, checklists, alerts, recurrence rules, and more.
+- **👤 User Data Only** — Settings, tags, custom colors, saved locations, and contacts. Use this to back up your configuration or replicate it on another CWOC instance.
+
+## Import Data
+
+Click **📥 Import Data** to open the import modal. Options are organized into two groups:
+
+**From CWOC Export** — Restore from a previously exported JSON file:
+- **🌐 Import All Data** — From a combined "All Data" export file
+- **📝 Import Chit Data** — From a chit-only export file
+- **👤 Import User Data** — From a user data export file
+
+**From External Apps** — Import data from other services:
+- **📅 Calendar (.ics)** — Google Calendar, Apple Calendar, or Outlook
+- **✅ Google Tasks (.json)** — From Google Takeout export
+- **📝 Google Keep (.json)** — From Google Takeout export (multiple files supported)
 
 ## Import Modes
 
@@ -43,14 +62,14 @@ Exported files are self-contained JSON with metadata including the CWOC version,
 
 ## 📅 Calendar Import (.ics)
 
-Import events and tasks from **Google Calendar**, **Apple Calendar**, or **Outlook** using standard iCalendar (.ics) files. Click the **📅 Import Calendar (.ics)** button in the Data Management section to select a file.
+Import events and tasks from **Google Calendar**, **Apple Calendar**, or **Outlook** using standard iCalendar (.ics) files. Open the **📥 Import Data** modal and click **📅 Calendar (.ics)** to select a file.
 
 ### How to Export from Google Calendar
 
 1. Go to [Google Calendar Settings → Export](https://calendar.google.com/calendar/r/settings/export)
 2. Click **Export** — this downloads a .zip file containing one .ics file per calendar
 3. Unzip the downloaded file
-4. In CWOC, go to [Settings → Data Management](/frontend/html/settings.html#data-management) → **📅 Import Calendar (.ics)**
+4. In CWOC, go to [Settings → Data Management](/frontend/html/settings.html#data-management) → **📥 Import Data** → **📅 Calendar (.ics)**
 5. Select the .ics file(s) you want to import
 
 **Tip:** To export a single Google calendar, open that calendar's settings (click the ⋮ menu next to the calendar name → Settings and sharing) and scroll down to "Export calendar."
@@ -93,7 +112,7 @@ This makes it easy to undo an import or clean up a calendar you no longer need �
 
 ## ✅ Google Tasks Import (.json)
 
-Import tasks from **Google Tasks** using the JSON file from Google Takeout. Click the **✅ Import Google Tasks (.json)** button in the Data Management section to select a file.
+Import tasks from **Google Tasks** using the JSON file from Google Takeout. Open the **📥 Import Data** modal and click **✅ Google Tasks (.json)** to select a file.
 
 ### How to Export from Google Tasks
 
@@ -102,7 +121,7 @@ Import tasks from **Google Tasks** using the JSON file from Google Takeout. Clic
 3. Click **Next step** → **Create export**
 4. Download the archive when ready and unzip it
 5. Inside the `Tasks/` folder you'll find one JSON file per task list
-6. In CWOC, go to Settings → Administration → Data Management → **✅ Import Google Tasks (.json)**
+6. In CWOC, go to Settings → Administration → Data Management → **📥 Import Data** → **✅ Google Tasks (.json)**
 7. Select the JSON file for the task list you want to import
 
 ### What gets imported
@@ -124,7 +143,7 @@ Import tasks from **Google Tasks** using the JSON file from Google Takeout. Clic
 
 ## 📝 Google Keep Import (.json)
 
-Import notes and lists from **Google Keep** using the JSON files from Google Takeout. Click the **📝 Import Google Keep (.json)** button in the Data Management section and select one or more JSON files.
+Import notes and lists from **Google Keep** using the JSON files from Google Takeout. Open the **📥 Import Data** modal and click **📝 Google Keep (.json)** to select one or more JSON files.
 
 ### How to Export from Google Keep
 
@@ -133,7 +152,7 @@ Import notes and lists from **Google Keep** using the JSON files from Google Tak
 3. Click **Next step** → **Create export**
 4. Download the archive when ready and unzip it
 5. Inside the `Keep/` folder you'll find one JSON file per note
-6. In CWOC, go to Settings → Administration → Data Management → **📝 Import Google Keep (.json)**
+6. In CWOC, go to Settings → Administration → Data Management → **📥 Import Data** → **📝 Google Keep (.json)**
 7. Select all the JSON files you want to import (multi-select supported)
 
 ### What gets imported
@@ -159,4 +178,4 @@ Import notes and lists from **Google Keep** using the JSON files from Google Tak
 
 ---
 
-**See also:** [Settings](/frontend/html/settings.html) · [Audit Log](/frontend/html/audit-log.html) · [Trash](/frontend/html/trash.html)
+**See also:** [Restic Backup](/frontend/html/help.html#restic-backup) · [Settings](/frontend/html/settings.html) · [Audit Log](/frontend/html/audit-log.html) · [Trash](/frontend/html/trash.html)

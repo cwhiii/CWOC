@@ -17,6 +17,7 @@ class SharedTagEntry(BaseModel):
     shares: List[ShareEntry]
 
 class Tag(BaseModel):
+    id: Optional[str] = None  # UUID v4, assigned by backend at creation time
     name: str
     color: Optional[str] = None
     fontColor: Optional[str] = None
@@ -48,6 +49,8 @@ class Settings(BaseModel):
     username: Optional[str] = None  # Display name for audit log attribution
     audit_log_max_days: Optional[int] = 1096
     audit_log_max_mb: Optional[int] = 1
+    log_max_days: Optional[int] = 30
+    log_max_mb: Optional[int] = 5
     default_notifications: Optional[Dict[str, Any]] = None  # { start: [...], due: [...] }
     unit_system: Optional[str] = "imperial"  # "imperial" or "metric"
     habits_success_window: Optional[str] = "30"  # "7", "30", "90", or "all"
@@ -93,6 +96,7 @@ class Settings(BaseModel):
     default_timezone: Optional[str] = None               # User's default IANA timezone (e.g. "America/Denver")
     timezone_override: Optional[str] = None              # Manual current timezone override (IANA timezone or null)
     default_view: Optional[str] = "Calendar"             # Default dashboard view on fresh site entry (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alarms, Omni, Last Viewed)
+    badges_completed_window: Optional[str] = "3"         # Recently-completed badges window: number of days ("3", "7", "30", "365") or "all"
 
 class Chit(BaseModel):
     class Config:
@@ -118,6 +122,7 @@ class Chit(BaseModel):
     recurrence_rule: Optional[Dict[str, Any]] = None  # { freq, interval, byDay, until }
     recurrence_exceptions: Optional[List[Dict[str, Any]]] = None  # [{ date, completed, title, broken_off }]
     location: Optional[str] = None
+    location_shared_to_vault: Optional[bool] = True  # When true, location is shared to vault (visible to all users)
     color: Optional[str] = None
     people: Optional[List[str]] = None
     pinned: Optional[bool] = None

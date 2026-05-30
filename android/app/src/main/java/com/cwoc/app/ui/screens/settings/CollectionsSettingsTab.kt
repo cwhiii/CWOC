@@ -62,17 +62,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import org.json.JSONObject
+import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
 import com.cwoc.app.ui.components.CwocSectionHeading
 
-// --- Default color palette (matches web CWOC defaults) ---
-private val DEFAULT_COLORS = listOf(
-    "#D4A574", "#8B6914", "#6B4E31", "#4A7C59", "#2E5A3C",
-    "#4A6FA5", "#2C4A7C", "#7B4F8A", "#5C3D6E", "#C75B39",
-    "#8B3A3A", "#D4A017", "#5F8A8B", "#8B7355", "#6B8E23",
-    "#CD853F", "#708090", "#B8860B", "#556B2F", "#8FBC8F"
-)
+// --- Default color palette — uses the unified CwocDefaultColors from ColorUtils ---
+private val DEFAULT_COLORS = ColorUtils.CwocDefaultColorHexes
 
 // --- Notification offset presets ---
 private val NOTIFICATION_OFFSETS = listOf(
@@ -88,25 +84,39 @@ private val NOTIFICATION_OFFSETS = listOf(
 )
 
 // Tag color palette matching web implementation (bg/fg pairs)
+// Includes parchment-themed pairs PLUS all unified default colors with auto-contrast
 private data class PaletteColor(val bg: String, val fg: String)
 
-private val TAG_COLOR_PALETTE = listOf(
-    PaletteColor("#8b5a2b", "#fff8e1"),
-    PaletteColor("#a0522d", "#fff8e1"),
-    PaletteColor("#4a2c2a", "#fdf5e6"),
-    PaletteColor("#6b4e31", "#fff8e1"),
-    PaletteColor("#b22222", "#fff8e1"),
-    PaletteColor("#8b0000", "#fdf5e6"),
-    PaletteColor("#2e4057", "#fdf5e6"),
-    PaletteColor("#1b4332", "#e8dcc8"),
-    PaletteColor("#5c4033", "#faebd7"),
-    PaletteColor("#d4af37", "#2b1e0f"),
-    PaletteColor("#c4a484", "#2b1e0f"),
-    PaletteColor("#e8dcc8", "#4a2c2a"),
-    PaletteColor("#d2b48c", "#2b1e0f"),
-    PaletteColor("#f5e6cc", "#4a2c2a"),
-    PaletteColor("#fff8e1", "#4a2c2a")
-)
+private val TAG_COLOR_PALETTE: List<PaletteColor> = run {
+    val parchmentPairs = listOf(
+        PaletteColor("#8b5a2b", "#fff8e1"),
+        PaletteColor("#a0522d", "#fff8e1"),
+        PaletteColor("#4a2c2a", "#fdf5e6"),
+        PaletteColor("#6b4e31", "#fff8e1"),
+        PaletteColor("#b22222", "#fff8e1"),
+        PaletteColor("#8b0000", "#fdf5e6"),
+        PaletteColor("#2e4057", "#fdf5e6"),
+        PaletteColor("#1b4332", "#e8dcc8"),
+        PaletteColor("#5c4033", "#faebd7"),
+        PaletteColor("#d4af37", "#2b1e0f"),
+        PaletteColor("#c4a484", "#2b1e0f"),
+        PaletteColor("#e8dcc8", "#4a2c2a"),
+        PaletteColor("#d2b48c", "#2b1e0f"),
+        PaletteColor("#f5e6cc", "#4a2c2a"),
+        PaletteColor("#fff8e1", "#4a2c2a")
+    )
+    val seenBg = parchmentPairs.map { it.bg.lowercase() }.toMutableSet()
+    val fromDefaults = ColorUtils.CwocDefaultColorHexes
+        .filter { hex -> hex.lowercase() !in seenBg }
+        .map { hex ->
+            // Compute auto-contrast fg
+            val bgColor = ColorUtils.parseHexColor(hex) ?: androidx.compose.ui.graphics.Color.Gray
+            val lum = (bgColor.red * 299 + bgColor.green * 587 + bgColor.blue * 114) / 1000
+            val fg = if (lum > 0.55f) "#2b1e0f" else "#fdf5e6"
+            PaletteColor(hex, fg)
+        }
+    parchmentPairs + fromDefaults
+}
 
 // Font color swatches matching web implementation
 private val FONT_COLOR_SWATCHES = listOf(
@@ -832,6 +842,7 @@ private fun EnhancedTagEditDialog(
                 onClick = {
                     onConfirm(
                         TagItem(
+                            id = initialTag.id,
                             name = name,
                             color = selectedBgColor,
                             parent = selectedParent,
@@ -1776,6 +1787,7 @@ private fun NotificationOffsetDialog(
 // ============================================================
 
 private data class TagItem(
+    val id: String? = null,
     val name: String,
     val color: String,
     val parent: String = "",
@@ -1991,6 +2003,7 @@ private fun parseTagsJson(json: String): List<TagItem> {
                 }
             } else emptyList()
             TagItem(
+                id = obj.optString("id", "").takeIf { it.isNotBlank() },
                 name = obj.optString("name", ""),
                 color = obj.optString("color", "#808080"),
                 parent = obj.optString("parent", ""),
@@ -2008,6 +2021,9 @@ private fun serializeTagsJson(tags: List<TagItem>): String {
     val array = JSONArray()
     tags.forEach { tag ->
         val obj = JSONObject()
+        if (tag.id != null) {
+            obj.put("id", tag.id)
+        }
         obj.put("name", tag.name)
         obj.put("color", tag.color)
         if (tag.parent.isNotEmpty()) {

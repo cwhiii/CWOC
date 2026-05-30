@@ -3,8 +3,12 @@ package com.cwoc.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Utility functions for contact color theming and auto-contrast text.
- * Matches the web's applyChitColors() behavior.
+ * Utility functions for color theming, auto-contrast text, and the unified color palette.
+ * Matches the web's shared-utils.js _cwocDefaultColors and applyChitColors() behavior.
+ *
+ * ALL color pickers in the app (editor, contacts, bundles, settings, tags) MUST use
+ * [CwocDefaultColors] as their default palette. Custom colors from user settings are
+ * appended at render time by each picker.
  */
 object ColorUtils {
 
@@ -14,13 +18,32 @@ object ColorUtils {
     /** Light text color for dark backgrounds — matches web's #fdf5e6 */
     private val LightText = Color(0xFFFDF5E6)
 
-    /** The 20-color palette matching the web contact editor */
-    val ContactColorPalette = listOf(
-        "#E3B23C", "#D4764E", "#D45B5B", "#C2185B", "#7B1FA2",
-        "#512DA8", "#303F9F", "#1976D2", "#0097A7", "#00897B",
-        "#388E3C", "#689F38", "#AFB42B", "#F9A825", "#FF8F00",
-        "#D84315", "#795548", "#546E7A", "#8D6E63", "#E91E63"
+    /**
+     * Unified default color palette — the ONE source of truth for all color pickers.
+     * Matches web's _cwocDefaultColors in shared-utils.js exactly.
+     * Custom colors from user settings are appended at render time.
+     */
+    val CwocDefaultColors = listOf(
+        "#C66B6B" to "Dusty Rose",
+        "#D68A59" to "Burnt Sienna",
+        "#E3B23C" to "Golden Ochre",
+        "#8A9A5B" to "Mossy Sage",
+        "#6B8299" to "Slate Teal",
+        "#8B6B99" to "Muted Lilac"
     )
+
+    /** Just the hex values from the unified palette (convenience accessor) */
+    val CwocDefaultColorHexes: List<String> = CwocDefaultColors.map { it.first }
+
+    /**
+     * Look up a color name from the unified palette by hex value.
+     * Falls back to the hex string itself if not found.
+     */
+    fun colorName(hex: String?): String {
+        if (hex.isNullOrBlank()) return "None"
+        val match = CwocDefaultColors.find { it.first.equals(hex, ignoreCase = true) }
+        return match?.second ?: hex
+    }
 
     /**
      * Parse a hex color string (e.g. "#E3B23C") into a Compose Color.

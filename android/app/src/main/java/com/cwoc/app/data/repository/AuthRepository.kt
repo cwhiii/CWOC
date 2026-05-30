@@ -94,6 +94,21 @@ class AuthRepository @Inject constructor(
         val urlSaved = prefs.edit().putString("server_url", serverUrl).commit()
         android.util.Log.d("CWOC_LOGIN", "server_url commit result: $urlSaved")
 
+        // Cache LAN URL: if login URL is not a Tailscale address, store as lan_server_url
+        val tailscaleUrl = prefs.getString("tailscale_server_url", null)
+        val isTailscaleLogin = if (tailscaleUrl != null) {
+            try {
+                java.net.URI(serverUrl).host?.lowercase() == java.net.URI(tailscaleUrl).host?.lowercase()
+            } catch (_: Exception) { false }
+        } else false
+
+        if (!isTailscaleLogin) {
+            prefs.edit().putString("lan_server_url", serverUrl).apply()
+            android.util.Log.d("CWOC_LOGIN", "Cached lan_server_url: $serverUrl")
+        } else {
+            android.util.Log.d("CWOC_LOGIN", "Login via Tailscale — not overwriting lan_server_url")
+        }
+
         return try {
             val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
             val request = DeviceTokenRequest(

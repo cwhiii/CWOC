@@ -114,7 +114,9 @@ class WeatherWidgetConfigActivity : BaseWidgetConfigActivity() {
                         com.cwoc.app.data.local.migration.MIGRATION_8_9,
                         com.cwoc.app.data.local.migration.MIGRATION_9_10,
                         com.cwoc.app.data.local.migration.MIGRATION_10_11,
-                        com.cwoc.app.data.local.migration.MIGRATION_11_12
+                        com.cwoc.app.data.local.migration.MIGRATION_11_12,
+                        com.cwoc.app.data.local.migration.MIGRATION_12_13,
+                        com.cwoc.app.data.local.migration.MIGRATION_13_14
                     )
                     .build()
 

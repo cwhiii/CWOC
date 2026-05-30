@@ -181,6 +181,16 @@ class ChitEditorViewModel @Inject constructor(
     val conflictFields: StateFlow<List<String>> = _conflictFields.asStateFlow()
 
     /**
+     * Represents a system user (contact with a username) for assignee dropdowns.
+     * Stores both the user ID (for saving) and display name (for UI).
+     */
+    data class SystemUser(
+        val id: String,
+        val displayName: String,
+        val username: String? = null
+    )
+
+    /**
      * Editor settings loaded from SettingsRepository.
      * Contains timeFormat, calendarSnap, defaultTimezone, and customColors
      * needed by the editor zone composables.
@@ -190,7 +200,7 @@ class ChitEditorViewModel @Inject constructor(
         val calendarSnap: Int = 15,
         val defaultTimezone: String = "America/New_York",
         val customColors: List<String> = emptyList(),
-        val sharedUsers: List<String> = emptyList(),
+        val sharedUsers: List<SystemUser> = emptyList(),
         val savedLocations: List<String> = emptyList(),
         // L6: Default notifications to auto-populate on new chits
         val defaultNotifications: String? = null
@@ -330,14 +340,15 @@ class ChitEditorViewModel @Inject constructor(
                     defaultTimezone = settings.defaultTimezone ?: "America/New_York",
                     customColors = customColorsList,
                     savedLocations = savedLocationsList,
-                    // F1: Parse shared users from kioskUsers JSON array
+                    // Load system users from contacts table (users with username)
                     sharedUsers = try {
-                        if (!settings.kioskUsers.isNullOrBlank()) {
-                            com.google.gson.Gson().fromJson(
-                                settings.kioskUsers,
-                                object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
-                            ) ?: emptyList()
-                        } else emptyList()
+                        contactDao.getSystemUsers().map { contact ->
+                            SystemUser(
+                                id = contact.id,
+                                displayName = contact.displayName ?: contact.username ?: "(Unknown)",
+                                username = contact.username
+                            )
+                        }
                     } catch (e: Exception) { emptyList() },
                     // L6: Default notifications from settings
                     defaultNotifications = settings.defaultNotifications
@@ -596,6 +607,9 @@ class ChitEditorViewModel @Inject constructor(
      * Adds the new tag to the local settings tags JSON list and marks settings dirty.
      * Also refreshes the local tagTree state.
      *
+     * Note: The tag is created locally without an ID. The server will assign a UUID
+     * when settings are synced. On next sync, the tag will receive its server-assigned ID.
+     *
      * Validates: Requirements 4.4
      */
     fun onTagCreated(tagName: String) {
@@ -611,11 +625,13 @@ class ChitEditorViewModel @Inject constructor(
                 mutableListOf()
             }
 
-            // Check if tag already exists
-            val alreadyExists = existingTags.any { (it["name"] as? String) == tagName }
+            // Check if tag already exists (by name, case-insensitive)
+            val alreadyExists = existingTags.any {
+                (it["name"] as? String)?.equals(tagName, ignoreCase = true) == true
+            }
             if (alreadyExists) return@launch
 
-            // Add new tag entry
+            // Add new tag entry — no ID assigned locally; server will assign UUID on sync
             val newTag = mapOf<String, Any?>(
                 "name" to tagName,
                 "color" to null,

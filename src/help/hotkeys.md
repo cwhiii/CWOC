@@ -34,6 +34,13 @@ Use the C CAPTN tab bar or hotkeys to switch between Calendar, Checklists, Alert
 - `Ctrl+K` / `Cmd+K` — Link (in notes/email/checklist items)
 - `Ctrl+E` / `Cmd+E` — Inline code (in notes/email/checklist items)
 - `Ctrl+Shift+X` / `Cmd+Shift+X` — Strikethrough (in notes/email/checklist items)
+- `Ctrl+Shift+7` / `Cmd+Shift+7` — Numbered list (in notes/email/checklist items)
+- `Ctrl+Shift+8` / `Cmd+Shift+8` — Bullet list (in notes/email/checklist items)
+- `Ctrl+Shift+.` / `Cmd+Shift+.` — Blockquote (in notes/email/checklist items)
+- `Ctrl+Shift+1` / `Cmd+Shift+1` — Heading H1 (in notes/email/checklist items)
+- `Ctrl+Shift+2` / `Cmd+Shift+2` — Heading H2 (in notes/email/checklist items)
+- `Ctrl+Shift+3` / `Cmd+Shift+3` — Heading H3 (in notes/email/checklist items)
+- `Ctrl+Shift+-` / `Cmd+Shift+-` — Horizontal rule (in notes/email/checklist items)
 
 ### Checklist-Specific
 

@@ -58,12 +58,13 @@ async function _loadTagSharingUserList() {
 }
 
 /**
- * Get the shares array for a given tag name from the cached config.
+ * Get the shares array for a given tag identifier (Tag_ID or name) from the cached config.
+ * shared_tags[].tag now stores Tag_IDs (UUIDs).
  */
-function _getTagShares(tagName) {
-  if (!tagName || !_tagSharingConfig) return [];
+function _getTagShares(tagIdentifier) {
+  if (!tagIdentifier || !_tagSharingConfig) return [];
   for (var i = 0; i < _tagSharingConfig.length; i++) {
-    if (_tagSharingConfig[i].tag === tagName) {
+    if (_tagSharingConfig[i].tag === tagIdentifier) {
       return _tagSharingConfig[i].shares || [];
     }
   }
@@ -72,9 +73,10 @@ function _getTagShares(tagName) {
 
 /**
  * Check if a tag has any active sharing configuration.
+ * Accepts Tag_ID (UUID) as identifier.
  */
-function _tagHasSharing(tagName) {
-  return _getTagShares(tagName).length > 0;
+function _tagHasSharing(tagIdentifier) {
+  return _getTagShares(tagIdentifier).length > 0;
 }
 
 /**
@@ -231,19 +233,24 @@ function _removeTagShare(userId) {
 
 /**
  * Save the full shared_tags config to the server.
+ * Uses Tag_ID (UUID) as the tag identifier in shared_tags[].tag.
  */
-async function _saveTagSharingConfig(tagName) {
-  if (tagName === undefined) {
+async function _saveTagSharingConfig(tagId) {
+  if (tagId === undefined) {
+    // Get the tag ID from the modal — look up by name if needed
     var tagNameInput = document.getElementById('tag-name');
     if (!tagNameInput) return;
-    tagName = tagNameInput.value.trim();
+    var tagName = tagNameInput.value.trim();
     if (!tagName) return;
+    // Resolve name to Tag_ID
+    tagId = (typeof getTagIdByName === 'function') ? getTagIdByName(tagName) : null;
+    if (!tagId) tagId = tagName; // fallback to name if no ID found
   }
 
-  if (tagName) {
+  if (tagId) {
     var found = false;
     for (var i = 0; i < _tagSharingConfig.length; i++) {
-      if (_tagSharingConfig[i].tag === tagName) {
+      if (_tagSharingConfig[i].tag === tagId) {
         if (_currentTagShares.length === 0) {
           _tagSharingConfig.splice(i, 1);
         } else {
@@ -257,14 +264,14 @@ async function _saveTagSharingConfig(tagName) {
     }
     if (!found && _currentTagShares.length > 0) {
       _tagSharingConfig.push({
-        tag: tagName,
+        tag: tagId,
         shares: _currentTagShares.map(function(s) {
           return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
         }),
       });
     }
 
-    _propagateTagSharingToSubTags(tagName);
+    _propagateTagSharingToSubTags(tagId);
   }
 
   try {
@@ -291,28 +298,37 @@ async function _saveTagSharingConfig(tagName) {
 
 /**
  * Propagate a parent tag's sharing config to all its sub-tags.
+ * Uses Tag_IDs for identification. Resolves parent ID to name to find children.
  */
-function _propagateTagSharingToSubTags(parentTag) {
-  if (!parentTag) return;
+function _propagateTagSharingToSubTags(parentTagId) {
+  if (!parentTagId) return;
 
   var parentShares = null;
   for (var i = 0; i < _tagSharingConfig.length; i++) {
-    if (_tagSharingConfig[i].tag === parentTag) {
+    if (_tagSharingConfig[i].tag === parentTagId) {
       parentShares = _tagSharingConfig[i].shares;
       break;
     }
   }
 
+  // Resolve parent tag ID to name for hierarchical matching
+  var parentName = (typeof resolveTagId === 'function') ? resolveTagId(parentTagId) : null;
+  if (!parentName || parentName === '[unknown tag]') return;
+
+  var prefix = parentName + '/';
+
+  // Find all child tags by name prefix, then get their IDs
   var tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
-  var allTagNames = Array.from(tagDivs).map(function(div) {
-    return (div.childNodes[0]?.textContent || '').trim();
-  }).filter(function(n) { return n; });
+  var childTagIds = [];
+  tagDivs.forEach(function(div) {
+    var tagName = (div.childNodes[0]?.textContent || '').trim();
+    var tagId = div.dataset.tagId || '';
+    if (tagName && tagName.startsWith(prefix) && tagId) {
+      childTagIds.push(tagId);
+    }
+  });
 
-  var prefix = parentTag + '/';
-
-  allTagNames.forEach(function(tagName) {
-    if (!tagName.startsWith(prefix)) return;
-
+  childTagIds.forEach(function(childId) {
     if (parentShares && parentShares.length > 0) {
       var subShares = parentShares.map(function(s) {
         return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
@@ -320,18 +336,18 @@ function _propagateTagSharingToSubTags(parentTag) {
 
       var found = false;
       for (var j = 0; j < _tagSharingConfig.length; j++) {
-        if (_tagSharingConfig[j].tag === tagName) {
+        if (_tagSharingConfig[j].tag === childId) {
           _tagSharingConfig[j].shares = subShares;
           found = true;
           break;
         }
       }
       if (!found) {
-        _tagSharingConfig.push({ tag: tagName, shares: subShares });
+        _tagSharingConfig.push({ tag: childId, shares: subShares });
       }
     } else {
       _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
-        return entry.tag !== tagName;
+        return entry.tag !== childId;
       });
     }
   });
@@ -339,6 +355,7 @@ function _propagateTagSharingToSubTags(parentTag) {
 
 /**
  * When a sub-tag is added to a shared parent, copy the parent's sharing config.
+ * Uses Tag_IDs for the shared_tags[].tag field.
  */
 function _inheritParentTagSharing(newTagName) {
   if (!newTagName || !newTagName.includes('/')) return;
@@ -346,12 +363,18 @@ function _inheritParentTagSharing(newTagName) {
   var parts = newTagName.split('/');
   for (var depth = parts.length - 1; depth >= 1; depth--) {
     var parentPath = parts.slice(0, depth).join('/');
-    var parentShares = _getTagShares(parentPath);
+    // Resolve parent name to Tag_ID
+    var parentId = (typeof getTagIdByName === 'function') ? getTagIdByName(parentPath) : null;
+    if (!parentId) continue;
+    var parentShares = _getTagShares(parentId);
     if (parentShares.length > 0) {
+      // Get the new tag's ID
+      var newTagId = (typeof getTagIdByName === 'function') ? getTagIdByName(newTagName) : null;
+      if (!newTagId) return; // Can't store sharing without an ID
       var subShares = parentShares.map(function(s) {
         return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
       });
-      _tagSharingConfig.push({ tag: newTagName, shares: subShares });
+      _tagSharingConfig.push({ tag: newTagId, shares: subShares });
       _saveTagSharingConfig(null);
       return;
     }
@@ -360,11 +383,16 @@ function _inheritParentTagSharing(newTagName) {
 
 /**
  * Initialize the tag sharing section when the tag modal opens.
+ * Uses Tag_ID to look up sharing config.
  */
 async function _initTagSharingSection(tagName) {
   await _loadTagSharingUserList();
 
-  _currentTagShares = _getTagShares(tagName).map(function(s) {
+  // Resolve tag name to Tag_ID for lookup
+  var tagId = (typeof getTagIdByName === 'function') ? getTagIdByName(tagName) : null;
+  var lookupKey = tagId || tagName;
+
+  _currentTagShares = _getTagShares(lookupKey).map(function(s) {
     return {
       user_id: s.user_id,
       role: s.role,
@@ -379,6 +407,7 @@ async function _initTagSharingSection(tagName) {
 
 /**
  * Enforce tag permission on the tag edit modal.
+ * Uses Tag_ID for permission lookup.
  */
 function _enforceTagPermission(tagName) {
   var tagNameInput = document.getElementById('tag-name');
@@ -395,7 +424,9 @@ function _enforceTagPermission(tagName) {
   if (fgSwatches) fgSwatches.style.pointerEvents = '';
   if (deleteBtn) { deleteBtn.disabled = false; deleteBtn.style.opacity = ''; }
 
-  var perm = _getTagPermissionForCurrentUser(tagName);
+  // Resolve tag name to Tag_ID for permission check
+  var tagId = (typeof getTagIdByName === 'function') ? getTagIdByName(tagName) : null;
+  var perm = _getTagPermissionForCurrentUser(tagId || tagName);
   if (!perm) return;
 
   if (perm === 'view') {
@@ -410,14 +441,15 @@ function _enforceTagPermission(tagName) {
 
 /**
  * Check if the current user has a tag_permission on a tag shared by another user.
+ * Accepts Tag_ID or tag name as identifier.
  */
-function _getTagPermissionForCurrentUser(tagName) {
+function _getTagPermissionForCurrentUser(tagIdentifier) {
   var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
   var currentUserId = currentUser ? currentUser.user_id : null;
-  if (!currentUserId || !tagName) return null;
+  if (!currentUserId || !tagIdentifier) return null;
 
   for (var i = 0; i < _tagSharingConfig.length; i++) {
-    if (_tagSharingConfig[i].tag === tagName) {
+    if (_tagSharingConfig[i].tag === tagIdentifier) {
       return null;
     }
   }
@@ -425,7 +457,7 @@ function _getTagPermissionForCurrentUser(tagName) {
   if (window._receivedSharedTags) {
     for (var j = 0; j < window._receivedSharedTags.length; j++) {
       var entry = window._receivedSharedTags[j];
-      if (entry.tag === tagName) {
+      if (entry.tag === tagIdentifier) {
         var shares = entry.shares || [];
         for (var k = 0; k < shares.length; k++) {
           if (shares[k].user_id === currentUserId) {
@@ -646,6 +678,7 @@ function _loadKioskTagPicker() {
     return;
   }
 
+  // Load kiosk_selected_tags — now stores Tag_IDs (UUIDs)
   _kioskSelectedTags = [];
   if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.kiosk_users) {
     _kioskSelectedTags = window.settingsManager.settings.kiosk_users;
@@ -661,16 +694,17 @@ function _loadKioskTagPicker() {
 
 /**
  * Re-render the kiosk tag tree with current selection state.
+ * _kioskSelectedTags stores Tag_IDs (UUIDs).
  */
 function _renderKioskTagTree() {
   var container = document.getElementById('kiosk-tag-list');
   if (!container) return;
 
-  renderTagTree(container, _kioskTagTree, _kioskSelectedTags, function(fullPath, isNowSelected) {
+  renderTagTree(container, _kioskTagTree, _kioskSelectedTags, function(tagId, isNowSelected) {
     if (isNowSelected) {
-      if (_kioskSelectedTags.indexOf(fullPath) === -1) _kioskSelectedTags.push(fullPath);
+      if (_kioskSelectedTags.indexOf(tagId) === -1) _kioskSelectedTags.push(tagId);
     } else {
-      _kioskSelectedTags = _kioskSelectedTags.filter(function(t) { return t !== fullPath; });
+      _kioskSelectedTags = _kioskSelectedTags.filter(function(t) { return t !== tagId; });
     }
     _renderKioskTagTree();
     setSaveButtonUnsaved();
@@ -678,14 +712,14 @@ function _renderKioskTagTree() {
 }
 
 /**
- * Gather the selected kiosk tag names.
+ * Gather the selected kiosk Tag_IDs (UUIDs).
  */
 function _gatherKioskTags() {
   return _kioskSelectedTags.slice();
 }
 
 /**
- * Open the kiosk with the selected tags.
+ * Open the kiosk with the selected Tag_IDs.
  */
 function _openKiosk() {
   var selected = _gatherKioskTags();

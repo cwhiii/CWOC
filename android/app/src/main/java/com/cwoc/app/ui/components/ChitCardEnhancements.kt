@@ -62,13 +62,16 @@ private val SYSTEM_TAGS = setOf(
 
 /**
  * Renders tag chips for a chit card. Shows colored pills with tag names.
- * Tags are stored as a List<String> on ChitEntity.
+ * Tags are stored as a List<String> on ChitEntity — containing UUIDs (user tags)
+ * and system tag name strings (CWOC_System/, Habits/).
  * System tags (Calendar, Checklists, Alarms, Projects, Tasks, Notes) and
  * internal CWOC_System/ prefixed tags are automatically filtered out.
  *
- * @param tags List of tag name strings from the chit
+ * @param tags List of tag ID strings (UUIDs) and/or system tag name strings from the chit
  * @param tagColorMap Optional map of tag name → hex color string from settings.
  *                    When provided, uses the configured color. Falls back to hash-based color.
+ * @param tagRegistry Optional map of tag ID (UUID) → TagDisplayInfo for resolving IDs to names/colors.
+ *                    When provided, UUIDs are resolved to display names. Without it, UUIDs display as-is.
  * @param maxTags Maximum number of tags to display before showing "+N" overflow
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -77,16 +80,26 @@ fun TagChipsRow(
     tags: List<String>?,
     modifier: Modifier = Modifier,
     tagColorMap: Map<String, String>? = null,
+    tagRegistry: Map<String, TagDisplayInfo>? = null,
     maxTags: Int = 4,
     overflowTextColor: Color? = null
 ) {
     if (tags.isNullOrEmpty()) return
 
-    // Filter out system tags and internal CWOC_System/ prefixed tags
-    val userTags = remember(tags) {
+    // Filter out system tags and resolve UUIDs to display info
+    val userTags = remember(tags, tagRegistry) {
         tags.filter { tag ->
             tag !in SYSTEM_TAGS &&
                 !tag.startsWith("CWOC_System/", ignoreCase = true)
+        }.map { tag ->
+            // Try to resolve UUID via registry
+            val info = tagRegistry?.get(tag)
+            if (info != null) {
+                TagChipData(displayName = info.name, color = info.color, rawValue = tag)
+            } else {
+                // Legacy name string or unresolved UUID — display as-is
+                TagChipData(displayName = tag, color = tagColorMap?.get(tag), rawValue = tag)
+            }
         }
     }
 
@@ -98,8 +111,8 @@ fun TagChipsRow(
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         val displayTags = if (userTags.size > maxTags) userTags.take(maxTags) else userTags
-        displayTags.forEach { tag ->
-            TagChip(tagName = tag, configuredColor = tagColorMap?.get(tag))
+        displayTags.forEach { chipData ->
+            TagChip(tagName = chipData.displayName, configuredColor = chipData.color)
         }
         if (userTags.size > maxTags) {
             Text(
@@ -111,6 +124,24 @@ fun TagChipsRow(
         }
     }
 }
+
+/**
+ * Display info for a tag, used by TagChipsRow to resolve UUIDs.
+ */
+data class TagDisplayInfo(
+    val name: String,
+    val color: String? = null,
+    val fontColor: String? = null
+)
+
+/**
+ * Internal data for rendering a single tag chip.
+ */
+private data class TagChipData(
+    val displayName: String,
+    val color: String?,
+    val rawValue: String
+)
 
 @Composable
 private fun TagChip(tagName: String, configuredColor: String? = null) {

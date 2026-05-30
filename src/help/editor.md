@@ -93,6 +93,7 @@ Below the Assignee field in the Task zone, a **Prerequisites** section lets you 
 The checklist zone header includes a **Data** menu (⋮) with clipboard and management actions:
 
 - **Paste as list items** — Reads your clipboard and creates each line as a new checklist item. Recognizes markdown checklist syntax (`- [ ]` / `- [x]`), bullet points, numbered lists, and plain lines. Indentation is preserved as nesting levels.
+- **Upload file as list items** — Import any text file (`.md`, `.txt`, `.csv`, etc.) as checklist items. Each line becomes an item, with the same parsing as Paste (markdown checklists, bullets, numbered lists, indentation). Supports undo.
 - **Copy incomplete to clipboard** — Copies all unchecked items to your clipboard as markdown checklist lines (`- [ ] item`), preserving indentation.
 - **Delete checked/unchecked items** — Bulk remove completed or incomplete items.
 - **Clean up empty items** — Remove items with no text.
@@ -126,8 +127,23 @@ While editing a checklist item, the same markdown formatting shortcuts available
 - `Ctrl+K` / `Cmd+K` — Link (`[text](url)`)
 - `Ctrl+E` / `Cmd+E` — Inline Code (`` `text` ``)
 - `Ctrl+Shift+X` / `Cmd+Shift+X` — Strikethrough (`~~text~~`)
+- `Ctrl+Shift+7` / `Cmd+Shift+7` — Numbered List
+- `Ctrl+Shift+8` / `Cmd+Shift+8` — Bullet List
+- `Ctrl+Shift+.` / `Cmd+Shift+.` — Blockquote
+- `Ctrl+Shift+1/2/3` / `Cmd+Shift+1/2/3` — Heading H1/H2/H3
+- `Ctrl+Shift+-` / `Cmd+Shift+-` — Horizontal Rule
 
-Select text first, then press the shortcut to wrap it in the formatting markers.
+Select text first, then press the shortcut to wrap it in the formatting markers. Without a selection, delimiters are inserted at the cursor.
+
+### Format Toolbar
+
+A format toolbar appears whenever you're editing a checklist item or typing in the "Add new item" input. It provides the same formatting buttons as the Notes zone:
+
+**Desktop:** The toolbar appears inline at the top of the checklist zone with buttons for Bold, Italic, Strikethrough, Link, Heading (H1/H2/H3 dropdown), Bullet List, Numbered List, Blockquote, Code, and Horizontal Rule.
+
+**Mobile:** A bottom-pinned toolbar appears above the keyboard with a scrollable row of formatting buttons, matching the Notes zone mobile toolbar pattern.
+
+**Android App:** A compact formatting row appears below the editing text field with the same set of buttons.
 
 ### Checkbox Animation
 
@@ -147,8 +163,13 @@ When items are selected, a toolbar appears with batch actions:
 - **Check** — Mark all selected items as checked
 - **Delete** — Delete all selected items (with confirmation)
 - **Move** — Move all selected items to another chit
+- **Copy** — Copy all selected items to clipboard as markdown checklist lines
 - **Indent / Outdent** — Adjust indentation of all selected items
 - **✕** — Clear the selection
+
+### Copy Item
+
+Each item has a 📋 icon (visible on hover, always visible on touch devices) to copy its text to the clipboard. Tapping it copies the item's raw text content and shows a brief confirmation toast.
 
 ### Send to Another Chit
 
@@ -167,7 +188,7 @@ The notes zone provides a **markdown editor** with a format toolbar and render t
 
 **Format Toolbar:** Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On desktop, the toolbar sits at the top of the zone body.
 
-**Mobile Toolbar:** On mobile, the format toolbar is pinned to the bottom of the screen (above the keyboard), matching the Android app layout. From left to right: Data menu (⋮), Preview/Edit toggle, Undo, Redo, then a scrollable row of formatting buttons (Bold, Italic, Strikethrough, Link, Heading dropdown, Bullet List, Numbered List, Block dropdown with Blockquote/Code/Horizontal Rule). The Data menu includes Copy to clipboard, Download as file, Send to another chit, Move to checklist, and Share. In preview mode, formatting buttons are disabled.
+**Mobile Toolbar:** On mobile, the format toolbar is pinned to the bottom of the screen (above the keyboard), matching the Android app layout. From left to right: Data menu (⋮), Preview/Edit toggle, Undo, Redo, then a scrollable row of formatting buttons (Bold, Italic, Strikethrough, Link, Heading dropdown, Bullet List, Numbered List, Block dropdown with Blockquote/Code/Horizontal Rule). The Data menu includes Copy to clipboard, Download as file, Upload file as note, Send to another chit, Move to checklist, and Share. In preview mode, formatting buttons are disabled.
 
 **Keyboard Shortcuts:**
 
@@ -184,6 +205,14 @@ The notes zone provides a **markdown editor** with a format toolbar and render t
 **Chit Link Autocomplete:** Type `[[` to trigger an autocomplete dropdown showing matching chit titles. Use Arrow keys to navigate, Enter to select, Escape to dismiss. The selected title is inserted as `[[title]]`.
 
 **Expand to Modal:** Click the Expand button in the zone header to open a full-screen editing modal (desktop only — on mobile the zone already fills the screen). Click "Done" to save changes back to the main editor.
+
+**Data Menu (⋮):** The Data button in the zone header opens a dropdown with:
+
+- **Copy to clipboard** — Copies the full notes text
+- **Download as file** — Saves notes as a `.md` file named after the chit title
+- **Upload file as note** — Import any text file (`.md`, `.txt`, `.csv`, `.json`, `.xml`, `.log`, code files, etc.) into the notes field. If notes are empty, the file content is loaded directly. If notes already have content, you're prompted to Append (adds below existing notes with a horizontal rule separator) or Replace (overwrites entirely, with confirmation)
+- **Send to another chit** — Transfer notes content to a different chit
+- **Move to checklist** — Convert note lines to checklist items
 
 The **← Checklist** button appends all checklist items to the notes as markdown checklist lines (`- [ ] item` / `- [x] item`). Both conversions are additive — they don't remove existing content from either zone.
 

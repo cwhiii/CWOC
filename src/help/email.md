@@ -106,7 +106,8 @@ Badges are smart action buttons that appear on email cards when actionable conte
 - **One Per Category** — At most one badge per category per email, up to the configured maximum (default 3)
 - **Configure in Settings** — Go to [Settings → Badges](/frontend/html/settings.html#badges) to enable/disable individual detectors or entire categories, change the max badges per email, or create custom detectors
 - **Custom Detectors** — Define your own detection patterns with keywords, regex, and a URL template. Useful for services not covered by the built-in set (pharmacies, loyalty programs, etc.)
+- **Badges Page** — All detected badges are also persisted and shown on the dedicated [Badges page](/frontend/html/help.html#badges), which tracks active items, auto-completes them, and shows recently finished ones in a categorized command center
 
 ---
 
-**See also:** [Views](/frontend/html/help.html#views) · [Omni View](/frontend/html/help.html#omni-view) · [Contacts](/frontend/html/people.html) · [Keyboard Shortcuts](/frontend/html/help.html#hotkeys)
+**See also:** [Views](/frontend/html/help.html#views) · [Omni View](/frontend/html/help.html#omni-view) · [Badges Page](/frontend/html/help.html#badges) · [Contacts](/frontend/html/people.html) · [Keyboard Shortcuts](/frontend/html/help.html#hotkeys)

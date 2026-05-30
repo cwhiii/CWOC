@@ -23,7 +23,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.recurrence.RecurrenceEngine
 import com.cwoc.app.domain.recurrence.RecurrenceRule
 import com.cwoc.app.ui.components.FlatpickrCalendarPicker
+import com.cwoc.app.ui.components.CwocZoneButton
 import com.cwoc.app.ui.components.formatYMDDate
 import com.cwoc.app.ui.components.parseYMDDate
 import com.cwoc.app.ui.theme.CwocDialogDefaults
@@ -212,7 +212,7 @@ fun RecurrenceZone(
             // --- Clear Button ---
             if (parsedRule != null) {
                 HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
-                TextButton(onClick = { onRecurrenceRuleChanged(null) }) {
+                CwocZoneButton(onClick = { onRecurrenceRuleChanged(null) }) {
                     Text("Clear Recurrence")
                 }
             }
@@ -396,13 +396,13 @@ private fun CustomRecurrenceBuilder(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.width(60.dp)
             )
-            TextButton(onClick = { showUntilDatePicker = true }) {
+            CwocZoneButton(onClick = { showUntilDatePicker = true }) {
                 Text(
                     text = rule.until?.let { formatUntilDate(it) } ?: "Set date"
                 )
             }
             if (rule.until != null) {
-                TextButton(onClick = {
+                CwocZoneButton(onClick = {
                     val updatedRule = rule.copy(until = null)
                     onRuleChanged(gson.toJson(updatedRule))
                 }) {

@@ -2023,6 +2023,14 @@ def _do_email_sync(user_id: str):
             except Exception as e:
                 logger.warning(f"Bundle classification error: {e}")
 
+        # ── Badge detection: scan new emails for trackable smart links ────
+        if all_email_chits:
+            try:
+                from src.backend.badge_integration import process_badges_batch
+                process_badges_batch(all_email_chits, user_id)
+            except Exception as e:
+                logger.warning(f"Badge detection error during sync: {e}")
+
         # Fire-and-forget: dispatch rules engine triggers for new email chits
         # (non-bundle "email_received" rules still fire via normal dispatch)
         try:

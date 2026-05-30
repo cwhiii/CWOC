@@ -782,5 +782,6 @@ class FakeEditorContactDao : com.cwoc.app.data.local.dao.ContactDao {
     override suspend fun purge(id: String) {}
     override suspend fun toggleFavorite(id: String, now: String) {}
     override suspend fun getFavoriteState(id: String): Boolean? = null
+    override suspend fun getSystemUsers(): List<com.cwoc.app.data.local.entity.ContactEntity> = emptyList()
     override fun getAllContacts(): Flow<List<com.cwoc.app.data.local.entity.ContactEntity>> = flowOf(emptyList())
 }

@@ -110,6 +110,8 @@ function _buildNotePreview(chit, extraStyle) {
   notePreview.className = 'note-preview';
   if (typeof marked !== 'undefined') {
     notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500), { breaks: true }), chits);
+    // Prevent links/images inside note preview from intercepting card drag
+    notePreview.querySelectorAll('a, img').forEach(function(el) { el.draggable = false; });
   } else {
     notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
   }

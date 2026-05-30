@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/images/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+    <style>
+        /* ══ ABOUT PAGE STYLES ══ */
+
+        .about-hero {
+            text-align: center;
+            margin-bottom: 2em;
+            padding: 1.5em 1em;
+        }
+        .about-hero img {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 3px solid #8b5a2b;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            margin-bottom: 1em;
+        }
+        .about-hero h1 {
+            font-size: 1.8em;
+            color: #4a2c2a;
+            margin: 0 0 0.3em;
+            letter-spacing: 1px;
+        }
+        .about-hero .tagline {
+            font-size: 1.1em;
+            color: #6b4e31;
+            font-style: italic;
+            margin: 0;
+        }
+        .about-version {
+            margin-top: 0.8em;
+            font-size: 0.9em;
+            color: #8b7355;
+        }
+        .about-version span {
+            background: rgba(139, 90, 43, 0.1);
+            padding: 3px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(139, 90, 43, 0.2);
+        }
+
+        /* ── Section Cards ── */
+        .about-section {
+            background: #fff8e1;
+            border: 1px solid #8b5a2b;
+            border-radius: 8px;
+            padding: 1.5em;
+            margin-bottom: 1.5em;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+        .about-section h2 {
+            font-size: 1.3em;
+            color: #4a2c2a;
+            margin: 0 0 0.8em;
+            padding-bottom: 0.5em;
+            border-bottom: 2px solid rgba(139, 90, 43, 0.2);
+            text-transform: none;
+            letter-spacing: 0.5px;
+            text-align: left;
+        }
+        .about-section p {
+            line-height: 1.7;
+            color: #1a1208;
+            margin: 0 0 0.8em;
+        }
+        .about-section p:last-child {
+            margin-bottom: 0;
+        }
+        .about-section ul {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        .about-section li {
+            margin: 0.4em 0;
+            line-height: 1.6;
+            color: #1a1208;
+        }
+
+        /* ── Creator Card ── */
+        .about-creator {
+            display: flex;
+            align-items: center;
+            gap: 1.2em;
+        }
+        .about-creator-info {
+            flex: 1;
+        }
+        .about-creator-name {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #4a2c2a;
+            margin-bottom: 0.3em;
+        }
+        .about-creator-bio {
+            font-size: 0.95em;
+            color: #3a2a1a;
+            line-height: 1.6;
+        }
+        .about-links {
+            margin-top: 1em;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .about-links a {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 0.9em;
+            font-weight: 600;
+            font-family: 'Lora', Georgia, serif;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            transition: box-shadow 0.2s, transform 0.1s;
+        }
+        .about-links a:hover {
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+            transform: translateY(-1px);
+        }
+
+        /* ── Buy Me a Coffee ── */
+        .coffee-section {
+            text-align: center;
+            padding: 2em 1.5em;
+            background: linear-gradient(135deg, #fff8e1 0%, #f5e6cc 100%);
+            border: 2px solid #d4af37;
+            border-radius: 10px;
+            margin-bottom: 1.5em;
+            box-shadow: 0 3px 8px rgba(212, 175, 55, 0.2);
+        }
+        .coffee-section h2 {
+            font-size: 1.4em;
+            color: #4a2c2a;
+            margin: 0 0 0.6em;
+            border-bottom: none;
+            padding-bottom: 0;
+            text-transform: none;
+            text-align: center;
+        }
+        .coffee-section p {
+            color: #3a2a1a;
+            line-height: 1.7;
+            margin: 0 0 1.2em;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .coffee-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: #8b5a2b;
+            color: #fff8e1;
+            border: 2px solid #5a3f2a;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 1.1em;
+            font-weight: 700;
+            font-family: 'Lora', Georgia, serif;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+        }
+        .coffee-btn:hover {
+            background: #6b4226;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3);
+        }
+        .coffee-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .coffee-icon {
+            font-size: 1.3em;
+        }
+
+        /* ── Tech Stack ── */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 0.8em;
+        }
+        .tech-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(139, 90, 43, 0.06);
+            border: 1px solid rgba(139, 90, 43, 0.15);
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #1a1208;
+        }
+        .tech-item i {
+            color: #8b5a2b;
+            width: 18px;
+            text-align: center;
+        }
+
+        /* ── Mobile ── */
+        @media (max-width: 480px) {
+            .about-hero img {
+                width: 100px;
+                height: 100px;
+            }
+            .about-hero h1 {
+                font-size: 1.4em;
+            }
+            .about-creator {
+                flex-direction: column;
+                text-align: center;
+            }
+            .about-links {
+                justify-content: center;
+            }
+            .tech-grid {
+                grid-template-columns: 1fr;
+            }
+            .coffee-section {
+                padding: 1.5em 1em;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="About" data-page-icon="ℹ️">
+
+    <div class="settings-panel">
+
+        <!-- Hero -->
+        <div class="about-hero">
+            <img src="/static/images/cwod_logo-large.png" alt="CWOC Logo" />
+            <h1>C.W.'s Omni Chits</h1>
+            <p class="tagline">One chit to rule them all.</p>
+        </div>
+
+        <!-- What is CWOC -->
+        <div class="about-section">
+            <h2>📜 What is CWOC?</h2>
+            <p>A self-hosted task, note, and calendar management app built around one flexible record — the <strong>chit</strong>. A chit can be a task, note, calendar event, alarm, checklist, or project, all in one unified data model.</p>
+            <p>Unlike most productivity tools, CWOC doesn't force you to pick a category up front. Fill in the fields that matter and the system figures out where it belongs. A chit with a date shows up on the calendar. Add a checklist and it appears in checklists too. Tag it and it filters with everything else.</p>
+            <p>Available as a web app and a native <strong>Android app</strong>. <a href="https://www.cwholemaniii.com/cwoc" target="_blank" rel="noopener" style="color:#6b4e31;font-weight:600;">Learn more & download →</a></p>
+            <p>No subscriptions. No cloud dependency. Your data lives on your hardware in a single SQLite file, accessible from any device on your network.</p>
+        </div>
+
+        <!-- Buy Me a Coffee -->
+        <div class="coffee-section">
+            <h2>☕ Buy Me a Coffee</h2>
+            <p>CWOC is a labor of love — built solo, maintained solo, and given away freely. If it's made your life a little more organized, consider fueling the next feature with a coffee.</p>
+            <a href="https://www.paypal.com/paypalme/cwhiii" target="_blank" rel="noopener" class="coffee-btn">
+                <span class="coffee-icon">☕</span>
+                Buy Me a Coffee
+            </a>
+        </div>
+
+        <!-- Creator -->
+        <div class="about-section">
+            <h2>👤 The Creator</h2>
+            <div class="about-creator">
+                <div class="about-creator-info">
+                    <div class="about-creator-name">C.W. Holeman III</div>
+                    <div class="about-creator-bio">
+                        Software developer, tinkerer, and believer in tools that work the way you think — not the other way around. CWOC started as a personal itch-scratcher and grew into a full-featured system that replaces a patchwork of apps with one unified interface.
+                    </div>
+                    <div class="about-links">
+                        <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank" rel="noopener">
+                            <i class="fas fa-globe"></i> Website
+                        </a>
+                        <a href="https://www.paypal.com/paypalme/cwhiii" target="_blank" rel="noopener">
+                            <i class="fas fa-mug-hot"></i> Support
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Philosophy -->
+        <div class="about-section">
+            <h2>💡 Philosophy</h2>
+            <ul>
+                <li><strong>One record, infinite uses.</strong> A chit adapts to what you need — no rigid categories, no separate apps for separate things.</li>
+                <li><strong>Your data, your hardware.</strong> Self-hosted, single SQLite file, no cloud lock-in. You own everything.</li>
+                <li><strong>No build step, no framework.</strong> Vanilla JS, HTML, CSS. Lightweight enough to run on a Raspberry Pi.</li>
+                <li><strong>Connections surface naturally.</strong> When everything lives on the same record, every field makes every view smarter.</li>
+            </ul>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="about-section">
+            <h2>🔧 Tech Stack</h2>
+            <div class="tech-grid">
+                <div class="tech-item"><i class="fab fa-python"></i> Python 3 + FastAPI</div>
+                <div class="tech-item"><i class="fas fa-database"></i> SQLite3</div>
+                <div class="tech-item"><i class="fab fa-js"></i> Vanilla JavaScript</div>
+                <div class="tech-item"><i class="fab fa-html5"></i> HTML5 + CSS3</div>
+                <div class="tech-item"><i class="fab fa-android"></i> Kotlin + Compose</div>
+                <div class="tech-item"><i class="fas fa-server"></i> Uvicorn</div>
+            </div>
+        </div>
+
+        <!-- License / Open Source -->
+        <div class="about-section">
+            <h2>📄 License</h2>
+            <p>CWOC is a personal project. All rights reserved. Built with care, shared with friends.</p>
+        </div>
+
+        <!-- Version (bottom) -->
+        <div class="about-version" style="text-align:center;margin-top:1em;">
+            <span id="about-version-label">Loading version...</span>
+        </div>
+
+    </div>
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-tab-sync.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/about.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

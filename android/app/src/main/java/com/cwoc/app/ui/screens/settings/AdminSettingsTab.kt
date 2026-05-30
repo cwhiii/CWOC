@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,18 +68,43 @@ import com.cwoc.app.ui.screens.settings.components.UpgradeModal
 import com.cwoc.app.ui.screens.settings.components.UpgradeModalMode
 import com.cwoc.app.ui.components.ReleaseNotesDialog
 import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.dto.BackupConfigSaveRequestDto
+import com.cwoc.app.data.remote.dto.BackupSnapshotDto
+import com.cwoc.app.data.remote.dto.BackupTargetDto
+import com.cwoc.app.data.remote.dto.NotificationRecipientsDto
+import com.cwoc.app.data.remote.dto.OrphanRepoDto
+import com.cwoc.app.data.remote.dto.RetentionPolicyDto
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material3.RadioButton
 import okhttp3.OkHttpClient
 import org.json.JSONArray
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.cwoc.app.ui.theme.CwocPrimary
+import com.cwoc.app.ui.theme.CwocSurface
 
 /**
  * Admin settings tab containing Administration, Diagnostics, Data Management, Calendar Export,
@@ -767,8 +794,10 @@ private fun DataManagementSection(
     onNavigateToTrash: () -> Unit,
     onNavigateToCustomObjects: () -> Unit
 ) {
+    var showExportDialog by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
     var showImportModeDialog by remember { mutableStateOf(false) }
-    var importModeTarget by remember { mutableStateOf("") } // "chit", "user", "calendar", "google_tasks", "google_keep"
+    var importModeTarget by remember { mutableStateOf("") } // "chit", "user", "all", "calendar", "google_tasks", "google_keep"
     var showReplaceConfirm by remember { mutableStateOf(false) }
     var showPurgeConfirm1 by remember { mutableStateOf(false) }
     var showPurgeConfirm2 by remember { mutableStateOf(false) }
@@ -784,116 +813,35 @@ private fun DataManagementSection(
                 modifier = Modifier.padding(start = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // ── Export / Import: Chit Data (Req 24.1) ──
-                CwocSectionHeading(text = "Chit Data")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { /* TODO: GET /api/export/chits → share sheet / file-save picker */ },
-                        modifier = Modifier.weight(1f),
-                        colors = CwocButtonDefaults.outsetColors(),
-                        border = CwocButtonDefaults.outsetBorder,
-                        shape = CwocButtonDefaults.outsetShape
-                    ) {
-                        Text("📤 Export")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            importModeTarget = "chit"
-                            showImportModeDialog = true
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = CwocButtonDefaults.outsetColors(),
-                        border = CwocButtonDefaults.outsetBorder,
-                        shape = CwocButtonDefaults.outsetShape
-                    ) {
-                        Text("📥 Import")
-                    }
-                }
-
-                // ── Export / Import: User Data (Req 24.2) ──
-                CwocSectionHeading(text = "User Data")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { /* TODO: GET /api/export/users → share sheet / file-save picker */ },
-                        modifier = Modifier.weight(1f),
-                        colors = CwocButtonDefaults.outsetColors(),
-                        border = CwocButtonDefaults.outsetBorder,
-                        shape = CwocButtonDefaults.outsetShape
-                    ) {
-                        Text("📤 Export")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            importModeTarget = "user"
-                            showImportModeDialog = true
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = CwocButtonDefaults.outsetColors(),
-                        border = CwocButtonDefaults.outsetBorder,
-                        shape = CwocButtonDefaults.outsetShape
-                    ) {
-                        Text("📥 Import")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // ── Calendar Import (.ics) with user selection (Req 24.3) ──
-                CwocSectionHeading(text = "Calendar Import (.ics)")
-                // User selection dropdown for calendar import
-                SettingsDropdown(
-                    label = "Import as user",
-                    value = selectedImportUser,
-                    options = listOf("Current User"), // TODO: Populate from user list
-                    onValueChange = { selectedImportUser = it }
+                // ── Export & Import Buttons ──
+                CwocSectionHeading(text = "Export & Import")
+                Text(
+                    text = "Export your data as JSON files or import from a previous export. For automated encrypted backups, see Restic Backup below.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                OutlinedButton(
-                    onClick = {
-                        importModeTarget = "calendar"
-                        showImportModeDialog = true
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CwocButtonDefaults.outsetColors(),
-                    border = CwocButtonDefaults.outsetBorder,
-                    shape = CwocButtonDefaults.outsetShape
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("📅 Import Calendar (.ics)")
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // ── Import Google Tasks (.json) (Req 24.4) ──
-                OutlinedButton(
-                    onClick = {
-                        importModeTarget = "google_tasks"
-                        showImportModeDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CwocButtonDefaults.outsetColors(),
-                    border = CwocButtonDefaults.outsetBorder,
-                    shape = CwocButtonDefaults.outsetShape
-                ) {
-                    Text("📋 Import Google Tasks (.json)")
-                }
-
-                // ── Import Google Keep (.json) (Req 24.5) ──
-                OutlinedButton(
-                    onClick = {
-                        importModeTarget = "google_keep"
-                        showImportModeDialog = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CwocButtonDefaults.outsetColors(),
-                    border = CwocButtonDefaults.outsetBorder,
-                    shape = CwocButtonDefaults.outsetShape
-                ) {
-                    Text("📝 Import Google Keep (.json)")
+                    Button(
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Text("📤 Export Data")
+                    }
+                    Button(
+                        onClick = { showImportDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Text("📥 Import Data")
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -982,6 +930,196 @@ private fun DataManagementSection(
                     )
                 }
             }
+    }
+
+    // ── Export Data Dialog ──
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("📤 Export Data", style = CwocDialogDefaults.titleStyle) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Download your data as JSON files for backup or migration.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            // TODO: GET /api/export/all → share sheet
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌐 All Data", fontWeight = FontWeight.Bold)
+                            Text("Chits, settings, tags, colors, contacts, alerts", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            // TODO: GET /api/export/chits → share sheet
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("📝 Chit Data Only", fontWeight = FontWeight.Bold)
+                            Text("All chits including deleted chits", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showExportDialog = false
+                            // TODO: GET /api/export/userdata → share sheet
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("👤 User Data Only", fontWeight = FontWeight.Bold)
+                            Text("Settings, tags, colors, saved locations, contacts", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    // ── Import Data Dialog ──
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("📥 Import Data", style = CwocDialogDefaults.titleStyle) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Restore from a previous CWOC export, or import from external apps.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("From CWOC Export", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "all"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("🌐 Import All Data", fontWeight = FontWeight.Bold)
+                            Text("From a combined export file", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "chit"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("📝 Import Chit Data", fontWeight = FontWeight.Bold)
+                            Text("From a chit-only export file", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "user"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("👤 Import User Data", fontWeight = FontWeight.Bold)
+                            Text("From a user data export file", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("From External Apps", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "calendar"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("📅 Calendar (.ics)", fontWeight = FontWeight.Bold)
+                            Text("Google Calendar, Apple Calendar, or Outlook", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "google_tasks"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("✅ Google Tasks (.json)", fontWeight = FontWeight.Bold)
+                            Text("From Google Takeout export", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showImportDialog = false
+                            importModeTarget = "google_keep"
+                            showImportModeDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocButtonDefaults.outsetColors(),
+                        border = CwocButtonDefaults.outsetBorder,
+                        shape = CwocButtonDefaults.outsetShape
+                    ) {
+                        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                            Text("📝 Google Keep (.json)", fontWeight = FontWeight.Bold)
+                            Text("From Google Takeout export (multiple files)", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImportDialog = false }) { Text("Close") }
+            }
+        )
     }
 
     // ── Import Mode Dialog (Req 24.12) ──
@@ -1417,7 +1555,21 @@ private fun DependentAppsSection(
                         }
                     }
                 }
+
+                // Restic Backup
+                if (settingsViewModel != null) {
+                    BackupSection(
+                        settingsState = settingsState,
+                        onUpdateSetting = onUpdateSetting,
+                        settingsViewModel = settingsViewModel
+                    )
+                }
             }
+        }
+
+        // Backup Target Modal (rendered outside section body so it overlays everything)
+        if (settingsViewModel != null) {
+            BackupTargetModal(settingsViewModel = settingsViewModel)
         }
     }
 }
@@ -2275,6 +2427,1658 @@ private fun HomeAssistantSection(
 }
 
 // ============================================================
+// Section: Restic Backup (Task 3.1)
+// Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.9, 11.3
+// ============================================================
+
+/**
+ * Restic Backup section with zone-button header (status icon), help toggle,
+ * collapsible body with status panel, and lazy-load initialization.
+ *
+ * Follows the same pattern as NtfySection: zone-button header, help icon,
+ * AnimatedVisibility body, and initialized flag for lazy-loading.
+ *
+ * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.9, 11.3
+ */
+@Composable
+fun BackupSection(
+    settingsState: SettingsFormState,
+    onUpdateSetting: (key: String, value: String) -> Unit,
+    settingsViewModel: SettingsViewModel
+) {
+    val backupState by settingsViewModel.backupState.collectAsState()
+    val context = LocalContext.current
+
+    var sectionExpanded by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
+
+    // Observe download events — open URL in browser via Intent.ACTION_VIEW (Req 6.5, 7.2)
+    LaunchedEffect(Unit) {
+        settingsViewModel.backupDownloadEvent.collect { url ->
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            context.startActivity(intent)
+        }
+    }
+
+    // Observe toast events — show Toast messages for backup operations
+    LaunchedEffect(Unit) {
+        settingsViewModel.backupToastEvent.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Initialize: fetch targets when section first expands (matching Ntfy's initialized pattern)
+    val initialized = remember { mutableStateOf(false) }
+    if (sectionExpanded && !initialized.value) {
+        initialized.value = true
+        settingsViewModel.loadBackupTargets()
+    }
+
+    // Determine status icon for the header button — Req 1.2
+    val statusIcon = when (backupState.headerStatus) {
+        "inactive" -> "⚪"
+        "incomplete" -> "🟡"
+        "ok" -> "🟢"
+        "local_only" -> "🟢🟡"
+        "error" -> "🔴"
+        else -> "⚪"
+    }
+
+    Column {
+        // Header row: Restic Backup zone-button with status icon + help icon (Req 1.1, 1.2)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { sectionExpanded = !sectionExpanded },
+                colors = CwocButtonDefaults.outsetColors(),
+                border = CwocButtonDefaults.outsetBorder,
+                shape = CwocButtonDefaults.outsetShape
+            ) {
+                Text("Restic Backup  $statusIcon")
+            }
+
+            // Help icon (circle-question) — Req 1.3
+            IconButton(
+                onClick = { showHelp = !showHelp },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Text(
+                    text = "❓",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
+        // Help text (toggled by help icon) — Req 1.3
+        AnimatedVisibility(visible = showHelp) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Restic is an encrypted, deduplicated backup tool. Configure multiple backup targets to protect your CWOC data across local or remote storage.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "See the full Restic Backup help guide for setup and configuration details.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        // Collapsible body — Req 1.4
+        AnimatedVisibility(visible = sectionExpanded) {
+            Column(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Status panel — Req 1.9, 11.3
+                // Matching web's #backup-status-panel: Targets count, Last backup, Next scheduled
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Targets",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${backupState.targetCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Last backup",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = settingsViewModel.formatBackupRelativeTime(backupState.lastBackupTime),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Next scheduled",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = settingsViewModel.formatBackupDateTime(backupState.nextBackupTime),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Loading indicator
+                if (backupState.isLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+
+                // Target list + orphans — Req 1.5, 1.8, 2.1, 2.2, 2.3, 2.4
+                BackupTargetList(
+                    targets = backupState.targets,
+                    orphans = backupState.orphans,
+                    settingsViewModel = settingsViewModel
+                )
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Restic Backup Target List (Task 3.2)
+// Validates: Requirements 1.5, 1.8, 2.1, 2.2, 2.3, 2.4
+// ============================================================
+
+/**
+ * Renders the list of backup targets as clickable cards, plus orphan repos.
+ * Each target card shows: status icon (🟢/🔴/⚪) + name (bold) + subtitle (repo type · last time · size) + chevron (›).
+ * Empty state: "No backup targets configured yet." (centered, dimmed).
+ * Orphans: 👻 icon, "Orphaned Local Backup", path + size, "💀 Delete" button with confirmation.
+ */
+@Composable
+private fun BackupTargetList(
+    targets: List<BackupTargetDto>,
+    orphans: List<OrphanRepoDto>,
+    settingsViewModel: SettingsViewModel
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (targets.isEmpty() && orphans.isEmpty()) {
+            // Empty state — Req 1.8
+            Text(
+                text = "No backup targets configured yet.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        } else {
+            // Render each target as a clickable card — Req 1.5, 2.1
+            targets.forEach { target ->
+                BackupTargetCard(
+                    target = target,
+                    settingsViewModel = settingsViewModel,
+                    onClick = { settingsViewModel.openBackupTargetModal(target.id) }
+                )
+            }
+
+            // Render orphan repos — Req 2.2, 2.3, 2.4
+            orphans.forEach { orphan ->
+                BackupOrphanCard(
+                    orphan = orphan,
+                    settingsViewModel = settingsViewModel
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A single backup target rendered as a clickable Material 3 Card.
+ * Shows status icon, name (bold), subtitle (repo_type · relative time · size), and chevron.
+ *
+ * Status icon logic:
+ * - last_backup_result?.success == false → 🔴
+ * - last_backup_time != null → 🟢
+ * - Otherwise → ⚪
+ */
+@Composable
+private fun BackupTargetCard(
+    target: BackupTargetDto,
+    settingsViewModel: SettingsViewModel,
+    onClick: () -> Unit
+) {
+    // Determine status icon
+    val statusIcon = when {
+        target.last_backup_result?.success == false -> "🔴"
+        target.last_backup_time != null -> "🟢"
+        else -> "⚪"
+    }
+
+    // Build subtitle: repo_type · relative time · size
+    val repoType = target.repo_type?.replaceFirstChar { it.uppercase() } ?: "Unknown"
+    val relativeTime = settingsViewModel.formatBackupRelativeTime(target.last_backup_time)
+    val size = target.repo_size ?: "—"
+    val subtitle = "$repoType · $relativeTime · $size"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Status icon
+            Text(
+                text = statusIcon,
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Name + subtitle
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = target.name ?: "Unnamed Target",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Chevron
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * An orphan repo rendered as a card with dashed-border styling.
+ * Shows 👻 icon, "Orphaned Local Backup", path + size, and a "💀 Delete" button
+ * that shows a confirmation dialog before calling deleteOrphanRepo.
+ */
+@Composable
+private fun BackupOrphanCard(
+    orphan: OrphanRepoDto,
+    settingsViewModel: SettingsViewModel
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Ghost icon
+            Text(
+                text = "👻",
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Orphaned Local Backup",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${orphan.path} · ${orphan.repo_size ?: "—"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Delete button
+            TextButton(
+                onClick = { showDeleteConfirm = true },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("💀 Delete")
+            }
+        }
+    }
+
+    // Confirmation dialog for orphan deletion
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Orphaned Backup?") },
+            text = {
+                Text("This will permanently delete the orphaned backup repository at:\n\n${orphan.path}\n\nThis cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        settingsViewModel.deleteOrphanRepo(orphan.path)
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = CwocDialogDefaults.containerColor,
+            titleContentColor = CwocDialogDefaults.titleContentColor,
+            textContentColor = CwocDialogDefaults.textContentColor
+        )
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Action Buttons (Task 3.3)
+// Validates: Requirements 1.6, 1.7
+// ============================================================
+
+/**
+ * Action buttons row for the Backup section: "➕ Add Target" and "▶️ Backup All Now".
+ * Both buttons use equal width via Modifier.weight(1f) with CWOC outset styling.
+ * The "Backup All Now" button shows a CircularProgressIndicator when backup is running.
+ */
+@Composable
+fun BackupActionButtons(
+    settingsViewModel: SettingsViewModel,
+    isLoading: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // ➕ Add Target button — Validates: Requirement 1.6
+        Button(
+            onClick = { settingsViewModel.openBackupTargetModal(null) },
+            modifier = Modifier.weight(1f),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
+        ) {
+            Text("➕ Add Target")
+        }
+
+        // ▶️ Backup All Now button — Validates: Requirement 1.7
+        Button(
+            onClick = { settingsViewModel.runBackupAll() },
+            enabled = !isLoading,
+            modifier = Modifier.weight(1f),
+            colors = CwocButtonDefaults.outsetColors(),
+            border = CwocButtonDefaults.outsetBorder,
+            shape = CwocButtonDefaults.outsetShape
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Backing up…")
+            } else {
+                Text("▶️ Backup All Now")
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Backup Target Modal — Repository (Task 4.2)
+// Validates: Requirements 3.2, 3.3, 3.4, 3.5
+// ============================================================
+
+/**
+ * Repository section for the BackupTargetModal.
+ * Collapsible (expanded by default) with:
+ * - Name field (required)
+ * - Type dropdown (8 options, Local disabled if localTargetExists)
+ * - URL/Path field (conditional visibility based on type)
+ * - Password field with show/hide toggle
+ * - Dynamic credential fields per type (SFTP, S3, B2, Azure, GCS, REST, rclone)
+ *
+ * All field values are passed as MutableState parameters so the parent modal
+ * can read them for validation/save.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupRepositorySection(
+    name: String,
+    onNameChange: (String) -> Unit,
+    repoType: String,
+    onRepoTypeChange: (String) -> Unit,
+    repoUrl: String,
+    onRepoUrlChange: (String) -> Unit,
+    repoPassword: String,
+    onRepoPasswordChange: (String) -> Unit,
+    // SFTP fields
+    sftpUsername: String,
+    onSftpUsernameChange: (String) -> Unit,
+    sftpHost: String,
+    onSftpHostChange: (String) -> Unit,
+    sftpPort: String,
+    onSftpPortChange: (String) -> Unit,
+    sftpRemotePath: String,
+    onSftpRemotePathChange: (String) -> Unit,
+    sftpAuthMethod: String, // "password" or "key"
+    onSftpAuthMethodChange: (String) -> Unit,
+    sftpPassword: String,
+    onSftpPasswordChange: (String) -> Unit,
+    sftpKeyPath: String,
+    onSftpKeyPathChange: (String) -> Unit,
+    // S3 fields
+    s3AccessKeyId: String,
+    onS3AccessKeyIdChange: (String) -> Unit,
+    s3SecretAccessKey: String,
+    onS3SecretAccessKeyChange: (String) -> Unit,
+    s3Region: String,
+    onS3RegionChange: (String) -> Unit,
+    // B2 fields
+    b2AccountId: String,
+    onB2AccountIdChange: (String) -> Unit,
+    b2ApplicationKey: String,
+    onB2ApplicationKeyChange: (String) -> Unit,
+    // Azure fields
+    azureAccountName: String,
+    onAzureAccountNameChange: (String) -> Unit,
+    azureAccountKey: String,
+    onAzureAccountKeyChange: (String) -> Unit,
+    // GCS fields
+    gcsProjectId: String,
+    onGcsProjectIdChange: (String) -> Unit,
+    gcsCredentialsJsonPath: String,
+    onGcsCredentialsJsonPathChange: (String) -> Unit,
+    // REST fields
+    restUsername: String,
+    onRestUsernameChange: (String) -> Unit,
+    restPassword: String,
+    onRestPasswordChange: (String) -> Unit,
+    // rclone fields
+    rcloneConfigName: String,
+    onRcloneConfigNameChange: (String) -> Unit,
+    // Whether a local target already exists (disables "Local" option)
+    localTargetExists: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(true) }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var sftpPasswordVisible by remember { mutableStateOf(false) }
+    var typeDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Repository type options — Req 3.3
+    val repoTypeOptions = listOf(
+        "local" to "Local",
+        "sftp" to "SFTP",
+        "s3" to "Amazon S3 / S3-Compatible",
+        "b2" to "Backblaze B2",
+        "azure" to "Microsoft Azure Blob Storage",
+        "gcs" to "Google Cloud Storage",
+        "rest" to "REST Server",
+        "rclone" to "rclone"
+    )
+
+    // Find display label for current type
+    val currentTypeLabel = repoTypeOptions.firstOrNull { it.first == repoType }?.second ?: "Local"
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Collapsible header — "Repository ▾/▸"
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Repository ${if (expanded) "▾" else "▸"}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Name field (required) — Req 3.2
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    label = { Text("Name *") },
+                    placeholder = { Text("e.g. Local Backup, NAS Nightly") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
+                )
+
+                // Type dropdown — Req 3.3
+                ExposedDropdownMenuBox(
+                    expanded = typeDropdownExpanded,
+                    onExpandedChange = { typeDropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = currentTypeLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeDropdownExpanded,
+                        onDismissRequest = { typeDropdownExpanded = false }
+                    ) {
+                        repoTypeOptions.forEach { (value, label) ->
+                            val isDisabled = value == "local" && localTargetExists
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        color = if (isDisabled)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        else
+                                            MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    if (!isDisabled) {
+                                        onRepoTypeChange(value)
+                                        typeDropdownExpanded = false
+                                    }
+                                },
+                                enabled = !isDisabled,
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
+                    }
+                }
+
+                // URL/Path field — conditional visibility based on type (Req 3.4)
+                // Hidden for local and sftp, shown for others with type-specific label/placeholder
+                if (repoType != "local" && repoType != "sftp") {
+                    val (urlLabel, urlPlaceholder) = when (repoType) {
+                        "s3" -> "Bucket URL" to "s3:s3.amazonaws.com/bucket-name"
+                        "b2" -> "Bucket Name" to "b2:bucket-name:/path"
+                        "azure" -> "Container URL" to "azure:container-name:/path"
+                        "gcs" -> "Bucket Name" to "gs:bucket-name:/path"
+                        "rest" -> "Server URL" to "rest:https://user:pass@host:8000/"
+                        "rclone" -> "Remote Path" to "rclone:remote-name:path"
+                        else -> "URL" to "Enter repository URL"
+                    }
+
+                    OutlinedTextField(
+                        value = repoUrl,
+                        onValueChange = onRepoUrlChange,
+                        label = { Text(urlLabel) },
+                        placeholder = { Text(urlPlaceholder) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                }
+
+                // Password field with show/hide toggle — Req 3.2
+                OutlinedTextField(
+                    value = repoPassword,
+                    onValueChange = onRepoPasswordChange,
+                    label = { Text("Repository Password") },
+                    placeholder = { Text("Encryption password for the repository") },
+                    singleLine = true,
+                    visualTransformation = if (passwordVisible)
+                        VisualTransformation.None
+                    else
+                        PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Text(
+                                text = if (passwordVisible) "🔒" else "👁️",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CwocInputDefaults.outlinedColors()
+                )
+
+                // Dynamic credential fields per type — Req 3.4
+                when (repoType) {
+                    "sftp" -> {
+                        // SFTP-specific fields
+                        SftpCredentialFields(
+                            username = sftpUsername,
+                            onUsernameChange = onSftpUsernameChange,
+                            host = sftpHost,
+                            onHostChange = onSftpHostChange,
+                            port = sftpPort,
+                            onPortChange = onSftpPortChange,
+                            remotePath = sftpRemotePath,
+                            onRemotePathChange = onSftpRemotePathChange,
+                            authMethod = sftpAuthMethod,
+                            onAuthMethodChange = onSftpAuthMethodChange,
+                            password = sftpPassword,
+                            onPasswordChange = onSftpPasswordChange,
+                            passwordVisible = sftpPasswordVisible,
+                            onPasswordVisibleChange = { sftpPasswordVisible = it },
+                            keyPath = sftpKeyPath,
+                            onKeyPathChange = onSftpKeyPathChange
+                        )
+                    }
+                    "s3" -> {
+                        // S3-specific fields
+                        OutlinedTextField(
+                            value = s3AccessKeyId,
+                            onValueChange = onS3AccessKeyIdChange,
+                            label = { Text("Access Key ID") },
+                            placeholder = { Text("AWS Access Key ID") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = s3SecretAccessKey,
+                            onValueChange = onS3SecretAccessKeyChange,
+                            label = { Text("Secret Access Key") },
+                            placeholder = { Text("AWS Secret Access Key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = s3Region,
+                            onValueChange = onS3RegionChange,
+                            label = { Text("Region") },
+                            placeholder = { Text("e.g. us-east-1") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    "b2" -> {
+                        // B2-specific fields
+                        OutlinedTextField(
+                            value = b2AccountId,
+                            onValueChange = onB2AccountIdChange,
+                            label = { Text("Account ID") },
+                            placeholder = { Text("Backblaze Account ID") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = b2ApplicationKey,
+                            onValueChange = onB2ApplicationKeyChange,
+                            label = { Text("Application Key") },
+                            placeholder = { Text("Backblaze Application Key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    "azure" -> {
+                        // Azure-specific fields
+                        OutlinedTextField(
+                            value = azureAccountName,
+                            onValueChange = onAzureAccountNameChange,
+                            label = { Text("Account Name") },
+                            placeholder = { Text("Azure Storage Account Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = azureAccountKey,
+                            onValueChange = onAzureAccountKeyChange,
+                            label = { Text("Account Key") },
+                            placeholder = { Text("Azure Storage Account Key") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    "gcs" -> {
+                        // GCS-specific fields
+                        OutlinedTextField(
+                            value = gcsProjectId,
+                            onValueChange = onGcsProjectIdChange,
+                            label = { Text("Project ID") },
+                            placeholder = { Text("Google Cloud Project ID") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = gcsCredentialsJsonPath,
+                            onValueChange = onGcsCredentialsJsonPathChange,
+                            label = { Text("Credentials JSON Path") },
+                            placeholder = { Text("/path/to/credentials.json") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    "rest" -> {
+                        // REST-specific fields
+                        OutlinedTextField(
+                            value = restUsername,
+                            onValueChange = onRestUsernameChange,
+                            label = { Text("Username") },
+                            placeholder = { Text("REST server username") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                        OutlinedTextField(
+                            value = restPassword,
+                            onValueChange = onRestPasswordChange,
+                            label = { Text("Password") },
+                            placeholder = { Text("REST server password") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    "rclone" -> {
+                        // rclone-specific fields
+                        OutlinedTextField(
+                            value = rcloneConfigName,
+                            onValueChange = onRcloneConfigNameChange,
+                            label = { Text("Config Name") },
+                            placeholder = { Text("rclone remote config name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+                    // "local" — no additional credential fields needed
+                }
+            }
+        }
+    }
+}
+
+/**
+ * SFTP-specific credential fields sub-composable.
+ * Shows Username, Host (required), Port (default 22), Remote Path,
+ * Auth method radio (Password/SSH Key), and conditional password or key path field.
+ */
+@Composable
+private fun SftpCredentialFields(
+    username: String,
+    onUsernameChange: (String) -> Unit,
+    host: String,
+    onHostChange: (String) -> Unit,
+    port: String,
+    onPortChange: (String) -> Unit,
+    remotePath: String,
+    onRemotePathChange: (String) -> Unit,
+    authMethod: String,
+    onAuthMethodChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    passwordVisible: Boolean,
+    onPasswordVisibleChange: (Boolean) -> Unit,
+    keyPath: String,
+    onKeyPathChange: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedTextField(
+            value = username,
+            onValueChange = onUsernameChange,
+            label = { Text("Username") },
+            placeholder = { Text("SSH username") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+
+        OutlinedTextField(
+            value = host,
+            onValueChange = onHostChange,
+            label = { Text("Host *") },
+            placeholder = { Text("hostname or IP address") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+
+        OutlinedTextField(
+            value = port,
+            onValueChange = { newValue ->
+                // Only allow numeric input for port
+                if (newValue.all { it.isDigit() } || newValue.isEmpty()) {
+                    onPortChange(newValue)
+                }
+            },
+            label = { Text("Port") },
+            placeholder = { Text("22") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+
+        OutlinedTextField(
+            value = remotePath,
+            onValueChange = onRemotePathChange,
+            label = { Text("Remote Path") },
+            placeholder = { Text("/path/to/backup/repo") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+
+        // Auth method radio buttons
+        Text(
+            text = "Authentication Method",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { onAuthMethodChange("password") }
+            ) {
+                RadioButton(
+                    selected = authMethod == "password",
+                    onClick = { onAuthMethodChange("password") }
+                )
+                Text(
+                    text = "Password",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { onAuthMethodChange("key") }
+            ) {
+                RadioButton(
+                    selected = authMethod == "key",
+                    onClick = { onAuthMethodChange("key") }
+                )
+                Text(
+                    text = "SSH Key",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+        }
+
+        // Conditional field based on auth method
+        if (authMethod == "password") {
+            OutlinedTextField(
+                value = password,
+                onValueChange = onPasswordChange,
+                label = { Text("SSH Password") },
+                placeholder = { Text("SSH password") },
+                singleLine = true,
+                visualTransformation = if (passwordVisible)
+                    VisualTransformation.None
+                else
+                    PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { onPasswordVisibleChange(!passwordVisible) }) {
+                        Text(
+                            text = if (passwordVisible) "🔒" else "👁️",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
+            )
+        } else {
+            OutlinedTextField(
+                value = keyPath,
+                onValueChange = onKeyPathChange,
+                label = { Text("SSH Key Path") },
+                placeholder = { Text("/path/to/id_rsa") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = CwocInputDefaults.outlinedColors()
+            )
+        }
+    }
+}
+
+// ============================================================
+// Section: Backup Target Modal — Data to Backup (Task 4.3)
+// Validates: Requirements 3.2
+// ============================================================
+
+/**
+ * Data class representing a single backup path item with its display label,
+ * actual path string, and priority group.
+ */
+private data class BackupPathItem(
+    val label: String,
+    val path: String,
+    val group: String // "Critical", "Important", "Nice to Have"
+)
+
+/**
+ * All backup path items matching the web implementation exactly.
+ * Critical and Important are checked by default; Nice to Have are unchecked.
+ */
+private val allBackupPathItems = listOf(
+    // Critical (checked by default)
+    BackupPathItem("Database pre-backup copy", "/app/data/app.db.backup", "Critical"),
+    BackupPathItem("Encryption key", "/app/data/encryption.key", "Critical"),
+    BackupPathItem("Contact profile pictures", "/app/data/contact_pictures", "Critical"),
+    BackupPathItem("User profile pictures", "/app/data/profile_pictures", "Critical"),
+    BackupPathItem("Attachments", "/app/data/attachments", "Critical"),
+    BackupPathItem("Contact vCards", "/app/data/vcards", "Critical"),
+    // Important (checked by default)
+    BackupPathItem("SSL certificates", "/etc/ssl/certs/cwoc", "Important"),
+    BackupPathItem("Systemd service file", "/etc/systemd/system/cwoc.service", "Important"),
+    BackupPathItem("Nginx config", "/etc/nginx/sites-available/cwoc", "Important"),
+    // Nice to Have (unchecked by default)
+    BackupPathItem("Client log", "/app/data/client-log.json", "Nice to Have"),
+    BackupPathItem("Update log", "/app/data/update-log.json", "Nice to Have")
+)
+
+/**
+ * Returns the default selected paths (Critical + Important items).
+ */
+fun getDefaultBackupPaths(): List<String> {
+    return allBackupPathItems
+        .filter { it.group == "Critical" || it.group == "Important" }
+        .map { it.path }
+}
+
+/**
+ * Collapsible "Data to Backup" section for the backup target modal.
+ * Collapsed by default. Shows three groups (Critical, Important, Nice to Have)
+ * with checkbox items for each backup path.
+ *
+ * @param selectedPaths The currently selected backup paths (mutable state list)
+ * @param onPathToggled Callback when a path is checked/unchecked
+ */
+@Composable
+fun BackupDataSection(
+    selectedPaths: List<String>,
+    onPathToggled: (String, Boolean) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Collapsible header — collapsed by default
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Data to Backup ${if (expanded) "▾" else "▸"}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Animated collapsible body
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Group items by their group label
+                val groups = listOf("Critical", "Important", "Nice to Have")
+
+                groups.forEach { groupName ->
+                    val groupItems = allBackupPathItems.filter { it.group == groupName }
+
+                    // Bold group label
+                    Text(
+                        text = groupName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+
+                    // Checkbox items for this group
+                    groupItems.forEach { item ->
+                        val isChecked = item.path in selectedPaths
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPathToggled(item.path, !isChecked) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    onPathToggled(item.path, checked)
+                                }
+                            )
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Backup Target Modal — Notifications (Task 4.6)
+// Validates: Requirement 3.2
+// ============================================================
+
+/**
+ * Notifications section for the Backup Target Modal.
+ * Collapsible, collapsed by default. Contains:
+ * - Notify dropdown: "All Admins" (only option)
+ * - Trigger dropdown: "Both (Success & Failures)" (default), "Success Only", "Failures Only"
+ * - Checkboxes: "Transfer notifications (backup/restore)" (checked), "Maintenance notifications (prune)" (checked)
+ *
+ * @param notifyRecipients Current notify recipients value (e.g., "all_admins")
+ * @param onNotifyRecipientsChange Callback when notify recipients changes
+ * @param notifyTrigger Current trigger value (e.g., "both", "success", "failures")
+ * @param onNotifyTriggerChange Callback when trigger changes
+ * @param notifyTransfer Whether transfer notifications are enabled
+ * @param onNotifyTransferChange Callback when transfer notification checkbox changes
+ * @param notifyMaintenance Whether maintenance notifications are enabled
+ * @param onNotifyMaintenanceChange Callback when maintenance notification checkbox changes
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupNotificationsSection(
+    notifyRecipients: String,
+    onNotifyRecipientsChange: (String) -> Unit,
+    notifyTrigger: String,
+    onNotifyTriggerChange: (String) -> Unit,
+    notifyTransfer: Boolean,
+    onNotifyTransferChange: (Boolean) -> Unit,
+    notifyMaintenance: Boolean,
+    onNotifyMaintenanceChange: (Boolean) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    // Notify dropdown options (value → display)
+    val notifyOptions = listOf(
+        "all_admins" to "All Admins"
+    )
+
+    // Trigger dropdown options (value → display)
+    val triggerOptions = listOf(
+        "both" to "Both (Success & Failures)",
+        "success" to "Success Only",
+        "failures" to "Failures Only"
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Collapsible header — collapsed by default
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Notifications ${if (expanded) "▾" else "▸"}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Animated collapsible body
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // --- Notify dropdown ---
+                Text(
+                    text = "Notify",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                var notifyDropdownExpanded by remember { mutableStateOf(false) }
+                val currentNotifyLabel = notifyOptions
+                    .firstOrNull { it.first == notifyRecipients }?.second ?: "All Admins"
+
+                ExposedDropdownMenuBox(
+                    expanded = notifyDropdownExpanded,
+                    onExpandedChange = { notifyDropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = currentNotifyLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = notifyDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        singleLine = true,
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = notifyDropdownExpanded,
+                        onDismissRequest = { notifyDropdownExpanded = false }
+                    ) {
+                        notifyOptions.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onNotifyRecipientsChange(value)
+                                    notifyDropdownExpanded = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
+                    }
+                }
+
+                // --- Trigger dropdown ---
+                Text(
+                    text = "Trigger",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                var triggerDropdownExpanded by remember { mutableStateOf(false) }
+                val currentTriggerLabel = triggerOptions
+                    .firstOrNull { it.first == notifyTrigger }?.second ?: "Both (Success & Failures)"
+
+                ExposedDropdownMenuBox(
+                    expanded = triggerDropdownExpanded,
+                    onExpandedChange = { triggerDropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = currentTriggerLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = triggerDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        singleLine = true,
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = triggerDropdownExpanded,
+                        onDismissRequest = { triggerDropdownExpanded = false }
+                    ) {
+                        triggerOptions.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onNotifyTriggerChange(value)
+                                    triggerDropdownExpanded = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
+                    }
+                }
+
+                // --- Transfer notifications checkbox ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNotifyTransferChange(!notifyTransfer) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = notifyTransfer,
+                        onCheckedChange = { onNotifyTransferChange(it) }
+                    )
+                    Text(
+                        text = "Transfer notifications (backup/restore)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+
+                // --- Maintenance notifications checkbox ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNotifyMaintenanceChange(!notifyMaintenance) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = notifyMaintenance,
+                        onCheckedChange = { onNotifyMaintenanceChange(it) }
+                    )
+                    Text(
+                        text = "Maintenance notifications (prune)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Backup Target Modal — Retention Policy (Task 4.5)
+// Validates: Requirements 3.2
+// ============================================================
+
+/**
+ * Collapsible "Retention Policy" section for the backup target modal.
+ * Collapsed by default. Shows hint text explaining the retention policy,
+ * followed by five number fields for configuring how many snapshots to keep.
+ *
+ * @param keepLast MutableState for "Keep last" value (default "5")
+ * @param keepDaily MutableState for "Keep daily" value (default "7")
+ * @param keepWeekly MutableState for "Keep weekly" value (default "4")
+ * @param keepMonthly MutableState for "Keep monthly" value (default "6")
+ * @param keepYearly MutableState for "Keep yearly" value (default "2")
+ */
+@Composable
+fun BackupRetentionSection(
+    keepLast: MutableState<String>,
+    keepDaily: MutableState<String>,
+    keepWeekly: MutableState<String>,
+    keepMonthly: MutableState<String>,
+    keepYearly: MutableState<String>
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Collapsible header — collapsed by default
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Retention Policy ${if (expanded) "▾" else "▸"}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Animated collapsible body
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Hint text
+                Text(
+                    text = "How many snapshots to keep. Old snapshots are automatically pruned to this policy after each backup.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Retention fields — 2 per row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = keepLast.value,
+                        onValueChange = { keepLast.value = it.filter { c -> c.isDigit() } },
+                        label = { Text("Keep last") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    OutlinedTextField(
+                        value = keepDaily.value,
+                        onValueChange = { keepDaily.value = it.filter { c -> c.isDigit() } },
+                        label = { Text("Keep daily") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = keepWeekly.value,
+                        onValueChange = { keepWeekly.value = it.filter { c -> c.isDigit() } },
+                        label = { Text("Keep weekly") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    OutlinedTextField(
+                        value = keepMonthly.value,
+                        onValueChange = { keepMonthly.value = it.filter { c -> c.isDigit() } },
+                        label = { Text("Keep monthly") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = keepYearly.value,
+                        onValueChange = { keepYearly.value = it.filter { c -> c.isDigit() } },
+                        label = { Text("Keep yearly") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number
+                        ),
+                        modifier = Modifier.weight(1f),
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    // Spacer to maintain grid alignment
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Schedule Section (Task 4.4)
+// Validates: Requirements 3.6, 3.7
+// ============================================================
+
+/**
+ * Backup Schedule section — collapsible, expanded by default.
+ * Contains a frequency dropdown and a time picker (visible only for Daily/Weekly).
+ *
+ * Frequency options (value → display):
+ *   "hourly" → "Hourly"
+ *   "6hour" → "Every 6 Hours"
+ *   "daily" → "Daily" (default)
+ *   "weekly" → "Weekly"
+ *   "manual" → "Manual Only"
+ *
+ * Time is stored as "HH:mm" (24-hour internal), displayed per user preference.
+ * Default time: "02:00" (2 AM).
+ *
+ * Validates: Requirements 3.6, 3.7
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupScheduleSection(
+    frequency: String,
+    onFrequencyChange: (String) -> Unit,
+    time: String,
+    onTimeChange: (String) -> Unit,
+    timeFormat: String = "12hour"
+) {
+    var expanded by remember { mutableStateOf(true) }
+    var frequencyDropdownExpanded by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+
+    // Frequency options: value → display label
+    val frequencyOptions = listOf(
+        "hourly" to "Hourly",
+        "6hour" to "Every 6 Hours",
+        "daily" to "Daily",
+        "weekly" to "Weekly",
+        "manual" to "Manual Only"
+    )
+
+    // Get display label for current frequency value
+    val currentFrequencyLabel = frequencyOptions
+        .firstOrNull { it.first == frequency }?.second ?: "Daily"
+
+    // Whether time picker should be visible (only for daily/weekly)
+    val showTimeField = frequency == "daily" || frequency == "weekly"
+
+    // Format the time for display based on user preference
+    val displayTime = remember(time, timeFormat) {
+        try {
+            val parts = time.split(":")
+            val hour = parts[0].toInt()
+            val minute = parts[1].toInt()
+            if (timeFormat == "24hour") {
+                String.format("%02d:%02d", hour, minute)
+            } else {
+                val displayHour = when {
+                    hour == 0 -> 12
+                    hour > 12 -> hour - 12
+                    else -> hour
+                }
+                val amPm = if (hour < 12) "AM" else "PM"
+                String.format("%d:%02d %s", displayHour, minute, amPm)
+            }
+        } catch (_: Exception) {
+            time
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // Collapsible header: "Schedule ▾/▸"
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Schedule ${if (expanded) "▾" else "▸"}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Collapsible body
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Frequency dropdown — Validates: Requirement 3.6
+                Text(
+                    text = "Frequency",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = frequencyDropdownExpanded,
+                    onExpandedChange = { frequencyDropdownExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = currentFrequencyLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = frequencyDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        singleLine = true,
+                        colors = CwocInputDefaults.outlinedColors()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = frequencyDropdownExpanded,
+                        onDismissRequest = { frequencyDropdownExpanded = false }
+                    ) {
+                        frequencyOptions.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onFrequencyChange(value)
+                                    frequencyDropdownExpanded = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
+                    }
+                }
+
+                // Time picker — visible only for Daily/Weekly — Validates: Requirement 3.7
+                if (showTimeField) {
+                    Text(
+                        text = "Time",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    // Tappable time display that opens TimePickerDialog
+                    // Wrap in Box with clickable since disabled TextField doesn't receive clicks
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTimePicker = true }
+                    ) {
+                        OutlinedTextField(
+                            value = displayTime,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            colors = CwocInputDefaults.outlinedColors()
+                        )
+                    }
+
+                    // Show TimePickerDialog when triggered
+                    if (showTimePicker) {
+                        val timeParts = time.split(":")
+                        val currentHour = timeParts.getOrNull(0)?.toIntOrNull() ?: 2
+                        val currentMinute = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                        LaunchedEffect(Unit) {
+                            val dialog = android.app.TimePickerDialog(
+                                context,
+                                { _, selectedHour, selectedMinute ->
+                                    val newTime = String.format("%02d:%02d", selectedHour, selectedMinute)
+                                    onTimeChange(newTime)
+                                    showTimePicker = false
+                                },
+                                currentHour,
+                                currentMinute,
+                                timeFormat == "24hour"
+                            )
+                            dialog.setOnCancelListener {
+                                showTimePicker = false
+                            }
+                            dialog.setOnDismissListener {
+                                showTimePicker = false
+                            }
+                            dialog.show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
 // Section: Version & Updates (Task 17.4)
 // ============================================================
 
@@ -3117,5 +4921,1186 @@ private fun SettingsDropdown(
                 }
             }
         }
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Inline Feedback & Results Area (Task 4.7)
+// Validates: Requirements 8.1, 8.2, 8.3
+// ============================================================
+
+/**
+ * Inline feedback composable for the backup modal.
+ * Displays a colored Card with an icon and message text, dismissible on tap.
+ *
+ * Color mapping:
+ * - "success" → green background (Color(0xFFE8F5E9)) with ✓ icon
+ * - "error" → red background (Color(0xFFFFEBEE)) with ✗ icon
+ * - "warning" → yellow background (Color(0xFFFFF8E1)) with ⚠️ icon
+ * - "info" or null → neutral/gray background (Color(0xFFF5F5F5)) with ℹ️ icon
+ *
+ * Validates: Requirements 8.1, 8.2, 8.3
+ */
+@Composable
+fun BackupFeedbackArea(
+    feedbackMessage: String?,
+    feedbackType: String?,
+    onDismiss: () -> Unit
+) {
+    if (feedbackMessage == null) return
+
+    val backgroundColor = when (feedbackType) {
+        "success" -> Color(0xFFE8F5E9)
+        "error" -> Color(0xFFFFEBEE)
+        "warning" -> Color(0xFFFFF8E1)
+        else -> Color(0xFFF5F5F5)
+    }
+
+    val icon = when (feedbackType) {
+        "success" -> "✓"
+        "error" -> "✗"
+        "warning" -> "⚠️"
+        else -> "ℹ️"
+    }
+
+    val textColor = when (feedbackType) {
+        "success" -> Color(0xFF2E7D32)
+        "error" -> Color(0xFFC62828)
+        "warning" -> Color(0xFFF57F17)
+        else -> Color(0xFF424242)
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onDismiss() },
+        colors = CardDefaults.cardColors(containerColor = backgroundColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = icon,
+                style = MaterialTheme.typography.bodyLarge,
+                color = textColor
+            )
+            Text(
+                text = feedbackMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/**
+ * Scrollable results area for the backup modal.
+ * Wraps content in a scrollable Column with a max height constraint (300.dp).
+ * Used for displaying snapshot lists and restore picker below the feedback area.
+ *
+ * Validates: Requirements 8.1, 8.2, 8.3
+ */
+@Composable
+fun BackupResultsArea(
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 300.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        content()
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Operation Buttons Grid (Task 4.8)
+// Validates: Requirements 3.8, 3.9, 4.3, 4.4
+// ============================================================
+
+/**
+ * 3-column grid of operation buttons for the backup target modal.
+ * Matches the web's button grid layout:
+ * - Row 1: 🩺 Status, 📋 Snapshots, (spacer)
+ * - Row 2: ▶️ Backup Now, ♻️ Restore, ⬇️ Download
+ * - Row 3: 🗑️ Manual Prune, 🔌 Remove, 💀 Remove & Delete (edit mode only)
+ *
+ * Each button shows a CircularProgressIndicator when its operation is in progress.
+ * "▶️ Backup Now" is disabled in create mode.
+ * Row 3 buttons are only visible in edit mode.
+ * Remove/Delete buttons use MaterialTheme.colorScheme.error for text color.
+ *
+ * Validates: Requirements 3.8, 3.9, 4.3, 4.4
+ */
+@Composable
+fun BackupOperationButtons(
+    settingsViewModel: SettingsViewModel,
+    targetId: String?,
+    isEditMode: Boolean,
+    isRunningBackup: Boolean,
+    isCheckingStatus: Boolean,
+    isLoadingSnapshots: Boolean,
+    isRestoring: Boolean,
+    isPruning: Boolean,
+    onRestore: () -> Unit,
+    onPrune: () -> Unit,
+    onRemove: () -> Unit,
+    onRemoveAndDelete: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Row 1: Status, Snapshots, (spacer)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 🩺 Status button
+            OutlinedButton(
+                onClick = { targetId?.let { settingsViewModel.checkBackupStatus(it) } },
+                modifier = Modifier.weight(1f),
+                enabled = isEditMode && !isCheckingStatus
+            ) {
+                if (isCheckingStatus) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text("🩺 Status")
+                }
+            }
+
+            // 📋 Snapshots button
+            OutlinedButton(
+                onClick = { targetId?.let { settingsViewModel.loadBackupSnapshots(it) } },
+                modifier = Modifier.weight(1f),
+                enabled = isEditMode && !isLoadingSnapshots
+            ) {
+                if (isLoadingSnapshots) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text("📋 Snapshots")
+                }
+            }
+
+            // Spacer to maintain 3-column grid
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        // Row 2: Backup Now, Restore, Download
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // ▶️ Backup Now button — disabled in create mode
+            OutlinedButton(
+                onClick = { targetId?.let { settingsViewModel.runBackupTarget(it) } },
+                modifier = Modifier.weight(1f),
+                enabled = isEditMode && !isRunningBackup
+            ) {
+                if (isRunningBackup) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text("▶️ Backup Now")
+                }
+            }
+
+            // ♻️ Restore button
+            OutlinedButton(
+                onClick = onRestore,
+                modifier = Modifier.weight(1f),
+                enabled = isEditMode && !isRestoring
+            ) {
+                if (isRestoring) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Text("♻️ Restore")
+                }
+            }
+
+            // ⬇️ Download button
+            OutlinedButton(
+                onClick = { /* Download triggers snapshot list first — handled by task 4.9 */ },
+                modifier = Modifier.weight(1f),
+                enabled = isEditMode
+            ) {
+                Text("⬇️ Download")
+            }
+        }
+
+        // Row 3: Manual Prune, Remove, Remove & Delete — only visible in edit mode
+        if (isEditMode) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 🗑️ Manual Prune button
+                OutlinedButton(
+                    onClick = onPrune,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isPruning
+                ) {
+                    if (isPruning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Text("🗑️ Prune")
+                    }
+                }
+
+                // 🔌 Remove button — danger text color
+                OutlinedButton(
+                    onClick = onRemove,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "🔌 Remove",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                // 💀 Remove & Delete button — danger text color
+                OutlinedButton(
+                    onClick = onRemoveAndDelete,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "💀 Delete",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Snapshot List Display (Task 4.9)
+// Validates: Requirements 6.3, 7.1, 7.2, 7.3
+// ============================================================
+
+/**
+ * Displays a list of backup snapshots with count header, snapshot details, and action buttons.
+ * Triggered by the "📋 Snapshots" button in the operations grid.
+ *
+ * Each snapshot row shows:
+ * - First line: short_id (monospace, bold) + relative time (dimmed, right-aligned)
+ * - Second line: formatted timestamp + size
+ * - Action buttons: ⬇️ Download and 🗑️ Delete
+ *
+ * Delete button shows a confirmation dialog before calling the API.
+ * Download button triggers the DownloadManager via the ViewModel.
+ *
+ * @param snapshots List of BackupSnapshotDto from the API
+ * @param settingsViewModel ViewModel for formatting helpers and API operations
+ * @param targetId The backup target ID for API calls
+ *
+ * Validates: Requirements 6.3, 7.1, 7.2, 7.3
+ */
+@Composable
+fun BackupSnapshotList(
+    snapshots: List<BackupSnapshotDto>,
+    settingsViewModel: SettingsViewModel,
+    targetId: String
+) {
+    // Track which snapshot is pending delete confirmation
+    var deleteConfirmSnapshotId by remember { mutableStateOf<String?>(null) }
+    var deleteConfirmShortId by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Count header
+        Text(
+            text = "${snapshots.size} Snapshot(s)",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        // Snapshot rows
+        snapshots.forEach { snapshot ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // First line: short_id (monospace, bold) + relative time (dimmed, right-aligned)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = snapshot.short_id ?: snapshot.id.take(8),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = settingsViewModel.formatBackupRelativeTime(snapshot.time),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Second line: formatted timestamp + size
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = settingsViewModel.formatBackupDateTime(snapshot.time),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = settingsViewModel.formatBackupBytes(snapshot.summary?.total_size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Action buttons row: Download and Delete
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Download button
+                        TextButton(
+                            onClick = {
+                                settingsViewModel.downloadBackupSnapshot(snapshot.id, targetId)
+                            }
+                        ) {
+                            Text("⬇️ Download")
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Delete button
+                        TextButton(
+                            onClick = {
+                                deleteConfirmSnapshotId = snapshot.id
+                                deleteConfirmShortId = snapshot.short_id ?: snapshot.id.take(8)
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = Color(0xFFC62828)
+                            )
+                        ) {
+                            Text("🗑️ Delete")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Delete confirmation dialog
+    if (deleteConfirmSnapshotId != null) {
+        AlertDialog(
+            onDismissRequest = {
+                deleteConfirmSnapshotId = null
+                deleteConfirmShortId = null
+            },
+            containerColor = CwocDialogDefaults.containerColor,
+            title = {
+                Text(
+                    text = "Delete Snapshot",
+                    style = CwocDialogDefaults.titleStyle
+                )
+            },
+            text = {
+                Text(
+                    text = "Permanently delete snapshot ${deleteConfirmShortId}? This cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val snapshotId = deleteConfirmSnapshotId!!
+                        deleteConfirmSnapshotId = null
+                        deleteConfirmShortId = null
+                        settingsViewModel.deleteBackupSnapshot(snapshotId, targetId)
+                    },
+                    colors = CwocDialogDefaults.dangerButtonColors()
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        deleteConfirmSnapshotId = null
+                        deleteConfirmShortId = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — BackupTargetModal (Task 4.1)
+// Validates: Requirements 3.1, 4.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
+// ============================================================
+
+/**
+ * Full-screen modal dialog for creating or editing a backup target.
+ * Uses Dialog with DialogProperties(usePlatformDefaultWidth = false) for full-screen.
+ * Contains a Scaffold with TopAppBar (title + Cancel/Done buttons) and a scrollable Column body.
+ *
+ * - Observes `backupModalState` from the ViewModel
+ * - Only renders when `backupModalState.isOpen == true`
+ * - Title: "Add Backup Target" (create) or "Edit: {name}" (edit)
+ * - Cancel (✗) closes without saving via `closeBackupTargetModal()`
+ * - Done (✓) validates required fields, builds BackupConfigSaveRequestDto, calls saveBackupConfig()
+ * - Back/dismiss → same as cancel
+ * - Shows loading indicator when `backupModalState.isLoading` is true
+ *
+ * Validates: Requirements 3.1, 4.1, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupTargetModal(
+    settingsViewModel: SettingsViewModel
+) {
+    val modalState by settingsViewModel.backupModalState.collectAsState()
+
+    // Only render when modal is open
+    if (!modalState.isOpen) return
+
+    // Derive title: "Add Backup Target" for create, "Edit: {name}" for edit
+    val title = if (modalState.isEditMode) {
+        "Edit: ${modalState.config?.name ?: "Target"}"
+    } else {
+        "Add Backup Target"
+    }
+
+    // ---- Form state variables (initialized from config for edit mode) ----
+    // Repository fields
+    var name by remember(modalState.config) { mutableStateOf(modalState.config?.name ?: "") }
+    var repoType by remember(modalState.config) { mutableStateOf(modalState.config?.repo_type ?: "local") }
+    var repoUrl by remember(modalState.config) { mutableStateOf(modalState.config?.repo_url ?: "") }
+    var repoPassword by remember(modalState.config) { mutableStateOf(modalState.config?.repo_password ?: "") }
+
+    // SFTP credential fields
+    var sftpUsername by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("user") ?: "") }
+    var sftpHost by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("host") ?: "") }
+    var sftpPort by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("port") ?: "22") }
+    var sftpRemotePath by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("path") ?: "") }
+    var sftpAuthMethod by remember(modalState.config) { mutableStateOf("password") }
+    var sftpPassword by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("password") ?: "") }
+    var sftpKeyPath by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("ssh_key_path") ?: "") }
+
+    // S3 credential fields
+    var s3AccessKeyId by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("access_key_id") ?: "") }
+    var s3SecretAccessKey by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("secret_access_key") ?: "") }
+    var s3Region by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("region") ?: "") }
+
+    // B2 credential fields
+    var b2AccountId by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("account_id") ?: "") }
+    var b2ApplicationKey by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("application_key") ?: "") }
+
+    // Azure credential fields
+    var azureAccountName by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("account_name") ?: "") }
+    var azureAccountKey by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("account_key") ?: "") }
+
+    // GCS credential fields
+    var gcsProjectId by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("project_id") ?: "") }
+    var gcsCredentialsJsonPath by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("credentials_path") ?: "") }
+
+    // REST credential fields
+    var restUsername by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("username") ?: "") }
+    var restPassword by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("password") ?: "") }
+
+    // rclone credential fields
+    var rcloneConfigName by remember(modalState.config) { mutableStateOf(modalState.config?.backend_credentials?.get("config_name") ?: "") }
+
+    // Schedule fields
+    var scheduleFrequency by remember(modalState.config) { mutableStateOf(modalState.config?.schedule_frequency ?: "daily") }
+    var scheduleTime by remember(modalState.config) { mutableStateOf(modalState.config?.schedule_time ?: "02:00") }
+
+    // Retention policy fields
+    val keepLast = remember(modalState.config) { mutableStateOf(modalState.config?.retention_policy?.keep_last?.toString() ?: "5") }
+    val keepDaily = remember(modalState.config) { mutableStateOf(modalState.config?.retention_policy?.keep_daily?.toString() ?: "7") }
+    val keepWeekly = remember(modalState.config) { mutableStateOf(modalState.config?.retention_policy?.keep_weekly?.toString() ?: "4") }
+    val keepMonthly = remember(modalState.config) { mutableStateOf(modalState.config?.retention_policy?.keep_monthly?.toString() ?: "6") }
+    val keepYearly = remember(modalState.config) { mutableStateOf(modalState.config?.retention_policy?.keep_yearly?.toString() ?: "2") }
+
+    // Notification fields
+    var notifyRecipients by remember(modalState.config) { mutableStateOf(modalState.config?.notification_recipients?.admins ?: "all_admins") }
+    var notifyTrigger by remember(modalState.config) { mutableStateOf(modalState.config?.notification_recipients?.trigger ?: "both") }
+    var notifyTransfer by remember(modalState.config) { mutableStateOf(modalState.config?.notification_transfer ?: true) }
+    var notifyMaintenance by remember(modalState.config) { mutableStateOf(modalState.config?.notification_maintenance ?: true) }
+
+    // Backup paths — default checked paths matching web
+    val defaultBackupPaths = listOf(
+        "/app/data/pre-backup.db",
+        "/app/data/encryption.key",
+        "/app/data/contact_pictures",
+        "/app/data/profile_pictures",
+        "/app/data/attachments",
+        "/app/data/vcards",
+        "/etc/ssl/certs/cwoc",
+        "/etc/systemd/system/cwoc.service",
+        "/etc/nginx/sites-available/cwoc"
+    )
+    var selectedBackupPaths by remember(modalState.config) {
+        mutableStateOf(modalState.config?.backup_paths ?: defaultBackupPaths)
+    }
+
+    // ---- Validation error states ----
+    var nameError by remember { mutableStateOf(false) }
+    var passwordError by remember { mutableStateOf(false) }
+    var hostError by remember { mutableStateOf(false) }
+    var urlError by remember { mutableStateOf(false) }
+
+    // ---- Feedback state (for validation errors shown inline) ----
+    var validationFeedback by remember { mutableStateOf<String?>(null) }
+
+    // Clear error states when user types in the respective fields
+    if (name.isNotBlank()) nameError = false
+    if (repoPassword.isNotBlank()) passwordError = false
+    if (sftpHost.isNotBlank()) hostError = false
+    if (repoUrl.isNotBlank()) urlError = false
+
+    Dialog(
+        onDismissRequest = { settingsViewModel.closeBackupTargetModal() },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = title,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        // Cancel button (✗) — close without saving
+                        IconButton(onClick = { settingsViewModel.closeBackupTargetModal() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        }
+                    },
+                    actions = {
+                        // Done button (✓) — validate + save + close
+                        TextButton(
+                            onClick = {
+                                // ---- Validation logic (Task 4.11) ----
+                                var valid = true
+                                validationFeedback = null
+
+                                // Name is always required
+                                if (name.isBlank()) {
+                                    nameError = true
+                                    valid = false
+                                }
+
+                                // Password required if creating new target (not editing existing)
+                                if (!modalState.isEditMode && repoPassword.isBlank()) {
+                                    passwordError = true
+                                    valid = false
+                                }
+
+                                // Host required for SFTP type
+                                if (repoType == "sftp" && sftpHost.isBlank()) {
+                                    hostError = true
+                                    valid = false
+                                }
+
+                                // URL required for non-local, non-SFTP types
+                                if (repoType != "local" && repoType != "sftp" && repoUrl.isBlank()) {
+                                    urlError = true
+                                    valid = false
+                                }
+
+                                if (!valid) {
+                                    validationFeedback = "Please fill in the required fields"
+                                    // Update modal feedback via ViewModel state
+                                    settingsViewModel.setBackupModalFeedback(
+                                        "Please fill in the required fields",
+                                        "error"
+                                    )
+                                    return@TextButton
+                                }
+
+                                // ---- Gather config (matching web's _gatherBackupConfig) ----
+
+                                // Build backend_credentials based on repo type
+                                val backendCredentials = when (repoType) {
+                                    "sftp" -> mapOf(
+                                        "user" to sftpUsername,
+                                        "host" to sftpHost,
+                                        "port" to sftpPort.ifBlank { "22" },
+                                        "path" to sftpRemotePath,
+                                        "password" to sftpPassword,
+                                        "ssh_key_path" to sftpKeyPath
+                                    )
+                                    "s3" -> mapOf(
+                                        "access_key_id" to s3AccessKeyId,
+                                        "secret_access_key" to s3SecretAccessKey,
+                                        "region" to s3Region
+                                    )
+                                    "b2" -> mapOf(
+                                        "account_id" to b2AccountId,
+                                        "application_key" to b2ApplicationKey
+                                    )
+                                    "azure" -> mapOf(
+                                        "account_name" to azureAccountName,
+                                        "account_key" to azureAccountKey
+                                    )
+                                    "gcs" -> mapOf(
+                                        "project_id" to gcsProjectId,
+                                        "credentials_path" to gcsCredentialsJsonPath
+                                    )
+                                    "rest" -> mapOf(
+                                        "username" to restUsername,
+                                        "password" to restPassword
+                                    )
+                                    "rclone" -> mapOf(
+                                        "config_name" to rcloneConfigName
+                                    )
+                                    else -> emptyMap() // local — no credentials
+                                }
+
+                                // Build repo_url based on type
+                                val finalRepoUrl = when (repoType) {
+                                    "local" -> "/app/data/backups/restic"
+                                    "sftp" -> {
+                                        // Build sftp:{user}@{host}:{port}/{path} matching web logic
+                                        val user = sftpUsername
+                                        val host = sftpHost
+                                        val port = sftpPort.ifBlank { "22" }
+                                        val path = sftpRemotePath.ifBlank { "/" }
+                                        if (user.isNotBlank() && host.isNotBlank()) {
+                                            var url = "$user@$host"
+                                            if (port.isNotBlank() && port != "22") {
+                                                url += ":$port"
+                                            }
+                                            url += ":$path"
+                                            url
+                                        } else {
+                                            ""
+                                        }
+                                    }
+                                    else -> repoUrl
+                                }
+
+                                // Build retention policy
+                                val retentionPolicy = RetentionPolicyDto(
+                                    keep_last = keepLast.value.toIntOrNull() ?: 0,
+                                    keep_daily = keepDaily.value.toIntOrNull() ?: 0,
+                                    keep_weekly = keepWeekly.value.toIntOrNull() ?: 0,
+                                    keep_monthly = keepMonthly.value.toIntOrNull() ?: 0,
+                                    keep_yearly = keepYearly.value.toIntOrNull() ?: 0
+                                )
+
+                                // Build notification recipients
+                                val notificationRecipients = NotificationRecipientsDto(
+                                    admins = notifyRecipients,
+                                    trigger = notifyTrigger
+                                )
+
+                                // Build the full save request DTO
+                                val dto = BackupConfigSaveRequestDto(
+                                    id = modalState.targetId, // null for create, non-null for edit
+                                    name = name.trim(),
+                                    enabled = true, // always enabled on save
+                                    repo_type = repoType,
+                                    repo_url = finalRepoUrl,
+                                    repo_password = repoPassword,
+                                    backend_credentials = backendCredentials,
+                                    backup_paths = selectedBackupPaths,
+                                    schedule_frequency = scheduleFrequency,
+                                    schedule_time = scheduleTime,
+                                    retention_policy = retentionPolicy,
+                                    notification_recipients = notificationRecipients,
+                                    notification_transfer = notifyTransfer,
+                                    notification_maintenance = notifyMaintenance
+                                )
+
+                                // Call save on ViewModel
+                                settingsViewModel.saveBackupConfig(dto)
+                            },
+                            enabled = !modalState.isSaving
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Done",
+                                tint = CwocPrimary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Done", color = CwocPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = CwocSurface
+                    )
+                )
+            },
+            containerColor = CwocSurface
+        ) { paddingValues ->
+            // Loading overlay
+            if (modalState.isLoading) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        color = CwocPrimary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Loading configuration…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // Scrollable form body
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Validation feedback banner
+                    if (validationFeedback != null || (modalState.feedbackMessage != null && modalState.feedbackType == "error")) {
+                        val feedbackMsg = validationFeedback ?: modalState.feedbackMessage ?: ""
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFFFEBEE) // light red background
+                            )
+                        ) {
+                            Text(
+                                text = "⚠️ $feedbackMsg",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFFC62828)
+                            )
+                        }
+                    }
+
+                    // Form sections will be added by tasks 4.2-4.6:
+                    // - 4.2: Repository section (uses name, repoType, repoUrl, repoPassword, credential fields, error states)
+                    // - 4.3: Data to Backup section (uses selectedBackupPaths)
+                    // - 4.4: Schedule section (uses scheduleFrequency, scheduleTime)
+                    // - 4.5: Retention Policy section (uses keepLast, keepDaily, keepWeekly, keepMonthly, keepYearly)
+                    // - 4.6: Notifications section (uses notifyRecipients, notifyTrigger, notifyTransfer, notifyMaintenance)
+                    // - 4.7: Inline feedback area
+                    // - 4.8: Operation buttons grid
+
+                    // Placeholder content showing modal is working
+                    Text(
+                        text = if (modalState.isEditMode) {
+                            "Editing target: ${modalState.config?.name ?: "Unknown"}"
+                        } else {
+                            "Configure a new backup target below."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Prune Confirmation Dialog (Task 4.12)
+// Validates: Requirements 6.6
+// ============================================================
+
+/**
+ * Confirmation dialog for the Manual Prune operation.
+ *
+ * Warns the user that pruning permanently removes old snapshots based on
+ * their retention policy and cannot be undone. Uses danger-styled confirm button.
+ *
+ * @param showDialog Whether the dialog is currently visible
+ * @param onDismiss Called when the user cancels or dismisses the dialog
+ * @param onConfirm Called when the user confirms the prune operation
+ */
+@Composable
+fun BackupPruneConfirmDialog(
+    showDialog: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Manual Prune", style = CwocDialogDefaults.titleStyle) },
+            text = {
+                Text(
+                    "Pruning will permanently remove old snapshots based on your retention policy. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onConfirm()
+                    },
+                    colors = CwocDialogDefaults.dangerButtonColors()
+                ) {
+                    Text("Prune")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Remove Confirmation Dialog (Task 4.13)
+// Validates: Requirements 6.7
+// ============================================================
+
+/**
+ * Confirmation dialog for the "🔌 Remove" operation.
+ *
+ * Removes the backup configuration from CWOC but leaves all repository data
+ * and snapshots on disk. Warns the user they will need the repository password
+ * to reconnect in the future.
+ *
+ * @param showDialog Whether the dialog is currently visible
+ * @param onDismiss Called when the user cancels or dismisses the dialog
+ * @param onConfirm Called when the user confirms the remove operation
+ */
+@Composable
+fun BackupRemoveConfirmDialog(
+    showDialog: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("Remove Backup Configuration", style = CwocDialogDefaults.titleStyle) },
+            text = {
+                Text(
+                    "This removes the backup configuration from CWOC but leaves all repository data and snapshots on disk.\n\nYou will need the repository password to reconnect to this backup target in the future."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onConfirm()
+                    }
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Remove & Delete Confirmation Dialog (Task 4.13)
+// Validates: Requirements 6.8
+// ============================================================
+
+/**
+ * Destructive confirmation dialog for the "💀 Remove & Delete" operation.
+ *
+ * Permanently deletes the backup configuration AND all repository data including
+ * every snapshot. Uses danger-styled confirm button to emphasize irreversibility.
+ *
+ * @param showDialog Whether the dialog is currently visible
+ * @param onDismiss Called when the user cancels or dismisses the dialog
+ * @param onConfirm Called when the user confirms the destructive delete operation
+ */
+@Composable
+fun BackupRemoveAndDeleteConfirmDialog(
+    showDialog: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            modifier = CwocDialogDefaults.borderModifier,
+            containerColor = CwocDialogDefaults.containerColor,
+            title = { Text("⚠️ Permanently Delete Everything", style = CwocDialogDefaults.titleStyle) },
+            text = {
+                Text(
+                    "This will PERMANENTLY DELETE the backup configuration AND all repository data including every snapshot.\n\nAll backup data will be irrevocably destroyed. There is no undo.\n\nThis cannot be recovered."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onConfirm()
+                    },
+                    colors = CwocDialogDefaults.dangerButtonColors()
+                ) {
+                    Text("Delete Everything")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+// ============================================================
+// Section: Restic Backup — Restore Flow (Task 4.10)
+// Validates: Requirements 6.4
+// ============================================================
+
+/**
+ * Restore flow composable for the backup target modal.
+ * Triggered by the "♻️ Restore" button — loads snapshot list and displays a selectable list.
+ * On snapshot tap: shows a destructive confirmation dialog with the EXACT same warning text as web.
+ * On confirm: calls POST /api/backup/restore via the ViewModel.
+ *
+ * @param snapshots The loaded snapshots (null = not loaded yet, empty = no snapshots)
+ * @param settingsViewModel The SettingsViewModel for calling restoreBackupSnapshot
+ * @param targetId The backup target ID for the restore API call
+ * @param targetName The backup target name displayed in the confirmation dialog
+ *
+ * Validates: Requirements 6.4
+ */
+@Composable
+fun BackupRestoreFlow(
+    snapshots: List<BackupSnapshotDto>?,
+    settingsViewModel: SettingsViewModel,
+    targetId: String,
+    targetName: String
+) {
+    // State for which snapshot the user tapped (triggers confirmation dialog)
+    var selectedSnapshot by remember { mutableStateOf<BackupSnapshotDto?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Header
+        Text(
+            text = "Select a snapshot to restore:",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        // Snapshot list or loading/empty state
+        when {
+            snapshots == null -> {
+                // Not loaded yet — show loading
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Loading snapshots…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            snapshots.isEmpty() -> {
+                Text(
+                    text = "No snapshots available.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            else -> {
+                // Render each snapshot as a clickable row
+                snapshots.forEach { snapshot ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedSnapshot = snapshot },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = snapshot.short_id ?: snapshot.id.take(8),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = settingsViewModel.formatBackupRelativeTime(snapshot.time),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = "›",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Destructive confirmation dialog — shown when a snapshot is tapped
+    if (selectedSnapshot != null) {
+        val snapshot = selectedSnapshot!!
+
+        // Format the snapshot date for display
+        val formattedSnapshotDate = settingsViewModel.formatBackupDateTime(snapshot.time)
+
+        // Format today's date
+        val todayFormatted = remember {
+            try {
+                val today = LocalDate.now()
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.getDefault())
+                today.format(formatter)
+            } catch (_: Exception) {
+                "today"
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { selectedSnapshot = null },
+            title = {
+                Text(
+                    text = "⚠️ THIS WILL PERMANENTLY DESTROY ALL EXISTING DATA",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Restore details
+                    Text(
+                        text = "Restoring from: $targetName\n" +
+                                "Snapshot: ${snapshot.short_id ?: snapshot.id.take(8)} ($formattedSnapshotDate)\n" +
+                                "Current date: $todayFormatted",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    // Warning text — EXACT match to web
+                    Text(
+                        text = "All current data, settings, and configurations for all users will be permanently and irrevocably lost. There is no undo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    // Tip
+                    Text(
+                        text = "\uD83D\uDCA1 Consider clicking Backup Now and Download first to create a safety copy of your current data.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val snapshotId = snapshot.id
+                        selectedSnapshot = null
+                        settingsViewModel.restoreBackupSnapshot(snapshotId, targetId)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(
+                        text = "Restore — Delete All Current Data",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedSnapshot = null }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = CwocDialogDefaults.containerColor,
+            titleContentColor = CwocDialogDefaults.titleContentColor,
+            textContentColor = CwocDialogDefaults.textContentColor
+        )
     }
 }

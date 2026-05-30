@@ -93,6 +93,11 @@ interface ContactDao {
     @Query("SELECT favorite FROM contacts WHERE id = :id")
     suspend fun getFavoriteState(id: String): Boolean?
 
+    // ─── System users (contacts with username — for assignee dropdowns) ────
+
+    @Query("SELECT * FROM contacts WHERE deleted = 0 AND username IS NOT NULL AND is_active = 1 ORDER BY displayName COLLATE NOCASE ASC")
+    suspend fun getSystemUsers(): List<ContactEntity>
+
     // Legacy alias for backward compatibility
     @Query("SELECT * FROM contacts ORDER BY givenName ASC")
     fun getAllContacts(): Flow<List<ContactEntity>>

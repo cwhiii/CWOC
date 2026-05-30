@@ -606,13 +606,13 @@
                             <div class="field">
                                 <label for="color">
                                     <span id="selected-color-name"
-                                        >Dusty Rose</span
+                                        >None</span
                                     >
                                     <div class="color-input">
                                         <span
                                             id="selected-color"
                                             class="color-preview"
-                                            style="background-color: #c66b6b"
+                                            style="background-color: transparent"
                                         ></span>
                                         <input
                                             type="text"
@@ -624,49 +624,7 @@
                                 </label>
                             </div>
                             <div class="color-picker">
-                                <div class="color-row" id="default-colors">
-                                    <div
-                                        class="color-swatch"
-                                        data-color="transparent"
-                                        style="
-                                            background-color: transparent;
-                                            font-size: 2em;
-                                        "
-                                    >
-                                        ☒
-                                    </div>
-                                    <div
-                                        class="color-swatch selected"
-                                        data-color="#C66B6B"
-                                        style="background-color: #c66b6b"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#D68A59"
-                                        style="background-color: #d68a59"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#E3B23C"
-                                        style="background-color: #e3b23c"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#8A9A5B"
-                                        style="background-color: #8a9a5b"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#6B8299"
-                                        style="background-color: #6b8299"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#8B6B99"
-                                        style="background-color: #8b6b99"
-                                    ></div>
-                                </div>
-                                <div class="color-row" id="custom-colors"></div>
+                                <div class="color-row" id="editor-color-swatches"></div>
                             </div>
                         </div>
                     </div>
@@ -704,6 +662,7 @@
                                     <div id="notesMoreMenu" class="zone-more-menu" style="display:none;">
                                         <button type="button" onclick="copyNotesToClipboard(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
                                         <button type="button" onclick="downloadNotes(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-download"></i> Download as file</button>
+                                        <button type="button" onclick="_uploadFileAsNote(event); _closeNotesMoreMenu();"><i class="fas fa-upload"></i> Upload file as note</button>
                                         <button type="button" onclick="_openSendContentModal(event, 'notes'); _closeNotesMoreMenu();"><i class="fas fa-paper-plane"></i> Send to another chit</button>
                                         <button type="button" onclick="_noteToChecklistFromHeader(event); _closeNotesMoreMenu();"><i class="fas fa-arrow-right"></i> Move to checklist</button>
                                     </div>
@@ -760,6 +719,13 @@
                                     id="description"
                                     name="description"
                                 />
+                                <input
+                                    type="file"
+                                    id="notesFileUploadInput"
+                                    accept=".md,.txt,.csv,.json,.xml,.html,.htm,.log,.yaml,.yml,.toml,.ini,.cfg,.conf,.sh,.py,.js,.ts,.css,.sql,.rb,.go,.rs,.java,.kt,.c,.cpp,.h,.hpp,.swift,.r,.pl,.php"
+                                    style="display:none;"
+                                    onchange="_handleNotesFileUpload(this)"
+                                />
                             </div>
                         </div>
                     </div>
@@ -775,6 +741,13 @@
                             </div>
                         </div>
                         <div id="checklistContent" class="zone-body">
+                            <input
+                                type="file"
+                                id="checklistFileUploadInput"
+                                accept=".md,.txt,.csv,.json,.xml,.html,.htm,.log,.yaml,.yml,.toml,.ini,.cfg,.conf,.sh,.py,.js,.ts,.css,.sql,.rb,.go,.rs,.java,.kt,.c,.cpp,.h,.hpp,.swift,.r,.pl,.php"
+                                style="display:none;"
+                                onchange="_handleChecklistFileUpload(this)"
+                            />
                             <div
                                 class="checklist-container"
                                 id="checklist-container"
@@ -1158,6 +1131,7 @@
                         </div>
                         <button type="button" class="zone-button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy to Clipboard"><i class="fas fa-clipboard"></i> Copy</button>
                         <button type="button" class="zone-button" onclick="downloadNotes(event, 'modal')" title="Download"><i class="fas fa-download"></i> Download</button>
+                        <button type="button" class="zone-button" onclick="_uploadFileAsNote(event)" title="Upload text file as note"><i class="fas fa-upload"></i> Upload</button>
                         <button type="button" class="zone-button" onclick="_openSendContentModal(event, 'notes')" title="Send notes to another chit"><i class="fas fa-paper-plane"></i> Send</button>
                         <button type="button" class="zone-button" onclick="_noteToChecklistFromHeader(event)" title="Move note lines to checklist items"><i class="fas fa-arrow-right"></i> To List</button>
                         <button type="button" class="zone-button" onclick="closeNotesModal(true)"><i class="fas fa-check"></i> Done</button>

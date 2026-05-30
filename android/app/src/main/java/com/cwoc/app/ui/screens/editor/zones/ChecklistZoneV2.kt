@@ -3,6 +3,9 @@ package com.cwoc.app.ui.screens.editor.zones
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +33,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
@@ -67,8 +72,14 @@ import androidx.compose.ui.unit.sp
 import com.cwoc.app.domain.checklist.ChecklistItemV2
 import com.cwoc.app.domain.checklist.ChecklistOperationsV2
 import com.cwoc.app.ui.util.InlineMarkdownRenderer
+import com.cwoc.app.ui.components.CwocZoneButton
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocPrimary
+import com.cwoc.app.ui.screens.editor.utils.MarkdownFormatUtils
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -145,6 +156,28 @@ fun ChecklistZoneV2(
     var showSendToChit by remember { mutableStateOf(false) }
     var sendToChitItemIds by remember { mutableStateOf<Set<String>?>(null) } // null = bulk (all items)
 
+    // File upload launcher for importing text files as checklist items
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val content = inputStream?.bufferedReader()?.readText() ?: ""
+                inputStream?.close()
+                if (content.isBlank()) {
+                    android.widget.Toast.makeText(context, "File is empty", android.widget.Toast.LENGTH_SHORT).show()
+                    return@rememberLauncherForActivityResult
+                }
+                val fileName = uri.lastPathSegment ?: "file"
+                viewModel.importFileAsItems(content)
+                android.widget.Toast.makeText(context, "Imported from $fileName", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Error reading file: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Zone Header (non-collapsible) ────────────────────────────────────
         ChecklistZoneHeader(
@@ -182,6 +215,15 @@ fun ChecklistZoneV2(
                     sendToChitItemIds = viewModel.selectedIds
                     showSendToChit = true
                 },
+                onCopy = {
+                    val markdown = viewModel.getSelectedAsMarkdown()
+                    if (markdown != null) {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("checklist items", markdown))
+                        val count = viewModel.selectedIds.size
+                        android.widget.Toast.makeText(context, "Copied $count item${if (count > 1) "s" else ""} to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onIndent = { viewModel.indentSelected() },
                 onOutdent = { viewModel.outdentSelected() },
                 onClear = { viewModel.clearSelection() }
@@ -203,6 +245,12 @@ fun ChecklistZoneV2(
                     if (!viewModel.isMultiSelectActive) {
                         viewModel.editingItemId = item.id
                     }
+                },
+                onTapCopy = {
+                    val text = viewModel.getItemText(item.id) ?: ""
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("checklist item", text))
+                    android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onTapSend = {
                     sendToChitItemIds = setOf(item.id)
@@ -249,6 +297,10 @@ fun ChecklistZoneV2(
                     viewModel.pasteItems(text)
                 }
                 showDataMenu = false
+            },
+            onUploadFile = {
+                showDataMenu = false
+                filePickerLauncher.launch("text/*")
             },
             onCopyIncomplete = {
                 val markdown = viewModel.getIncompleteAsMarkdown()
@@ -378,8 +430,11 @@ private fun ChecklistZoneHeader(
         Spacer(modifier = Modifier.width(8.dp))
 
         // Data button
-        TextButton(onClick = onDataClick) {
-            Text("⋮ Data", fontSize = 13.sp, color = AgedBrownMedium)
+        CwocZoneButton(
+            onClick = onDataClick,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text("⋮ Data", fontSize = 13.sp)
         }
 
         // Auto-save indicator
@@ -406,27 +461,23 @@ private fun ChecklistZoneHeader(
         Spacer(modifier = Modifier.weight(1f))
 
         // Undo button
-        TextButton(
+        CwocZoneButton(
             onClick = onUndoClick,
-            enabled = canUndo
+            enabled = canUndo,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
         ) {
-            Text(
-                text = "↺",
-                fontSize = 18.sp,
-                color = if (canUndo) AgedBrownMedium else AgedBrownMedium.copy(alpha = 0.3f)
-            )
+            Text("↺", fontSize = 18.sp)
         }
 
+        Spacer(modifier = Modifier.width(4.dp))
+
         // Redo button
-        TextButton(
+        CwocZoneButton(
             onClick = onRedoClick,
-            enabled = canRedo
+            enabled = canRedo,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
         ) {
-            Text(
-                text = "↻",
-                fontSize = 18.sp,
-                color = if (canRedo) AgedBrownMedium else AgedBrownMedium.copy(alpha = 0.3f)
-            )
+            Text("↻", fontSize = 18.sp)
         }
 
         // Zone indicator (decorative)
@@ -532,6 +583,7 @@ private fun ChecklistItemRowV2(
     isGhost: Boolean,
     onToggleCheck: () -> Unit,
     onTapText: () -> Unit,
+    onTapCopy: () -> Unit,
     onTapSend: () -> Unit,
     onTapDelete: () -> Unit,
     onTapStrip: () -> Unit,
@@ -660,7 +712,12 @@ private fun ChecklistItemRowV2(
                         }
                     }
                 },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(24.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = AgedBrownMedium,
+                    uncheckedColor = BorderColor,
+                    checkmarkColor = ParchmentLight
+                )
             )
         } else {
             Spacer(modifier = Modifier.size(24.dp))
@@ -671,52 +728,189 @@ private fun ChecklistItemRowV2(
         // Text content (editing or display)
         Box(modifier = Modifier.weight(1f)) {
             if (isEditing && !isGhost) {
-                // Inline editing TextField with keyboard shortcuts
-                var editText by remember(item.id) { mutableStateOf(item.text) }
-                BasicTextField(
-                    value = editText,
-                    onValueChange = { newText ->
-                        // Detect Enter key press (newline inserted by soft keyboard)
-                        if (newText.contains("\n") && !editText.contains("\n")) {
-                            // Enter pressed — split item at the newline position
-                            val nlIdx = newText.indexOf("\n")
-                            val textBefore = newText.substring(0, nlIdx)
-                            editText = textBefore
-                            onTextChange(textBefore)
-                            onSplitItem(nlIdx)
-                        } else {
-                            editText = newText
-                            onTextChange(newText)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, AccentTeal, RoundedCornerShape(3.dp))
-                        .padding(2.dp)
-                        .onKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown) {
-                                when (keyEvent.key) {
-                                    Key.Tab -> {
-                                        if (keyEvent.isShiftPressed) onOutdent() else onIndent()
-                                        true
-                                    }
-                                    Key.Escape -> {
-                                        editText = item.text // revert
-                                        onTextChange(item.text)
-                                        onFinishEditing()
-                                        true
-                                    }
-                                    else -> false
-                                }
-                            } else false
+                // Inline editing TextField with keyboard shortcuts and format toolbar
+                var editTextFieldValue by remember(item.id) {
+                    mutableStateOf(TextFieldValue(text = item.text, selection = TextRange(item.text.length)))
+                }
+                var showHeadingDropdown by remember { mutableStateOf(false) }
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    BasicTextField(
+                        value = editTextFieldValue,
+                        onValueChange = { newValue ->
+                            val newText = newValue.text
+                            val oldText = editTextFieldValue.text
+                            // Detect Enter key press (newline inserted by soft keyboard)
+                            if (newText.contains("\n") && !oldText.contains("\n")) {
+                                // Enter pressed — split item at the newline position
+                                val nlIdx = newText.indexOf("\n")
+                                val textBefore = newText.substring(0, nlIdx)
+                                editTextFieldValue = TextFieldValue(text = textBefore, selection = TextRange(textBefore.length))
+                                onTextChange(textBefore)
+                                onSplitItem(nlIdx)
+                            } else {
+                                editTextFieldValue = newValue
+                                onTextChange(newText)
+                            }
                         },
-                    textStyle = TextStyle(fontSize = 15.sp, color = TextColor),
-                    cursorBrush = SolidColor(AccentTeal),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                    keyboardActions = KeyboardActions(
-                        onDone = { onFinishEditing() }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, AccentTeal, RoundedCornerShape(3.dp))
+                            .padding(2.dp)
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                    when (keyEvent.key) {
+                                        Key.Tab -> {
+                                            if (keyEvent.isShiftPressed) onOutdent() else onIndent()
+                                            true
+                                        }
+                                        Key.Escape -> {
+                                            editTextFieldValue = TextFieldValue(text = item.text, selection = TextRange(item.text.length))
+                                            onTextChange(item.text)
+                                            onFinishEditing()
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                } else false
+                            },
+                        textStyle = TextStyle(fontSize = 15.sp, color = TextColor),
+                        cursorBrush = SolidColor(AccentTeal),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                        keyboardActions = KeyboardActions(
+                            onDone = { onFinishEditing() }
+                        )
                     )
-                )
+
+                    // ── Format Toolbar (shown while editing) ──
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        // Bold
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyWrapFormat(editTextFieldValue, "**")
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("B", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextColor) }
+                        // Italic
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyWrapFormat(editTextFieldValue, "_")
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("I", fontSize = 14.sp, color = TextColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic) }
+                        // Strikethrough
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyWrapFormat(editTextFieldValue, "~~")
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("S", fontSize = 14.sp, color = TextColor, textDecoration = TextDecoration.LineThrough) }
+                        // Link
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyLinkFormat(editTextFieldValue)
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("🔗", fontSize = 14.sp) }
+                        // Heading dropdown
+                        Box {
+                            TextButton(
+                                onClick = { showHeadingDropdown = true },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) { Text("H▾", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextColor) }
+                            androidx.compose.material3.DropdownMenu(
+                                expanded = showHeadingDropdown,
+                                onDismissRequest = { showHeadingDropdown = false }
+                            ) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("H1", fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        editTextFieldValue = MarkdownFormatUtils.applyHeadingFormat(editTextFieldValue, 1)
+                                        onTextChange(editTextFieldValue.text)
+                                        showHeadingDropdown = false
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("H2", fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        editTextFieldValue = MarkdownFormatUtils.applyHeadingFormat(editTextFieldValue, 2)
+                                        onTextChange(editTextFieldValue.text)
+                                        showHeadingDropdown = false
+                                    }
+                                )
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("H3", fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        editTextFieldValue = MarkdownFormatUtils.applyHeadingFormat(editTextFieldValue, 3)
+                                        onTextChange(editTextFieldValue.text)
+                                        showHeadingDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                        // Bullet list
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyLinePrefixFormat(editTextFieldValue, "- ")
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("•", fontSize = 14.sp, color = TextColor) }
+                        // Numbered list
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyLinePrefixFormat(editTextFieldValue, "1. ", numbered = true)
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("1.", fontSize = 14.sp, color = TextColor) }
+                        // Blockquote
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyBlockquoteFormat(editTextFieldValue)
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("❝", fontSize = 14.sp, color = TextColor) }
+                        // Inline code
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyWrapFormat(editTextFieldValue, "`")
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("⟨⟩", fontSize = 14.sp, color = TextColor) }
+                        // Horizontal rule
+                        TextButton(
+                            onClick = {
+                                editTextFieldValue = MarkdownFormatUtils.applyHorizontalRule(editTextFieldValue)
+                                onTextChange(editTextFieldValue.text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) { Text("—", fontSize = 14.sp, color = TextColor) }
+                    }
+                }
             } else {
                 // Markdown rendered text (tap to edit)
                 val textDecoration = if (item.checked) TextDecoration.LineThrough else TextDecoration.None
@@ -736,6 +930,15 @@ private fun ChecklistItemRowV2(
         }
 
         if (!isGhost) {
+            // Copy icon
+            Text(
+                text = "📋",
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .clickable { onTapCopy() }
+                    .padding(horizontal = 4.dp)
+            )
+
             // Send icon
             Text(
                 text = "📤",
@@ -847,6 +1050,7 @@ private fun ChecklistCompletedSectionV2(
                             isGhost = false,
                             onToggleCheck = { onToggleCheck(item.id) },
                             onTapText = {},
+                            onTapCopy = {},
                             onTapSend = {},
                             onTapDelete = { onTapDelete(item.id) },
                             onTapStrip = { onTapStrip(item.id) },
@@ -866,6 +1070,7 @@ private fun ChecklistCompletedSectionV2(
                             isGhost = true,
                             onToggleCheck = {},
                             onTapText = {},
+                            onTapCopy = {},
                             onTapSend = {},
                             onTapDelete = {},
                             onTapStrip = {},
@@ -892,6 +1097,7 @@ private fun ChecklistMultiSelectToolbar(
     onCheck: () -> Unit,
     onDelete: () -> Unit,
     onMove: () -> Unit,
+    onCopy: () -> Unit,
     onIndent: () -> Unit,
     onOutdent: () -> Unit,
     onClear: () -> Unit
@@ -916,6 +1122,7 @@ private fun ChecklistMultiSelectToolbar(
         ToolbarButton("✓ Check") { onCheck() }
         ToolbarButton("🗑 Delete") { onDelete() }
         ToolbarButton("📤 Move") { onMove() }
+        ToolbarButton("📋 Copy") { onCopy() }
         ToolbarButton("→") { onIndent() }
         ToolbarButton("←") { onOutdent() }
         ToolbarButton("✕") { onClear() }
@@ -924,16 +1131,12 @@ private fun ChecklistMultiSelectToolbar(
 
 @Composable
 private fun ToolbarButton(label: String, onClick: () -> Unit) {
-    Text(
-        text = label,
-        fontSize = 12.sp,
-        color = AgedBrownMedium,
-        modifier = Modifier
-            .background(ParchmentLight, RoundedCornerShape(4.dp))
-            .border(1.dp, AgedBrownLight.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 3.dp)
-    )
+    CwocZoneButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(text = label, fontSize = 12.sp)
+    }
 }
 
 // ── Data Menu Bottom Sheet ───────────────────────────────────────────────────
@@ -945,6 +1148,7 @@ private fun ChecklistDataMenuSheet(
     autoSaveActive: Boolean,
     onDismiss: () -> Unit,
     onPasteAsItems: () -> Unit,
+    onUploadFile: () -> Unit,
     onCopyIncomplete: () -> Unit,
     onDeleteChecked: () -> Unit,
     onDeleteUnchecked: () -> Unit,
@@ -969,6 +1173,7 @@ private fun ChecklistDataMenuSheet(
                 .padding(bottom = 16.dp)
         ) {
             DataMenuItem(icon = "📋", label = "Paste as list items", onClick = onPasteAsItems)
+            DataMenuItem(icon = "⬆️", label = "Upload file as list items", onClick = onUploadFile)
             DataMenuItem(icon = "📋", label = "Copy incomplete to clipboard", onClick = onCopyIncomplete)
             if (hasCheckedItems) {
                 DataMenuItem(icon = "☑️", label = "Delete checked items", onClick = onDeleteChecked)

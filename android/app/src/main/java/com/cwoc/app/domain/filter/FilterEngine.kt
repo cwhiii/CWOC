@@ -171,6 +171,10 @@ object FilterEngine {
         // Project filter — handled by passesProjectFilter() which has access to project context
 
         // Tag filter with descendant matching
+        // Tags can be UUIDs (user tags) or name strings (system/legacy).
+        // Filter tags in FilterState are also UUIDs or name strings.
+        // For UUID-based filtering: direct ID match.
+        // For hierarchical matching: resolve IDs to names and check prefix.
         if (filters.tags.isNotEmpty()) {
             val chitTags = chit.tags ?: emptyList()
             when (filters.tagMatchMode) {

@@ -77,6 +77,9 @@ function _cwocInjectSidebar() {
   html += '  <button class="action-button" id="sidebar-check-mail-btn" style="margin-bottom:6px;">';
   html += '    <i class="fas fa-sync" style="margin-right:6px;"></i> Check Mail';
   html += '  </button>';
+  html += '  <button class="action-button" id="sidebar-unify-btn" style="margin-bottom:6px;">';
+  html += '    <i class="fas fa-layer-group" style="margin-right:6px;"></i> Unify';
+  html += '  </button>';
   html += '  <div id="email-account-filter-wrap" style="margin-bottom:8px;"></div>';
   html += '  <div class="filter-group">';
   html += '    <label class="filter-group-label" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.filter-arrow\').textContent=b.style.display===\'none\'?\'▶\':\'▼\';">';
@@ -399,6 +402,11 @@ function _cwocInjectSidebar() {
   html += '      🤖 Rules';
   html += '    </button>';
   html += '  </div>';
+  html += '  <div style="display:flex;gap:6px;margin-top:6px;">';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-badges-btn" title="Badges — active tracking items">';
+  html += '      🛡️ Badges';
+  html += '    </button>';
+  html += '  </div>';
   html += '</div>';
 
   /* Trash & Custom Objects */
@@ -430,7 +438,7 @@ function _cwocInjectSidebar() {
   html += '    </button>';
   html += '  </div>';
   html += '  <div id="sidebar-version-footer" style="text-align:center;padding:6px 0 2px;font-size:0.65em;opacity:0.45;">';
-  html += '    <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank" id="sidebar-version-link" title="" style="color:inherit;text-decoration:none;">C.W.\'s Omni Chits</a>';
+  html += '    <a href="#" id="sidebar-version-link" title="" style="color:inherit;text-decoration:none;cursor:pointer;" onclick="event.preventDefault();_cwocShowAboutModal();">C.W.\'s Omni Chits</a>';
   html += '  </div>';
   html += '</div>';
 
@@ -523,6 +531,14 @@ function _cwocInitSidebar(context) {
     };
   }
 
+  /* Wire email sidebar Unify button */
+  var unifyBtn = document.getElementById('sidebar-unify-btn');
+  if (unifyBtn) {
+    unifyBtn.onclick = function() {
+      if (typeof _toggleEmailUnify === 'function') _toggleEmailUnify();
+    };
+  }
+
   var todayBtn = document.getElementById('sidebar-today-btn');
   if (todayBtn) todayBtn.onclick = function() { _cb('onToday')(); };
 
@@ -585,6 +601,10 @@ function _cwocInitSidebar(context) {
   /* Rules */
   var rulesBtn = document.getElementById('sidebar-rules-btn');
   if (rulesBtn) rulesBtn.onclick = function() { _cb('onRulesClick')(); };
+
+  /* Badges */
+  var badgesBtn = document.getElementById('sidebar-badges-btn');
+  if (badgesBtn) badgesBtn.onclick = function() { window.location.href = '/frontend/html/badges.html'; };
 
   /* Settings */
   var settingsBtn = document.getElementById('sidebar-settings-btn');

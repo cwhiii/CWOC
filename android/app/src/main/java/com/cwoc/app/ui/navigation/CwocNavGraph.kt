@@ -23,6 +23,7 @@ import com.cwoc.app.ui.screens.rules.RuleEditorScreen
 import com.cwoc.app.ui.screens.rules.RulesManagerScreen
 import com.cwoc.app.ui.screens.useradmin.UserAdminScreen
 import com.cwoc.app.ui.screens.adminchits.AdminChitsScreen
+import com.cwoc.app.ui.screens.badges.BadgesScreen
 import com.cwoc.app.ui.screens.calendar.CalendarScreen
 import com.cwoc.app.ui.screens.checklists.ChecklistsScreen
 import com.cwoc.app.ui.screens.editor.ChitEditorScreen
@@ -290,7 +291,16 @@ fun CwocNavGraph(
 
         composable(Screen.Weather.route) {
             WeatherScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCalendarDate = { dateStr ->
+                    // Set the date on the sidebar state so CalendarScreen picks it up
+                    try {
+                        val date = java.time.LocalDate.parse(dateStr)
+                        sidebarStateViewModel?.setDate(date)
+                        sidebarStateViewModel?.setPeriod("Day")
+                    } catch (_: Exception) { /* ignore invalid dates */ }
+                    navController.navigate(Screen.Calendar.route)
+                }
             )
         }
 
@@ -317,6 +327,12 @@ fun CwocNavGraph(
 
         composable(Screen.Help.route) {
             com.cwoc.app.ui.screens.help.HelpScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.About.route) {
+            com.cwoc.app.ui.screens.about.AboutScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -408,6 +424,15 @@ fun CwocNavGraph(
                 },
                 sidebarStateViewModel = sidebarStateViewModel,
                 filterSortViewModel = filterSortViewModel
+            )
+        }
+
+        composable(Screen.Badges.route) {
+            BadgesScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEditor = { chitId ->
+                    navController.navigate(Screen.Editor.createRoute(chitId))
+                }
             )
         }
 

@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.cwoc.app.data.remote.AuthInterceptor
 import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.NetworkFallbackInterceptor
 import com.cwoc.app.data.remote.TokenAuthenticator
 import com.cwoc.app.data.repository.AuthEventEmitter
 import com.cwoc.app.data.repository.AuthRepository
+import com.cwoc.app.data.sync.NetworkFallbackState
 import com.cwoc.app.data.sync.SyncForegroundService
 import com.google.gson.Gson
 import dagger.Module
@@ -14,7 +16,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -83,11 +84,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideNetworkFallbackInterceptor(
+        fallbackState: NetworkFallbackState
+    ): NetworkFallbackInterceptor {
+        return NetworkFallbackInterceptor(fallbackState)
+    }
+
+    @Provides
+    @Singleton
     fun provideOkHttpClient(
+        fallbackInterceptor: NetworkFallbackInterceptor,
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator,
-        loggingInterceptor: HttpLoggingInterceptor,
-        prefs: SharedPreferences
+        loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
         // Trust all certificates (needed for self-signed HTTPS on local server)
         val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
@@ -99,34 +108,10 @@ object NetworkModule {
         val sslContext = SSLContext.getInstance("TLS")
         sslContext.init(null, trustAllCerts, SecureRandom())
 
-        // Dynamic base URL interceptor: rewrites every request's host/port/scheme
-        // to the current server_url from SharedPreferences. This ensures the singleton
-        // Retrofit always hits the correct server even if the URL changes after login.
-        val dynamicUrlInterceptor = okhttp3.Interceptor { chain ->
-            val originalRequest = chain.request()
-            val serverUrl = prefs.getString("server_url", null)
-            if (serverUrl.isNullOrBlank()) {
-                chain.proceed(originalRequest)
-            } else {
-                val targetUrl = serverUrl.trimEnd('/').toHttpUrlOrNull()
-                if (targetUrl != null) {
-                    val newUrl = originalRequest.url.newBuilder()
-                        .scheme(targetUrl.scheme)
-                        .host(targetUrl.host)
-                        .port(targetUrl.port)
-                        .build()
-                    val newRequest = originalRequest.newBuilder().url(newUrl).build()
-                    chain.proceed(newRequest)
-                } else {
-                    chain.proceed(originalRequest)
-                }
-            }
-        }
-
         return OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier { _, _ -> true }
-            .addInterceptor(dynamicUrlInterceptor)
+            .addInterceptor(fallbackInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .authenticator(tokenAuthenticator)

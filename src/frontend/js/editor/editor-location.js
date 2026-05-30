@@ -295,6 +295,16 @@ function _displayMapInUI(lat, lon, address) {
 
 /**
  * Populate the #saved-locations-dropdown from cached saved locations.
+ * Supports section headers with optional dividers.
+ * 
+ * Data structure: array of objects with optional 'section' field.
+ * {
+ *   label: "Home",           // Display name for location
+ *   address: "123 Main St",  // Address for location
+ *   section: "Personal"      // Optional: group header name (if present, this is a section header)
+ *   divider: true            // Optional: show divider below section header
+ * }
+ * 
  * Called during editor init and can be re-called to refresh.
  */
 async function loadSavedLocationsDropdown() {
@@ -307,11 +317,33 @@ async function loadSavedLocationsDropdown() {
     dropdown.remove(1);
   }
 
+  var currentSection = null;
+  
   locations.forEach(function (loc) {
-    var opt = document.createElement('option');
-    opt.value = loc.address || '';
-    opt.textContent = loc.label || loc.address || '(unnamed)';
-    dropdown.appendChild(opt);
+    // Check if this is a section header
+    if (loc.section) {
+      // Add optgroup for the section
+      var group = document.createElement('optgroup');
+      group.label = loc.section;
+      dropdown.appendChild(group);
+      currentSection = loc.section;
+    } else {
+      // Regular location option
+      var opt = document.createElement('option');
+      opt.value = loc.address || '';
+      opt.textContent = loc.label || loc.address || '(unnamed)';
+      
+      // If we're in a section, add to the last optgroup
+      if (currentSection) {
+        var groups = dropdown.querySelectorAll('optgroup');
+        if (groups.length > 0) {
+          groups[groups.length - 1].appendChild(opt);
+          return;
+        }
+      }
+      
+      dropdown.appendChild(opt);
+    }
   });
 
   // Attach onchange handler (remove previous to avoid duplicates)
@@ -402,6 +434,7 @@ function onClearLocation(event) {
 
 /**
  * Populate the #compact-location-dropdown from cached saved locations.
+ * Supports section headers with optional dividers.
  * Called during editor init alongside loadSavedLocationsDropdown().
  */
 async function loadCompactLocationDropdown() {
@@ -421,11 +454,33 @@ async function loadCompactLocationDropdown() {
     noOpt.disabled = true;
     dropdown.appendChild(noOpt);
   } else {
+    var currentSection = null;
+    
     locations.forEach(function (loc) {
-      var opt = document.createElement('option');
-      opt.value = loc.address || '';
-      opt.textContent = loc.label || loc.address || '(unnamed)';
-      dropdown.appendChild(opt);
+      // Check if this is a section header
+      if (loc.section) {
+        // Add optgroup for the section
+        var group = document.createElement('optgroup');
+        group.label = loc.section;
+        dropdown.appendChild(group);
+        currentSection = loc.section;
+      } else {
+        // Regular location option
+        var opt = document.createElement('option');
+        opt.value = loc.address || '';
+        opt.textContent = loc.label || loc.address || '(unnamed)';
+        
+        // If we're in a section, add to the last optgroup
+        if (currentSection) {
+          var groups = dropdown.querySelectorAll('optgroup');
+          if (groups.length > 0) {
+            groups[groups.length - 1].appendChild(opt);
+            return;
+          }
+        }
+        
+        dropdown.appendChild(opt);
+      }
     });
   }
 

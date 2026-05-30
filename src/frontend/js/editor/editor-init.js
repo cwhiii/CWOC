@@ -757,11 +757,7 @@ async function loadChitData(chitId) {
     }
 
     if (chit.color) {
-      const allColors = [...defaultColors, ...(window.customColors || [])];
-      const colorObj = allColors.find(
-        (c) => c.hex.toLowerCase() === chit.color.toLowerCase(),
-      );
-      _setColor(chit.color, colorObj ? colorObj.name : "Custom");
+      _setColor(chit.color, cwocColorName(chit.color));
     }
 
     const pinnedInput = document.getElementById("pinned");
@@ -794,7 +790,37 @@ async function loadChitData(chitId) {
     if (typeof _initSnooze === 'function') _initSnooze(chit);
 
     _loadTags().then((tags) => {
-      _renderTags(tags, chit.tags || []);
+      // API may return chit.tags as:
+      //   New format: [{id: "uuid"|null, name: "string"}] objects
+      //   Old format: ["tag name", "tag name"] plain strings
+      // Extract identifiers for the editor's internal selection state.
+      // System tags (id=null in new format, or system names in old) are filtered out.
+      var rawTags = chit.tags || [];
+      var tagIds = [];
+      for (var i = 0; i < rawTags.length; i++) {
+        var t = rawTags[i];
+        if (t && typeof t === 'object' && t.id) {
+          // New format: {id: "uuid", name: "string"} — use the UUID
+          tagIds.push(t.id);
+        } else if (t && typeof t === 'object' && t.name) {
+          // New format but system tag (id=null) — skip system tags, keep user tags by name
+          if (!isSystemTag(t.name)) {
+            // Use the tag's ID from the registry if available, otherwise use name
+            var regId = getTagIdByName(t.name);
+            tagIds.push(regId || t.name);
+          }
+        } else if (typeof t === 'string') {
+          // Old format: plain name string or UUID string
+          if (t.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+            tagIds.push(t);
+          } else if (!isSystemTag(t)) {
+            // Plain tag name — look up ID or use name as key
+            var regId2 = getTagIdByName(t);
+            tagIds.push(regId2 || t);
+          }
+        }
+      }
+      _renderTags(tags, tagIds);
     });
 
     // Display stored weather_data immediately
@@ -966,28 +992,15 @@ async function loadChitData(chitId) {
     setTimeout(() => markEditorSaved(), 500);
 
     // Refresh mobile overview now that all data is loaded (checklist, notes, etc.)
-    // Try immediately if zone mode is already active
-    var _logMsg = '[loadChitData][v2022] Overview refresh check: _mobileZoneModeActive=' + (typeof _mobileZoneModeActive !== 'undefined' ? _mobileZoneModeActive : 'UNDEFINED') + ', _mobileCurrentZoneIdx=' + (typeof _mobileCurrentZoneIdx !== 'undefined' ? _mobileCurrentZoneIdx : 'UNDEFINED');
-    _logMsg += ' | Status="' + (document.getElementById('status') ? document.getElementById('status').value : 'NO EL') + '"';
-    _logMsg += ' | habitEnabled.checked=' + (document.getElementById('habitEnabled') ? document.getElementById('habitEnabled').checked : 'NO EL');
-    _logMsg += ' | habitGoal=' + (document.getElementById('habitGoal') ? document.getElementById('habitGoal').value : 'NO EL');
-    _logMsg += ' | _currentHabitSuccess=' + window._currentHabitSuccess;
-    fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: _logMsg, source: 'mobile-overview', level: 'debug'}) });
     if (typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive && _mobileCurrentZoneIdx === 0) {
-      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Rendering overview NOW (zone mode active, on zone 0)', source: 'mobile-overview', level: 'debug'}) });
       var titleContainer = document.getElementById('titleWeatherContainer');
       if (titleContainer && typeof _renderMobileOverview === 'function') {
         _renderMobileOverview(titleContainer);
       }
-    } else {
-      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Skipping immediate render — will try delayed', source: 'mobile-overview', level: 'debug'}) });
     }
     // Also schedule a delayed re-render in case zone mode activates after data loads
     setTimeout(function() {
-      var _dMsg = '[loadChitData] Delayed (350ms): _mobileZoneModeActive=' + (typeof _mobileZoneModeActive !== 'undefined' ? _mobileZoneModeActive : 'UNDEFINED') + ', _mobileCurrentZoneIdx=' + (typeof _mobileCurrentZoneIdx !== 'undefined' ? _mobileCurrentZoneIdx : 'UNDEFINED');
-      fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: _dMsg, source: 'mobile-overview', level: 'debug'}) });
       if (typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive && _mobileCurrentZoneIdx === 0) {
-        fetch('/api/client-log', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({message: '[loadChitData] Delayed render: rendering overview now', source: 'mobile-overview', level: 'debug'}) });
         var tc = document.getElementById('titleWeatherContainer');
         if (tc && typeof _renderMobileOverview === 'function') {
           _renderMobileOverview(tc);
@@ -1212,7 +1225,7 @@ document.addEventListener("DOMContentLoaded", function () {
     labelsInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        addSearchedTag();
+        if (typeof addSearchedTag === 'function') addSearchedTag();
       }
     });
   }
@@ -1431,10 +1444,10 @@ document.addEventListener("DOMContentLoaded", function () {
     Notification.requestPermission();
   }
 
-  // Load custom colors from settings and render into the color picker
-  _fetchCustomColors().then((colors) => {
+  // Load custom colors from settings and render the unified color picker
+  _fetchCustomColors().then(function(colors) {
     window.customColors = colors;
-    _renderCustomColors(colors);
+    _initEditorColorPicker();
   });
 
   // Populate saved locations dropdown
@@ -1485,8 +1498,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const recFreq = document.getElementById('recurrenceFreq');
   if (recFreq) recFreq.addEventListener('change', _updateByDayVisibility);
 
-  // Attach listeners to default colors
-  _attachColorSwatchListeners();
+
 
   // Initialize checklist
   const checklistContainer = document.getElementById("checklist-container");

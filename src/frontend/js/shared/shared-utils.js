@@ -973,6 +973,7 @@ function formatTime(date) {
 }
 
 function setSaveButtonUnsaved() {
+  if (window._cwocSuppressDirty) return;
   if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
@@ -1017,7 +1018,12 @@ function isLightColor(hex) {
 
 // ── Shared Color Picker ──────────────────────────────────────────────────────
 
-/** Default color palette used across CWOC (editor color zone, bundle tabs, etc.) */
+/**
+ * Unified default color palette used across ALL of CWOC.
+ * This is the ONE source of truth for default colors — editor, contacts,
+ * settings, bundles, tags, rule editor, and the Android app all reference this.
+ * Custom colors from user settings are appended at render time.
+ */
 var _cwocDefaultColors = [
   { hex: '#C66B6B', name: 'Dusty Rose' },
   { hex: '#D68A59', name: 'Burnt Sienna' },
@@ -1028,62 +1034,123 @@ var _cwocDefaultColors = [
 ];
 
 /**
+ * Look up a color name from the default palette by hex value.
+ * Falls back to 'Custom' if not found.
+ * @param {string} hex — hex color string
+ * @returns {string} color name
+ */
+function cwocColorName(hex) {
+  if (!hex) return 'None';
+  var match = _cwocDefaultColors.find(function(c) {
+    return c.hex.toLowerCase() === hex.toLowerCase();
+  });
+  if (match) return match.name;
+  // Check custom colors from settings
+  var customColors = (window._cwocSettings || {}).custom_colors;
+  if (Array.isArray(customColors)) {
+    for (var i = 0; i < customColors.length; i++) {
+      var c = customColors[i];
+      var cHex = (typeof c === 'string') ? c : (c.hex || '');
+      var cName = (typeof c === 'string') ? c : (c.name || '');
+      if (cHex.toLowerCase() === hex.toLowerCase() && cName) return cName;
+    }
+  }
+  return 'Custom';
+}
+
+/**
  * Render a color picker (swatches) into a container element.
- * Uses the default palette + user's custom colors from settings.
+ * Uses the unified default palette + user's custom colors from settings.
+ * This is the ONE color picker used everywhere in CWOC.
  * Calls onChange(hex) when a swatch is clicked.
  *
  * @param {HTMLElement} container — element to render swatches into (cleared first)
  * @param {string} currentColor — currently selected hex color (or '' for none)
  * @param {Function} onChange — callback(hex) when selection changes
- * @param {object} [opts] — options: { showNone: true } to include a "no color" swatch
+ * @param {object} [opts] — options:
+ *   showNone: true/false (default true) — include a "no color" swatch
+ *   showCustom: true/false (default true) — include custom colors from settings
  */
 function cwocRenderColorPicker(container, currentColor, onChange, opts) {
   opts = opts || {};
   container.innerHTML = '';
 
-  var colors = _cwocDefaultColors.slice();
+  var defaultColors = _cwocDefaultColors.slice();
+  var customColorsList = [];
 
-  // Add custom colors from settings
-  var customColors = (window._cwocSettings || {}).custom_colors;
-  if (Array.isArray(customColors)) {
-    customColors.forEach(function(c) {
-      var hex = (typeof c === 'string') ? c : (c.hex || c.color || '');
-      var name = (typeof c === 'string') ? c : (c.name || c.hex || '');
-      if (hex) colors.push({ hex: hex, name: name });
-    });
+  // Collect custom colors from settings
+  if (opts.showCustom !== false) {
+    var customColors = (window._cwocSettings || {}).custom_colors;
+    if (Array.isArray(customColors)) {
+      customColors.forEach(function(c) {
+        var hex = (typeof c === 'string') ? c : (c.hex || c.color || '');
+        var name = (typeof c === 'string') ? c : (c.name || c.hex || '');
+        if (hex && !defaultColors.find(function(existing) { return existing.hex.toLowerCase() === hex.toLowerCase(); })) {
+          customColorsList.push({ hex: hex, name: name });
+        }
+      });
+    }
   }
 
-  // "None" swatch
-  if (opts.showNone !== false) {
-    var noneSwatch = document.createElement('button');
-    noneSwatch.type = 'button';
-    noneSwatch.className = 'color-swatch cwoc-color-none';
-    noneSwatch.textContent = '\u2718';
-    noneSwatch.title = 'No color';
-    if (!currentColor) noneSwatch.classList.add('selected');
-    noneSwatch.addEventListener('click', function() {
-      container.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('selected'); });
-      noneSwatch.classList.add('selected');
-      onChange('');
-    });
-    container.appendChild(noneSwatch);
-  }
-
-  // Color swatches
-  colors.forEach(function(c) {
+  // Helper: create a swatch button
+  function makeSwatch(c) {
     var swatch = document.createElement('button');
     swatch.type = 'button';
     swatch.className = 'color-swatch';
     swatch.style.backgroundColor = c.hex;
     swatch.title = c.name;
+    swatch.dataset.hex = c.hex.toLowerCase();
     if (c.hex.toLowerCase() === (currentColor || '').toLowerCase()) swatch.classList.add('selected');
     swatch.addEventListener('click', function() {
       container.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('selected'); });
       swatch.classList.add('selected');
       onChange(c.hex);
     });
-    container.appendChild(swatch);
-  });
+    return swatch;
+  }
+
+  // Helper: create a section label
+  function makeLabel(text) {
+    var label = document.createElement('div');
+    label.className = 'cwoc-color-section-label';
+    label.textContent = text;
+    return label;
+  }
+
+  // ── Default Colors section ──
+  container.appendChild(makeLabel('Default'));
+
+  var defaultRow = document.createElement('div');
+  defaultRow.className = 'cwoc-color-row';
+
+  // "None" swatch (part of defaults)
+  if (opts.showNone !== false) {
+    var noneSwatch = document.createElement('button');
+    noneSwatch.type = 'button';
+    noneSwatch.className = 'color-swatch cwoc-color-none';
+    noneSwatch.textContent = '\u2718';
+    noneSwatch.title = 'No color';
+    noneSwatch.dataset.hex = '';
+    if (!currentColor) noneSwatch.classList.add('selected');
+    noneSwatch.addEventListener('click', function() {
+      container.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('selected'); });
+      noneSwatch.classList.add('selected');
+      onChange('');
+    });
+    defaultRow.appendChild(noneSwatch);
+  }
+
+  defaultColors.forEach(function(c) { defaultRow.appendChild(makeSwatch(c)); });
+  container.appendChild(defaultRow);
+
+  // ── Custom Colors section (only if there are custom colors) ──
+  if (customColorsList.length > 0) {
+    container.appendChild(makeLabel('Custom'));
+    var customRow = document.createElement('div');
+    customRow.className = 'cwoc-color-row';
+    customColorsList.forEach(function(c) { customRow.appendChild(makeSwatch(c)); });
+    container.appendChild(customRow);
+  }
 }
 
 /**
@@ -1956,4 +2023,167 @@ function cwocAttachmentPreview(url, filename, mimeType) {
     }
   }
   document.addEventListener('keydown', _escHandler, true);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   About Modal — shows CWOC about/credits in a modal overlay
+   Accessible from sidebar footer link and help page.
+   On first login, auto-shows and shrink-animates to the sidebar link on close.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Show the About CWOC modal with app info, creator credit, and support link.
+ * Fetches version from /api/version and displays inline.
+ * @param {object} [opts] - Options: { animate: true } to shrink-animate on close
+ */
+function _cwocShowAboutModal(opts) {
+  opts = opts || {};
+  var shouldAnimate = opts.animate || false;
+
+  // Remove any existing about modal
+  var existing = document.getElementById('cwoc-about-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-about-modal';
+  overlay.className = 'cwoc-overlay';
+
+  var modal = document.createElement('div');
+  modal.id = 'cwoc-about-modal-box';
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:10px;padding:28px 24px;max-width:520px;width:92%;max-height:85vh;overflow-y:auto;font-family:Lora,Georgia,serif;color:#2b1e0f;box-shadow:0 8px 32px rgba(0,0,0,0.35);text-align:center;transition:transform 0.5s cubic-bezier(0.4,0,0.2,1),opacity 0.5s ease;';
+
+  // Hero section
+  var hero = document.createElement('div');
+  hero.style.cssText = 'margin-bottom:1.5em;';
+  hero.innerHTML = '<img src="/static/images/cwod_logo.png" alt="CWOC Logo" style="width:80px;height:80px;border-radius:50%;border:2px solid #8b5a2b;box-shadow:0 3px 8px rgba(0,0,0,0.2);margin-bottom:0.8em;" />'
+    + '<h2 style="margin:0 0 0.2em;font-size:1.5em;color:#4a2c2a;letter-spacing:0.5px;">C.W.\'s Omni Chits</h2>'
+    + '<p style="margin:0;font-style:italic;color:#6b4e31;font-size:1em;">One chit to rule them all.</p>';
+  modal.appendChild(hero);
+
+  // What is CWOC
+  var desc = document.createElement('div');
+  desc.style.cssText = 'text-align:left;margin-bottom:1.5em;padding:1em 1.2em;background:#fff8e1;border:1px solid rgba(139,90,43,0.2);border-radius:6px;';
+  desc.innerHTML = '<p style="margin:0 0 0.6em;line-height:1.6;font-size:0.95em;">A self-hosted task, note, and calendar management app built around one flexible record — the <strong>chit</strong>. No subscriptions, no cloud dependency. Your data lives on your hardware.</p>'
+    + '<p style="margin:0 0 0.6em;line-height:1.6;font-size:0.95em;">Fill in the fields that matter and the system figures out where it belongs. A chit with a date shows up on the calendar. Add a checklist and it appears in checklists too.</p>'
+    + '<p style="margin:0;line-height:1.6;font-size:0.95em;">Available as a web app and a native <strong>Android app</strong>. <a href="https://www.cwholemaniii.com/cwoc" target="_blank" rel="noopener" style="color:#6b4e31;font-weight:600;">Learn more & download →</a></p>';
+  modal.appendChild(desc);
+
+  // Support / Buy Me a Coffee (PayPal)
+  var coffee = document.createElement('div');
+  coffee.style.cssText = 'margin-bottom:1.5em;padding:1.2em;background:linear-gradient(135deg,#fff8e1 0%,#f5e6cc 100%);border:2px solid #d4af37;border-radius:8px;box-shadow:0 2px 6px rgba(212,175,55,0.15);';
+  coffee.innerHTML = '<p style="margin:0 0 0.8em;font-size:0.95em;color:#3a2a1a;line-height:1.5;">CWOC is a labor of love — built solo, maintained solo, and given away freely. If it\'s made your life a little more organized, consider fueling the next feature.</p>'
+    + '<a href="https://www.paypal.com/paypalme/cwhiii" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#8b5a2b;color:#fff8e1;border:2px solid #5a3f2a;border-radius:6px;text-decoration:none;font-size:1em;font-weight:700;font-family:Lora,Georgia,serif;box-shadow:0 2px 6px rgba(0,0,0,0.2);transition:background 0.2s,transform 0.1s;">☕ Buy Me a Coffee</a>';
+  modal.appendChild(coffee);
+
+  // Creator
+  var creator = document.createElement('div');
+  creator.style.cssText = 'text-align:left;margin-bottom:1.5em;padding:1em 1.2em;background:#fff8e1;border:1px solid rgba(139,90,43,0.2);border-radius:6px;';
+  creator.innerHTML = '<div style="font-weight:700;color:#4a2c2a;margin-bottom:0.3em;font-size:1.05em;">C.W. Holeman III</div>'
+    + '<div style="font-size:0.9em;color:#3a2a1a;line-height:1.5;margin-bottom:0.8em;">Software developer, tinkerer, and believer in tools that work the way you think — not the other way around.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:linear-gradient(#d4a373,#c8965a);color:#2b1e0f;border-radius:4px;text-decoration:none;font-size:0.85em;font-weight:600;font-family:Lora,Georgia,serif;box-shadow:0 1px 3px rgba(0,0,0,0.15);">🌐 Website</a>'
+    + '<a href="https://www.paypal.com/paypalme/cwhiii" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:linear-gradient(#d4a373,#c8965a);color:#2b1e0f;border-radius:4px;text-decoration:none;font-size:0.85em;font-weight:600;font-family:Lora,Georgia,serif;box-shadow:0 1px 3px rgba(0,0,0,0.15);">☕ Support</a>'
+    + '</div>';
+  modal.appendChild(creator);
+
+  // Version (bottom)
+  var versionDiv = document.createElement('div');
+  versionDiv.id = 'cwoc-about-version';
+  versionDiv.style.cssText = 'margin-bottom:1em;font-size:0.85em;color:#8b7355;';
+  modal.appendChild(versionDiv);
+
+  // Close button
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'standard-button';
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = 'padding:8px 24px;font-family:Lora,Georgia,serif;font-size:0.95em;cursor:pointer;';
+  modal.appendChild(closeBtn);
+
+  // Full about page link
+  var fullLink = document.createElement('div');
+  fullLink.style.cssText = 'margin-top:1em;font-size:0.8em;color:#8b7355;';
+  fullLink.innerHTML = '<a href="/frontend/html/about.html" style="color:#6b4e31;text-decoration:none;border-bottom:1px dotted #8b5a2b;">View full About page →</a>';
+  modal.appendChild(fullLink);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // ── Close logic with optional shrink animation ──
+  function _closeModal() {
+    document.removeEventListener('keydown', _onKey, true);
+
+    if (shouldAnimate) {
+      // Shrink-animate the modal toward the sidebar footer link
+      var target = document.getElementById('sidebar-version-link');
+      if (target) {
+        var targetRect = target.getBoundingClientRect();
+        var modalRect = modal.getBoundingClientRect();
+        var dx = targetRect.left + targetRect.width / 2 - (modalRect.left + modalRect.width / 2);
+        var dy = targetRect.top + targetRect.height / 2 - (modalRect.top + modalRect.height / 2);
+        modal.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(0.05)';
+        modal.style.opacity = '0';
+        overlay.style.transition = 'background 0.5s ease';
+        overlay.style.background = 'transparent';
+        setTimeout(function() { overlay.remove(); }, 550);
+      } else {
+        // No sidebar link visible — just fade out
+        modal.style.transform = 'scale(0.3)';
+        modal.style.opacity = '0';
+        overlay.style.transition = 'background 0.4s ease';
+        overlay.style.background = 'transparent';
+        setTimeout(function() { overlay.remove(); }, 450);
+      }
+    } else {
+      overlay.remove();
+    }
+  }
+
+  closeBtn.onclick = function() { _closeModal(); };
+
+  // Fetch version
+  fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+    var el = document.getElementById('cwoc-about-version');
+    if (el && d.version) el.innerHTML = '<span style="background:rgba(139,90,43,0.1);padding:2px 8px;border-radius:3px;border:1px solid rgba(139,90,43,0.2);">v' + d.version + '</span>';
+  }).catch(function() {});
+
+  // ESC to close
+  function _onKey(e) {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      _closeModal();
+    }
+  }
+  document.addEventListener('keydown', _onKey, true);
+
+  // Click outside to close
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) {
+      _closeModal();
+    }
+  });
+
+  closeBtn.focus();
+}
+
+/**
+ * Auto-show the About modal on first login for a user.
+ * Uses localStorage key 'cwoc_about_shown_<userId>' to track.
+ * Called from shared.js or shared-page.js after auth is ready.
+ */
+function _cwocCheckFirstLoginAbout() {
+  if (typeof waitForAuth !== 'function') return;
+  waitForAuth().then(function(user) {
+    if (!user) return;
+    var key = 'cwoc_about_shown_' + user.user_id;
+    if (!localStorage.getItem(key)) {
+      // First time this user has logged in — show the about modal with animation
+      localStorage.setItem(key, '1');
+      // Small delay to let the page finish rendering
+      setTimeout(function() {
+        _cwocShowAboutModal({ animate: true });
+      }, 800);
+    }
+  });
 }

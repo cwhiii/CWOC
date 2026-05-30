@@ -4,11 +4,12 @@
 //
 // Data structure (stored as JSON in settings.custom_view_filters):
 // {
-//   "Calendar": { statuses: [], tags: [], priorities: [], people: [], text: "",
+//   "Calendar": { statuses: [], tags: ["uuid1", "uuid2"], priorities: [], people: [], text: "",
 //                 display: { pinned: true, archived: false, ... }, sort: { field: "", dir: "asc" }, project: "" },
 //   "Tasks": { ... },
 //   ...
 // }
+// Note: tags[] stores Tag_IDs (UUIDs). Display resolves IDs to names via the tag registry.
 
 /** View definitions in display order (Omni first, then tab order) */
 var _customFilterViews = [
@@ -451,7 +452,8 @@ function _populateCustomFilterModal(viewKey) {
 
 /**
  * Populate the Tags section with checkboxes from the settings tag list.
- * @param {string[]} selectedTags - Currently selected tag names
+ * Checkboxes display tag names but store Tag_IDs as their values.
+ * @param {string[]} selectedTags - Currently selected Tag_IDs (UUIDs)
  */
 function _populateCfTags(selectedTags) {
   var container = document.getElementById('cf-tags-multi');
@@ -470,15 +472,16 @@ function _populateCfTags(selectedTags) {
   }
 
   tags.forEach(function(tag) {
+    if (!tag.id) return; // Skip tags without IDs (shouldn't happen post-migration)
     var label = document.createElement('label');
     var cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.value = tag.name;
+    cb.value = tag.id; // Store Tag_ID as the checkbox value
     cb.dataset.filter = 'tag';
-    cb.checked = selectedTags.indexOf(tag.name) !== -1;
+    cb.checked = selectedTags.indexOf(tag.id) !== -1;
     label.appendChild(cb);
     var span = document.createElement('span');
-    span.textContent = ' ' + tag.name;
+    span.textContent = ' ' + tag.name; // Display the tag name
     if (tag.color) {
       span.style.backgroundColor = tag.color;
       span.style.color = tag.fontColor || '#2b1e0f';
@@ -599,7 +602,7 @@ function _gatherCustomFilterModalState() {
     });
   }
 
-  // Tags
+  // Tags — checkbox values are Tag_IDs (UUIDs)
   state.tags = [];
   var tagsContainer = document.getElementById('cf-tags-multi');
   if (tagsContainer) {

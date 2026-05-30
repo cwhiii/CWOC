@@ -589,3 +589,10 @@
     color: var(--aged-brown-dark, #4a2c2a);
     font-weight: 600;
 }
+
+/* ── Email Unify button active state ──────────────────────────────────────── */
+#sidebar-unify-btn.active {
+    background-color: #4a2c2a;
+    border-color: #4a2c2a;
+    color: #fdf5e6;
+}

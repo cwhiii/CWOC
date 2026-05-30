@@ -139,5 +139,8 @@ data class SettingsDto(
     val ntfy_enabled: String? = null,
     val ha_enabled: String? = null,
     val ha_poll_interval: String? = null,
-    val kiosk_selected_tags: Any? = null
+    val kiosk_selected_tags: Any? = null,
+
+    // Badges
+    val badges_completed_window: String? = null
 )

@@ -7,13 +7,14 @@ info helpers.
 """
 
 import asyncio
+import re
 import sqlite3
 import json
 import logging
 import os
 import time
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from uuid import uuid4
 
 
@@ -156,8 +157,91 @@ def deserialize_json_field(data: Optional[str]) -> Any:
         return None
 
 
-def compute_system_tags(chit) -> List[str]:
-    """Compute system tags based on chit properties. Returns merged list of user + system tags."""
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tag ID Helpers — UUID discrimination, system tag detection, resolution
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TAG_ID_PATTERN = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    re.IGNORECASE
+)
+
+
+def is_tag_id(value: str) -> bool:
+    """Return True if value matches UUID v4 format (case-insensitive)."""
+    if not isinstance(value, str):
+        return False
+    return bool(_TAG_ID_PATTERN.match(value))
+
+
+def is_system_tag(value: str) -> bool:
+    """Return True if value starts with 'CWOC_System/' or 'Habits/' (case-insensitive)."""
+    if not isinstance(value, str):
+        return False
+    lower = value.lower()
+    return lower.startswith("cwoc_system/") or lower.startswith("habits/")
+
+
+def resolve_tag_ids(tag_ids: list, tag_registry: list) -> list:
+    """Resolve a list of tag values (UUIDs and system tag strings) to [{id, name}] objects.
+
+    For UUIDs: looks up the name from the registry. Orphaned UUIDs (not found) are
+    logged as warnings and omitted from the result.
+    For system tags: returns {"id": None, "name": the_system_tag_string}.
+    """
+    if not tag_ids:
+        return []
+
+    # Build a lookup from registry: id → tag object
+    registry_by_id = {}
+    for tag in (tag_registry or []):
+        if isinstance(tag, dict) and tag.get("id"):
+            registry_by_id[tag["id"]] = tag
+
+    result = []
+    for value in tag_ids:
+        if not isinstance(value, str) or not value:
+            continue
+        if is_system_tag(value):
+            result.append({"id": None, "name": value})
+        elif is_tag_id(value):
+            tag_obj = registry_by_id.get(value)
+            if tag_obj:
+                result.append({"id": value, "name": tag_obj.get("name", "")})
+            else:
+                logger.warning(f"Orphaned tag ID '{value}' — not found in tag registry, omitting")
+        else:
+            # Not a UUID and not a system tag — treat as legacy name string (shouldn't happen post-migration)
+            logger.warning(f"Unexpected non-UUID, non-system tag value: '{value}'")
+    return result
+
+
+def get_tag_registry(conn, user_id: str) -> list:
+    """Load the user's tag registry from settings. Returns list of tag objects, or [] if none."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT tags FROM settings WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row or not row[0]:
+            return []
+        tags = deserialize_json_field(row[0])
+        if isinstance(tags, list):
+            return tags
+        return []
+    except Exception as e:
+        logger.error(f"Error loading tag registry for user '{user_id}': {e}")
+        return []
+
+
+def compute_system_tags(chit, tag_registry: list = None) -> List[str]:
+    """Compute system tags based on chit properties. Returns merged list of user tag IDs + system tag name strings.
+
+    Args:
+        chit: The chit object with properties to evaluate.
+        tag_registry: Optional list of tag registry objects [{id, name, ...}].
+            When provided, user tag UUIDs are resolved to names for the "Project" check.
+            When None, falls back to old behavior (treats tag values as names).
+    """
     system_tags = []
     if chit.due_datetime or chit.start_datetime or getattr(chit, 'point_in_time', None):
         system_tags.append("CWOC_System/Calendar")
@@ -167,8 +251,35 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Alarms")
     if chit.notification and getattr(chit, 'point_in_time', None):
         system_tags.append("CWOC_System/Reminders")
-    if "Project" in (chit.tags or []):
+
+    # "Project" detection: check child_chits OR if any user tag name contains "Project"
+    has_project_tag = False
+    chit_tags = chit.tags or []
+    if getattr(chit, 'child_chits', None):
+        has_project_tag = True
+    elif tag_registry is not None:
+        # Build ID→name lookup from registry for resolving UUIDs
+        id_to_name = {entry.get("id"): entry.get("name", "") for entry in tag_registry if entry.get("id")}
+        for tag_val in chit_tags:
+            if is_tag_id(tag_val):
+                resolved_name = id_to_name.get(tag_val, "")
+                if "project" in resolved_name.lower():
+                    has_project_tag = True
+                    break
+            elif not is_system_tag(tag_val):
+                # Legacy name string — check directly
+                if "project" in tag_val.lower():
+                    has_project_tag = True
+                    break
+    else:
+        # No registry provided — fall back to old behavior (treat values as names)
+        for tag_val in chit_tags:
+            if not is_system_tag(tag_val) and "project" in tag_val.lower():
+                has_project_tag = True
+                break
+    if has_project_tag:
         system_tags.append("CWOC_System/Projects")
+
     if chit.status in ["ToDo", "In Progress", "Blocked", "Complete", "Rejected"]:
         system_tags.append("CWOC_System/Tasks")
     if not (chit.due_datetime or chit.start_datetime or chit.end_datetime or getattr(chit, 'point_in_time', None)):
@@ -197,21 +308,26 @@ def compute_system_tags(chit) -> List[str]:
             system_tags.append(f"Habits/{title}")
     # Strip old flat system tags from user tags before merging
     old_system = {"Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"}
-    user_tags = [t for t in (chit.tags or []) if t not in old_system]
+    user_tags = [t for t in chit_tags if t not in old_system and not is_system_tag(t)]
     return list(set(user_tags + system_tags))
 
 
-def ensure_tags_in_settings(conn, user_id: str, tag_names: List[str]):
+def ensure_tags_in_settings(conn, user_id: str, tag_values: List[str]) -> Dict[str, str]:
     """Register tags in the user's settings if they aren't already there.
 
-    Skips system tags (CWOC_System/ prefix). Creates a settings row if none exists.
-    Should be called by any code path that puts user-facing tags on chits.
-    """
-    # Filter to only non-system, non-empty tags
-    new_tags = [t for t in tag_names if t and not t.startswith("CWOC_System/")]
-    if not new_tags:
-        return
+    Accepts a list of tag values that can be:
+      - Tag_IDs (UUIDs) — validated against the registry, kept as-is
+      - System tags (CWOC_System/, Habits/) — skipped entirely
+      - Name strings — matched case-insensitively against existing registry entries;
+        if found, uses existing ID; if not, generates a new UUID v4 and creates entry
 
+    Returns a dict mapping name strings to their Tag_IDs (only for name inputs that
+    were resolved or newly created). UUID inputs are not included in the mapping.
+    """
+    if not tag_values:
+        return {}
+
+    # Load existing registry
     cursor = conn.cursor()
     cursor.execute("SELECT tags FROM settings WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
@@ -220,29 +336,79 @@ def ensure_tags_in_settings(conn, user_id: str, tag_names: List[str]):
     if row and row[0]:
         existing_tags = deserialize_json_field(row[0]) or []
 
-    # Build set of known tag names
-    known_names = set()
+    # Build lookup maps from existing registry
+    # id_set: set of known tag IDs for validation
+    # name_to_entry: lowercase name → existing tag entry (for case-insensitive match)
+    id_set = set()
+    name_to_entry = {}
     for t in existing_tags:
-        if isinstance(t, str):
-            known_names.add(t)
-        elif isinstance(t, dict) and t.get("name"):
-            known_names.add(t["name"])
+        if isinstance(t, dict):
+            tag_id = t.get("id")
+            tag_name = t.get("name", "")
+            if tag_id:
+                id_set.add(tag_id)
+            if tag_name:
+                name_to_entry[tag_name.lower()] = t
+        elif isinstance(t, str):
+            # Legacy string-only entries (pre-migration)
+            name_to_entry[t.lower()] = {"name": t}
 
-    # Add any missing tags
-    added = False
-    for tag_name in new_tags:
-        if tag_name not in known_names:
-            known_names.add(tag_name)
-            existing_tags.append({"name": tag_name, "color": None, "favorite": False})
-            added = True
+    name_to_id_mapping = {}
+    modified = False
 
-    if added:
+    for value in tag_values:
+        if not value or not isinstance(value, str):
+            continue
+
+        # Skip system tags — they don't go in the registry
+        if is_system_tag(value):
+            continue
+
+        # If it's already a UUID, just validate it exists
+        if is_tag_id(value):
+            # UUID input — no mapping needed, just validate existence
+            continue
+
+        # It's a name string — check if it already exists (case-insensitive)
+        lower_name = value.lower()
+        if lower_name in name_to_entry:
+            entry = name_to_entry[lower_name]
+            existing_id = entry.get("id") if isinstance(entry, dict) else None
+            if existing_id:
+                name_to_id_mapping[value] = existing_id
+            # If entry exists but has no ID yet (legacy), generate one
+            elif isinstance(entry, dict):
+                new_id = str(uuid4())
+                entry["id"] = new_id
+                id_set.add(new_id)
+                name_to_id_mapping[value] = new_id
+                modified = True
+        else:
+            # New tag — generate UUID and create registry entry
+            new_id = str(uuid4())
+            new_entry = {
+                "id": new_id,
+                "name": value,
+                "color": None,
+                "fontColor": None,
+                "favorite": False
+            }
+            existing_tags.append(new_entry)
+            id_set.add(new_id)
+            name_to_entry[lower_name] = new_entry
+            name_to_id_mapping[value] = new_id
+            modified = True
+
+    # Persist if we added or modified entries
+    if modified:
         serialized = serialize_json_field(existing_tags)
         if row:
             cursor.execute("UPDATE settings SET tags = ? WHERE user_id = ?", (serialized, user_id))
         else:
             cursor.execute("INSERT INTO settings (user_id, tags) VALUES (?, ?)", (user_id, serialized))
         conn.commit()
+
+    return name_to_id_mapping
 
 
 # Database initialization

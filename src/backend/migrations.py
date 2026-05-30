@@ -7,6 +7,7 @@ Migrations are called sequentially at startup from main.py.
 
 import logging
 import os
+import re
 import sqlite3
 
 from uuid import uuid4
@@ -360,6 +361,27 @@ def migrate_add_audit_settings():
         logger.info("Audit settings columns ready")
     except Exception as e:
         logger.error(f"Error adding audit settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_log_limits():
+    """Add log_max_days and log_max_mb columns to settings table for client/update log pruning."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "log_max_days" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN log_max_days INTEGER DEFAULT 30")
+        if "log_max_mb" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN log_max_mb REAL DEFAULT 5.0")
+        conn.commit()
+        logger.info("Log limits columns ready")
+    except Exception as e:
+        logger.error(f"Error adding log limits columns: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -4188,6 +4210,686 @@ def migrate_cleanup_email_notifications():
         conn.commit()
     except Exception as e:
         logger.error(f"Error in migrate_cleanup_email_notifications: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Restic Backup: backup_config table ───────────────────────────────────
+
+def migrate_backup_config():
+    """Create backup_config table for storing restic backup target configurations.
+
+    Multi-row table — each row is an independent backup target with its own
+    repository, schedule, retention policy, and operational state.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if the table exists and whether the id column is TEXT or INTEGER.
+        # Older versions created `id INTEGER PRIMARY KEY` which rejects UUID strings.
+        # If that's the case, we need to recreate the table with TEXT PRIMARY KEY.
+        needs_recreate = False
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='backup_config'")
+        if cursor.fetchone():
+            cursor.execute("PRAGMA table_info(backup_config)")
+            cols = {row[1]: row[2] for row in cursor.fetchall()}
+            if cols.get("id", "").upper() == "INTEGER":
+                needs_recreate = True
+                logger.info("backup_config table has INTEGER id — recreating with TEXT PRIMARY KEY")
+
+        if needs_recreate:
+            # Preserve any existing data
+            cursor.execute("SELECT * FROM backup_config")
+            existing_rows = cursor.fetchall()
+            col_names = [desc[0] for desc in cursor.description]
+
+            cursor.execute("DROP TABLE backup_config")
+            cursor.execute("""
+                CREATE TABLE backup_config (
+                    id TEXT PRIMARY KEY,
+                    name TEXT DEFAULT 'Backup',
+                    enabled INTEGER DEFAULT 0,
+                    repo_type TEXT DEFAULT 'local',
+                    repo_url TEXT,
+                    repo_password_encrypted TEXT,
+                    backend_credentials_encrypted TEXT,
+                    backup_paths TEXT,
+                    schedule_frequency TEXT DEFAULT 'daily',
+                    schedule_time TEXT DEFAULT '02:00',
+                    retention_policy TEXT,
+                    notification_recipients TEXT,
+                    notification_transfer INTEGER DEFAULT 1,
+                    notification_maintenance INTEGER DEFAULT 1,
+                    last_backup_time TEXT,
+                    last_backup_result TEXT,
+                    next_backup_time TEXT,
+                    last_check_time TEXT,
+                    backup_history TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+            """)
+            # Re-insert existing rows with string IDs
+            if existing_rows:
+                import uuid as _uuid
+                new_col_names = [
+                    "id", "name", "enabled", "repo_type", "repo_url",
+                    "repo_password_encrypted", "backend_credentials_encrypted",
+                    "backup_paths", "schedule_frequency", "schedule_time",
+                    "retention_policy", "notification_recipients",
+                    "notification_transfer", "notification_maintenance",
+                    "last_backup_time", "last_backup_result", "next_backup_time",
+                    "last_check_time", "backup_history", "retry_count",
+                    "created_at", "updated_at",
+                ]
+                for row in existing_rows:
+                    row_dict = dict(zip(col_names, row))
+                    # Ensure id is a string UUID
+                    row_id = str(row_dict.get("id", ""))
+                    if not row_id or row_id.isdigit():
+                        row_id = str(_uuid.uuid4())
+                    values = [row_id]
+                    for col in new_col_names[1:]:
+                        values.append(row_dict.get(col))
+                    placeholders = ", ".join(["?"] * len(new_col_names))
+                    cursor.execute(
+                        f"INSERT OR IGNORE INTO backup_config ({', '.join(new_col_names)}) VALUES ({placeholders})",
+                        values,
+                    )
+            conn.commit()
+            logger.info("Recreated backup_config table with TEXT PRIMARY KEY")
+        else:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS backup_config (
+                    id TEXT PRIMARY KEY,
+                    name TEXT DEFAULT 'Backup',
+                    enabled INTEGER DEFAULT 0,
+                    repo_type TEXT DEFAULT 'local',
+                    repo_url TEXT,
+                    repo_password_encrypted TEXT,
+                    backend_credentials_encrypted TEXT,
+                    backup_paths TEXT,
+                    schedule_frequency TEXT DEFAULT 'daily',
+                    schedule_time TEXT DEFAULT '02:00',
+                    retention_policy TEXT,
+                    notification_recipients TEXT,
+                    notification_transfer INTEGER DEFAULT 1,
+                    notification_maintenance INTEGER DEFAULT 1,
+                    last_backup_time TEXT,
+                    last_backup_result TEXT,
+                    next_backup_time TEXT,
+                    last_check_time TEXT,
+                    backup_history TEXT,
+                    retry_count INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+            """)
+
+        # Migrate legacy single-row config (id=1) to new format if it exists
+        cursor.execute("SELECT id FROM backup_config WHERE id = '1' OR id = 1")
+        legacy_row = cursor.fetchone()
+        if legacy_row:
+            # Generate a proper UUID for the legacy row
+            import uuid
+            new_id = str(uuid.uuid4())
+            cursor.execute(
+                "UPDATE backup_config SET id = ?, name = 'Primary Backup' WHERE id = '1' OR id = 1",
+                (new_id,)
+            )
+            conn.commit()
+            logger.info("Migrated legacy backup_config row to id=%s", new_id)
+
+        # Ensure 'name' column exists (for tables created before multi-target support)
+        cursor.execute("PRAGMA table_info(backup_config)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "name" not in columns:
+            cursor.execute("ALTER TABLE backup_config ADD COLUMN name TEXT DEFAULT 'Backup'")
+            conn.commit()
+
+        conn.commit()
+        logger.info("backup_config table ready")
+    except Exception as e:
+        logger.error(f"Error in migrate_backup_config: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Tag ID System: one-time data migration ───────────────────────────────
+
+def migrate_tags_to_id_system():
+    """Migrate all tag references from name-based to UUID-based system.
+
+    Steps (all in a single transaction):
+      1. Assign UUIDs to tag registry entries that don't have one
+      2. Convert chit tags from names to IDs
+      3. Convert settings references (recent_tags, custom_view_filters,
+         shared_tags, kiosk_selected_tags, omni_locked_filters)
+      4. Convert rules engine references (tag_present/tag_not_present conditions,
+         add_tag/remove_tag actions)
+
+    Idempotent: detects already-converted values via UUID regex and skips them.
+    Transactional: rolls back everything on any failure.
+    """
+    import json
+    import re
+
+    UUID_PATTERN = re.compile(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        re.IGNORECASE
+    )
+
+    SYSTEM_TAG_PREFIXES = ("cwoc_system/", "habits/")
+
+    def _is_uuid(value):
+        return isinstance(value, str) and bool(UUID_PATTERN.match(value))
+
+    def _is_system_tag(value):
+        if not isinstance(value, str):
+            return False
+        return value.lower().startswith(SYSTEM_TAG_PREFIXES)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        cursor = conn.cursor()
+
+        # ── Get all users ────────────────────────────────────────────────
+        cursor.execute("SELECT user_id, tags, recent_tags, custom_view_filters, shared_tags, kiosk_selected_tags, omni_locked_filters FROM settings")
+        settings_columns = [desc[0] for desc in cursor.description]
+        all_settings_rows = cursor.fetchall()
+
+        for settings_row in all_settings_rows:
+            user_id = settings_row[0]
+            raw_tags = settings_row[1]
+            raw_recent_tags = settings_row[2]
+            raw_custom_view_filters = settings_row[3]
+            raw_shared_tags = settings_row[4]
+            raw_kiosk_selected_tags = settings_row[5]
+            raw_omni_locked_filters = settings_row[6]
+
+            # ── Step 1: Assign UUIDs to tag registry entries ─────────────
+            tag_registry = deserialize_json_field(raw_tags) or []
+            name_to_id = {}  # lowercase name → UUID (for lookups)
+            registry_modified = False
+
+            for tag_entry in tag_registry:
+                if not isinstance(tag_entry, dict):
+                    continue
+                tag_name = tag_entry.get("name", "")
+                tag_id = tag_entry.get("id")
+
+                # If already has a valid UUID, just record the mapping
+                if tag_id and _is_uuid(tag_id):
+                    if tag_name:
+                        name_to_id[tag_name.lower()] = tag_id
+                    continue
+
+                # Assign a new UUID
+                new_id = str(uuid4())
+                tag_entry["id"] = new_id
+                registry_modified = True
+                if tag_name:
+                    name_to_id[tag_name.lower()] = new_id
+
+            # Also handle legacy string-only entries (convert to dict)
+            new_registry = []
+            for tag_entry in tag_registry:
+                if isinstance(tag_entry, str):
+                    # Legacy string entry — convert to dict with UUID
+                    existing_id = name_to_id.get(tag_entry.lower())
+                    if existing_id:
+                        new_registry.append({
+                            "id": existing_id,
+                            "name": tag_entry,
+                            "color": None,
+                            "fontColor": None,
+                            "favorite": False
+                        })
+                    else:
+                        new_id = str(uuid4())
+                        name_to_id[tag_entry.lower()] = new_id
+                        new_registry.append({
+                            "id": new_id,
+                            "name": tag_entry,
+                            "color": None,
+                            "fontColor": None,
+                            "favorite": False
+                        })
+                    registry_modified = True
+                else:
+                    new_registry.append(tag_entry)
+
+            if registry_modified:
+                tag_registry = new_registry
+
+            # Helper: resolve a name to an ID, creating orphan entry if needed
+            def _resolve_name(name):
+                if not name or not isinstance(name, str):
+                    return name
+                if _is_uuid(name):
+                    return name  # Already an ID
+                if _is_system_tag(name):
+                    return name  # System tags stay as names
+                lower = name.lower()
+                if lower in name_to_id:
+                    return name_to_id[lower]
+                # Orphaned name — create a new registry entry
+                new_id = str(uuid4())
+                name_to_id[lower] = new_id
+                tag_registry.append({
+                    "id": new_id,
+                    "name": name,
+                    "color": None,
+                    "fontColor": None,
+                    "favorite": False
+                })
+                return new_id
+
+            # ── Step 2: Convert chit tags from names to IDs ──────────────
+            cursor.execute(
+                "SELECT id, tags FROM chits WHERE owner_id = ? AND tags IS NOT NULL AND tags != '' AND tags != '[]'",
+                (user_id,)
+            )
+            chit_rows = cursor.fetchall()
+
+            for chit_id, raw_chit_tags in chit_rows:
+                chit_tags = deserialize_json_field(raw_chit_tags)
+                if not isinstance(chit_tags, list) or not chit_tags:
+                    continue
+
+                # Check if already fully converted (all entries are UUIDs or system tags)
+                needs_conversion = False
+                for tag_val in chit_tags:
+                    if isinstance(tag_val, str) and not _is_uuid(tag_val) and not _is_system_tag(tag_val):
+                        needs_conversion = True
+                        break
+
+                if not needs_conversion:
+                    continue
+
+                # Convert each tag
+                converted_tags = []
+                for tag_val in chit_tags:
+                    if not isinstance(tag_val, str) or not tag_val:
+                        continue
+                    converted_tags.append(_resolve_name(tag_val))
+
+                cursor.execute(
+                    "UPDATE chits SET tags = ? WHERE id = ?",
+                    (serialize_json_field(converted_tags), chit_id)
+                )
+
+            # ── Step 3: Convert settings references ──────────────────────
+
+            settings_modified = False
+
+            # recent_tags: array of name strings → array of Tag_IDs
+            recent_tags = deserialize_json_field(raw_recent_tags)
+            if isinstance(recent_tags, list) and recent_tags:
+                needs_conversion = any(
+                    isinstance(t, str) and not _is_uuid(t) and not _is_system_tag(t)
+                    for t in recent_tags
+                )
+                if needs_conversion:
+                    recent_tags = [_resolve_name(t) for t in recent_tags if isinstance(t, str)]
+                    raw_recent_tags = serialize_json_field(recent_tags)
+                    settings_modified = True
+
+            # custom_view_filters: for each view's tags array, convert names to IDs
+            custom_view_filters = deserialize_json_field(raw_custom_view_filters)
+            if isinstance(custom_view_filters, dict) and custom_view_filters:
+                cvf_modified = False
+                for view_key, view_config in custom_view_filters.items():
+                    if not isinstance(view_config, dict):
+                        continue
+                    view_tags = view_config.get("tags")
+                    if not isinstance(view_tags, list) or not view_tags:
+                        continue
+                    needs_conversion = any(
+                        isinstance(t, str) and not _is_uuid(t) and not _is_system_tag(t)
+                        for t in view_tags
+                    )
+                    if needs_conversion:
+                        view_config["tags"] = [_resolve_name(t) for t in view_tags if isinstance(t, str)]
+                        cvf_modified = True
+                if cvf_modified:
+                    raw_custom_view_filters = serialize_json_field(custom_view_filters)
+                    settings_modified = True
+
+            # shared_tags: for each entry, convert tag field from name to Tag_ID
+            shared_tags = deserialize_json_field(raw_shared_tags)
+            if isinstance(shared_tags, list) and shared_tags:
+                st_modified = False
+                for entry in shared_tags:
+                    if not isinstance(entry, dict):
+                        continue
+                    tag_val = entry.get("tag")
+                    if isinstance(tag_val, str) and tag_val and not _is_uuid(tag_val) and not _is_system_tag(tag_val):
+                        entry["tag"] = _resolve_name(tag_val)
+                        st_modified = True
+                if st_modified:
+                    raw_shared_tags = serialize_json_field(shared_tags)
+                    settings_modified = True
+
+            # kiosk_selected_tags: array of names → array of Tag_IDs
+            kiosk_selected_tags = deserialize_json_field(raw_kiosk_selected_tags)
+            if isinstance(kiosk_selected_tags, list) and kiosk_selected_tags:
+                needs_conversion = any(
+                    isinstance(t, str) and not _is_uuid(t) and not _is_system_tag(t)
+                    for t in kiosk_selected_tags
+                )
+                if needs_conversion:
+                    kiosk_selected_tags = [_resolve_name(t) for t in kiosk_selected_tags if isinstance(t, str)]
+                    raw_kiosk_selected_tags = serialize_json_field(kiosk_selected_tags)
+                    settings_modified = True
+
+            # omni_locked_filters: if it has a tags array, convert names to IDs
+            omni_locked_filters = deserialize_json_field(raw_omni_locked_filters)
+            if isinstance(omni_locked_filters, dict) and omni_locked_filters:
+                omni_tags = omni_locked_filters.get("tags")
+                if isinstance(omni_tags, list) and omni_tags:
+                    needs_conversion = any(
+                        isinstance(t, str) and not _is_uuid(t) and not _is_system_tag(t)
+                        for t in omni_tags
+                    )
+                    if needs_conversion:
+                        omni_locked_filters["tags"] = [_resolve_name(t) for t in omni_tags if isinstance(t, str)]
+                        raw_omni_locked_filters = serialize_json_field(omni_locked_filters)
+                        settings_modified = True
+
+            # ── Save updated tag registry (always, since we may have added orphan entries) ──
+            cursor.execute(
+                "UPDATE settings SET tags = ? WHERE user_id = ?",
+                (serialize_json_field(tag_registry), user_id)
+            )
+
+            # Save other settings fields if modified
+            if settings_modified:
+                cursor.execute(
+                    """UPDATE settings SET
+                        recent_tags = ?,
+                        custom_view_filters = ?,
+                        shared_tags = ?,
+                        kiosk_selected_tags = ?,
+                        omni_locked_filters = ?
+                    WHERE user_id = ?""",
+                    (
+                        raw_recent_tags,
+                        raw_custom_view_filters,
+                        raw_shared_tags,
+                        raw_kiosk_selected_tags,
+                        raw_omni_locked_filters,
+                        user_id,
+                    )
+                )
+
+            # ── Step 4: Convert rules engine references ──────────────────
+            cursor.execute(
+                "SELECT id, conditions, actions FROM rules WHERE owner_id = ?",
+                (user_id,)
+            )
+            rule_rows = cursor.fetchall()
+
+            for rule_id, raw_conditions, raw_actions in rule_rows:
+                rule_modified = False
+
+                # Convert conditions (recursive tree)
+                conditions = deserialize_json_field(raw_conditions)
+                if conditions:
+                    if _convert_rule_conditions(conditions, _resolve_name):
+                        raw_conditions = serialize_json_field(conditions)
+                        rule_modified = True
+
+                # Convert actions
+                actions = deserialize_json_field(raw_actions)
+                if isinstance(actions, list):
+                    for action in actions:
+                        if not isinstance(action, dict):
+                            continue
+                        action_type = action.get("type", "")
+                        params = action.get("params", {})
+                        if not isinstance(params, dict):
+                            continue
+
+                        if action_type in ("add_tag", "remove_tag"):
+                            tag_val = params.get("tag")
+                            if isinstance(tag_val, str) and tag_val and not _is_uuid(tag_val) and not _is_system_tag(tag_val):
+                                params["tag"] = _resolve_name(tag_val)
+                                rule_modified = True
+
+                if rule_modified:
+                    cursor.execute(
+                        "UPDATE rules SET conditions = ?, actions = ? WHERE id = ?",
+                        (
+                            serialize_json_field(conditions) if conditions else raw_conditions,
+                            serialize_json_field(actions) if actions else raw_actions,
+                            rule_id,
+                        )
+                    )
+
+        # ── Commit the entire transaction ────────────────────────────────
+        conn.commit()
+        logger.info("Tag ID system migration complete — all tag references converted to UUIDs")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error in migrate_tags_to_id_system — rolled back: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def _convert_rule_conditions(node, resolve_fn):
+    """Recursively convert tag name values in rule condition tree to Tag_IDs.
+
+    Returns True if any modification was made.
+    """
+    if not isinstance(node, dict):
+        return False
+
+    modified = False
+
+    # Group node — recurse into children
+    if node.get("type") == "group":
+        children = node.get("children", [])
+        for child in children:
+            if _convert_rule_conditions(child, resolve_fn):
+                modified = True
+        return modified
+
+    # Leaf node — check if it's a tag operator
+    operator = node.get("operator", "")
+    if operator in ("tag_present", "tag_not_present"):
+        value = node.get("value")
+        if isinstance(value, str) and value:
+            uuid_pat = re.compile(
+                r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+                re.IGNORECASE
+            )
+            if not uuid_pat.match(value) and not value.lower().startswith(("cwoc_system/", "habits/")):
+                node["value"] = resolve_fn(value)
+                modified = True
+
+    return modified
+
+# ── Seed Extended Color Palette: one-time data migration ─────────────────
+
+def migrate_seed_extended_colors():
+    """One-time migration: add the extended color palette to each user's custom_colors.
+
+    The default palette was trimmed to the original 6 colors. All the extra colors
+    that were previously hardcoded in various pickers are now seeded into the user's
+    custom_colors setting so they remain available everywhere via the unified picker.
+
+    Idempotent — only adds colors that aren't already in the user's custom_colors.
+    """
+    import json as _json
+
+    # Colors to seed (everything that was in the various palettes minus the 6 defaults)
+    SEED_COLORS = [
+        "#b22222", "#DAA520", "#D4764E", "#D45B5B", "#C2185B",
+        "#7B1FA2", "#512DA8", "#303F9F", "#1976D2", "#0097A7",
+        "#00897B", "#388E3C", "#689F38", "#AFB42B", "#F9A825",
+        "#FF8F00", "#D84315", "#795548", "#546E7A", "#8D6E63",
+        "#E91E63"
+    ]
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Get all users' settings
+        cursor.execute("SELECT user_id, custom_colors FROM settings")
+        rows = cursor.fetchall()
+
+        for user_id, custom_colors_raw in rows:
+            # Parse existing custom colors
+            existing = []
+            if custom_colors_raw:
+                try:
+                    existing = _json.loads(custom_colors_raw)
+                    if not isinstance(existing, list):
+                        existing = []
+                except (ValueError, TypeError):
+                    existing = []
+
+            # Normalize existing to lowercase hex set for dedup
+            existing_lower = set()
+            for c in existing:
+                if isinstance(c, str):
+                    existing_lower.add(c.lower())
+                elif isinstance(c, dict) and c.get("hex"):
+                    existing_lower.add(c["hex"].lower())
+
+            # Add seed colors that aren't already present
+            added = 0
+            for hex_color in SEED_COLORS:
+                if hex_color.lower() not in existing_lower:
+                    existing.append(hex_color)
+                    existing_lower.add(hex_color.lower())
+                    added += 1
+
+            if added > 0:
+                cursor.execute(
+                    "UPDATE settings SET custom_colors = ? WHERE user_id = ?",
+                    (_json.dumps(existing), user_id)
+                )
+                logger.info(f"Seeded {added} extended colors into custom_colors for user {user_id}")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error seeding extended colors: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Badges Table: migration ──────────────────────────────────────────────
+
+def migrate_add_badges_table():
+    """Create badges table for persisted smart link detections.
+
+    Stores detected badges (package tracking, flights, hotels, etc.) with
+    deduplication on (provider_name, code). Includes indexes on status,
+    category, and the provider+code composite.
+
+    Also adds badges_completed_window column to settings table (default "3").
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS and
+    CREATE INDEX IF NOT EXISTS, checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── Create badges table ──────────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS badges (
+                id TEXT PRIMARY KEY,
+                chit_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                provider_name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                url TEXT NOT NULL,
+                icon TEXT,
+                label TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                detected_at TEXT NOT NULL,
+                last_updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                last_email_subject TEXT,
+                UNIQUE(provider_name, code)
+            )
+        """)
+
+        # ── Create indexes ───────────────────────────────────────────────
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_badges_status ON badges(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_badges_category ON badges(category)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_badges_provider_code ON badges(provider_name, code)
+        """)
+
+        # ── Add badges_completed_window to settings ──────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "badges_completed_window" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN badges_completed_window TEXT DEFAULT '3'")
+            logger.info("Added badges_completed_window column to settings table")
+
+        conn.commit()
+        logger.info("Badges table and indexes ready")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_badges_table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Location Vault Toggle: migration ───────────────────────────────────────
+
+def migrate_add_location_vault_toggle():
+    """Add location_shared_to_vault column to chits table.
+
+    When a chit has a location, this flag controls whether the location
+    is shared to the vault (visible to all users) or kept private.
+    Defaults to true (shared) to match contact behavior.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "location_shared_to_vault" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN location_shared_to_vault BOOLEAN DEFAULT 1")
+            logger.info("Added location_shared_to_vault column to chits table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_location_vault_toggle: {str(e)}")
+        raise
     finally:
         if conn:
             conn.close()

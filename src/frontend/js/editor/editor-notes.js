@@ -397,6 +397,130 @@ function downloadNotes(event, source) {
   URL.revokeObjectURL(url);
 }
 
+/* ── Upload File as Note ──────────────────────────────────────────────────── */
+
+/**
+ * Trigger the hidden file input to upload a text file as note content.
+ * Supports .md, .txt, .csv, and any other text-based file.
+ */
+function _uploadFileAsNote(event) {
+  if (event) event.stopPropagation();
+  var input = document.getElementById('notesFileUploadInput');
+  if (input) {
+    input.value = ''; // reset so same file can be re-selected
+    input.click();
+  }
+}
+
+/**
+ * Handle the file selection from the hidden input.
+ * Reads the file as text and offers to append or replace the current notes.
+ */
+function _handleNotesFileUpload(input) {
+  if (!input.files || !input.files.length) return;
+  var file = input.files[0];
+
+  // Sanity check: reject files over 5MB
+  if (file.size > 5 * 1024 * 1024) {
+    cwocToast('File too large (max 5 MB)', 'error');
+    return;
+  }
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var content = e.target.result;
+    if (!content && content !== '') {
+      cwocToast('Could not read file', 'error');
+      return;
+    }
+    _applyUploadedNoteContent(content, file.name);
+  };
+  reader.onerror = function() {
+    cwocToast('Error reading file', 'error');
+  };
+  reader.readAsText(file);
+}
+
+/**
+ * Apply uploaded file content to the notes field.
+ * If notes are empty, just sets the content.
+ * If notes already have content, asks whether to append or replace.
+ */
+function _applyUploadedNoteContent(content, filename) {
+  var textarea = document.getElementById('note');
+  var currentText = textarea ? textarea.value.trim() : '';
+
+  if (!currentText) {
+    // Notes are empty — just set the content directly
+    _setNoteContent(content);
+    cwocToast('Loaded ' + filename, 'success');
+    return;
+  }
+
+  // Notes have existing content — ask append or replace
+  cwocConfirm('Notes already have content.\n\n"Append" adds the file below existing notes.\n"Replace" overwrites them entirely.', {
+    title: '📄 Import: ' + filename,
+    confirmLabel: 'Append',
+    cancelLabel: 'Cancel'
+  }).then(function(result) {
+    if (result === true) {
+      // Append with separator
+      var separator = '\n\n---\n\n';
+      _setNoteContent(currentText + separator + content);
+      cwocToast('Appended ' + filename, 'success');
+    } else {
+      // Offer replace as second step
+      cwocConfirm('Replace all existing notes with the contents of "' + filename + '"?\n\nThis cannot be undone.', {
+        title: '⚠️ Replace Notes?',
+        confirmLabel: 'Replace',
+        cancelLabel: 'Cancel',
+        danger: true
+      }).then(function(replaceResult) {
+        if (replaceResult) {
+          _setNoteContent(content);
+          cwocToast('Replaced notes with ' + filename, 'success');
+        }
+      });
+    }
+  });
+}
+
+/**
+ * Set note content in both the main textarea and the modal (if open).
+ */
+function _setNoteContent(text) {
+  var textarea = document.getElementById('note');
+  if (textarea) {
+    textarea.value = text;
+    autoGrowNote(textarea);
+  }
+
+  // Update rendered view if showing
+  var rendered = document.getElementById('notes-rendered-output');
+  if (rendered && rendered.style.display !== 'none') {
+    if (typeof marked !== 'undefined') {
+      rendered.innerHTML = marked.parse(text || '', { breaks: true });
+    }
+  }
+
+  // Update modal if open
+  var modal = document.getElementById('notesModal');
+  if (modal && modal.style.display !== 'none') {
+    var modalInput = document.getElementById('notes-markdown-input-modal');
+    var lpInput = document.getElementById('notes-livepreview-input-modal');
+    if (modalInput) modalInput.innerText = text;
+    if (lpInput) lpInput.value = text;
+    // Update live preview if in that mode
+    if (_notesModalMode === 'livepreview') {
+      cwocUpdateLivePreview('notes-livepreview-input-modal', 'notes-livepreview-output-modal');
+    }
+  }
+
+  // Mark as unsaved
+  if (typeof markEditorUnsaved === 'function') markEditorUnsaved();
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
 function openNotesModal(event) {
   if (event) event.stopPropagation();
   // Never open fullscreen modal on mobile — zone already fills screen
@@ -616,6 +740,14 @@ var _mobileNotesKeyboardOpen = false;
 /**
  * Create and inject the mobile bottom toolbar for the Notes zone.
  * Called when mobile zone mode activates and the notes zone is shown.
+ *
+ * Button event pattern:
+ *   - touchstart → preventDefault() keeps textarea focused (prevents blur)
+ *   - touchend → fires the action directly (iOS Safari suppresses click after
+ *     touchstart.preventDefault(), so we can't rely on click alone)
+ *   - mousedown → preventDefault() keeps textarea focused (desktop fallback)
+ *   - click → fires the action (desktop fallback, won't double-fire on mobile
+ *     because touchstart.preventDefault() suppresses the synthetic click on iOS)
  */
 function _createMobileNotesToolbar() {
   if (_mobileNotesToolbarEl) return; // already created
@@ -625,16 +757,36 @@ function _createMobileNotesToolbar() {
   toolbar.id = 'mobileNotesBottomToolbar';
   toolbar.style.display = 'none'; // hidden until keyboard opens
 
+  /**
+   * Wire a button with touch-safe event handling.
+   * Fires action on touchend (mobile) and click (desktop).
+   * Prevents double-fire via a flag since iOS suppresses click after
+   * touchstart.preventDefault(), but Android does not.
+   */
+  function _wireMobileBtn(btn, action) {
+    var _touchFired = false;
+    btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    btn.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      _touchFired = true;
+      action(e);
+      // Reset flag after a tick so click doesn't also fire
+      setTimeout(function() { _touchFired = false; }, 300);
+    });
+    btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      // Skip if touchend already handled this tap (Android)
+      if (_touchFired) { _touchFired = false; return; }
+      action(e);
+    });
+  }
+
   // ── Data menu button (⋮)
   var dataBtn = document.createElement('button');
   dataBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
   dataBtn.title = 'Data actions';
-  dataBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
-  dataBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
-  dataBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _toggleMobileNotesDropdown('data');
-  });
+  _wireMobileBtn(dataBtn, function() { _toggleMobileNotesDropdown('data'); });
   toolbar.appendChild(dataBtn);
 
   // ── Preview/Edit toggle
@@ -642,12 +794,7 @@ function _createMobileNotesToolbar() {
   previewBtn.id = 'mobileNotesPreviewBtn';
   previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
   previewBtn.title = 'Preview';
-  previewBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
-  previewBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
-  previewBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _mobileNotesTogglePreview();
-  });
+  _wireMobileBtn(previewBtn, function() { _mobileNotesTogglePreview(); });
   toolbar.appendChild(previewBtn);
 
   // ── Undo
@@ -655,12 +802,7 @@ function _createMobileNotesToolbar() {
   undoBtn.id = 'mobileNotesUndoBtn';
   undoBtn.innerHTML = '<i class="fas fa-undo"></i>';
   undoBtn.title = 'Undo';
-  undoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
-  undoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
-  undoBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _notesUndo(e);
-  });
+  _wireMobileBtn(undoBtn, function(e) { _notesUndo(e); });
   toolbar.appendChild(undoBtn);
 
   // ── Redo
@@ -668,12 +810,7 @@ function _createMobileNotesToolbar() {
   redoBtn.id = 'mobileNotesRedoBtn';
   redoBtn.innerHTML = '<i class="fas fa-redo"></i>';
   redoBtn.title = 'Redo';
-  redoBtn.addEventListener('touchstart', function(e) { e.preventDefault(); });
-  redoBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
-  redoBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    _notesRedo(e);
-  });
+  _wireMobileBtn(redoBtn, function(e) { _notesRedo(e); });
   toolbar.appendChild(redoBtn);
 
   // ── Separator
@@ -700,11 +837,7 @@ function _createMobileNotesToolbar() {
     var el = document.createElement('button');
     el.innerHTML = btn.label;
     el.title = btn.title;
-    // Prevent blur on the textarea when tapping toolbar buttons
-    el.addEventListener('touchstart', function(e) { e.preventDefault(); });
-    el.addEventListener('mousedown', function(e) { e.preventDefault(); });
-    el.addEventListener('click', function(e) {
-      e.stopPropagation();
+    _wireMobileBtn(el, function() {
       if (btn.action === 'heading-dropdown') {
         _toggleMobileNotesDropdown('heading');
       } else if (btn.action === 'block-dropdown') {
@@ -722,6 +855,7 @@ function _createMobileNotesToolbar() {
   _mobileNotesDataMenu = _createMobileNotesDropdown('data', [
     { icon: '📋', label: 'Copy to clipboard', action: function() { copyNotesToClipboard(null, 'main'); } },
     { icon: '⬇️', label: 'Download as file', action: function() { downloadNotes(null, 'main'); } },
+    { icon: '⬆️', label: 'Upload file as note', action: function() { _uploadFileAsNote(null); } },
     { icon: '📤', label: 'Send to another chit', action: function() { if (typeof _openSendContentModal === 'function') _openSendContentModal(null, 'notes'); } },
     { icon: '☑️', label: 'Move to checklist', action: function() { if (typeof _noteToChecklistFromHeader === 'function') _noteToChecklistFromHeader(null); } },
     { icon: '🔗', label: 'Share', action: function() { _mobileNotesShare(); } },
@@ -758,10 +892,21 @@ function _createMobileNotesDropdown(type, items) {
   items.forEach(function(item) {
     var btn = document.createElement('button');
     btn.innerHTML = (item.icon ? item.icon + ' ' : '') + item.label;
+    var _touchFired = false;
     btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+    btn.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      _touchFired = true;
+      _closeMobileNotesDropdowns();
+      item.action();
+      var noteEl = document.getElementById('note');
+      if (noteEl) noteEl.focus();
+      setTimeout(function() { _touchFired = false; }, 300);
+    });
     btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
+      if (_touchFired) { _touchFired = false; return; }
       _closeMobileNotesDropdowns();
       item.action();
       // Re-focus textarea after action

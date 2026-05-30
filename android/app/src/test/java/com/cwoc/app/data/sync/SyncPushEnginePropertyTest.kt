@@ -884,6 +884,7 @@ class FakePushContactDao : ContactDao {
         val entity = entities[id] ?: return
         entities[id] = entity.copy(hasUnviewedConflict = true, conflictFields = fields)
     }
+    override suspend fun getSystemUsers(): List<ContactEntity> = emptyList()
     override fun getAllContacts(): Flow<List<ContactEntity>> = flowOf(emptyList())
 }
 

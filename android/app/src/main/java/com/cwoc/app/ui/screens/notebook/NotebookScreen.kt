@@ -284,7 +284,10 @@ private fun NotebookCard(
     val hasNote = !chit.note.isNullOrBlank()
     val checklistItems = remember(chit.checklist) { ChecklistOperations.parseChecklist(chit.checklist) }
     val hasChecklist = checklistItems.any { it.text.isNotBlank() }
-    val isViewerRole = chit.availability == "declined"
+    val isViewerRole = remember(chit.shares, chit.ownerId, chit.assignedTo, currentUserId) {
+        if (currentUserId.isBlank()) false
+        else com.cwoc.app.domain.sharing.SharingUtils.isViewerRole(chit, currentUserId)
+    }
 
     // Type badge: 📝☑ for both, ☑ for checklist only, 📝 for note only
     val typeBadge = when {
@@ -410,7 +413,9 @@ private fun NotebookCard(
                             modifier = Modifier.size(20.dp),
                             colors = CheckboxDefaults.colors(
                                 checkedColor = cardTextColor.copy(alpha = 0.8f),
-                                uncheckedColor = cardTextColor.copy(alpha = 0.7f)
+                                uncheckedColor = cardTextColor.copy(alpha = 0.7f),
+                                checkmarkColor = if (cardTextColor == Color(0xFF2B1E0F) || cardTextColor == Color(0xFF1A1208))
+                                    Color(0xFFFDF5E6) else Color(0xFF2B1E0F)
                             )
                         )
                         Spacer(modifier = Modifier.width(4.dp))

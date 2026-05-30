@@ -10,6 +10,7 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
 import com.cwoc.app.data.remote.CwocApiService
 import com.cwoc.app.data.repository.SyncResult
 import com.cwoc.app.data.remote.dto.ClientLogRequest
+import com.cwoc.app.domain.tags.TagResolver
 import com.cwoc.app.notification.EmailNotificationHelper
 import com.cwoc.app.notification.NotificationScheduler
 import com.google.gson.Gson
@@ -31,9 +32,12 @@ class SyncEngine @Inject constructor(
     private val edgeCaseHandler: EdgeCaseHandler,
     private val notificationScheduler: NotificationScheduler,
     private val emailNotificationHelper: EmailNotificationHelper,
+    private val tagResolver: TagResolver,
     private val gson: Gson,
     private val prefs: SharedPreferences,
-    private val apiService: CwocApiService
+    private val apiService: CwocApiService,
+    private val networkFallbackState: NetworkFallbackState,
+    private val weatherRepository: com.cwoc.app.data.repository.WeatherRepository
 ) {
 
     suspend fun performSync(since: Int = 0): SyncResult {
@@ -169,6 +173,8 @@ class SyncEngine @Inject constructor(
                 Log.d(TAG, "Replacing settings with server version")
                 val entity = settings.toEntity(now, gson)
                 settingsDao.replace(entity)
+                // Invalidate tag resolver cache since tag registry may have changed
+                tagResolver.invalidateCache()
                 Log.d(TAG, "Settings replaced successfully")
             }
 
@@ -197,6 +203,8 @@ class SyncEngine @Inject constructor(
                                         savedLocations = if (locationsJson != null && locationsJson != "null" && locationsJson != "[]") locationsJson else localSettings.savedLocations
                                     )
                                     settingsDao.replace(updatedEntity)
+                                    // Invalidate tag resolver cache since tags may have been fetched
+                                    tagResolver.invalidateCache()
                                     Log.d(TAG, "Force-fetched settings: tags=${tagsJson?.take(50)}, savedLocations=${locationsJson?.take(50)}")
                                 }
                             }
@@ -225,8 +233,9 @@ class SyncEngine @Inject constructor(
 
             val finalDbCount = chitDao.getCount()
             val syncElapsed = (System.nanoTime() - syncStart) / 1_000_000
-            Log.d(TAG, "[PERF] Sync complete in ${syncElapsed}ms. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
-            reportLog("[PERF] Sync complete: ${syncElapsed}ms total, version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
+            val connectionType = if (networkFallbackState.isFallback.value) "fallback (${networkFallbackState.activeLabel.value})" else "primary"
+            Log.d(TAG, "[PERF] Sync complete via $connectionType in ${syncElapsed}ms. New high-water mark: ${body.server_version}, DB chit count: $finalDbCount")
+            reportLog("[PERF] Sync complete via $connectionType: ${syncElapsed}ms total, version=${body.server_version}, chits_received=${body.chits?.size ?: 0}, contacts_received=${body.contacts?.size ?: 0}, tag_renames=${body.tag_renames?.size ?: 0}, db_chit_count=$finalDbCount", "info")
 
             // ── Fetch user profile via the SAME working apiService that just synced ──
             // This ensures profile_image_url is always populated using the proven sync pipeline.
@@ -245,6 +254,30 @@ class SyncEngine @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch user profile during sync: ${e.message}")
+            }
+
+            // Best-effort: refresh weather forecasts cache during sync
+            try {
+                weatherRepository.refreshFromServer()
+                Log.d(TAG, "Weather forecasts refreshed during sync")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to refresh weather during sync: ${e.message}")
+            }
+
+            // Best-effort: cache Tailscale URL after successful sync (Req 1.1, 1.5)
+            try {
+                val tsResponse = apiService.getTailscaleStatus()
+                if (tsResponse.isSuccessful) {
+                    val tsData = tsResponse.body()
+                    if (tsData?.status == "active" && !tsData.ip.isNullOrBlank()) {
+                        prefs.edit()
+                            .putString("tailscale_server_url", "http://${tsData.ip}:3333")
+                            .apply()
+                        Log.d(TAG, "Cached Tailscale URL: http://${tsData.ip}:3333")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to cache Tailscale URL during sync: ${e.message}")
             }
 
             return SyncResult.Success(body.server_version)

@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from src.backend.db import (
     DB_PATH, _update_lock, deserialize_json_field,
     get_or_create_instance_id, get_version_info, update_version_info,
+    is_tag_id,
 )
 from src.backend.routes.audit import insert_audit_entry, get_current_actor
 from src.backend.sharing import _deserialize_chit_fields
@@ -235,8 +236,8 @@ async def get_weather_forecasts(request: Request):
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ── Sync constants ──
-SYNC_PING_INTERVAL = 30   # seconds between pings
-SYNC_PONG_TIMEOUT = 10    # seconds to wait for pong response
+SYNC_PING_INTERVAL = 25   # seconds between pings
+SYNC_PONG_TIMEOUT = 15    # seconds to wait for pong response
 _SYNC_MESSAGE_TTL = 300   # 5 minutes message retention
 
 # ── HTTP polling sync queue ──
@@ -360,17 +361,20 @@ async def websocket_sync(ws: WebSocket):
         _sync_event_loop = asyncio.get_event_loop()
     await _sync_hub.connect(ws)
     ping_task = asyncio.create_task(_ws_ping_loop(ws))
+    # Use 2x ping interval + pong timeout for generous receive window.
+    # The client should respond to a ping well within one ping cycle, but
+    # network jitter, CPU throttling, or GC pauses can delay things.
+    receive_timeout = (SYNC_PING_INTERVAL * 2) + SYNC_PONG_TIMEOUT
     try:
         while True:
-            # Use wait_for to detect unresponsive clients (ping interval + pong timeout)
             try:
                 data = await asyncio.wait_for(
                     ws.receive_json(),
-                    timeout=SYNC_PING_INTERVAL + SYNC_PONG_TIMEOUT
+                    timeout=receive_timeout
                 )
             except asyncio.TimeoutError:
                 # Client did not send anything within the timeout window — close connection
-                logger.info("WS client timed out (no pong), closing connection")
+                logger.info("WS client timed out (no pong in %ds), closing connection", receive_timeout)
                 await ws.close(code=1001)
                 break
 
@@ -386,9 +390,9 @@ async def websocket_sync(ws: WebSocket):
                 _sync_messages[:] = _sync_messages[-_sync_max_messages:]
             await _sync_hub.broadcast(data, msg_id=msg["id"], exclude=ws)
     except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
+        logger.debug("WS client disconnected normally")
+    except Exception as e:
+        logger.warning("WS connection error: %s", e)
     finally:
         ping_task.cancel()
         _sync_hub.disconnect(ws)
@@ -521,32 +525,60 @@ async def attachments_page():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/kiosk")
-def get_kiosk(tags: str = Query("", description="Comma-separated tag names to filter by")):
+def get_kiosk(tags: str = Query("", description="Comma-separated Tag_IDs (UUIDs) to filter by")):
     """Return combined non-deleted, non-stealth chits that have any of the specified tags.
 
     Unauthenticated endpoint — no request.state.user_id available.
-    Filters chits by tag membership (case-insensitive match).
+    Accepts Tag_IDs (UUIDs) as comma-separated query param.
+    Filters chits by direct ID match + hierarchical name resolution.
+
+    Hierarchical matching: if filter Tag_ID resolves to "Work", also matches
+    chits tagged with "Work/Projects", "Work/Projects/CWOC", etc.
 
     Response: {
         "chits": [ ...chit objects with owner_display_name... ],
-        "tags": [ "tag1", "tag2", ... ]
+        "tags": [ "uuid1", "uuid2", ... ]
     }
     """
     if not tags or not tags.strip():
-        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagName1,TagName2")
+        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagID1,TagID2")
 
     raw_tags = [t.strip() for t in tags.split(",") if t.strip()]
     if not raw_tags:
-        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagName1,TagName2")
-
-    # Lowercase for case-insensitive matching
-    tag_set_lower = {t.lower() for t in raw_tags}
+        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagID1,TagID2")
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+
+        # Load tag registry from settings (single-user app, grab first row)
+        tag_registry = []
+        reg_row = cursor.execute("SELECT tags FROM settings LIMIT 1").fetchone()
+        if reg_row and reg_row["tags"]:
+            raw_reg = reg_row["tags"]
+            tag_registry = json.loads(raw_reg) if isinstance(raw_reg, str) else raw_reg
+            if not isinstance(tag_registry, list):
+                tag_registry = []
+
+        # Build lookup: id → tag object
+        registry_by_id = {}
+        for tag_obj in tag_registry:
+            if isinstance(tag_obj, dict) and tag_obj.get("id"):
+                registry_by_id[tag_obj["id"]] = tag_obj
+
+        # Resolve filter Tag_IDs to their names for hierarchical matching
+        filter_tag_ids = set(raw_tags)
+        filter_tag_names_lower = {}  # tag_id → lowercase name (for hierarchical prefix matching)
+        for tag_id in raw_tags:
+            if is_tag_id(tag_id):
+                tag_obj = registry_by_id.get(tag_id)
+                if tag_obj and tag_obj.get("name"):
+                    filter_tag_names_lower[tag_id] = tag_obj["name"].lower()
+            else:
+                # Fallback: treat non-UUID values as legacy name strings (case-insensitive)
+                filter_tag_names_lower[tag_id] = tag_id.lower()
 
         # Fetch all non-deleted, non-stealth chits that have tags
         cursor.execute(
@@ -564,17 +596,32 @@ def get_kiosk(tags: str = Query("", description="Comma-separated tag names to fi
             _deserialize_chit_fields(chit)
             chit["assigned_to"] = chit.get("assigned_to")
             chit["owner_display_name"] = chit.get("owner_display_name", "")
-            # Check if chit has any of the requested tags (case-insensitive)
-            # Also match child tags: selecting "Work" includes chits tagged "Work/Projects"
+            # Check if chit has any of the requested tags
             chit_tags = chit.get("tags") or []
             if isinstance(chit_tags, list):
                 matched = False
                 for chit_tag in chit_tags:
-                    chit_tag_lower = chit_tag.lower()
-                    for filter_tag_lower in tag_set_lower:
-                        if chit_tag_lower == filter_tag_lower or chit_tag_lower.startswith(filter_tag_lower + '/'):
-                            matched = True
-                            break
+                    if not isinstance(chit_tag, str) or not chit_tag:
+                        continue
+                    # Direct ID match: chit has the exact filter Tag_ID
+                    if chit_tag in filter_tag_ids:
+                        matched = True
+                        break
+                    # Hierarchical match: resolve chit tag to name and check prefix
+                    chit_tag_name_lower = None
+                    if is_tag_id(chit_tag):
+                        chit_tag_obj = registry_by_id.get(chit_tag)
+                        if chit_tag_obj and chit_tag_obj.get("name"):
+                            chit_tag_name_lower = chit_tag_obj["name"].lower()
+                    else:
+                        # System tag or legacy name string
+                        chit_tag_name_lower = chit_tag.lower()
+
+                    if chit_tag_name_lower:
+                        for filter_name_lower in filter_tag_names_lower.values():
+                            if chit_tag_name_lower.startswith(filter_name_lower + '/'):
+                                matched = True
+                                break
                     if matched:
                         break
                 if matched:
@@ -637,6 +684,11 @@ def get_kiosk_config():
             conn.close()
 
 
+@router.get("/about")
+async def about_page():
+    return FileResponse("/app/src/frontend/html/about.html")
+
+
 @router.get("/maps")
 async def maps_page():
     return FileResponse("/app/src/frontend/html/maps.html")
@@ -682,7 +734,7 @@ def health_check():
 @router.get("/api/disk-usage")
 def get_disk_usage():
     """Return disk usage stats: total, used, free (in bytes) for the data partition,
-    plus CWOC-specific storage (DB + attachments + contacts + users)."""
+    plus CWOC-specific storage broken down into app data vs backups."""
     import shutil
     try:
         # Use the data directory (where the DB lives) to get the relevant partition
@@ -693,13 +745,20 @@ def get_disk_usage():
 
         # Calculate CWOC storage: sum of all files in /app/data/
         cwoc_storage = 0
+        backup_storage = 0
         cwoc_data_dir = "/app/data" if os.path.isdir("/app/data") else data_dir
+        backup_dir = os.path.join(cwoc_data_dir, "backups")
+
         for dirpath, dirnames, filenames in os.walk(cwoc_data_dir):
             for f in filenames:
                 try:
                     fp = os.path.join(dirpath, f)
                     if os.path.isfile(fp):
-                        cwoc_storage += os.path.getsize(fp)
+                        size = os.path.getsize(fp)
+                        cwoc_storage += size
+                        # Track backup storage separately
+                        if fp.startswith(backup_dir + os.sep) or fp == backup_dir:
+                            backup_storage += size
                 except OSError:
                     pass
 
@@ -708,6 +767,8 @@ def get_disk_usage():
             "used": usage.used,
             "free": usage.free,
             "cwoc_storage": cwoc_storage,
+            "backup_storage": backup_storage,
+            "app_storage": cwoc_storage - backup_storage,
         }
     except Exception as e:
         logger.error(f"Error getting disk usage: {str(e)}")

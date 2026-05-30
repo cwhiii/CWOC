@@ -506,19 +506,31 @@ data class OverviewRow(
     val text: String,
     val targetZoneId: String,
     val isTitle: Boolean = false,
-    val isMultiLine: Boolean = false
+    val isMultiLine: Boolean = false,
+    val checklistItems: List<ChecklistOverviewItem>? = null
+)
+
+/**
+ * A checklist item shown in the overview with interactive checkbox.
+ */
+data class ChecklistOverviewItem(
+    val index: Int,
+    val text: String,
+    val checked: Boolean
 )
 
 /**
  * Overview zone — read-only summary of all populated fields.
  * Tapping any row navigates to the corresponding zone.
  * When [chitColor] is provided, uses contrast-safe text colors.
+ * Checklist rows render interactive checkboxes via [onChecklistItemToggle].
  */
 @Composable
 fun OverviewZoneContent(
     rows: List<OverviewRow>,
     onRowClick: (String) -> Unit,
-    chitColor: Color? = null
+    chitColor: Color? = null,
+    onChecklistItemToggle: ((Int, Boolean) -> Unit)? = null
 ) {
     // Compute contrast-safe colors based on chit background
     val textColor = if (chitColor != null) contrastColor(chitColor) else Color(0xFF3E2B1A)
@@ -546,25 +558,88 @@ fun OverviewZoneContent(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         rows.forEach { row ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onRowClick(row.targetZoneId) }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = if (row.isMultiLine) Alignment.Top else Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(row.icon, fontSize = 16.sp, modifier = Modifier.width(24.dp))
-                Text(
-                    text = row.text,
-                    modifier = Modifier.weight(1f),
-                    fontSize = if (row.isTitle) 16.sp else 14.sp,
-                    fontWeight = if (row.isTitle) FontWeight.Bold else FontWeight.Normal,
-                    color = if (row.isTitle) titleTextColor else textColor,
-                    maxLines = if (row.isMultiLine) 5 else 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text("›", fontSize = 18.sp, color = arrowColor, fontWeight = FontWeight.Bold)
+            if (row.checklistItems != null && onChecklistItemToggle != null) {
+                // Interactive checklist row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        row.icon, fontSize = 16.sp,
+                        modifier = Modifier
+                            .width(24.dp)
+                            .clickable { onRowClick(row.targetZoneId) }
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        row.checklistItems.forEach { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = item.checked,
+                                    onCheckedChange = { checked ->
+                                        onChecklistItemToggle(item.index, checked)
+                                    },
+                                    modifier = Modifier.size(24.dp),
+                                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                        checkedColor = Color(0xFF6B4E31),
+                                        uncheckedColor = textColor.copy(alpha = 0.6f),
+                                        checkmarkColor = Color.White
+                                    )
+                                )
+                                Text(
+                                    text = item.text,
+                                    fontSize = 14.sp,
+                                    color = textColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        // Show overflow text if present
+                        if (row.text.isNotBlank()) {
+                            Text(
+                                text = row.text,
+                                fontSize = 13.sp,
+                                color = textColor.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        "›", fontSize = 18.sp, color = arrowColor, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onRowClick(row.targetZoneId) }
+                    )
+                }
+            } else {
+                // Standard row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onRowClick(row.targetZoneId) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = if (row.isMultiLine) Alignment.Top else Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(row.icon, fontSize = 16.sp, modifier = Modifier.width(24.dp))
+                    Text(
+                        text = row.text,
+                        modifier = Modifier.weight(1f),
+                        fontSize = if (row.isTitle) 16.sp else 14.sp,
+                        fontWeight = if (row.isTitle) FontWeight.Bold else FontWeight.Normal,
+                        color = if (row.isTitle) titleTextColor else textColor,
+                        maxLines = if (row.isMultiLine) 5 else 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text("›", fontSize = 18.sp, color = arrowColor, fontWeight = FontWeight.Bold)
+                }
             }
             HorizontalDivider(color = dividerColor, thickness = 1.dp)
         }

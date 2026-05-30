@@ -1,3 +1,11 @@
+## cwoc_server-20260525_2010 / cwoc_app-20260525_2010
+
+Checklist items in the editor Overview zone are now interactive on both mobile web and Android app. Incomplete items render as tappable checkboxes — checking one toggles it in the actual checklist data (marks dirty, triggers auto-save if enabled). The arrow (›) and icon still navigate to the full Checklist zone. Shows up to 6 items with overflow count.
+
+## cwoc_server-20260525_2006 / cwoc_app-20260525_2006
+
+Added habit progress row to the editor Overview zone on both mobile web and Android app. When a chit has habits enabled, the overview now shows a 🎯 row with the current success count vs goal and the reset period (e.g., "3 / 5 (daily)"). Tapping the row navigates to the Habits zone.
+
 ## cwoc_server-20260525_1642 / cwoc_app-20260525_1642
 
 Fixed checklist not showing in editor overview zone on mobile web and Android app. Mobile web: the overview panel was rendering before chit data loaded from the API, so the checklist container was empty — now re-renders the overview after data loads. Android app: the overview now parses checklist JSON and shows actual item text (incomplete items with counts) instead of just "Checklist items" static text.

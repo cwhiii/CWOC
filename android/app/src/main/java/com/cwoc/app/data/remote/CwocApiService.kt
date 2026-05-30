@@ -1,6 +1,13 @@
 package com.cwoc.app.data.remote
 
 import com.cwoc.app.data.remote.dto.ArchiveOriginalRequest
+import com.cwoc.app.data.remote.dto.BackupConfigSaveRequestDto
+import com.cwoc.app.data.remote.dto.BackupOperationResponseDto
+import com.cwoc.app.data.remote.dto.BackupRestoreRequestDto
+import com.cwoc.app.data.remote.dto.BackupSnapshotsResponseDto
+import com.cwoc.app.data.remote.dto.BackupStatusResponseDto
+import com.cwoc.app.data.remote.dto.BackupTargetDto
+import com.cwoc.app.data.remote.dto.BackupTargetsResponseDto
 import com.cwoc.app.data.remote.dto.CreateBundleRequest
 import com.cwoc.app.data.remote.dto.RuleHabitDto
 import com.cwoc.app.data.remote.dto.DeviceTokenRequest
@@ -576,6 +583,15 @@ interface CwocApiService {
         @Body data: Map<String, @JvmSuppressWildcards Any?>
     ): Response<ImportDataResponse>
 
+    /**
+     * Import an ICS calendar file as chits.
+     * Body: { "ics_content": "<raw .ics file text>" }
+     */
+    @POST("/api/import/ics")
+    suspend fun importIcs(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<IcsImportResponse>
+
     // ─── Bundles endpoints ──────────────────────────────────────────────────
 
     /**
@@ -781,6 +797,98 @@ interface CwocApiService {
     suspend fun searchChits(
         @Query("q") query: String
     ): Response<List<com.cwoc.app.data.remote.dto.ChitSearchResult>>
+
+    // ─── Backup endpoints ───────────────────────────────────────────────────
+
+    /**
+     * Get all backup targets and any orphaned repos.
+     */
+    @GET("/api/backup/targets")
+    suspend fun getBackupTargets(): Response<BackupTargetsResponseDto>
+
+    /**
+     * Get backup config for a specific target (or the default if target_id is null).
+     */
+    @GET("/api/backup/config")
+    suspend fun getBackupConfig(@Query("target_id") targetId: String?): Response<BackupTargetDto>
+
+    /**
+     * Save (create or update) a backup target configuration.
+     */
+    @POST("/api/backup/config")
+    suspend fun saveBackupConfig(@Body config: BackupConfigSaveRequestDto): Response<BackupOperationResponseDto>
+
+    /**
+     * Remove a backup target configuration (preserves repo data on disk).
+     */
+    @DELETE("/api/backup/config/{targetId}")
+    suspend fun deleteBackupConfig(@Path("targetId") targetId: String): Response<BackupOperationResponseDto>
+
+    /**
+     * Remove a backup target configuration AND permanently delete all repo data.
+     */
+    @DELETE("/api/backup/config/{targetId}/destroy")
+    suspend fun deleteBackupConfigAndData(@Path("targetId") targetId: String): Response<BackupOperationResponseDto>
+
+    /**
+     * Delete an orphaned backup repository by path.
+     */
+    @DELETE("/api/backup/orphan")
+    suspend fun deleteOrphanRepo(@Query("path") path: String): Response<BackupOperationResponseDto>
+
+    /**
+     * Run a backup now. If target_id is null, backs up all targets.
+     */
+    @POST("/api/backup/run")
+    suspend fun runBackup(@Query("target_id") targetId: String? = null): Response<BackupOperationResponseDto>
+
+    /**
+     * Get snapshots for a backup target.
+     */
+    @GET("/api/backup/snapshots")
+    suspend fun getBackupSnapshots(@Query("target_id") targetId: String?): Response<BackupSnapshotsResponseDto>
+
+    /**
+     * Delete a specific snapshot from a backup target.
+     */
+    @DELETE("/api/backup/snapshots/{snapshotId}")
+    suspend fun deleteBackupSnapshot(
+        @Path("snapshotId") snapshotId: String,
+        @Query("target_id") targetId: String?
+    ): Response<BackupOperationResponseDto>
+
+    /**
+     * Restore a backup snapshot to the server.
+     */
+    @POST("/api/backup/restore")
+    suspend fun restoreBackupSnapshot(@Body request: BackupRestoreRequestDto): Response<BackupOperationResponseDto>
+
+    /**
+     * Prune old snapshots based on retention policy.
+     */
+    @POST("/api/backup/prune")
+    suspend fun pruneBackupSnapshots(@Query("target_id") targetId: String?): Response<BackupOperationResponseDto>
+
+    /**
+     * Get backup status (reachability check) for a target.
+     */
+    @GET("/api/backup/status")
+    suspend fun getBackupStatus(@Query("target_id") targetId: String?): Response<BackupStatusResponseDto>
+
+    /**
+     * Get backup info (repo stats) for a target.
+     */
+    @GET("/api/backup/info")
+    suspend fun getBackupInfo(@Query("target_id") targetId: String?): Response<BackupOperationResponseDto>
+
+    /**
+     * Download a backup snapshot archive. Returns the response body for DownloadManager.
+     */
+    @GET("/api/backup/snapshots/{snapshotId}/download")
+    suspend fun downloadBackupSnapshot(
+        @Path("snapshotId") snapshotId: String,
+        @Query("target_id") targetId: String?
+    ): Response<ResponseBody>
 }
 
 /**
@@ -1059,6 +1167,15 @@ data class ImportDataResponse(
     val imported: Int? = null,
     val skipped: Int? = null,
     val errors: List<String>? = null
+)
+
+/**
+ * Response from POST /api/import/ics.
+ */
+data class IcsImportResponse(
+    val imported: Int = 0,
+    val skipped: Int = 0,
+    val errors: List<String> = emptyList()
 )
 
 /**

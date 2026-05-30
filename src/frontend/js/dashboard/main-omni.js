@@ -21,7 +21,6 @@ var _omniLockedFilters = null;     // Persisted filter defaults
 var _omniHSTInterval = null;       // HST bar update interval
 var _omniTimeUntilInterval = null; // Time-until badge update interval
 var _omniFiltersApplied = false;   // Prevents re-applying filters on every render cycle
-var _omniHSTMode = 'both';        // HST bar icon mode: 'chits', 'both', 'weather', 'none'
 
 /* ── Default layout config ───────────────────────────────────────────────── */
 
@@ -30,14 +29,15 @@ var _omniDefaultLayout = [
     { id: "weather", width: "full", visible: true, position: 1, hideWhenEmpty: true },
     { id: "hst_weather", width: "full", visible: false, position: 2, hideWhenEmpty: true },
     { id: "hst_temp_strip", width: "full", visible: false, position: 3, hideWhenEmpty: true },
-    { id: "chrono", width: "half", visible: true, position: 4, column: "left", hideWhenEmpty: true },
-    { id: "reminders", width: "half", visible: true, position: 5, column: "left", hideWhenEmpty: true },
-    { id: "ondeck", width: "half", visible: true, position: 6, column: "left", hideWhenEmpty: true },
-    { id: "soon", width: "half", visible: true, position: 7, column: "left", hideWhenEmpty: true },
-    { id: "email", width: "half", visible: true, position: 8, column: "left", hideWhenEmpty: true },
-    { id: "pinned_notes", width: "half", visible: true, position: 9, column: "right", hideWhenEmpty: true },
-    { id: "pinned_checklists", width: "half", visible: true, position: 10, column: "right", hideWhenEmpty: true },
-    { id: "pinned_all", width: "half", visible: false, position: 11, column: "right", hideWhenEmpty: true }
+    { id: "events_weather", width: "full", visible: false, position: 4, hideWhenEmpty: true },
+    { id: "chrono", width: "half", visible: true, position: 5, column: "left", hideWhenEmpty: true },
+    { id: "reminders", width: "half", visible: true, position: 6, column: "left", hideWhenEmpty: true },
+    { id: "ondeck", width: "half", visible: true, position: 7, column: "left", hideWhenEmpty: true },
+    { id: "soon", width: "half", visible: true, position: 8, column: "left", hideWhenEmpty: true },
+    { id: "email", width: "half", visible: true, position: 9, column: "left", hideWhenEmpty: true },
+    { id: "pinned_notes", width: "half", visible: true, position: 10, column: "right", hideWhenEmpty: true },
+    { id: "pinned_checklists", width: "half", visible: true, position: 11, column: "right", hideWhenEmpty: true },
+    { id: "pinned_all", width: "half", visible: false, position: 12, column: "right", hideWhenEmpty: true }
 ];
 
 /* ── Section display names and icons ─────────────────────────────────────── */
@@ -47,6 +47,7 @@ var _omniSectionMeta = {
     weather: { label: "Weather", icon: "" },
     hst_weather: { label: "HST + Weather", icon: "📊🌤️" },
     hst_temp_strip: { label: "HST Weather Strip", icon: "" },
+    events_weather: { label: "Events & Weather", icon: "🗓️🌤️" },
     chrono: { label: "Chrono Anchored", icon: "⏰" },
     reminders: { label: "Reminders", icon: "📢" },
     ondeck: { label: "On Deck", icon: "🔜" },
@@ -106,7 +107,7 @@ function displayOmniView(filteredChits) {
                         var def = _omniDefaultLayout.find(function(d) { return d.id === item.id; });
                         item.hideWhenEmpty = def ? def.hideWhenEmpty : true;
                     }
-                    // Reminders must always hide when empty (corrects stale saved setting)
+                    // Reminders must always hide when empty (transient by nature)
                     if (item.id === 'reminders') {
                         item.hideWhenEmpty = true;
                     }
@@ -211,6 +212,22 @@ function _buildOmniSection(sectionConfig, widthClass) {
         var header = document.createElement("div");
         header.className = "omni-section-header";
         header.innerHTML = (meta.icon ? '<span class="omni-section-icon">' + meta.icon + '</span> ' : '') + meta.label;
+
+        // Email section: add a small Check Mail button (icon only)
+        if (sectionConfig.id === "email") {
+            var checkBtn = document.createElement("button");
+            checkBtn.type = "button";
+            checkBtn.className = "omni-email-check-btn";
+            checkBtn.id = "omni-email-check-btn";
+            checkBtn.title = "Check Mail";
+            checkBtn.innerHTML = '<i class="fas fa-sync"></i>';
+            checkBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                if (typeof _checkMail === 'function') _checkMail();
+            });
+            header.appendChild(checkBtn);
+        }
+
         section.appendChild(header);
     }
 
@@ -499,6 +516,9 @@ function _populateOmniSections(filteredChits, visibleSections) {
     var categorized = _omniDeduplicateChits(filteredChits);
     console.log('[OmniSections] _populateOmniSections: visibleSections=', visibleSections.map(function(s) { return s.id; }));
     console.log('[OmniSections] categorized.email length:', categorized.email ? categorized.email.length : 'undefined');
+    console.log('[OmniSections] categorized.chrono length:', categorized.chrono ? categorized.chrono.length : 'undefined');
+    console.log('[OmniSections] categorized.reminders length:', categorized.reminders ? categorized.reminders.length : 'undefined');
+    console.log('[OmniSections] categorized.ondeck length:', categorized.ondeck ? categorized.ondeck.length : 'undefined');
 
     visibleSections.forEach(function(sectionConfig) {
         var contentEl = document.getElementById("omni-content-" + sectionConfig.id);
@@ -508,7 +528,7 @@ function _populateOmniSections(filteredChits, visibleSections) {
             case "hst":
                 // HST Bar — implemented in task 7.1
                 if (typeof _renderOmniHST === 'function') {
-                    _renderOmniHST(contentEl, categorized.chrono);
+                    _renderOmniHST(contentEl, categorized.chrono, sectionConfig);
                 }
                 break;
             case "weather":
@@ -519,11 +539,15 @@ function _populateOmniSections(filteredChits, visibleSections) {
                 break;
             case "hst_weather":
                 // Combined HST + Weather side by side
-                _renderOmniHSTWeatherCombo(contentEl, categorized.chrono);
+                _renderOmniHSTWeatherCombo(contentEl, categorized.chrono, sectionConfig);
                 break;
             case "hst_temp_strip":
                 // HST bar with temperature color strip underneath
-                _renderOmniHSTTempStrip(contentEl, categorized.chrono);
+                _renderOmniHSTTempStrip(contentEl, categorized.chrono, sectionConfig);
+                break;
+            case "events_weather":
+                // Combined Events (chrono) + Weather side by side
+                _renderOmniEventsWeather(contentEl, categorized.chrono, sectionConfig);
                 break;
             case "chrono":
                 // Chrono Anchored — implemented in task 6.1
@@ -589,7 +613,7 @@ function _populateOmniSections(filteredChits, visibleSections) {
         }
 
         // Hide empty sections based on per-section hideWhenEmpty setting
-        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather" && sectionConfig.id !== "hst_temp_strip") {
+        if (sectionConfig.id !== "hst" && sectionConfig.id !== "weather" && sectionConfig.id !== "hst_weather" && sectionConfig.id !== "hst_temp_strip" && sectionConfig.id !== "events_weather") {
             var sectionEl = contentEl.parentElement;
             var items;
             if (sectionConfig.id === "pinned_all") {
@@ -1208,9 +1232,13 @@ function _buildDueDateBadge(dueDate, now) {
  * @param {HTMLElement} contentEl - The section content container
  * @param {Array} chronoItems - Array of { type: 'event', chit, start, end, isPast }
  */
-function _renderOmniHST(contentEl, chronoItems) {
+function _renderOmniHST(contentEl, chronoItems, sectionConfig) {
     if (!contentEl) return;
     contentEl.innerHTML = "";
+
+    // Read per-section toggle settings (default to true)
+    var showWeather = sectionConfig && sectionConfig.showWeather === false ? false : true;
+    var showEvents = sectionConfig && sectionConfig.showEvents === false ? false : true;
 
     // ── Build bar container ─────────────────────────────────────────────────
     var bar = document.createElement("div");
@@ -1272,7 +1300,8 @@ function _renderOmniHST(contentEl, chronoItems) {
     }
     _updateHSTFill();
 
-    // ── Place chit icons at their time positions ────────────────────────────
+    // ── Place chit icons at their time positions (if enabled) ─────────────
+    if (showEvents) {
     var chitPositions = [];
     if (chronoItems && chronoItems.length > 0) {
         chronoItems.forEach(function(item) {
@@ -1335,39 +1364,49 @@ function _renderOmniHST(contentEl, chronoItems) {
         marker.style.cursor = "pointer";
         iconsLayer.appendChild(marker);
     });
+    } // end showEvents
 
-    // ── Fetch and place weather icons ───────────────────────────────────────
-    _placeOmniHSTWeather(iconsLayer);
+    // ── Fetch and place weather icons (if enabled) ────────────────────────
+    if (showWeather) {
+        _placeOmniHSTWeather(iconsLayer);
+    }
 
-    // ── Apply current HST mode visibility ───────────────────────────────────
-    _applyHSTMode(iconsLayer);
-
-    // ── Click bar to cycle mode: chits → both → weather → none → chits ─────
-    bar.addEventListener("click", function(e) {
-        if (e.target !== bar && e.target !== fill && e.target !== timeOverlay) return;
-        var modes = ['chits', 'both', 'weather', 'none'];
-        var idx = modes.indexOf(_omniHSTMode);
-        _omniHSTMode = modes[(idx + 1) % modes.length];
-        _applyHSTMode(iconsLayer);
-    });
+    // ── Click bar to cycle through enabled modes ────────────────────────────
+    // Build the available modes based on what's enabled in settings
+    var _hstCycleModes = [];
+    if (showEvents && showWeather) {
+        _hstCycleModes = ['both', 'chits', 'weather', 'none'];
+    } else if (showEvents) {
+        _hstCycleModes = ['chits', 'none'];
+    } else if (showWeather) {
+        _hstCycleModes = ['weather', 'none'];
+    }
+    console.log('[HST Click] showEvents:', showEvents, 'showWeather:', showWeather, 'modes:', _hstCycleModes);
+    // Only add click handler if there are modes to cycle through
+    if (_hstCycleModes.length > 1) {
+        var _hstCurrentMode = _hstCycleModes[0]; // Start with first available mode
+        bar.addEventListener("click", function(e) {
+            console.log('[HST Click] clicked, target:', e.target.className, 'bar?', e.target === bar, 'fill?', e.target === fill, 'timeOverlay?', e.target === timeOverlay);
+            if (e.target !== bar && e.target !== fill && e.target !== timeOverlay) return;
+            var idx = _hstCycleModes.indexOf(_hstCurrentMode);
+            _hstCurrentMode = _hstCycleModes[(idx + 1) % _hstCycleModes.length];
+            console.log('[HST Click] cycling to mode:', _hstCurrentMode);
+            // Apply visibility
+            var chitIcons = iconsLayer.querySelectorAll('.omni-hst-chit-icon, .omni-hst-line');
+            var weatherIcons = iconsLayer.querySelectorAll('.omni-hst-weather-icon');
+            console.log('[HST Click] chitIcons count:', chitIcons.length, 'weatherIcons count:', weatherIcons.length);
+            var showC = (_hstCurrentMode === 'chits' || _hstCurrentMode === 'both');
+            var showW = (_hstCurrentMode === 'weather' || _hstCurrentMode === 'both');
+            chitIcons.forEach(function(el) { el.style.display = showC ? '' : 'none'; });
+            weatherIcons.forEach(function(el) { el.style.display = showW ? '' : 'none'; });
+        });
+    } else {
+        console.log('[HST Click] No modes to cycle through, skipping click handler');
+    }
 
     // ── Set 1-second update interval for fill animation ─────────────────────
     if (_omniHSTInterval) { clearInterval(_omniHSTInterval); }
     _omniHSTInterval = setInterval(function() { _updateHSTFill(); _updateHSTTime(); }, 1000);
-}
-
-/**
- * Apply HST bar icon visibility based on _omniHSTMode.
- * Modes: 'chits' (chits only), 'both' (both), 'weather' (weather only), 'none' (neither)
- */
-function _applyHSTMode(iconsLayer) {
-    if (!iconsLayer) return;
-    var chitIcons = iconsLayer.querySelectorAll('.omni-hst-chit-icon, .omni-hst-line');
-    var weatherIcons = iconsLayer.querySelectorAll('.omni-hst-weather-icon');
-    var showChits = (_omniHSTMode === 'chits' || _omniHSTMode === 'both');
-    var showWeather = (_omniHSTMode === 'weather' || _omniHSTMode === 'both');
-    chitIcons.forEach(function(el) { el.style.display = showChits ? '' : 'none'; });
-    weatherIcons.forEach(function(el) { el.style.display = showWeather ? '' : 'none'; });
 }
 
 /**
@@ -1570,7 +1609,7 @@ function _renderOmniWeather(contentEl) {
  * @param {HTMLElement} contentEl - The section content container
  * @param {Array} chronoItems - Chrono items for the HST bar
  */
-function _renderOmniHSTWeatherCombo(contentEl, chronoItems) {
+function _renderOmniHSTWeatherCombo(contentEl, chronoItems, sectionConfig) {
     if (!contentEl) return;
     contentEl.innerHTML = "";
 
@@ -1581,9 +1620,51 @@ function _renderOmniHSTWeatherCombo(contentEl, chronoItems) {
     var hstSide = document.createElement("div");
     hstSide.className = "omni-combo-hst";
     if (typeof _renderOmniHST === 'function') {
-        _renderOmniHST(hstSide, chronoItems);
+        _renderOmniHST(hstSide, chronoItems, sectionConfig);
     }
     comboWrapper.appendChild(hstSide);
+
+    // Right side: Weather bar
+    var weatherSide = document.createElement("div");
+    weatherSide.className = "omni-combo-weather";
+    if (typeof _renderOmniWeather === 'function') {
+        _renderOmniWeather(weatherSide);
+    }
+    comboWrapper.appendChild(weatherSide);
+
+    contentEl.appendChild(comboWrapper);
+}
+
+/* ── Events & Weather Combo Section ───────────────────────────────────────── */
+
+/**
+ * Renders the Events & Weather combo: chrono events on the left, weather bar on the right.
+ * @param {HTMLElement} contentEl - The section content container
+ * @param {Array} chronoItems - Chrono items for the events side
+ */
+function _renderOmniEventsWeather(contentEl, chronoItems, sectionConfig) {
+    if (!contentEl) return;
+    contentEl.innerHTML = "";
+
+    var comboWrapper = document.createElement("div");
+    comboWrapper.className = "omni-hst-weather-combo";
+
+    // Left side: Today's events (chrono timed events + on-deck all-day events)
+    var eventsSide = document.createElement("div");
+    eventsSide.className = "omni-combo-hst";
+    var _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
+    // Get the full categorized data to include on-deck events too
+    var hasContent = false;
+    if (chronoItems && chronoItems.length > 0) {
+        _renderOmniChrono(eventsSide, chronoItems, _viSettings);
+        hasContent = true;
+    }
+
+    if (!hasContent) {
+        eventsSide.innerHTML = '<div class="omni-empty">No events right now.</div>';
+    }
+    comboWrapper.appendChild(eventsSide);
 
     // Right side: Weather bar
     var weatherSide = document.createElement("div");
@@ -1607,12 +1688,12 @@ function _renderOmniHSTWeatherCombo(contentEl, chronoItems) {
  * @param {HTMLElement} contentEl - The section content container
  * @param {Array} chronoItems - Chrono items for the HST bar
  */
-function _renderOmniHSTTempStrip(contentEl, chronoItems) {
+function _renderOmniHSTTempStrip(contentEl, chronoItems, sectionConfig) {
     if (!contentEl) return;
     contentEl.innerHTML = "";
 
     // Render the normal HST bar
-    _renderOmniHST(contentEl, chronoItems);
+    _renderOmniHST(contentEl, chronoItems, sectionConfig);
 
     // Find the HST bar element that was just rendered and inject the temp strip inside it
     var hstBar = contentEl.querySelector('.omni-hst-bar');

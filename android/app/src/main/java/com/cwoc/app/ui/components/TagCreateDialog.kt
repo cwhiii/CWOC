@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.domain.tags.TagNode
+import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import androidx.compose.material3.Button
 import com.cwoc.app.ui.theme.CwocInputDefaults
@@ -54,23 +55,9 @@ data class TagEditData(
 )
 
 /**
- * Color palette for tag creation — matches the ColorZone default palette.
+ * Color palette for tag creation — uses the unified CwocDefaultColors palette.
  */
-private val TAG_COLOR_PALETTE = listOf(
-    null,          // No color
-    "#C66B6B",     // Muted Red
-    "#D68A59",     // Muted Orange
-    "#E3B23C",     // Muted Yellow/Gold
-    "#8A9A5B",     // Muted Green
-    "#6B8299",     // Muted Blue
-    "#8B6B99",     // Muted Purple
-    "#B85C5C",     // Darker Red
-    "#C47A3F",     // Darker Orange
-    "#7A8A4B",     // Darker Green
-    "#5B7289",     // Darker Blue
-    "#7B5B89",     // Darker Purple
-    "#996B4E"      // Brown
-)
+private val TAG_COLOR_PALETTE: List<String?> = listOf(null) + ColorUtils.CwocDefaultColorHexes
 
 /**
  * Dialog for creating or editing a tag with name, color, font color, favorite, and optional parent tag.

@@ -12,7 +12,7 @@
  *   Everything else  → network fetch (no cache)
  */
 
-const CACHE_NAME = 'cwoc-shell-v4';
+const CACHE_NAME = 'cwoc-shell-v5';
 
 const APP_SHELL_URLS = [
     // ── HTML pages ──
@@ -101,6 +101,7 @@ const APP_SHELL_URLS = [
     '/frontend/js/editor/editor-snooze.js',
     '/frontend/js/editor/editor-save.js',
     '/frontend/js/editor/editor-init.js',
+    '/frontend/js/editor/editor-mobile-zones.js',
     '/frontend/js/editor/editor_checklists.js',
     '/frontend/js/editor/editor_projects.js',
 

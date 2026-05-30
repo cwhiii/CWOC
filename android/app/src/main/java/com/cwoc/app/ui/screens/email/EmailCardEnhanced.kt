@@ -412,6 +412,12 @@ private fun EmailTagChipsRow(
         val displayTags = if (tags.size > maxTags) tags.take(maxTags) else tags
 
         displayTags.forEach { tag ->
+            // Resolve display name: for path-based names use leaf, for UUIDs use tagColorMap key or tag itself
+            // The tagColorMap keys may be tag names (from settings) that we can use for display
+            val displayName = tag.substringAfterLast("/").let { leaf ->
+                // If the leaf looks like a UUID, it's an unresolved tag ID — show abbreviated
+                if (leaf.matches(Regex("^[0-9a-f]{8}-[0-9a-f]{4}-.*"))) "tag" else leaf
+            }
             val chipBgColor = remember(tag, tagColorMap[tag]) {
                 val configuredHex = tagColorMap[tag]
                 if (configuredHex != null) {
@@ -429,7 +435,7 @@ private fun EmailTagChipsRow(
                 color = chipBgColor.copy(alpha = 0.85f)
             ) {
                 Text(
-                    text = tag,
+                    text = displayName,
                     style = MaterialTheme.typography.labelSmall,
                     color = chipTextColor,
                     fontWeight = FontWeight.Medium,

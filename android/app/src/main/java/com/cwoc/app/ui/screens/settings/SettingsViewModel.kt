@@ -7,6 +7,9 @@ import com.cwoc.app.data.local.entity.SettingsEntity
 import com.cwoc.app.data.mapper.SettingsPayloadMapper
 import com.cwoc.app.data.remote.BundleDto
 import com.cwoc.app.data.remote.CwocApiService
+import com.cwoc.app.data.remote.dto.BackupSnapshotDto
+import com.cwoc.app.data.remote.dto.BackupTargetDto
+import com.cwoc.app.data.remote.dto.OrphanRepoDto
 import com.cwoc.app.data.repository.SettingsRepository
 import com.cwoc.app.data.repository.SyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -946,6 +949,12 @@ class SettingsViewModel @Inject constructor(
                 if (response.isSuccessful) {
                     val data = response.body()
                     val status = data?.status ?: "unknown"
+                    // Cache Tailscale URL when status is active and IP is present (Req 1.1)
+                    if (status == "active" && !data?.ip.isNullOrBlank()) {
+                        prefs.edit()
+                            .putString("tailscale_server_url", "http://${data!!.ip}:3333")
+                            .apply()
+                    }
                     _tailscaleState.update {
                         it.copy(
                             status = status,
@@ -1600,6 +1609,636 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ─── Restic Backup ─────────────────────────────────────────────────────────
+
+    data class BackupState(
+        val targets: List<BackupTargetDto> = emptyList(),
+        val orphans: List<OrphanRepoDto> = emptyList(),
+        val isLoading: Boolean = false,
+        val headerStatus: String = "inactive", // inactive, incomplete, ok, local_only, error
+        val lastBackupTime: String? = null,
+        val nextBackupTime: String? = null,
+        val targetCount: Int = 0
+    )
+
+    data class BackupModalState(
+        val isOpen: Boolean = false,
+        val isEditMode: Boolean = false,
+        val targetId: String? = null,
+        val config: BackupTargetDto? = null,
+        val isLoading: Boolean = false,
+        val isSaving: Boolean = false,
+        val isRunningBackup: Boolean = false,
+        val isCheckingStatus: Boolean = false,
+        val isLoadingSnapshots: Boolean = false,
+        val isRestoring: Boolean = false,
+        val isPruning: Boolean = false,
+        val feedbackMessage: String? = null,
+        val feedbackType: String? = null, // success, error, warning, info
+        val snapshots: List<BackupSnapshotDto>? = null,
+        val showSnapshots: Boolean = false,
+        val showRestoreList: Boolean = false
+    )
+
+    private val _backupState = MutableStateFlow(BackupState())
+    val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
+
+    private val _backupModalState = MutableStateFlow(BackupModalState())
+    val backupModalState: StateFlow<BackupModalState> = _backupModalState.asStateFlow()
+
+    /** One-shot toast events for backup operations (success/error messages shown via Snackbar). */
+    private val _backupToastEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val backupToastEvent: SharedFlow<String> = _backupToastEvent.asSharedFlow()
+
+    /** One-shot event emitting a download URL for the UI to open via Intent.ACTION_VIEW. */
+    private val _backupDownloadEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val backupDownloadEvent: SharedFlow<String> = _backupDownloadEvent.asSharedFlow()
+
+    /**
+     * Load all backup targets and orphan repos from the server.
+     * Computes headerStatus, lastBackupTime, and nextBackupTime from the response.
+     *
+     * Header status logic (matching web's _backupUpdateHeaderIcon):
+     * 1. No targets → "inactive"
+     * 2. Any target has last_backup_result.success == false → "error"
+     * 3. All targets have repo_type == "local" → "local_only"
+     * 4. Any target has last_backup_time != null → "ok"
+     * 5. Otherwise → "incomplete"
+     *
+     * Validates: Requirements 1.5, 2.1, 2.2, 11.3
+     */
+    fun loadBackupTargets() {
+        viewModelScope.launch {
+            _backupState.update { it.copy(isLoading = true) }
+            try {
+                val response = apiService.getBackupTargets()
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    val targets = data?.targets ?: emptyList()
+                    val orphans = data?.orphans ?: emptyList()
+
+                    // Compute header status matching web logic
+                    val headerStatus = computeBackupHeaderStatus(targets)
+
+                    // Find most recent last_backup_time across all targets
+                    val lastBackupTime = targets
+                        .mapNotNull { it.last_backup_time }
+                        .maxOrNull()
+
+                    // Find earliest next_backup_time across all targets
+                    val nextBackupTime = targets
+                        .mapNotNull { it.next_backup_time }
+                        .minOrNull()
+
+                    _backupState.update {
+                        it.copy(
+                            targets = targets,
+                            orphans = orphans,
+                            isLoading = false,
+                            headerStatus = headerStatus,
+                            lastBackupTime = lastBackupTime,
+                            nextBackupTime = nextBackupTime,
+                            targetCount = targets.size
+                        )
+                    }
+                } else {
+                    _backupState.update {
+                        it.copy(isLoading = false)
+                    }
+                }
+            } catch (e: Exception) {
+                _backupState.update {
+                    it.copy(isLoading = false)
+                }
+            }
+        }
+    }
+
+    /**
+     * Compute the backup header status icon state from the targets list.
+     * Matches web's _backupUpdateHeaderIcon logic exactly.
+     */
+    private fun computeBackupHeaderStatus(targets: List<BackupTargetDto>): String {
+        // 1. No targets → inactive
+        if (targets.isEmpty()) return "inactive"
+
+        // 2. Any target has last_backup_result.success == false → error
+        if (targets.any { it.last_backup_result?.success == false }) return "error"
+
+        // 3. All targets have repo_type == "local" → local_only
+        if (targets.all { it.repo_type == "local" }) return "local_only"
+
+        // 4. Any target has last_backup_time != null → ok
+        if (targets.any { it.last_backup_time != null }) return "ok"
+
+        // 5. Otherwise → incomplete
+        return "incomplete"
+    }
+
+    /**
+     * Open the backup target modal in create or edit mode.
+     * If targetId is null, opens in create mode with default values.
+     * If targetId is non-null, fetches the config from the server and opens in edit mode.
+     *
+     * Validates: Requirements 3.1, 4.1
+     */
+    fun openBackupTargetModal(targetId: String?) {
+        if (targetId == null) {
+            // Create mode — open with defaults
+            _backupModalState.update {
+                BackupModalState(
+                    isOpen = true,
+                    isEditMode = false,
+                    targetId = null,
+                    config = null,
+                    feedbackMessage = null,
+                    feedbackType = null
+                )
+            }
+        } else {
+            // Edit mode — fetch config from server
+            viewModelScope.launch {
+                _backupModalState.update {
+                    BackupModalState(
+                        isOpen = true,
+                        isEditMode = true,
+                        targetId = targetId,
+                        isLoading = true,
+                        feedbackMessage = null,
+                        feedbackType = null
+                    )
+                }
+                try {
+                    val response = apiService.getBackupConfig(targetId)
+                    if (response.isSuccessful) {
+                        val config = response.body()
+                        _backupModalState.update {
+                            it.copy(
+                                config = config,
+                                isLoading = false
+                            )
+                        }
+                    } else {
+                        val errorMsg = try {
+                            response.errorBody()?.string() ?: "Failed to load config"
+                        } catch (_: Exception) { "Failed to load config" }
+                        _backupModalState.update {
+                            it.copy(
+                                isLoading = false,
+                                feedbackMessage = errorMsg,
+                                feedbackType = "error"
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    _backupModalState.update {
+                        it.copy(
+                            isLoading = false,
+                            feedbackMessage = "Network error loading config: ${e.message}",
+                            feedbackType = "error"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Close the backup target modal and refresh the target list.
+     *
+     * Validates: Requirements 5.4
+     */
+    fun closeBackupTargetModal() {
+        _backupModalState.value = BackupModalState()
+        loadBackupTargets()
+    }
+
+    /**
+     * Set feedback message and type on the backup modal state.
+     * Used by the UI layer for validation feedback without launching a coroutine.
+     */
+    fun setBackupModalFeedback(message: String?, type: String?) {
+        _backupModalState.update { it.copy(feedbackMessage = message, feedbackType = type) }
+    }
+
+    /**
+     * Save a backup target configuration (create or update).
+     * On success: shows toast, refreshes target list, closes modal.
+     * On error: shows inline feedback in the modal.
+     *
+     * Validates: Requirements 5.4, 5.5, 5.6, 10.3
+     */
+    fun saveBackupConfig(config: com.cwoc.app.data.remote.dto.BackupConfigSaveRequestDto) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isSaving = true, feedbackMessage = null, feedbackType = null) }
+            try {
+                val response = apiService.saveBackupConfig(config)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body?.success == true) {
+                        val message = body.message ?: "Backup target saved."
+                        _backupToastEvent.tryEmit(message)
+                        // Close modal and refresh
+                        _backupModalState.value = BackupModalState()
+                        loadBackupTargets()
+                    } else {
+                        val errorMsg = body?.error ?: body?.message ?: "Save failed"
+                        _backupModalState.update {
+                            it.copy(
+                                isSaving = false,
+                                feedbackMessage = errorMsg,
+                                feedbackType = "error"
+                            )
+                        }
+                    }
+                } else {
+                    val errorMsg = try {
+                        response.errorBody()?.string() ?: "Server error (${response.code()})"
+                    } catch (_: Exception) { "Server error (${response.code()})" }
+                    _backupModalState.update {
+                        it.copy(
+                            isSaving = false,
+                            feedbackMessage = errorMsg,
+                            feedbackType = "error"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update {
+                    it.copy(
+                        isSaving = false,
+                        feedbackMessage = "Network error saving config: ${e.message}",
+                        feedbackType = "error"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Delete a backup target configuration (preserves repo data on disk).
+     * Closes modal and refreshes the target list on success.
+     *
+     * Validates: Requirements 6.7
+     */
+    fun deleteBackupConfig(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isLoading = true, feedbackMessage = null, feedbackType = null) }
+            try {
+                val response = apiService.deleteBackupConfig(targetId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val message = body?.message ?: "Configuration removed (data preserved on disk)."
+                    _backupToastEvent.tryEmit(message)
+                    _backupModalState.value = BackupModalState()
+                    loadBackupTargets()
+                } else {
+                    val errorMsg = try {
+                        response.errorBody()?.string() ?: "Failed to remove config"
+                    } catch (_: Exception) { "Failed to remove config" }
+                    _backupModalState.update {
+                        it.copy(
+                            isLoading = false,
+                            feedbackMessage = errorMsg,
+                            feedbackType = "error"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update {
+                    it.copy(
+                        isLoading = false,
+                        feedbackMessage = "Network error: ${e.message}",
+                        feedbackType = "error"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Delete a backup target configuration AND permanently delete all repo data.
+     * Closes modal and refreshes the target list on success.
+     *
+     * Validates: Requirements 6.8
+     */
+    fun deleteBackupConfigAndData(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isLoading = true, feedbackMessage = null, feedbackType = null) }
+            try {
+                val response = apiService.deleteBackupConfigAndData(targetId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val message = body?.message ?: "Configuration and all data permanently deleted."
+                    _backupToastEvent.tryEmit(message)
+                    _backupModalState.value = BackupModalState()
+                    loadBackupTargets()
+                } else {
+                    val errorMsg = try {
+                        response.errorBody()?.string() ?: "Failed to delete config and data"
+                    } catch (_: Exception) { "Failed to delete config and data" }
+                    _backupModalState.update {
+                        it.copy(
+                            isLoading = false,
+                            feedbackMessage = errorMsg,
+                            feedbackType = "error"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update {
+                    it.copy(
+                        isLoading = false,
+                        feedbackMessage = "Network error: ${e.message}",
+                        feedbackType = "error"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Delete an orphaned backup repository by path.
+     * Refreshes the target list on success.
+     *
+     * Validates: Requirements 2.2
+     */
+    fun deleteOrphanRepo(path: String) {
+        viewModelScope.launch {
+            _backupState.update { it.copy(isLoading = true) }
+            try {
+                val response = apiService.deleteOrphanRepo(path)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val message = body?.message ?: "Orphaned repository deleted."
+                    _backupToastEvent.tryEmit(message)
+                    loadBackupTargets()
+                } else {
+                    val errorMsg = try {
+                        response.errorBody()?.string() ?: "Failed to delete orphan"
+                    } catch (_: Exception) { "Failed to delete orphan" }
+                    _backupToastEvent.tryEmit("Error: $errorMsg")
+                    _backupState.update { it.copy(isLoading = false) }
+                }
+            } catch (e: Exception) {
+                _backupToastEvent.tryEmit("Network error: ${e.message}")
+                _backupState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    // ─── Backup Operations: Backup / Restore / Prune (Task 2.3) ─────────────────
+
+    /**
+     * Runs backup for ALL targets.
+     * Calls POST /api/backup/run (no target_id), shows loading on the section header,
+     * toasts the result, and refreshes the target list.
+     *
+     * Validates: Requirements 1.7, 6.1
+     */
+    fun runBackupAll() {
+        viewModelScope.launch {
+            _backupState.update { it.copy(isLoading = true) }
+            try {
+                val response = apiService.runBackup(null)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success == true) {
+                        val msg = if (data.snapshot_id != null) {
+                            "✓ Backup completed. Snapshot: ${data.snapshot_id}. Duration: ${data.duration?.let { "%.1fs".format(it) } ?: "—"}"
+                        } else if (!data.results.isNullOrEmpty()) {
+                            val successCount = data.results.count { it.success == true }
+                            "✓ Backup completed. $successCount target(s) backed up."
+                        } else {
+                            "✓ Backup completed."
+                        }
+                        _backupToastEvent.tryEmit(msg)
+                    } else {
+                        _backupToastEvent.tryEmit("✗ Backup failed: ${data?.error ?: data?.message ?: "Unknown error"}")
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupToastEvent.tryEmit("✗ Backup failed: $errorMsg")
+                }
+            } catch (e: Exception) {
+                _backupToastEvent.tryEmit("✗ Backup failed: ${e.message ?: "Network error"}")
+            } finally {
+                _backupState.update { it.copy(isLoading = false) }
+                loadBackupTargets()
+            }
+        }
+    }
+
+    /**
+     * Runs backup for a single target.
+     * Calls POST /api/backup/run?target_id=X, shows loading in modal,
+     * displays inline feedback with snapshot_id and duration on success.
+     *
+     * Validates: Requirements 6.1, 6.2
+     */
+    fun runBackupTarget(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isRunningBackup = true, feedbackMessage = "⏳ Backing up...", feedbackType = "info") }
+            try {
+                val response = apiService.runBackup(targetId)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success == true) {
+                        val msg = "✓ Backup completed. Snapshot: ${data.snapshot_id ?: "—"}. Duration: ${data.duration?.let { "%.1fs".format(it) } ?: "—"}"
+                        _backupModalState.update { it.copy(isRunningBackup = false, feedbackMessage = msg, feedbackType = "success") }
+                    } else {
+                        _backupModalState.update { it.copy(isRunningBackup = false, feedbackMessage = "✗ Backup failed: ${data?.error ?: data?.message ?: "Unknown error"}", feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(isRunningBackup = false, feedbackMessage = "✗ Backup failed: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(isRunningBackup = false, feedbackMessage = "✗ Backup failed: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Checks the backup status (reachability) for a target.
+     * Calls GET /api/backup/status?target_id=X, displays inline feedback (healthy/error).
+     *
+     * Validates: Requirements 6.2
+     */
+    fun checkBackupStatus(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isCheckingStatus = true, feedbackMessage = "Checking status...", feedbackType = "info") }
+            try {
+                val response = apiService.getBackupStatus(targetId)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.reachable == true) {
+                        _backupModalState.update { it.copy(isCheckingStatus = false, feedbackMessage = "Repository is healthy and reachable. ✓", feedbackType = "success") }
+                    } else {
+                        val errorMsg = data?.message ?: "Repository unreachable"
+                        _backupModalState.update { it.copy(isCheckingStatus = false, feedbackMessage = errorMsg, feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(isCheckingStatus = false, feedbackMessage = "Status check failed: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(isCheckingStatus = false, feedbackMessage = "Status check failed: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Loads snapshots for a backup target.
+     * Calls GET /api/backup/snapshots?target_id=X, populates modal snapshots list.
+     *
+     * Validates: Requirements 6.3, 7.1
+     */
+    fun loadBackupSnapshots(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isLoadingSnapshots = true, feedbackMessage = null, feedbackType = null) }
+            try {
+                val response = apiService.getBackupSnapshots(targetId)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success != false) {
+                        _backupModalState.update { it.copy(isLoadingSnapshots = false, snapshots = data?.snapshots ?: emptyList(), showSnapshots = true) }
+                    } else {
+                        _backupModalState.update { it.copy(isLoadingSnapshots = false, feedbackMessage = "Failed to load snapshots: ${data.error ?: data.message ?: "Unknown error"}", feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(isLoadingSnapshots = false, feedbackMessage = "Failed to load snapshots: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(isLoadingSnapshots = false, feedbackMessage = "Failed to load snapshots: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Deletes a specific snapshot from a backup target.
+     * Calls DELETE /api/backup/snapshots/{id}?target_id=X, refreshes snapshot list.
+     *
+     * Validates: Requirements 7.3
+     */
+    fun deleteBackupSnapshot(snapshotId: String, targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(feedbackMessage = "Deleting snapshot...", feedbackType = "info") }
+            try {
+                val response = apiService.deleteBackupSnapshot(snapshotId, targetId)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success == true) {
+                        _backupModalState.update { it.copy(feedbackMessage = "Snapshot deleted.", feedbackType = "success") }
+                        // Refresh snapshot list
+                        loadBackupSnapshots(targetId)
+                    } else {
+                        _backupModalState.update { it.copy(feedbackMessage = "Delete failed: ${data?.error ?: data?.message ?: "Unknown error"}", feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(feedbackMessage = "Delete failed: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(feedbackMessage = "Delete failed: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Restores a backup snapshot to the server.
+     * Calls POST /api/backup/restore with snapshot_id and target_id, displays result feedback.
+     *
+     * Validates: Requirements 6.4
+     */
+    fun restoreBackupSnapshot(snapshotId: String, targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isRestoring = true, feedbackMessage = "⏳ Restoring...", feedbackType = "info", showRestoreList = false) }
+            try {
+                val request = com.cwoc.app.data.remote.dto.BackupRestoreRequestDto(
+                    snapshot_id = snapshotId,
+                    target = "/",
+                    target_id = targetId
+                )
+                val response = apiService.restoreBackupSnapshot(request)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success == true) {
+                        _backupModalState.update { it.copy(isRestoring = false, feedbackMessage = "✓ Restore completed. ${data.message ?: ""}", feedbackType = "success") }
+                    } else {
+                        _backupModalState.update { it.copy(isRestoring = false, feedbackMessage = "✗ Restore failed: ${data?.error ?: data?.message ?: "Unknown error"}", feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(isRestoring = false, feedbackMessage = "✗ Restore failed: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(isRestoring = false, feedbackMessage = "✗ Restore failed: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Constructs the download URL for a backup snapshot and emits it via backupDownloadEvent.
+     * The UI observes this event and opens the URL via Intent.ACTION_VIEW (browser).
+     * URL format: {baseUrl}/api/backup/snapshots/{snapshotId}/download?target_id={targetId}
+     *
+     * Validates: Requirements 6.5, 7.2
+     */
+    fun downloadBackupSnapshot(snapshotId: String, targetId: String) {
+        val baseUrl = _settings.value.serverUrl.ifEmpty { "http://192.168.1.111:3333" }
+        val downloadUrl = "$baseUrl/api/backup/snapshots/$snapshotId/download?target_id=$targetId"
+        _backupDownloadEvent.tryEmit(downloadUrl)
+    }
+
+    /**
+     * Prunes old snapshots based on retention policy for a target.
+     * Calls POST /api/backup/prune?target_id=X, displays result (snapshots_removed, space_reclaimed).
+     *
+     * Validates: Requirements 6.6, 8.1
+     */
+    fun pruneBackupSnapshots(targetId: String) {
+        viewModelScope.launch {
+            _backupModalState.update { it.copy(isPruning = true, feedbackMessage = "⏳ Pruning...", feedbackType = "info") }
+            try {
+                val response = apiService.pruneBackupSnapshots(targetId)
+                if (response.isSuccessful) {
+                    val data = response.body()
+                    if (data?.success == true) {
+                        val removed = data.snapshots_removed ?: 0
+                        val reclaimed = data.space_reclaimed ?: "0 B"
+                        _backupModalState.update { it.copy(isPruning = false, feedbackMessage = "Prune completed. Removed: $removed snapshot(s). Reclaimed: $reclaimed.", feedbackType = "success") }
+                    } else {
+                        _backupModalState.update { it.copy(isPruning = false, feedbackMessage = "Prune failed: ${data?.error ?: data?.message ?: "Unknown error"}", feedbackType = "error") }
+                    }
+                } else {
+                    val errorMsg = parseBackupErrorBody(response.errorBody()?.string())
+                    _backupModalState.update { it.copy(isPruning = false, feedbackMessage = "Prune failed: $errorMsg", feedbackType = "error") }
+                }
+            } catch (e: Exception) {
+                _backupModalState.update { it.copy(isPruning = false, feedbackMessage = "Prune failed: ${e.message ?: "Network error"}", feedbackType = "error") }
+            }
+        }
+    }
+
+    /**
+     * Parses an error response body to extract a meaningful message.
+     * Tries to parse JSON with "detail", "message", or "error" field, falls back to raw string.
+     */
+    private fun parseBackupErrorBody(errorBody: String?): String {
+        if (errorBody.isNullOrBlank()) return "Server error"
+        return try {
+            val json = org.json.JSONObject(errorBody)
+            json.optString("detail", null)
+                ?: json.optString("message", null)
+                ?: json.optString("error", null)
+                ?: "Server error"
+        } catch (_: Exception) {
+            errorBody.take(200)
+        }
+    }
+
     // ─── Sort Order Reset ───────────────────────────────────────────────────────
 
     private val _isResettingSortOrders = MutableStateFlow(false)
@@ -1914,5 +2553,95 @@ class SettingsViewModel @Inject constructor(
             haEnabled = formState.haEnabled,
             haPollInterval = formState.haPollInterval
         )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BACKUP DATE/TIME FORMATTING HELPERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Formats an ISO 8601 timestamp string respecting the user's 12h/24h preference.
+     * Returns "—" for null or invalid input.
+     *
+     * Validates: Requirements 9.1, 9.2
+     */
+    fun formatBackupDateTime(isoString: String?): String {
+        if (isoString.isNullOrBlank()) return "—"
+        return try {
+            val instant = java.time.Instant.parse(isoString)
+            val zdt = instant.atZone(java.time.ZoneId.systemDefault())
+            val is24Hour = _settings.value.timeFormat == "24hour"
+            val pattern = if (is24Hour) "yyyy-MM-dd HH:mm" else "yyyy-MM-dd h:mm a"
+            val formatter = java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault())
+            zdt.format(formatter)
+        } catch (_: Exception) {
+            "—"
+        }
+    }
+
+    /**
+     * Formats a "HH:MM" (24-hour) time string to the user's preferred format.
+     * Returns "—" for null or invalid input.
+     *
+     * Validates: Requirements 9.1, 9.2
+     */
+    fun formatBackupTime(time24: String?): String {
+        if (time24.isNullOrBlank()) return "—"
+        return try {
+            val localTime = java.time.LocalTime.parse(time24, java.time.format.DateTimeFormatter.ofPattern("H:mm"))
+            val is24Hour = _settings.value.timeFormat == "24hour"
+            val pattern = if (is24Hour) "HH:mm" else "h:mm a"
+            val formatter = java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault())
+            localTime.format(formatter)
+        } catch (_: Exception) {
+            "—"
+        }
+    }
+
+    /**
+     * Returns a relative time string matching the web's _backupRelativeTime() exactly:
+     * "just now", "Xm ago", "Xh ago", "Xd ago", "Xw ago".
+     * Returns "—" for null or invalid input.
+     *
+     * Validates: Requirements 9.3
+     */
+    fun formatBackupRelativeTime(isoString: String?): String {
+        if (isoString.isNullOrBlank()) return "—"
+        return try {
+            val instant = java.time.Instant.parse(isoString)
+            val now = java.time.Instant.now()
+            val diffMs = now.toEpochMilli() - instant.toEpochMilli()
+            val diffMin = diffMs / 60000
+            if (diffMin < 1) return "just now"
+            if (diffMin < 60) return "${diffMin}m ago"
+            val diffHr = diffMin / 60
+            if (diffHr < 24) return "${diffHr}h ago"
+            val diffDay = diffHr / 24
+            if (diffDay < 7) return "${diffDay}d ago"
+            val diffWk = diffDay / 7
+            "${diffWk}w ago"
+        } catch (_: Exception) {
+            "—"
+        }
+    }
+
+    /**
+     * Formats a byte count into a human-readable string matching the web's _backupFormatBytes():
+     * "X B", "X.Y KB", "X.Y MB", "X.Y GB", "X.Y TB".
+     * Returns "0 B" for null or zero.
+     *
+     * Validates: Requirements 9.1
+     */
+    fun formatBackupBytes(bytes: Long?): String {
+        if (bytes == null || bytes == 0L) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val i = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
+        val safeIndex = i.coerceIn(0, units.size - 1)
+        val value = bytes.toDouble() / Math.pow(1024.0, safeIndex.toDouble())
+        return if (safeIndex == 0) {
+            "${value.toLong()} ${units[safeIndex]}"
+        } else {
+            "${"%.1f".format(value)} ${units[safeIndex]}"
+        }
     }
 }

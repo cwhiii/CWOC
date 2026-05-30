@@ -5,19 +5,23 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.cwoc.app.data.local.converter.Converters
 import com.cwoc.app.data.local.dao.AttachmentMetadataDao
+import com.cwoc.app.data.local.dao.BadgeDao
 import com.cwoc.app.data.local.dao.ChitDao
 import com.cwoc.app.data.local.dao.ContactDao
 import com.cwoc.app.data.local.dao.NotificationDao
 import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.StandaloneAlertDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
+import com.cwoc.app.data.local.dao.WeatherForecastDao
 import com.cwoc.app.data.local.entity.AttachmentMetadata
+import com.cwoc.app.data.local.entity.BadgeEntity
 import com.cwoc.app.data.local.entity.ChitEntity
 import com.cwoc.app.data.local.entity.ContactEntity
 import com.cwoc.app.data.local.entity.NotificationEntity
 import com.cwoc.app.data.local.entity.SettingsEntity
 import com.cwoc.app.data.local.entity.StandaloneAlertEntity
 import com.cwoc.app.data.local.entity.SyncMetadataEntity
+import com.cwoc.app.data.local.entity.WeatherForecastEntity
 
 @Database(
     entities = [
@@ -27,9 +31,11 @@ import com.cwoc.app.data.local.entity.SyncMetadataEntity
         AttachmentMetadata::class,
         SyncMetadataEntity::class,
         NotificationEntity::class,
-        StandaloneAlertEntity::class
+        StandaloneAlertEntity::class,
+        WeatherForecastEntity::class,
+        BadgeEntity::class
     ],
-    version = 12,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -41,4 +47,6 @@ abstract class CwocDatabase : RoomDatabase() {
     abstract fun syncMetadataDao(): SyncMetadataDao
     abstract fun notificationDao(): NotificationDao
     abstract fun standaloneAlertDao(): StandaloneAlertDao
+    abstract fun weatherForecastDao(): WeatherForecastDao
+    abstract fun badgeDao(): BadgeDao
 }

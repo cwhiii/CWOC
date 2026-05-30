@@ -19,6 +19,56 @@ private fun Any?.toJsonString(gson: Gson): String? {
 }
 
 /**
+ * Extracts tag values from the API response format.
+ *
+ * The server returns chit tags as [{id: "uuid"|null, name: "string"}] objects.
+ * This function extracts:
+ * - For user tags (id != null): the UUID string
+ * - For system tags (id == null): the name string (e.g., "CWOC_System/Calendar")
+ *
+ * Also handles legacy format (plain string array) for backward compatibility.
+ */
+private fun extractTagValues(tagsAny: Any?, gson: Gson): List<String>? {
+    if (tagsAny == null) return null
+
+    // Handle the case where it's already a List
+    when (tagsAny) {
+        is List<*> -> {
+            if (tagsAny.isEmpty()) return emptyList()
+
+            val first = tagsAny.firstOrNull()
+            return when {
+                // New format: [{id: "uuid"|null, name: "string"}]
+                first is Map<*, *> -> {
+                    tagsAny.mapNotNull { item ->
+                        val map = item as? Map<*, *> ?: return@mapNotNull null
+                        val id = map["id"] as? String
+                        val name = map["name"] as? String ?: return@mapNotNull null
+                        // If id is present, store the UUID; otherwise store the name (system tag)
+                        id ?: name
+                    }
+                }
+                // Legacy format: ["tag1", "tag2"]
+                first is String -> {
+                    tagsAny.mapNotNull { it as? String }
+                }
+                else -> emptyList()
+            }
+        }
+        is String -> {
+            // Could be a JSON string — try to parse
+            return try {
+                val parsed = gson.fromJson<List<Any>>(tagsAny, object : com.google.gson.reflect.TypeToken<List<Any>>() {}.type)
+                extractTagValues(parsed, gson)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        else -> return null
+    }
+}
+
+/**
  * Maps a ChitDto from the server to a ChitEntity for Room storage.
  * @param syncedAt ISO timestamp of when this sync occurred
  * @param gson Gson instance for serializing complex JSON fields
@@ -28,7 +78,7 @@ fun ChitDto.toEntity(syncedAt: String, gson: Gson): ChitEntity {
         id = id,
         title = title,
         note = note,
-        tags = tags,
+        tags = extractTagValues(tags, gson),
         startDatetime = start_datetime,
         endDatetime = end_datetime,
         dueDatetime = due_datetime,
@@ -289,6 +339,8 @@ fun SettingsDto.toEntity(syncedAt: String, gson: Gson): SettingsEntity {
         ntfyEnabled = ntfy_enabled,
         haEnabled = ha_enabled,
         haPollInterval = ha_poll_interval,
-        kioskSelectedTags = kiosk_selected_tags.toJsonString(gson)
+        kioskSelectedTags = kiosk_selected_tags.toJsonString(gson),
+        // Badges
+        badgesCompletedWindow = badges_completed_window ?: "3"
     )
 }

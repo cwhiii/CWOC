@@ -45,6 +45,10 @@ sealed class Screen(val route: String) {
     data object UserAdmin : Screen("user-admin")
     data object AdminChits : Screen("admin-chits")
     data object ContactTrash : Screen("contact-trash")
+    // Badges page
+    data object Badges : Screen("badges")
+    // About page
+    data object About : Screen("about")
     // CC: Email client
     data object Email : Screen("email")
     // Attachments browser

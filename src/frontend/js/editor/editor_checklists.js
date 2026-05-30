@@ -25,6 +25,7 @@ class Checklist {
 
   init() {
     this._createCountDisplay();
+    this._createFormatToolbar();
     this.createInput();
     this.render();
     this._initMultiSelectEsc();
@@ -40,6 +41,255 @@ class Checklist {
         self._clearSelection();
       }
     }, true); // capture phase so it fires before other ESC handlers
+  }
+
+  /* ── Format Toolbar (markdown formatting buttons for checklist items) ──── */
+
+  _createFormatToolbar() {
+    var self = this;
+    var isMobile = document.body.classList.contains('mobile-zone-mode') ||
+                   window.matchMedia('(max-width: 768px)').matches;
+
+    // Desktop inline toolbar (positioned above the editing textarea)
+    this._formatToolbar = document.createElement('div');
+    this._formatToolbar.className = 'checklist-format-toolbar notes-format-toolbar';
+    this._formatToolbar.style.display = 'none';
+
+    var fmtButtons = [
+      { label: '<strong>B</strong>', title: 'Bold (Cmd+B)', action: 'b' },
+      { label: '<em>I</em>', title: 'Italic (Cmd+I)', action: 'i' },
+      { label: '<s>S</s>', title: 'Strikethrough (Cmd+Shift+X)', action: 's' },
+      { label: '🔗', title: 'Link (Cmd+K)', action: 'k' },
+      { label: 'sep' },
+      { label: 'H ▾', title: 'Heading', action: 'heading-dropdown' },
+      { label: '• List', title: 'Bullet List (Cmd+Shift+8)', action: 'ul' },
+      { label: '1. List', title: 'Numbered List (Cmd+Shift+7)', action: 'ol' },
+      { label: '❝ Quote', title: 'Blockquote (Cmd+Shift+.)', action: 'q' },
+      { label: '⟨⟩', title: 'Code (Cmd+E)', action: 'code' },
+      { label: '―', title: 'Horizontal Rule (Cmd+Shift+-)', action: 'hr' },
+    ];
+
+    fmtButtons.forEach(function(btn) {
+      if (btn.label === 'sep') {
+        var sep = document.createElement('span');
+        sep.className = 'notes-toolbar-sep';
+        self._formatToolbar.appendChild(sep);
+        return;
+      }
+      if (btn.action === 'heading-dropdown') {
+        var dropdown = document.createElement('div');
+        dropdown.className = 'notes-toolbar-dropdown';
+        var trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.title = btn.title;
+        trigger.textContent = 'H ▾';
+        trigger.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        dropdown.appendChild(trigger);
+        var menu = document.createElement('div');
+        menu.className = 'notes-toolbar-dropdown-menu';
+        [1, 2, 3].forEach(function(level) {
+          var hBtn = document.createElement('button');
+          hBtn.type = 'button';
+          hBtn.textContent = 'H' + level;
+          hBtn.style.fontSize = (1.3 - level * 0.1) + 'em';
+          hBtn.style.fontWeight = 'bold';
+          hBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+          hBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            self._applyFormatToActiveTextarea('h' + level);
+          });
+          menu.appendChild(hBtn);
+        });
+        dropdown.appendChild(menu);
+        self._formatToolbar.appendChild(dropdown);
+        return;
+      }
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.innerHTML = btn.label;
+      el.title = btn.title;
+      el.addEventListener('mousedown', function(e) { e.preventDefault(); }); // prevent blur
+      el.addEventListener('click', function(e) {
+        e.preventDefault();
+        self._applyFormatToActiveTextarea(btn.action);
+      });
+      self._formatToolbar.appendChild(el);
+    });
+
+    // Mobile bottom-pinned toolbar
+    this._mobileFormatToolbar = document.createElement('div');
+    this._mobileFormatToolbar.className = 'mobile-checklist-bottom-toolbar mobile-notes-bottom-toolbar';
+    this._mobileFormatToolbar.style.display = 'none';
+
+    var mobileScroll = document.createElement('div');
+    mobileScroll.className = 'notes-mobile-tb-scroll';
+
+    var mobileFmtButtons = [
+      { label: '<b>B</b>', title: 'Bold', action: 'b' },
+      { label: '<i>I</i>', title: 'Italic', action: 'i' },
+      { label: '<s>S</s>', title: 'Strikethrough', action: 's' },
+      { label: '🔗', title: 'Link', action: 'k' },
+      { label: 'H▾', title: 'Heading', action: 'heading-dropdown' },
+      { label: '•', title: 'Bullet List', action: 'ul' },
+      { label: '1.', title: 'Numbered List', action: 'ol' },
+      { label: '❝', title: 'Blockquote', action: 'q' },
+      { label: '⟨⟩', title: 'Code', action: 'code' },
+      { label: '—', title: 'Horizontal Rule', action: 'hr' },
+    ];
+
+    function _wireMobileChecklistBtn(btn, action) {
+      var _touchFired = false;
+      btn.addEventListener('touchstart', function(e) { e.preventDefault(); });
+      btn.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        _touchFired = true;
+        action(e);
+        setTimeout(function() { _touchFired = false; }, 300);
+      });
+      btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (_touchFired) { _touchFired = false; return; }
+        action(e);
+      });
+    }
+
+    // Heading dropdown for mobile
+    this._mobileHeadingDropdown = document.createElement('div');
+    this._mobileHeadingDropdown.className = 'mobile-notes-tb-dropdown';
+    this._mobileHeadingDropdown.id = 'mobileChecklistHeadingDropdown';
+    [1, 2, 3].forEach(function(level) {
+      var hBtn = document.createElement('button');
+      hBtn.textContent = 'H' + level + ' — ' + ['Large', 'Medium', 'Small'][level - 1] + ' Heading';
+      _wireMobileChecklistBtn(hBtn, function() {
+        self._closeMobileDropdowns();
+        self._applyFormatToActiveTextarea('h' + level);
+        self._refocusActiveTextarea();
+      });
+      self._mobileHeadingDropdown.appendChild(hBtn);
+    });
+
+    mobileFmtButtons.forEach(function(btn) {
+      var el = document.createElement('button');
+      el.innerHTML = btn.label;
+      el.title = btn.title;
+      _wireMobileChecklistBtn(el, function() {
+        if (btn.action === 'heading-dropdown') {
+          self._toggleMobileChecklistDropdown();
+        } else {
+          self._closeMobileDropdowns();
+          self._applyFormatToActiveTextarea(btn.action);
+          self._refocusActiveTextarea();
+        }
+      });
+      mobileScroll.appendChild(el);
+    });
+
+    this._mobileFormatToolbar.appendChild(mobileScroll);
+    document.body.appendChild(this._mobileFormatToolbar);
+    document.body.appendChild(this._mobileHeadingDropdown);
+
+    // Insert desktop toolbar into the zone body (hidden by default)
+    var zoneBody = this.container;
+    if (zoneBody) {
+      zoneBody.insertBefore(this._formatToolbar, zoneBody.firstChild);
+    }
+  }
+
+  _applyFormatToActiveTextarea(action) {
+    var ta = this.container.querySelector('textarea.checklist-edit-input') ||
+             this.container.querySelector('input.checklist-input');
+    if (!ta) return;
+    if (typeof _emailFormatBtn === 'function') {
+      _emailFormatBtn(action, null, ta);
+      // Auto-size if textarea
+      if (ta.tagName === 'TEXTAREA') {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+      }
+    }
+  }
+
+  _refocusActiveTextarea() {
+    var ta = this.container.querySelector('textarea.checklist-edit-input') ||
+             this.container.querySelector('input.checklist-input');
+    if (ta) ta.focus();
+  }
+
+  _toggleMobileChecklistDropdown() {
+    var menu = this._mobileHeadingDropdown;
+    if (!menu) return;
+    var isOpen = menu.classList.contains('active');
+    this._closeMobileDropdowns();
+    if (!isOpen) {
+      if (this._mobileFormatToolbar) {
+        var tbTop = parseInt(this._mobileFormatToolbar.style.top) || 0;
+        menu.style.bottom = (window.innerHeight - tbTop) + 'px';
+      }
+      menu.classList.add('active');
+      var self = this;
+      setTimeout(function() {
+        document.addEventListener('click', function _close() {
+          self._closeMobileDropdowns();
+          document.removeEventListener('click', _close);
+        }, { once: true });
+      }, 0);
+    }
+  }
+
+  _closeMobileDropdowns() {
+    if (this._mobileHeadingDropdown) {
+      this._mobileHeadingDropdown.classList.remove('active');
+    }
+  }
+
+  _showFormatToolbar() {
+    var isMobile = document.body.classList.contains('mobile-zone-mode');
+    if (isMobile) {
+      if (this._mobileFormatToolbar) {
+        this._mobileFormatToolbar.style.display = 'flex';
+        this._positionMobileToolbar();
+        // Wire viewport resize if not already done
+        if (!this._mobileVVWired && window.visualViewport) {
+          this._mobileVVWired = true;
+          var self = this;
+          var onResize = function() {
+            if (self._mobileFormatToolbar && self._mobileFormatToolbar.style.display !== 'none') {
+              self._positionMobileToolbar();
+            }
+          };
+          window.visualViewport.addEventListener('resize', onResize);
+          window.visualViewport.addEventListener('scroll', onResize);
+        }
+      }
+      // Hide desktop toolbar on mobile
+      if (this._formatToolbar) this._formatToolbar.style.display = 'none';
+    } else {
+      if (this._formatToolbar) this._formatToolbar.style.display = 'flex';
+      if (this._mobileFormatToolbar) this._mobileFormatToolbar.style.display = 'none';
+    }
+  }
+
+  _hideFormatToolbar() {
+    if (this._formatToolbar) this._formatToolbar.style.display = 'none';
+    if (this._mobileFormatToolbar) this._mobileFormatToolbar.style.display = 'none';
+    this._closeMobileDropdowns();
+  }
+
+  _positionMobileToolbar() {
+    if (!this._mobileFormatToolbar) return;
+    if (window.visualViewport) {
+      var vv = window.visualViewport;
+      var toolbarHeight = this._mobileFormatToolbar.offsetHeight || 46;
+      var topPos = vv.offsetTop + vv.height - toolbarHeight;
+      this._mobileFormatToolbar.style.position = 'fixed';
+      this._mobileFormatToolbar.style.top = topPos + 'px';
+      this._mobileFormatToolbar.style.bottom = 'auto';
+    } else {
+      this._mobileFormatToolbar.style.position = 'fixed';
+      this._mobileFormatToolbar.style.top = 'auto';
+      this._mobileFormatToolbar.style.bottom = '0px';
+    }
   }
 
   _createCountDisplay() {
@@ -180,6 +430,14 @@ class Checklist {
       _pasteClipboardAsChecklistItems(self);
     });
 
+    var menuUploadFile = document.createElement("button");
+    menuUploadFile.innerHTML = '<i class="fas fa-upload"></i> Upload file as list items';
+    menuUploadFile.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      _uploadFileAsChecklistItems(self);
+    });
+
     var menuCopyIncomplete = document.createElement("button");
     menuCopyIncomplete.innerHTML = '<i class="fas fa-clipboard"></i> Copy incomplete to clipboard';
     menuCopyIncomplete.addEventListener("click", function(e) {
@@ -189,6 +447,7 @@ class Checklist {
     });
 
     this._moreMenu.appendChild(menuPasteAsItems);
+    this._moreMenu.appendChild(menuUploadFile);
     this._moreMenu.appendChild(menuCopyIncomplete);
     this._moreMenu.appendChild(menuClear);
     this._moreMenu.appendChild(menuDeleteUnchecked);
@@ -289,6 +548,19 @@ class Checklist {
     this.input.placeholder = "Add new item (Enter to add)";
     this.input.className = "checklist-input";
     var self = this;
+
+    this.input.addEventListener("focus", function() { self._showFormatToolbar(); });
+    this.input.addEventListener("blur", function() {
+      // Delay to allow toolbar button clicks
+      setTimeout(function() {
+        var active = document.activeElement;
+        if (self._formatToolbar && self._formatToolbar.contains(active)) return;
+        if (self._mobileFormatToolbar && self._mobileFormatToolbar.contains(active)) return;
+        if (active === self.input) return;
+        if (self.editingItem) return; // editing started, toolbar stays
+        self._hideFormatToolbar();
+      }, 150);
+    });
 
     this.input.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
@@ -544,13 +816,33 @@ class Checklist {
       });
     }
 
+    // Copy icon (appears on hover)
+    var copyIcon = document.createElement("span");
+    copyIcon.className = "checklist-copy-icon";
+    copyIcon.textContent = "📋";
+    copyIcon.title = "Copy item text";
+    copyIcon.style.visibility = "hidden";
+    var self = this;
+    copyIcon.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      var textToCopy = item.text || '';
+      if (self.editingItem && self.editingItem.id === item.id) {
+        var ta = el.querySelector("textarea.checklist-edit-input");
+        if (ta) textToCopy = ta.value;
+      }
+      navigator.clipboard.writeText(textToCopy).then(function() {
+        if (typeof cwocToast === 'function') cwocToast('Copied to clipboard', 'success', 1500);
+      });
+    });
+    el.appendChild(copyIcon);
+
     // Send-to-chit icon (appears on hover)
     var sendIcon = document.createElement("span");
     sendIcon.className = "checklist-send-icon";
     sendIcon.textContent = "📤";
     sendIcon.title = "Send to another chit";
     sendIcon.style.visibility = "hidden";
-    var self = this;
     sendIcon.addEventListener("mousedown", (e) => {
       e.stopPropagation();
       e.preventDefault(); // Prevent blur on the textarea
@@ -587,8 +879,8 @@ class Checklist {
     });
     el.appendChild(trash);
 
-    el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; sendIcon.style.visibility = "visible"; });
-    el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; sendIcon.style.visibility = "hidden"; });
+    el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; sendIcon.style.visibility = "visible"; copyIcon.style.visibility = "visible"; });
+    el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; sendIcon.style.visibility = "hidden"; copyIcon.style.visibility = "hidden"; });
 
     // Multi-select strip (right edge) — always clickable
     var selectStrip = document.createElement("div");
@@ -808,6 +1100,7 @@ class Checklist {
 
     ta.focus();
     autoSize();
+    self._showFormatToolbar();
 
     // Position cursor at click location
     if (clickEvent) {
@@ -833,6 +1126,7 @@ class Checklist {
 
     var finishEditing = function(save) {
       if (!self.editingItem) return;
+      self._hideFormatToolbar();
       if (save) {
         // Always preserve the item text (even if empty) — only remove on explicit delete
         item.text = ta.value.trim();
@@ -1052,7 +1346,17 @@ class Checklist {
       }
     });
 
-    ta.addEventListener("blur", function() { finishEditing(true); });
+    ta.addEventListener("blur", function() {
+      // Delay to allow toolbar button clicks to register before finishing
+      setTimeout(function() {
+        if (!self.editingItem) return; // already finished
+        var active = document.activeElement;
+        if (self._formatToolbar && self._formatToolbar.contains(active)) return;
+        if (self._mobileFormatToolbar && self._mobileFormatToolbar.contains(active)) return;
+        if (active === ta) return; // re-focused
+        finishEditing(true);
+      }, 150);
+    });
   }
 
   /* ── Check / Delete ─────────────────────────────────────────────────────── */
@@ -1492,6 +1796,22 @@ class Checklist {
     });
     existing.appendChild(moveBtn);
 
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'zone-button';
+    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+    copyBtn.title = 'Copy selected items to clipboard';
+    copyBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var selectedItems = self.items.filter(function(i) { return self._selectedIds.has(i.id); });
+      var text = selectedItems.map(function(i) {
+        return '  '.repeat(i.level || 0) + '- [ ] ' + (i.text || '');
+      }).join('\n');
+      navigator.clipboard.writeText(text).then(function() {
+        if (typeof cwocToast === 'function') cwocToast('Copied ' + selectedItems.length + ' item' + (selectedItems.length > 1 ? 's' : '') + ' to clipboard', 'success', 1500);
+      });
+    });
+    existing.appendChild(copyBtn);
+
     var indentBtn = document.createElement('button');
     indentBtn.className = 'zone-button';
     indentBtn.innerHTML = '<i class="fas fa-indent"></i> Indent';
@@ -1835,6 +2155,131 @@ async function _pasteClipboardAsChecklistItems(checklist) {
     checklist.render();
     checklist._notifyChange();
   }, '📋 Pasted ' + newItems.length + ' item' + (newItems.length === 1 ? '' : 's'));
+}
+
+// ── Upload File as Checklist Items ───────────────────────────────────────────
+
+/**
+ * Trigger the hidden file input to upload a text file as checklist items.
+ * Each line becomes a checklist item. Supports markdown checklists, bullets,
+ * numbered lists, and plain text lines.
+ */
+function _uploadFileAsChecklistItems(checklist) {
+  // Store reference so the onchange handler can access it
+  window._checklistUploadTarget = checklist;
+  var input = document.getElementById('checklistFileUploadInput');
+  if (input) {
+    input.value = '';
+    input.click();
+  }
+}
+
+/**
+ * Handle the file selection from the hidden checklist file input.
+ */
+function _handleChecklistFileUpload(input) {
+  if (!input.files || !input.files.length) return;
+  var file = input.files[0];
+  var checklist = window._checklistUploadTarget;
+  if (!checklist) return;
+
+  // Reject files over 5MB
+  if (file.size > 5 * 1024 * 1024) {
+    cwocToast('File too large (max 5 MB)', 'error');
+    return;
+  }
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var content = e.target.result;
+    if (!content && content !== '') {
+      cwocToast('Could not read file', 'error');
+      return;
+    }
+    _applyUploadedChecklistContent(checklist, content, file.name);
+  };
+  reader.onerror = function() {
+    cwocToast('Error reading file', 'error');
+  };
+  reader.readAsText(file);
+}
+
+/**
+ * Parse uploaded file text into checklist items and add them.
+ * Uses the same parsing logic as _pasteClipboardAsChecklistItems.
+ */
+function _applyUploadedChecklistContent(checklist, text, filename) {
+  if (!text || !text.trim()) {
+    cwocToast('File is empty', 'error');
+    return;
+  }
+
+  var lines = text.split('\n');
+  var newItems = [];
+  lines.forEach(function(line) {
+    if (!line.trim()) return;
+    // Detect indent level
+    var indent = 0;
+    var stripped = line;
+    while (stripped.startsWith('    ') || stripped.startsWith('\t')) {
+      indent++;
+      stripped = stripped.startsWith('\t') ? stripped.slice(1) : stripped.slice(4);
+    }
+    if (stripped.startsWith('  ')) { indent++; stripped = stripped.slice(2); }
+    // Detect markdown checklist format: - [x] or - [ ] or * [x] or * [ ]
+    var isChecked = false;
+    var mdChecklistMatch = stripped.match(/^[-*]\s+\[([ xX])\]\s*/);
+    if (mdChecklistMatch) {
+      isChecked = mdChecklistMatch[1].toLowerCase() === 'x';
+      stripped = stripped.replace(/^[-*]\s+\[[ xX]\]\s*/, '');
+    } else {
+      // Strip list markers and standalone checkbox markers
+      stripped = stripped.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '');
+      // Check for standalone [x] or [ ] at start (legacy format)
+      var legacyCheck = stripped.match(/^\[([ xX])\]\s*/);
+      if (legacyCheck) {
+        isChecked = legacyCheck[1].toLowerCase() === 'x';
+        stripped = stripped.replace(/^\[[ xX]\]\s*/, '');
+      }
+    }
+    if (!stripped.trim()) return;
+    newItems.push({
+      id: checklist.generateId(),
+      text: stripped.trim(),
+      level: Math.min(indent, MAX_INDENT_LEVEL),
+      checked: isChecked,
+      parent: null
+    });
+  });
+
+  if (newItems.length === 0) {
+    cwocToast('No items found in file', 'error');
+    return;
+  }
+
+  // Assign parents based on levels
+  for (var i = 1; i < newItems.length; i++) {
+    if (newItems[i].level > 0) {
+      for (var j = i - 1; j >= 0; j--) {
+        if (newItems[j].level === newItems[i].level - 1) { newItems[i].parent = newItems[j].id; break; }
+      }
+    }
+  }
+
+  // Snapshot for undo
+  var prevItems = JSON.parse(JSON.stringify(checklist.items));
+
+  checklist._pushUndoState();
+  checklist.items = checklist.items.concat(newItems);
+  checklist.render();
+  checklist._notifyChange();
+
+  // Show undo toast
+  _showDeleteUndoToast(null, null, null, function() {
+    checklist.items = prevItems;
+    checklist.render();
+    checklist._notifyChange();
+  }, '📄 Imported ' + newItems.length + ' item' + (newItems.length === 1 ? '' : 's') + ' from ' + filename);
 }
 
 // ── Copy Incomplete Items to Clipboard ───────────────────────────────────────

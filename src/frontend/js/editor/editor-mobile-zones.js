@@ -768,7 +768,16 @@ function _renderMobileOverview(container) {
     panel.appendChild(makeRow('🗓️', _escHtml(datesText), 'datesSection'));
   }
 
-  // 4. Notes (show preview of the note content with overflow fade)
+  // 4. Status (if set)
+  var statusEl = document.getElementById('status');
+  if (statusEl && statusEl.value) {
+    var statusText = statusEl.value;
+    var priorityEl = document.getElementById('priority');
+    if (priorityEl && priorityEl.value) statusText += ' • ' + priorityEl.value;
+    panel.appendChild(makeRow('📋', _escHtml(statusText), 'taskSection'));
+  }
+
+  // 5. Notes (show preview of the note content with overflow fade)
   var noteEl = document.getElementById('note');
   if (noteEl && noteEl.value.trim()) {
     var noteLines = noteEl.value.trim().split('\n').filter(function(l) { return l.trim(); });
@@ -787,34 +796,98 @@ function _renderMobileOverview(container) {
     panel.appendChild(noteRow);
   }
 
-  // 5. Checklist (show incomplete items)
+  // 5. Checklist (show incomplete items with interactive checkboxes)
+  try {
   var checkContainer = document.getElementById('checklist-container');
   if (checkContainer) {
     var allItems = checkContainer.querySelectorAll('.checklist-item');
     if (allItems.length > 0) {
       var incomplete = [];
-      allItems.forEach(function(item) {
+      var totalChecked = 0;
+      allItems.forEach(function(item, idx) {
         var cb = item.querySelector('input[type="checkbox"]');
         if (cb && !cb.checked) {
           var textEl = item.querySelector('.checklist-text');
           var text = textEl ? textEl.textContent.trim() : '';
-          if (text) incomplete.push(text);
+          if (text) incomplete.push({ text: text, idx: idx, el: item });
+        } else if (cb && cb.checked) {
+          totalChecked++;
         }
       });
       if (incomplete.length > 0) {
-        var checkPreview = incomplete.slice(0, 4).map(function(t) {
-          if (t.length > 50) t = t.substring(0, 50) + '…';
-          return '☐ ' + _escHtml(t);
-        }).join('<br>');
-        if (incomplete.length > 4) checkPreview += '<br><span style="opacity:0.5;">…' + (incomplete.length - 4) + ' more</span>';
-        var totalChecked = allItems.length - incomplete.length;
-        if (totalChecked > 0) checkPreview += '<br><span style="opacity:0.5;">✓ ' + totalChecked + ' completed</span>';
         var checkRow = document.createElement('div');
-        checkRow.className = 'mobile-overview-row mobile-overview-multiline';
-        checkRow.innerHTML = '<span class="mobile-overview-icon">☑️</span>' +
-          '<span class="mobile-overview-text">' + checkPreview + '</span>' +
-          '<span class="mobile-overview-arrow">›</span>';
-        checkRow.addEventListener('click', function() { goToZone('checklistSection'); });
+        checkRow.className = 'mobile-overview-row mobile-overview-multiline mobile-overview-checklist';
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'mobile-overview-icon';
+        iconSpan.textContent = '☑️';
+        checkRow.appendChild(iconSpan);
+
+        var contentSpan = document.createElement('span');
+        contentSpan.className = 'mobile-overview-text';
+
+        var itemsToShow = incomplete.slice(0, 6);
+        itemsToShow.forEach(function(itemData) {
+          var itemRow = document.createElement('label');
+          itemRow.className = 'mobile-overview-check-item';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = false;
+          cb.addEventListener('change', function(e) {
+            e.stopPropagation();
+            // Toggle in the actual checklist
+            var realItem = itemData.el;
+            var realCb = realItem ? realItem.querySelector('input[type="checkbox"]') : null;
+            if (realCb) {
+              realCb.checked = true;
+              realCb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            // Re-render overview after a short delay to let the checklist update
+            setTimeout(function() {
+              var titleContainer = document.getElementById('titleWeatherContainer');
+              if (titleContainer && typeof _renderMobileOverview === 'function') {
+                _renderMobileOverview(titleContainer);
+              }
+            }, 400);
+          });
+          var textNode = document.createElement('span');
+          var t = itemData.text;
+          if (t.length > 45) t = t.substring(0, 45) + '…';
+          textNode.textContent = t;
+          itemRow.appendChild(cb);
+          itemRow.appendChild(textNode);
+          contentSpan.appendChild(itemRow);
+        });
+
+        if (incomplete.length > 6) {
+          var moreSpan = document.createElement('span');
+          moreSpan.className = 'mobile-overview-check-more';
+          moreSpan.textContent = '…' + (incomplete.length - 6) + ' more';
+          contentSpan.appendChild(moreSpan);
+        }
+        if (totalChecked > 0) {
+          var doneSpan = document.createElement('span');
+          doneSpan.className = 'mobile-overview-check-more';
+          doneSpan.textContent = '✓ ' + totalChecked + ' completed';
+          contentSpan.appendChild(doneSpan);
+        }
+
+        checkRow.appendChild(contentSpan);
+
+        var arrowSpan = document.createElement('span');
+        arrowSpan.className = 'mobile-overview-arrow';
+        arrowSpan.textContent = '›';
+        arrowSpan.addEventListener('click', function(e) {
+          e.stopPropagation();
+          goToZone('checklistSection');
+        });
+        checkRow.appendChild(arrowSpan);
+
+        // Tapping the icon navigates to the zone
+        iconSpan.addEventListener('click', function(e) {
+          e.stopPropagation();
+          goToZone('checklistSection');
+        });
+
         panel.appendChild(checkRow);
       } else {
         // All complete
@@ -823,25 +896,38 @@ function _renderMobileOverview(container) {
       }
     }
   }
-
-  // 6. Status (if set)
-  var statusEl = document.getElementById('status');
-  if (statusEl && statusEl.value) {
-    var statusText = statusEl.value;
-    var priorityEl = document.getElementById('priority');
-    if (priorityEl && priorityEl.value) statusText += ' • ' + priorityEl.value;
-    panel.appendChild(makeRow('📋', _escHtml(statusText), 'taskSection'));
+  } catch(_checkErr) {
+    // checklist render error — continue
   }
 
-  // 7. Tags (user tags only, filter out system tags)
-  var userTags = (window._currentTagSelection || []).filter(function(tag) {
-    var systemTags = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes'];
-    if (systemTags.indexOf(tag) >= 0) return false;
-    if (tag.toLowerCase().indexOf('cwoc_system/') === 0) return false;
+  // 7. Habits (show progress if habit is enabled)
+  var habitCb = document.getElementById('habitEnabled');
+  if (habitCb && habitCb.checked) {
+    var habitGoalEl = document.getElementById('habitGoal');
+    var goal = habitGoalEl ? (parseInt(habitGoalEl.value) || 1) : 1;
+    var success = window._currentHabitSuccess || 0;
+    var habitText = success + ' / ' + goal;
+    var resetUnitEl = document.getElementById('habitResetUnit');
+    var resetEnabledCb = document.getElementById('habitResetEnabled');
+    if (resetEnabledCb && resetEnabledCb.checked && resetUnitEl && resetUnitEl.value) {
+      habitText += ' (' + resetUnitEl.value.toLowerCase() + ')';
+    }
+    panel.appendChild(makeRow('🎯', _escHtml(habitText), 'habitLogSection'));
+  }
+
+  // 8. Tags (user tags only, filter out system tags) — resolve Tag_IDs to display names
+  var userTags = (window._currentTagSelection || []).filter(function(tagId) {
+    var tag = (typeof getTagById === 'function') ? getTagById(tagId) : null;
+    if (!tag) return true; // Keep unknown IDs (they'll show as "[unknown tag]")
+    if ((typeof isSystemTag === 'function') && isSystemTag(tag.name)) return false;
     return true;
   });
   if (userTags.length > 0) {
-    var tagText = userTags.map(function(t) { return t.split('/').pop(); }).join(', ');
+    var tagText = userTags.map(function(tagId) {
+      var tag = (typeof getTagById === 'function') ? getTagById(tagId) : null;
+      var name = tag ? tag.name : (typeof resolveTagId === 'function' ? resolveTagId(tagId) : tagId);
+      return name.split('/').pop();
+    }).join(', ');
     panel.appendChild(makeRow('🏷️', _escHtml(tagText), 'tagsSection'));
   }
 

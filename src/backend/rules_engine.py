@@ -380,13 +380,19 @@ def evaluate_leaf(
         if field_value is None:
             return False
         tags = field_value if isinstance(field_value, list) else []
-        return any(str(t).lower() == str(value).lower() for t in tags)
+        if not tags:
+            return False
+        # Case-sensitive exact match (value is a Tag_ID UUID or system tag string)
+        return value in tags
 
     if operator == "tag_not_present":
         if field_value is None:
             return True  # tag can't be present if there are no tags
         tags = field_value if isinstance(field_value, list) else []
-        return not any(str(t).lower() == str(value).lower() for t in tags)
+        if not tags:
+            return True
+        # Case-sensitive exact match
+        return value not in tags
 
     if operator == "person_on_chit":
         if field_value is None:
@@ -1015,23 +1021,39 @@ def execute_action(
 
             # ── Dispatch by action type ──────────────────────────
             if action_type == "add_tag":
-                tag = params.get("tag", "")
+                tag_id = params.get("tag", "")
+                if not tag_id:
+                    conn.commit()
+                    return {"success": False, "message": "add_tag action missing tag parameter"}
+                # Validate the Tag_ID exists in the tag registry
+                from src.backend.db import get_tag_registry, is_tag_id
+                if is_tag_id(tag_id):
+                    registry = get_tag_registry(conn, owner_id)
+                    registry_ids = {t.get("id") for t in registry if isinstance(t, dict) and t.get("id")}
+                    if tag_id not in registry_ids:
+                        logger.warning(
+                            "add_tag action: Tag_ID '%s' not found in registry for user '%s', skipping",
+                            tag_id, owner_id,
+                        )
+                        conn.commit()
+                        return {"success": False, "message": f"Tag ID {tag_id} not found in registry"}
                 tags = deserialize_json_field(chit.get("tags")) or []
-                if tag and tag not in tags:
-                    tags.append(tag)
+                # Skip if already present (no duplicates, case-sensitive)
+                if tag_id in tags:
+                    conn.commit()
+                    return {"success": True, "message": f"Tag {tag_id} already present on chit {entity_id}"}
+                tags.append(tag_id)
                 chit["tags"] = tags
                 cursor.execute(
                     "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",
                     (serialize_json_field(tags), current_time, entity_id),
                 )
-                # Register the tag in settings so it appears in filters/editor
-                if tag:
-                    ensure_tags_in_settings(conn, owner_id, [tag])
 
             elif action_type == "remove_tag":
-                tag = params.get("tag", "")
+                tag_id = params.get("tag", "")
                 tags = deserialize_json_field(chit.get("tags")) or []
-                tags = [t for t in tags if t != tag]
+                # Case-sensitive exact match removal
+                tags = [t for t in tags if t != tag_id]
                 chit["tags"] = tags
                 cursor.execute(
                     "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",

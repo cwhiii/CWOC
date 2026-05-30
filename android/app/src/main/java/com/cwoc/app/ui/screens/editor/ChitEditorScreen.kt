@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -132,6 +134,7 @@ import com.cwoc.app.data.repository.ChitRepository
 import com.cwoc.app.domain.tags.TagNode
 import com.cwoc.app.ui.components.CalculatorSheet
 import com.cwoc.app.ui.components.ContactAvatar
+import com.cwoc.app.ui.components.CwocZoneButton
 import com.cwoc.app.ui.components.MarkdownRenderer
 import com.cwoc.app.ui.components.SnoozePickerDialog
 import com.cwoc.app.ui.screens.editor.zones.AlertsZone
@@ -648,13 +651,14 @@ fun ChitEditorScreen(
                                                 onValueChange = { viewModel.updateForm(formState.copy(severity = it)) }
                                             )
                                             // Assignee
-                                            DropdownField(
+                                            AssigneeDropdownField(
                                                 label = "Assignee",
                                                 value = formState.assignedTo,
-                                                options = editorSettings.sharedUsers,
+                                                users = editorSettings.sharedUsers,
                                                 onValueChange = { newAssignee ->
-                                                    val updatedPeople = if (newAssignee != null && newAssignee.isNotBlank() && !formState.people.contains(newAssignee)) {
-                                                        formState.people + newAssignee
+                                                    val displayName = editorSettings.sharedUsers.find { it.id == newAssignee }?.displayName
+                                                    val updatedPeople = if (displayName != null && displayName.isNotBlank() && !formState.people.contains(displayName)) {
+                                                        formState.people + displayName
                                                     } else {
                                                         formState.people
                                                     }
@@ -784,11 +788,34 @@ fun ChitEditorScreen(
                                 } else {
                                     // Existing chit (or new with no sourceTab): show overview summary rows
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    val overviewRows = remember(formState) { buildOverviewRows(formState, sourceTab) }
+                                    // Build tag ID → name map from the tag tree for overview display
+                                    val tagNameMap = remember(tagTree) {
+                                        val map = mutableMapOf<String, String>()
+                                        fun walk(nodes: List<TagNode>) {
+                                            nodes.forEach { node ->
+                                                if (node.id != null) {
+                                                    map[node.id] = node.fullPath
+                                                }
+                                                walk(node.children)
+                                            }
+                                        }
+                                        walk(tagTree)
+                                        map
+                                    }
+                                    val overviewRows = remember(formState, tagNameMap) { buildOverviewRows(formState, sourceTab, tagNameMap) }
                                     com.cwoc.app.ui.screens.editor.zones.OverviewZoneContent(
                                         rows = overviewRows,
                                         onRowClick = { targetZoneId -> zoneState.navigateToZoneId(targetZoneId) },
-                                        chitColor = chitNavColor
+                                        chitColor = chitNavColor,
+                                        onChecklistItemToggle = { itemIndex, checked ->
+                                            try {
+                                                val arr = org.json.JSONArray(formState.checklist ?: "[]")
+                                                if (itemIndex in 0 until arr.length()) {
+                                                    arr.getJSONObject(itemIndex).put("checked", checked)
+                                                    viewModel.updateForm(formState.copy(checklist = arr.toString()))
+                                                }
+                                            } catch (_: Exception) { }
+                                        }
                                     )
                                 }
                             }
@@ -852,13 +879,14 @@ fun ChitEditorScreen(
                                     onValueChange = { viewModel.updateForm(formState.copy(severity = it)) }
                                 )
                                 // Assignee
-                                DropdownField(
+                                AssigneeDropdownField(
                                     label = "Assignee",
                                     value = formState.assignedTo,
-                                    options = editorSettings.sharedUsers,
+                                    users = editorSettings.sharedUsers,
                                     onValueChange = { newAssignee ->
-                                        val updatedPeople = if (newAssignee != null && newAssignee.isNotBlank() && !formState.people.contains(newAssignee)) {
-                                            formState.people + newAssignee
+                                        val displayName = editorSettings.sharedUsers.find { it.id == newAssignee }?.displayName
+                                        val updatedPeople = if (displayName != null && displayName.isNotBlank() && !formState.people.contains(displayName)) {
+                                            formState.people + displayName
                                         } else {
                                             formState.people
                                         }
@@ -1341,6 +1369,10 @@ private fun TagsZone(
         fun walk(nodes: List<TagNode>) {
             nodes.forEach { node ->
                 map[node.fullPath] = node
+                // Also map by ID for UUID-based lookups
+                if (node.id != null) {
+                    map[node.id] = node
+                }
                 walk(node.children)
             }
         }
@@ -1406,12 +1438,15 @@ private fun TagsZone(
                 displayTags.forEach { tagPath ->
                     val node = tagNodeMap[tagPath]
                     val chipColor = node?.color?.let { parseTagColorLocal(it) }
+                    // Resolve display name: use node's fullPath leaf name, or raw value if unresolved
+                    val displayName = node?.fullPath?.substringAfterLast("/")
+                        ?: tagPath.substringAfterLast("/")
                     InputChip(
                         selected = true,
                         onClick = { onTagsChange(tags - tagPath) },
                         label = {
                             Text(
-                                tagPath.substringAfterLast("/"),
+                                displayName,
                                 color = chipColor?.let { contrastTextColorLocal(it) }
                                     ?: MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1445,16 +1480,19 @@ private fun TagsZone(
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 favoriteTags.forEach { fav ->
-                    val isSelected = tags.contains(fav.fullPath)
+                    // Use tag ID if available, otherwise fall back to fullPath
+                    val tagIdentifier = fav.id ?: fav.fullPath
+                    val isSelected = tags.contains(tagIdentifier) || tags.contains(fav.fullPath)
                     val chipColor = fav.color?.let { parseTagColorLocal(it) }
                     InputChip(
                         selected = isSelected,
                         onClick = {
                             if (isSelected) {
-                                onTagsChange(tags - fav.fullPath)
+                                // Remove by both possible identifiers
+                                onTagsChange(tags.filter { it != tagIdentifier && it != fav.fullPath })
                             } else {
-                                onTagsChange(tags + fav.fullPath)
-                                onTagTracked(fav.fullPath)
+                                onTagsChange(tags + tagIdentifier)
+                                onTagTracked(tagIdentifier)
                                 // Auto-color: if chit has no color and this is the first tag, apply tag color
                                 if (currentColor.isNullOrBlank() || currentColor == "transparent") {
                                     fav.color?.let { onAutoColor(it) }
@@ -1533,7 +1571,7 @@ private fun PeopleZone(
     serverUrl: String = "",
     authToken: String = "",
     shares: String? = null,
-    sharedUsers: List<String> = emptyList(),
+    sharedUsers: List<ChitEditorViewModel.SystemUser> = emptyList(),
     assignedTo: String? = null,
     peopleSearchResults: List<String> = emptyList(),
     onPeopleSearchQueryChange: (String) -> Unit = {},
@@ -1790,7 +1828,7 @@ private fun PeopleZone(
         // ── Add Shared User (from system users list) ─────────────────────────
         if (sharedUsers.isNotEmpty()) {
             val availableUsers = sharedUsers.filter { user ->
-                shareEntries.none { (it["display_name"] as? String) == user }
+                shareEntries.none { (it["user_id"] as? String) == user.id }
             }
             if (availableUsers.isNotEmpty()) {
                 var showUserPicker by remember { mutableStateOf(false) }
@@ -1807,14 +1845,14 @@ private fun PeopleZone(
                             .background(CwocDialogDefaults.containerColor)
                             .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
                     ) {
-                        availableUsers.forEach { userName ->
+                        availableUsers.forEach { user ->
                             DropdownMenuItem(
-                                text = { Text(userName) },
+                                text = { Text(user.displayName) },
                                 onClick = {
                                     val newShare = mapOf(
-                                        "user_id" to userName,
+                                        "user_id" to user.id,
                                         "role" to "viewer",
-                                        "display_name" to userName,
+                                        "display_name" to user.displayName,
                                         "rsvp_status" to "invited"
                                     )
                                     val updatedShares = shareEntries + newShare
@@ -1919,13 +1957,18 @@ private fun PeopleZone(
             // ── Assigned-To Dropdown ─────────────────────────────────────────
             if (sharedUsers.isNotEmpty()) {
                 var assignedExpanded by remember { mutableStateOf(false) }
-                val assignableUsers = listOf("") + sharedUsers
+                // Resolve display name for the current assignedTo user ID
+                val assignedDisplayName = if (assignedTo != null) {
+                    sharedUsers.find { it.id == assignedTo }?.displayName ?: assignedTo
+                } else {
+                    "(Unassigned)"
+                }
                 ExposedDropdownMenuBox(
                     expanded = assignedExpanded,
                     onExpandedChange = { assignedExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value = assignedTo ?: "(Unassigned)",
+                        value = assignedDisplayName,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Assigned To") },
@@ -1946,8 +1989,8 @@ private fun PeopleZone(
                         )
                         sharedUsers.forEach { user ->
                             DropdownMenuItem(
-                                text = { Text(user) },
-                                onClick = { onAssignedToChange(user); assignedExpanded = false }
+                                text = { Text(user.displayName) },
+                                onClick = { onAssignedToChange(user.id); assignedExpanded = false }
                             )
                         }
                     }
@@ -2331,6 +2374,34 @@ private fun NotesZone(
     var showDataMenu by remember { mutableStateOf(false) }
     var showSendToChit by remember { mutableStateOf(false) }
     var showHeadingDropdown by remember { mutableStateOf(false) }
+    // File upload state
+    var showUploadConfirm by remember { mutableStateOf(false) }
+    var uploadedFileContent by remember { mutableStateOf("") }
+    var uploadedFileName by remember { mutableStateOf("") }
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val content = inputStream?.bufferedReader()?.readText() ?: ""
+                inputStream?.close()
+                val name = uri.lastPathSegment ?: "file"
+                if (note.isBlank()) {
+                    // Notes empty — load directly
+                    onNoteChange(content)
+                    android.widget.Toast.makeText(context, "Loaded $name", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    // Notes have content — ask append or replace
+                    uploadedFileContent = content
+                    uploadedFileName = name
+                    showUploadConfirm = true
+                }
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Error reading file: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     // J5: Chit link autocomplete state
     var showChitLinkPicker by remember { mutableStateOf(false) }
     var chitLinkQuery by remember { mutableStateOf("") }
@@ -2547,6 +2618,10 @@ private fun NotesZone(
                                 android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
                         }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("⬆️ Upload file as note") }, onClick = {
+                            showDataMenu = false
+                            filePickerLauncher.launch("text/*")
+                        })
                         DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
                         if (onMoveToChecklist != null) {
                             DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
@@ -2597,6 +2672,10 @@ private fun NotesZone(
                                 android.widget.Toast.makeText(context, "Saved to Downloads/$fileName", android.widget.Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) { android.widget.Toast.makeText(context, "Save failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
                         }, enabled = note.isNotBlank())
+                        DropdownMenuItem(text = { Text("⬆️ Upload file as note") }, onClick = {
+                            showDataMenu = false
+                            filePickerLauncher.launch("text/*")
+                        })
                         DropdownMenuItem(text = { Text("📤 Send to another chit") }, onClick = { showDataMenu = false; showSendToChit = true }, enabled = note.isNotBlank() && onSendNoteToChit != null)
                         if (onMoveToChecklist != null) {
                             DropdownMenuItem(text = { Text("☑️ Move to checklist") }, onClick = {
@@ -2660,6 +2739,33 @@ private fun NotesZone(
             },
             onDismiss = { showSendToChit = false },
             title = "Send Notes To..."
+        )
+    }
+
+    // Upload file confirm dialog (append vs replace)
+    if (showUploadConfirm) {
+        AlertDialog(
+            onDismissRequest = { showUploadConfirm = false },
+            title = { Text("📄 Import: $uploadedFileName") },
+            text = { Text("Notes already have content.\n\n\"Append\" adds the file below existing notes.\n\"Replace\" overwrites them entirely.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val separator = "\n\n---\n\n"
+                    onNoteChange(note.trimEnd() + separator + uploadedFileContent)
+                    android.widget.Toast.makeText(context, "Appended $uploadedFileName", android.widget.Toast.LENGTH_SHORT).show()
+                    showUploadConfirm = false
+                }) { Text("Append") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { showUploadConfirm = false }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        onNoteChange(uploadedFileContent)
+                        android.widget.Toast.makeText(context, "Replaced notes with $uploadedFileName", android.widget.Toast.LENGTH_SHORT).show()
+                        showUploadConfirm = false
+                    }) { Text("Replace", color = Color(0xFFB22222)) }
+                }
+            }
         )
     }
 }
@@ -3085,7 +3191,7 @@ private fun HealthIndicatorsZone(
 
         // Raw JSON toggle for advanced editing
         var showRawJson by remember { mutableStateOf(false) }
-        TextButton(onClick = { showRawJson = !showRawJson }) {
+        CwocZoneButton(onClick = { showRawJson = !showRawJson }) {
             Text(if (showRawJson) "Hide JSON" else "Edit Raw JSON")
         }
         if (showRawJson) {
@@ -3212,6 +3318,60 @@ private fun DropdownField(
                 DropdownMenuItem(
                     text = { Text(option) },
                     onClick = { onValueChange(option); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Assignee dropdown that displays user names but stores user IDs.
+ * Shows the display name of the currently assigned user, stores the UUID.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssigneeDropdownField(
+    label: String,
+    value: String?,
+    users: List<ChitEditorViewModel.SystemUser>,
+    onValueChange: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    // Resolve display name for the current value (user ID)
+    val displayText = if (value != null) {
+        users.find { it.id == value }?.displayName ?: value
+    } else {
+        ""
+    }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = displayText,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            colors = CwocInputDefaults.outlinedColors()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .background(CwocDialogDefaults.containerColor)
+                .border(1.dp, CwocOutline, RoundedCornerShape(4.dp))
+        ) {
+            DropdownMenuItem(
+                text = { Text("None") },
+                onClick = { onValueChange(null); expanded = false }
+            )
+            users.forEach { user ->
+                DropdownMenuItem(
+                    text = { Text(user.displayName) },
+                    onClick = { onValueChange(user.id); expanded = false }
                 )
             }
         }

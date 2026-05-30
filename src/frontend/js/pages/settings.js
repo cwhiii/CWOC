@@ -54,15 +54,13 @@ const formats = [
 
 // (itemToDelete removed — delete-modal migrated to cwocConfirm)
 
-// Color mapping from main.js
-const colorMap = {
-  "#C66B6B": "Dusty Rose",
-  "#D68A59": "Burnt Sienna",
-  "#E3B23C": "Golden Ochre",
-  "#8A9A5B": "Mossy Sage",
-  "#6B8299": "Slate Teal",
-  "#A8A2C6": "Muted Lilac",
-};
+// Color mapping — uses shared _cwocDefaultColors from shared-utils.js
+const colorMap = {};
+(_cwocDefaultColors || []).forEach(function(c) {
+  colorMap[c.hex] = c.name;
+  colorMap[c.hex.toLowerCase()] = c.name;
+  colorMap[c.hex.toUpperCase()] = c.name;
+});
 
 // ── Timezone ─────────────────────────────────────────────────────────────────
 
@@ -149,25 +147,370 @@ function _validateTimezoneSettings() {
 
 /**
  * Render saved location rows into #locations-list from data array.
+ * Supports section headers with optional dividers.
+ * 
+ * Data structure: array of objects with optional 'section' field.
+ * {
+ *   label: "Home",           // Display name for location
+ *   address: "123 Main St",  // Address for location
+ *   is_default: true,        // Whether this is the default location
+ *   section: "Personal"      // Optional: group header name (if present, this is a section header)
+ *   divider: true            // Optional: show divider below section header
+ * }
  */
 function renderLocationsSection(locations) {
   const container = document.getElementById("locations-list");
   if (!container) return;
   container.innerHTML = "";
+  
   if (!locations || locations.length === 0) {
     locations = [{ label: "", address: "", is_default: false }];
   }
+  
+  let currentSection = null;
+  
   locations.forEach((loc, idx) => {
-    _appendLocationRow(container, loc.label || "", loc.address || "", loc.is_default);
+    // Check if this is a section header
+    if (loc.section) {
+      // Add section header
+      const sectionHeader = document.createElement("div");
+      sectionHeader.className = "location-section-header";
+      sectionHeader.textContent = loc.section;
+      sectionHeader.contentEditable = true;
+      sectionHeader.spellcheck = false;
+      sectionHeader.draggable = false; // Section headers are drop targets, not draggable
+      _setupLocationSectionHeader(sectionHeader);
+      container.appendChild(sectionHeader);
+      
+      // Add divider if requested
+      if (loc.divider) {
+        const dividerWrap = document.createElement("div");
+        dividerWrap.className = "location-divider-wrap";
+        dividerWrap.draggable = true;
+        dividerWrap.style.cssText = "padding: 8px 0; margin: 4px 0; cursor: grab;";
+        
+        const divider = document.createElement("hr");
+        divider.className = "location-section-divider";
+        divider.style.cssText = "border:none; border-top:1px dashed #8b5a2b; margin:0; opacity:0.5;";
+        
+        dividerWrap.appendChild(divider);
+        container.appendChild(dividerWrap);
+      }
+      
+      currentSection = loc.section;
+    } else {
+      // Regular location row
+      _appendLocationRow(container, loc.label || "", loc.address || "", loc.is_default, currentSection);
+    }
+  });
+  
+  // Initialize drag-and-drop for the container
+  _initLocationDragDrop(container);
+}
+
+/**
+ * Set up a section header with edit and context menu for delete.
+ */
+function _setupLocationSectionHeader(header) {
+  header.style.outline = "none";
+  header.style.cursor = "text";
+  header.draggable = true;
+  
+  // Focus and select all text on click
+  header.addEventListener("click", function(e) {
+    // Only select text if not dragging
+    if (header.classList.contains("dragging")) return;
+    const range = document.createRange();
+    range.selectNodeContents(header);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  
+  // Mark unsaved on edit
+  header.addEventListener("input", function() {
+    setSaveButtonUnsaved();
+  });
+  
+  // Right-click context menu to delete section
+  header.addEventListener("contextmenu", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const container = document.getElementById("locations-list");
+    const children = Array.from(container.children);
+    const headerIdx = children.indexOf(header);
+    
+    // Check if section has any locations
+    let hasLocations = false;
+    for (let i = headerIdx + 1; i < children.length; i++) {
+      const child = children[i];
+      if (child.classList && child.classList.contains("location-section-header")) {
+        break;
+      }
+      if (child.classList && child.classList.contains("location-row")) {
+        hasLocations = true;
+        break;
+      }
+    }
+    
+    const menu = document.createElement("div");
+    menu.className = "context-menu";
+    if (hasLocations) {
+      menu.innerHTML = '<div class="context-menu-item danger">🗑️ Delete Section (Keep Locations)</div>';
+    } else {
+      menu.innerHTML = '<div class="context-menu-item danger">🗑️ Delete Section</div>';
+    }
+    menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:#fff8e1;border:1px solid #8b5a2b;border-radius:4px;padding:4px 0;z-index:10000;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.2);`;
+    
+    const item = menu.querySelector(".context-menu-item");
+    item.style.cssText = "padding:6px 12px;cursor:pointer;color:#a01c1c;";
+    item.addEventListener("mouseenter", function() { this.style.background = "rgba(139, 90, 43, 0.2)"; });
+    item.addEventListener("mouseleave", function() { this.style.background = ""; });
+    item.addEventListener("click", function() {
+      // Delete section but keep locations (move them out)
+      const locationsToMove = [];
+      for (let i = headerIdx + 1; i < children.length; i++) {
+        const child = children[i];
+        if (child.classList && child.classList.contains("location-section-header")) {
+          break; // Stop at next section
+        }
+        if (child.classList && child.classList.contains("location-row")) {
+          locationsToMove.push(child);
+        }
+      }
+      
+      // Remove section header
+      header.remove();
+      
+      // Remove following divider if present
+      const nextSibling = children[headerIdx + 1];
+      if (nextSibling && nextSibling.classList && nextSibling.classList.contains("location-divider-wrap")) {
+        nextSibling.remove();
+      }
+      
+      // Remove data-section attribute from locations (move them out of section)
+      locationsToMove.forEach(row => {
+        delete row.dataset.section;
+      });
+      
+      // Move locations to the end of the container (or before next section)
+      const nextSection = container.querySelector(".location-section-header");
+      if (nextSection) {
+        // Insert before next section
+        locationsToMove.forEach(row => {
+          container.insertBefore(row, nextSection);
+        });
+      } else {
+        // Append to end
+        locationsToMove.forEach(row => {
+          container.appendChild(row);
+        });
+      }
+      
+      document.body.removeChild(menu);
+      setSaveButtonUnsaved();
+    });
+    
+    document.body.appendChild(menu);
+    
+    // Close menu on click elsewhere
+    const closeMenu = function(ev) {
+      if (menu.contains(ev.target)) return;
+      document.body.removeChild(menu);
+      document.removeEventListener("click", closeMenu);
+    };
+    setTimeout(() => document.addEventListener("click", closeMenu), 0);
+  });
+}
+
+/**
+ * Initialize drag-and-drop for location rows, dividers, and section headers within a container.
+ * Section headers are dragged with their entire section (header + divider + all locations).
+ */
+function _initLocationDragDrop(container) {
+  let draggedEl = null;
+  let draggedSection = null; // For section header drags, stores the entire section
+  
+  container.addEventListener("dragstart", function(e) {
+    const row = e.target.closest(".location-row");
+    const dividerWrap = e.target.closest(".location-divider-wrap");
+    const header = e.target.closest(".location-section-header");
+    
+    if (row) {
+      draggedEl = row;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    } else if (dividerWrap) {
+      draggedEl = dividerWrap;
+      dividerWrap.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    } else if (header) {
+      // Dragging a section header — collect the entire section
+      const children = Array.from(container.children);
+      const headerIdx = children.indexOf(header);
+      draggedSection = { header: header, elements: [] };
+      
+      // Collect all elements in this section (header, optional divider, all locations until next section)
+      draggedSection.elements.push(header);
+      for (let i = headerIdx + 1; i < children.length; i++) {
+        const child = children[i];
+        if (child.classList && child.classList.contains("location-section-header")) {
+          break; // Stop at next section
+        }
+        draggedSection.elements.push(child);
+      }
+      
+      header.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "");
+    }
+  });
+  
+  container.addEventListener("dragend", function(e) {
+    if (draggedEl) {
+      draggedEl.classList.remove("dragging");
+      draggedEl = null;
+    }
+    if (draggedSection && draggedSection.header) {
+      draggedSection.header.classList.remove("dragging");
+      draggedSection.header.classList.remove("drop-target");
+      draggedSection = null;
+    }
+    // Remove all drop indicators
+    container.querySelectorAll(".drop-indicator").forEach(el => el.remove());
+    container.querySelectorAll(".location-row").forEach(el => el.classList.remove("drop-target"));
+    container.querySelectorAll(".location-divider-wrap").forEach(el => el.classList.remove("drop-target"));
+    container.querySelectorAll(".location-section-header").forEach(el => el.classList.remove("drop-target"));
+  });
+  
+  container.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    
+    const targetRow = e.target.closest(".location-row");
+    const targetHeader = e.target.closest(".location-section-header");
+    const targetDividerWrap = e.target.closest(".location-divider-wrap");
+    
+    // Don't drop on our own section
+    if (draggedSection && targetHeader === draggedSection.header) return;
+    
+    // Remove previous indicators
+    container.querySelectorAll(".drop-indicator").forEach(el => el.remove());
+    container.querySelectorAll(".location-row").forEach(el => el.classList.remove("drop-target"));
+    container.querySelectorAll(".location-divider-wrap").forEach(el => el.classList.remove("drop-target"));
+    container.querySelectorAll(".location-section-header").forEach(el => el.classList.remove("drop-target"));
+    
+    if (targetRow && targetRow !== draggedEl) {
+      // Show drop indicator above the target row
+      targetRow.classList.add("drop-target");
+      const rect = targetRow.getBoundingClientRect();
+      const indicator = document.createElement("div");
+      indicator.className = "drop-indicator";
+      indicator.style.cssText = `position:absolute;left:${rect.left}px;right:${rect.right}px;top:${rect.top - 2}px;height:4px;background:#8b5a2b;border-radius:2px;pointer-events:none;z-index:10;`;
+      document.body.appendChild(indicator);
+    } else if (targetHeader && targetHeader !== (draggedSection ? draggedSection.header : null)) {
+      // Show drop indicator below the target section header
+      targetHeader.classList.add("drop-target");
+      const rect = targetHeader.getBoundingClientRect();
+      const indicator = document.createElement("div");
+      indicator.className = "drop-indicator";
+      indicator.style.cssText = `position:absolute;left:${rect.left}px;right:${rect.right}px;top:${rect.bottom + 2}px;height:4px;background:#8b5a2b;border-radius:2px;pointer-events:none;z-index:10;`;
+      document.body.appendChild(indicator);
+    } else if (targetDividerWrap && targetDividerWrap !== draggedEl) {
+      // Show drop indicator above the divider wrapper
+      targetDividerWrap.classList.add("drop-target");
+      const rect = targetDividerWrap.getBoundingClientRect();
+      const indicator = document.createElement("div");
+      indicator.className = "drop-indicator";
+      indicator.style.cssText = `position:absolute;left:${rect.left}px;right:${rect.right}px;top:${rect.top - 2}px;height:4px;background:#8b5a2b;border-radius:2px;pointer-events:none;z-index:10;`;
+      document.body.appendChild(indicator);
+    }
+  });
+  
+  container.addEventListener("drop", function(e) {
+    e.preventDefault();
+    
+    if (!draggedEl && !draggedSection) return;
+    
+    const targetRow = e.target.closest(".location-row");
+    const targetHeader = e.target.closest(".location-section-header");
+    const targetDividerWrap = e.target.closest(".location-divider-wrap");
+    
+    // Don't drop on our own section
+    if (draggedSection && targetHeader === draggedSection.header) return;
+    
+    // Remove indicators
+    container.querySelectorAll(".drop-indicator").forEach(el => el.remove());
+    
+    if (draggedSection) {
+      // Dropping an entire section
+      let insertBeforeEl = null;
+      
+      if (targetHeader && targetHeader !== draggedSection.header) {
+        // Drop before the target section header
+        insertBeforeEl = targetHeader;
+      } else if (targetRow) {
+        // Drop before the target row
+        insertBeforeEl = targetRow;
+      } else if (targetDividerWrap) {
+        // Drop before the target divider wrapper
+        insertBeforeEl = targetDividerWrap;
+      }
+      
+      if (insertBeforeEl) {
+        // Move all section elements before the target
+        draggedSection.elements.forEach(el => {
+          container.insertBefore(el, insertBeforeEl);
+        });
+      }
+      
+      draggedSection.header.classList.remove("dragging");
+      draggedSection.header.classList.remove("drop-target");
+      draggedSection = null;
+    } else if (draggedEl) {
+      // Dropping a single element (row or divider wrapper)
+      if (targetRow && targetRow !== draggedEl) {
+        // Drop before the target row
+        container.insertBefore(draggedEl, targetRow);
+      } else if (targetHeader) {
+        // Drop after the section header (before any divider or first location)
+        const nextSibling = targetHeader.nextElementSibling;
+        if (nextSibling && nextSibling.classList && nextSibling.classList.contains("location-divider-wrap")) {
+          container.insertBefore(draggedEl, nextSibling.nextSibling || null);
+        } else {
+          container.insertBefore(draggedEl, nextSibling || null);
+        }
+      } else if (targetDividerWrap && targetDividerWrap !== draggedEl) {
+        // Drop before the target divider wrapper
+        container.insertBefore(draggedEl, targetDividerWrap);
+      }
+      
+      draggedEl.classList.remove("dragging");
+      draggedEl = null;
+    }
+    
+    setSaveButtonUnsaved();
   });
 }
 
 /**
  * Append a single location row to the container.
+ * @param {HTMLElement} container - Container element
+ * @param {string} label - Location label
+ * @param {string} address - Location address
+ * @param {boolean} isDefault - Whether this is the default location
+ * @param {string} [sectionName] - Section this location belongs to (for data attribute)
  */
-function _appendLocationRow(container, label, address, isDefault) {
+function _appendLocationRow(container, label, address, isDefault, sectionName) {
   const row = document.createElement("div");
   row.className = "location-row";
+  row.draggable = true;
+  if (sectionName) {
+    row.dataset.section = sectionName;
+  }
 
   const radio = document.createElement("input");
   radio.type = "radio";
@@ -235,6 +578,87 @@ function addLocationRow() {
 }
 
 /**
+ * Add a section header to the saved locations list.
+ */
+function addLocationSection() {
+  const container = document.getElementById("locations-list");
+  if (!container) return;
+  
+  const sectionHeader = document.createElement("div");
+  sectionHeader.className = "location-section-header";
+  sectionHeader.contentEditable = true;
+  sectionHeader.textContent = "New Section";
+  sectionHeader.spellcheck = false;
+  sectionHeader.style.outline = "none";
+  sectionHeader.style.cursor = "text";
+  
+  // Focus and select all text on click
+  sectionHeader.addEventListener("click", function() {
+    const range = document.createRange();
+    range.selectNodeContents(sectionHeader);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  
+  // Mark unsaved on edit
+  sectionHeader.addEventListener("input", function() {
+    setSaveButtonUnsaved();
+  });
+  
+  container.appendChild(sectionHeader);
+  setSaveButtonUnsaved();
+  
+  // Focus the new section
+  sectionHeader.click();
+}
+
+/**
+ * Add a divider below the last section header.
+ */
+function addLocationDivider() {
+  const container = document.getElementById("locations-list");
+  if (!container) return;
+  
+  // Check if there's already a section header without a divider
+  const headers = container.querySelectorAll(".location-section-header");
+  if (headers.length === 0) {
+    cwocToast("Add a section header first, then add a divider below it.", "error");
+    return;
+  }
+  
+  const lastHeader = headers[headers.length - 1];
+  const nextSibling = lastHeader.nextElementSibling;
+  
+  // If next sibling is already a divider wrapper, remove it (toggle behavior)
+  if (nextSibling && nextSibling.classList && nextSibling.classList.contains("location-divider-wrap")) {
+    nextSibling.remove();
+    setSaveButtonUnsaved();
+    return;
+  }
+  
+  // Add a divider wrapper after the last section header
+  const dividerWrap = document.createElement("div");
+  dividerWrap.className = "location-divider-wrap";
+  dividerWrap.draggable = true;
+  dividerWrap.style.cssText = "padding: 8px 0; margin: 4px 0; cursor: grab;";
+  
+  const divider = document.createElement("hr");
+  divider.className = "location-section-divider";
+  divider.style.cssText = "border:none; border-top:1px dashed #8b5a2b; margin:0; opacity:0.5;";
+  
+  dividerWrap.appendChild(divider);
+  
+  if (nextSibling) {
+    container.insertBefore(dividerWrap, nextSibling);
+  } else {
+    container.appendChild(dividerWrap);
+  }
+  
+  setSaveButtonUnsaved();
+}
+
+/**
  * Auto-select logic: if exactly one row has a non-empty address, auto-check its radio.
  */
 function _autoSelectSingleLocation() {
@@ -258,6 +682,8 @@ function _autoSelectSingleLocation() {
 function collectLocationsData() {
   const container = document.getElementById("locations-list");
   if (!container) return undefined; // Container missing — don't overwrite
+  
+  // Check if we have any location rows at all
   const rows = container.querySelectorAll(".location-row");
   if (rows.length === 0) {
     // No rows rendered at all — DOM wasn't populated, preserve server data
@@ -269,13 +695,37 @@ function collectLocationsData() {
     }
     return undefined; // Signal to skip this field
   }
+  
   const all = [];
-  rows.forEach(row => {
-    const label = row.querySelector(".location-label-input")?.value?.trim() || "";
-    const address = row.querySelector(".location-address-input")?.value?.trim() || "";
-    const isDefault = row.querySelector('input[type="radio"]')?.checked || false;
-    all.push({ label, address, is_default: isDefault });
+  const children = Array.from(container.children);
+  
+  children.forEach(child => {
+    // Check if this is a section header
+    if (child.classList && child.classList.contains('location-section-header')) {
+      // Look ahead to see if the next element is a divider wrapper
+      const nextSibling = child.nextElementSibling;
+      const hasDivider = nextSibling && nextSibling.classList && nextSibling.classList.contains('location-divider-wrap');
+      all.push({ 
+        section: child.textContent.trim(), 
+        divider: hasDivider 
+      });
+      return;
+    }
+    
+    // Skip divider wrappers (they're handled by the section header)
+    if (child.classList && child.classList.contains('location-divider-wrap')) {
+      return;
+    }
+    
+    // Regular location row
+    if (child.classList && child.classList.contains('location-row')) {
+      const label = child.querySelector(".location-label-input")?.value?.trim() || "";
+      const address = child.querySelector(".location-address-input")?.value?.trim() || "";
+      const isDefault = child.querySelector('input[type="radio"]')?.checked || false;
+      all.push({ label, address, is_default: isDefault });
+    }
   });
+  
   const nonEmpty = all.filter(loc => loc.address !== "");
   if (nonEmpty.length === 0) {
     // All rows are empty — user intentionally cleared them
@@ -413,6 +863,8 @@ function setupDragListeners() {
   timeFormatGrid.ondrop = handleDropOnGrid;
   inactiveZone.ondragover = handleDragOver;
   inactiveZone.ondrop = handleDropOnInactive;
+  // Wire up touch support for mobile
+  _setupClockFormatTouch();
 }
 
 function handleDragStart(e) {
@@ -485,6 +937,185 @@ function handleDropOnInactive(e) {
     updateGrid(true);
   }
   setSaveButtonUnsaved();
+}
+
+/** Touch-based drag support for Clock Format items on mobile */
+function _setupClockFormatTouch() {
+  var touchItem = null;
+  var touchClone = null;
+  var touchValue = null;
+  var startX = 0;
+  var startY = 0;
+  var holdTimer = null;
+  var dragActivated = false;
+
+  function attachTouchToItem(item) {
+    item.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      touchItem = item;
+      touchValue = item.dataset.value;
+      dragActivated = false;
+
+      holdTimer = setTimeout(function() {
+        if (!touchItem) return;
+        dragActivated = true;
+        touchClone = item.cloneNode(true);
+        touchClone.style.position = 'fixed';
+        touchClone.style.zIndex = '99999';
+        touchClone.style.opacity = '0.85';
+        touchClone.style.pointerEvents = 'none';
+        touchClone.style.padding = '8px 12px';
+        touchClone.style.background = '#f5e6cc';
+        touchClone.style.border = '1px solid #8b5a2b';
+        touchClone.style.borderRadius = '5px';
+        touchClone.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        touchClone.style.left = (startX - 40) + 'px';
+        touchClone.style.top = (startY - 15) + 'px';
+        document.body.appendChild(touchClone);
+        item.style.opacity = '0.4';
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 150);
+    }, { passive: true });
+
+    item.addEventListener('touchmove', function(e) {
+      if (!touchItem) return;
+
+      var touch = e.touches[0];
+      var dx = touch.clientX - startX;
+      var dy = touch.clientY - startY;
+
+      if (!dragActivated && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        touchItem = null;
+        return;
+      }
+
+      if (!dragActivated || !touchClone) return;
+      e.preventDefault();
+
+      touchClone.style.left = (touch.clientX - 40) + 'px';
+      touchClone.style.top = (touch.clientY - 15) + 'px';
+
+      // Highlight drop targets
+      var gridRect = timeFormatGrid.getBoundingClientRect();
+      var inactiveRect = inactiveZone.getBoundingClientRect();
+      timeFormatGrid.style.outline = '';
+      inactiveZone.style.outline = '';
+      if (touch.clientX >= gridRect.left && touch.clientX <= gridRect.right &&
+          touch.clientY >= gridRect.top && touch.clientY <= gridRect.bottom) {
+        timeFormatGrid.style.outline = '2px solid #8b5a2b';
+      } else if (touch.clientX >= inactiveRect.left && touch.clientX <= inactiveRect.right &&
+                 touch.clientY >= inactiveRect.top && touch.clientY <= inactiveRect.bottom) {
+        inactiveZone.style.outline = '2px solid #8b5a2b';
+      }
+    }, { passive: false });
+
+    item.addEventListener('touchend', function(e) {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (!touchItem) return;
+
+      item.style.opacity = '';
+      timeFormatGrid.style.outline = '';
+      inactiveZone.style.outline = '';
+
+      if (dragActivated && touchClone) {
+        var touch = e.changedTouches[0];
+        var gridRect = timeFormatGrid.getBoundingClientRect();
+        var inactiveRect = inactiveZone.getBoundingClientRect();
+
+        var droppedOnGrid = touch.clientX >= gridRect.left && touch.clientX <= gridRect.right &&
+                            touch.clientY >= gridRect.top && touch.clientY <= gridRect.bottom;
+        var droppedOnInactive = touch.clientX >= inactiveRect.left && touch.clientX <= inactiveRect.right &&
+                                touch.clientY >= inactiveRect.top && touch.clientY <= inactiveRect.bottom;
+
+        if (item.classList.contains('inactive-item') && droppedOnGrid) {
+          // Move from inactive to active
+          var format = formats.find(function(f) { return f.value === touchValue; });
+          if (format) {
+            var newFormatItem = document.createElement('div');
+            newFormatItem.className = 'format-item';
+            newFormatItem.draggable = true;
+            newFormatItem.dataset.value = format.value;
+            newFormatItem.textContent = format.label;
+            var newSlot = document.createElement('div');
+            newSlot.className = 'grid-slot';
+            newSlot.dataset.index = timeFormatGrid.children.length;
+            newSlot.appendChild(newFormatItem);
+            timeFormatGrid.appendChild(newSlot);
+            item.remove();
+            updateGrid(true);
+            setSaveButtonUnsaved();
+          }
+        } else if (item.classList.contains('format-item') && droppedOnInactive) {
+          // Move from active to inactive
+          var newInactive = document.createElement('div');
+          newInactive.className = 'inactive-item';
+          newInactive.draggable = true;
+          newInactive.dataset.value = touchValue;
+          newInactive.textContent = item.textContent;
+          inactiveZone.appendChild(newInactive);
+          item.parentElement.remove();
+          updateGrid(true);
+          setSaveButtonUnsaved();
+        } else if (item.classList.contains('format-item') && droppedOnGrid) {
+          // Reorder within grid — find target slot
+          var slots = timeFormatGrid.querySelectorAll('.grid-slot');
+          var targetSlot = null;
+          for (var i = 0; i < slots.length; i++) {
+            var rect = slots[i].getBoundingClientRect();
+            if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+                touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+              targetSlot = slots[i];
+              break;
+            }
+          }
+          if (targetSlot && targetSlot.querySelector('.format-item') &&
+              targetSlot.querySelector('.format-item') !== item) {
+            var targetItem = targetSlot.querySelector('.format-item');
+            var tempValue = targetItem.dataset.value;
+            var tempText = targetItem.textContent;
+            targetItem.dataset.value = touchValue;
+            targetItem.textContent = item.textContent;
+            item.dataset.value = tempValue;
+            item.textContent = tempText;
+            setupDragListeners();
+            setSaveButtonUnsaved();
+          }
+        }
+
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+
+      touchItem = null;
+      touchValue = null;
+      dragActivated = false;
+    });
+
+    item.addEventListener('touchcancel', function() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (touchClone) {
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+      if (touchItem) {
+        touchItem.style.opacity = '';
+        touchItem = null;
+      }
+      touchValue = null;
+      dragActivated = false;
+      timeFormatGrid.style.outline = '';
+      inactiveZone.style.outline = '';
+    });
+  }
+
+  // Attach to all current format and inactive items
+  document.querySelectorAll('.format-item').forEach(attachTouchToItem);
+  document.querySelectorAll('.inactive-item').forEach(attachTouchToItem);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -656,6 +1287,46 @@ function _buildOmniLayoutCard(area) {
   card.appendChild(handle);
   card.appendChild(label);
   card.appendChild(controls);
+
+  // HST-type sections get "Show Weather" and "Show Events" checkboxes
+  var hstSections = ['hst', 'hst_weather', 'hst_temp_strip', 'events_weather'];
+  if (hstSections.indexOf(area.id) !== -1) {
+    var toggleRow = document.createElement('div');
+    toggleRow.className = 'omni-layout-card-toggles';
+
+    // Show Weather checkbox
+    var weatherLabel = document.createElement('label');
+    weatherLabel.className = 'omni-layout-card-toggle';
+    var weatherCb = document.createElement('input');
+    weatherCb.type = 'checkbox';
+    weatherCb.checked = area.showWeather !== false;
+    weatherCb.addEventListener('change', function(e) {
+      e.stopPropagation();
+      area.showWeather = weatherCb.checked;
+      setSaveButtonUnsaved();
+    });
+    weatherLabel.appendChild(weatherCb);
+    weatherLabel.appendChild(document.createTextNode(' Show Weather'));
+    toggleRow.appendChild(weatherLabel);
+
+    // Show Events checkbox
+    var eventsLabel = document.createElement('label');
+    eventsLabel.className = 'omni-layout-card-toggle';
+    var eventsCb = document.createElement('input');
+    eventsCb.type = 'checkbox';
+    eventsCb.checked = area.showEvents !== false;
+    eventsCb.addEventListener('change', function(e) {
+      e.stopPropagation();
+      area.showEvents = eventsCb.checked;
+      setSaveButtonUnsaved();
+    });
+    eventsLabel.appendChild(eventsCb);
+    eventsLabel.appendChild(document.createTextNode(' Show Events'));
+    toggleRow.appendChild(eventsLabel);
+
+    card.appendChild(toggleRow);
+  }
+
   return card;
 }
 
@@ -772,6 +1443,193 @@ function _setupOmniDragListeners() {
       setSaveButtonUnsaved();
     });
   });
+
+  // Touch support for mobile
+  _setupOmniLayoutTouch(container, allLists);
+}
+
+/** Touch-based drag support for Omni Layout cards on mobile */
+function _setupOmniLayoutTouch(container, allLists) {
+  var touchCard = null;
+  var touchClone = null;
+  var touchAreaId = null;
+  var startX = 0;
+  var startY = 0;
+  var holdTimer = null;
+  var dragActivated = false;
+
+  var cards = container.querySelectorAll('.omni-layout-card');
+
+  cards.forEach(function(card) {
+    card.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      touchCard = card;
+      touchAreaId = card.dataset.areaId;
+      dragActivated = false;
+
+      // Short hold to activate drag (150ms)
+      holdTimer = setTimeout(function() {
+        if (!touchCard) return;
+        dragActivated = true;
+        touchClone = card.cloneNode(true);
+        touchClone.style.position = 'fixed';
+        touchClone.style.zIndex = '99999';
+        touchClone.style.opacity = '0.85';
+        touchClone.style.pointerEvents = 'none';
+        touchClone.style.width = card.offsetWidth + 'px';
+        touchClone.style.left = (startX - card.offsetWidth / 2) + 'px';
+        touchClone.style.top = (startY - 20) + 'px';
+        touchClone.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        touchClone.style.borderRadius = '5px';
+        document.body.appendChild(touchClone);
+        card.classList.add('dragging');
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 150);
+    }, { passive: true });
+
+    card.addEventListener('touchmove', function(e) {
+      if (!touchCard) return;
+
+      var touch = e.touches[0];
+      var dx = touch.clientX - startX;
+      var dy = touch.clientY - startY;
+
+      // Cancel hold if moved too far before activation
+      if (!dragActivated && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        touchCard = null;
+        return;
+      }
+
+      if (!dragActivated || !touchClone) return;
+      e.preventDefault();
+
+      touchClone.style.left = (touch.clientX - touchCard.offsetWidth / 2) + 'px';
+      touchClone.style.top = (touch.clientY - 20) + 'px';
+
+      // Clear all indicators
+      container.querySelectorAll('.omni-layout-card').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      allLists.forEach(function(l) { l.classList.remove('omni-drop-highlight'); });
+
+      // Find which zone the finger is over
+      var targetList = _getOmniListAtPoint(allLists, touch.clientX, touch.clientY);
+      if (targetList) {
+        targetList.classList.add('omni-drop-highlight');
+        // Show insertion indicator
+        var cardsInList = Array.from(targetList.querySelectorAll('.omni-layout-card:not(.dragging)'));
+        for (var i = 0; i < cardsInList.length; i++) {
+          var rect = cardsInList[i].getBoundingClientRect();
+          if (touch.clientY < rect.top + rect.height / 2) {
+            cardsInList[i].style.borderTop = '3px solid #8b5a2b';
+            break;
+          } else if (i === cardsInList.length - 1) {
+            cardsInList[i].style.borderBottom = '3px solid #8b5a2b';
+          }
+        }
+      }
+    }, { passive: false });
+
+    card.addEventListener('touchend', function(e) {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (!touchCard) return;
+
+      card.classList.remove('dragging');
+
+      if (dragActivated && touchClone) {
+        var touch = e.changedTouches[0];
+
+        // Find which zone the finger ended over
+        var targetList = _getOmniListAtPoint(allLists, touch.clientX, touch.clientY);
+        if (targetList) {
+          var zone = targetList.dataset.zone;
+          var area = _omniLayoutState.find(function(a) { return a.id === touchAreaId; });
+          if (area) {
+            // Determine insert position
+            var cardsInList = Array.from(targetList.querySelectorAll('.omni-layout-card:not(.dragging)'));
+            var insertIdx = cardsInList.length;
+            for (var i = 0; i < cardsInList.length; i++) {
+              var rect = cardsInList[i].getBoundingClientRect();
+              if (touch.clientY < rect.top + rect.height / 2) {
+                insertIdx = i;
+                break;
+              }
+            }
+
+            // Set width/column/visibility based on target zone
+            if (zone === 'full') {
+              area.visible = true;
+              area.width = 'full';
+              area.column = null;
+            } else if (zone === 'left') {
+              area.visible = true;
+              area.width = 'half';
+              area.column = 'left';
+            } else if (zone === 'right') {
+              area.visible = true;
+              area.width = 'half';
+              area.column = 'right';
+            } else {
+              area.visible = false;
+            }
+
+            _recalcOmniPositions(insertIdx, zone, area);
+            _renderOmniLayoutGrid();
+            setSaveButtonUnsaved();
+          }
+        }
+
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+
+      // Clear indicators
+      container.querySelectorAll('.omni-layout-card').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      allLists.forEach(function(l) { l.classList.remove('omni-drop-highlight'); });
+      touchCard = null;
+      touchAreaId = null;
+      dragActivated = false;
+    });
+
+    card.addEventListener('touchcancel', function() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (touchClone) {
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+      if (touchCard) {
+        touchCard.classList.remove('dragging');
+        touchCard = null;
+      }
+      touchAreaId = null;
+      dragActivated = false;
+      container.querySelectorAll('.omni-layout-card').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      allLists.forEach(function(l) { l.classList.remove('omni-drop-highlight'); });
+    });
+  });
+}
+
+/** Find which omni layout list (zone) is at the given point */
+function _getOmniListAtPoint(allLists, x, y) {
+  for (var i = 0; i < allLists.length; i++) {
+    var rect = allLists[i].getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return allLists[i];
+    }
+  }
+  return null;
 }
 
 /**
@@ -829,7 +1687,10 @@ function _loadOmniLayout(settings) {
         _omniLayoutState = defaults.map(function(def) {
           var found = saved.find(function(s) { return s.id === def.id; });
           if (found) {
-            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position, column: found.column !== undefined ? found.column : def.column, hideWhenEmpty: found.hideWhenEmpty !== undefined ? found.hideWhenEmpty : def.hideWhenEmpty };
+            var item = { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position, column: found.column !== undefined ? found.column : def.column, hideWhenEmpty: found.hideWhenEmpty !== undefined ? found.hideWhenEmpty : def.hideWhenEmpty };
+            if (found.showWeather !== undefined) item.showWeather = found.showWeather;
+            if (found.showEvents !== undefined) item.showEvents = found.showEvents;
+            return item;
           }
           return def;
         });
@@ -844,6 +1705,9 @@ function _collectOmniLayout() {
   if (!_omniLayoutState) return JSON.stringify(_getDefaultOmniLayout());
   return JSON.stringify(_omniLayoutState.map(function(area) {
     var entry = { id: area.id, width: area.width, visible: area.visible, position: area.position, column: area.column || null, hideWhenEmpty: area.hideWhenEmpty !== false };
+    // HST-type sections: persist showWeather/showEvents toggles
+    if (area.showWeather !== undefined) entry.showWeather = area.showWeather;
+    if (area.showEvents !== undefined) entry.showEvents = area.showEvents;
     return entry;
   }));
 }
@@ -929,7 +1793,14 @@ function _renderOmniLockedFilters(settings) {
 
   var parts = [];
   if (filters.statuses && filters.statuses.length) parts.push('Status: ' + filters.statuses.join(', '));
-  if (filters.tags && filters.tags.length) parts.push('Tags: ' + filters.tags.join(', '));
+  if (filters.tags && filters.tags.length) {
+    // Resolve Tag_IDs to display names
+    var tagNames = filters.tags.map(function(tagId) {
+      if (typeof resolveTagId === 'function') return resolveTagId(tagId);
+      return tagId;
+    });
+    parts.push('Tags: ' + tagNames.join(', '));
+  }
   if (filters.priorities && filters.priorities.length) parts.push('Priority: ' + filters.priorities.join(', '));
   if (filters.people && filters.people.length) parts.push('People: ' + filters.people.join(', '));
   if (filters.text) parts.push('Text: "' + filters.text + '"');
@@ -984,6 +1855,16 @@ function toggleAuditPruneInputs() {
   var cb = document.getElementById('audit-prune-enabled');
   var daysInput = document.getElementById('audit-max-days');
   var mbInput = document.getElementById('audit-max-mb');
+  var disabled = !(cb && cb.checked);
+  if (daysInput) { daysInput.disabled = disabled; daysInput.style.opacity = disabled ? '0.5' : '1'; }
+  if (mbInput) { mbInput.disabled = disabled; mbInput.style.opacity = disabled ? '0.5' : '1'; }
+}
+
+/** Toggle disabled state of log prune inputs based on Enable Pruning checkbox */
+function toggleLogPruneInputs() {
+  var cb = document.getElementById('log-prune-enabled');
+  var daysInput = document.getElementById('log-max-days');
+  var mbInput = document.getElementById('log-max-mb');
   var disabled = !(cb && cb.checked);
   if (daysInput) { daysInput.disabled = disabled; daysInput.style.opacity = disabled ? '0.5' : '1'; }
   if (mbInput) { mbInput.disabled = disabled; mbInput.style.opacity = disabled ? '0.5' : '1'; }
@@ -1248,17 +2129,8 @@ function renderColors(colors) {
   var defaultColorList = document.getElementById("default-color-list");
   if (defaultColorList) {
     defaultColorList.innerHTML = "";
-    var defaultPalette = [
-      { hex: "transparent", name: "Transparent" },
-      { hex: "#C66B6B", name: "Dusty Rose" },
-      { hex: "#D68A59", name: "Burnt Sienna" },
-      { hex: "#E3B23C", name: "Golden Ochre" },
-      { hex: "#8A9A5B", name: "Mossy Sage" },
-      { hex: "#6B8299", name: "Slate Teal" },
-      { hex: "#8B6B99", name: "Muted Lilac" },
-      { hex: "#b22222", name: "Firebrick" },
-      { hex: "#DAA520", name: "Goldenrod" },
-    ];
+    // Use the shared unified palette (with Transparent prepended for display)
+    var defaultPalette = [{ hex: "transparent", name: "Transparent" }].concat(_cwocDefaultColors);
     defaultPalette.forEach(function(c) {
       var colorItem = document.createElement("div");
       colorItem.className = "color-item";
@@ -1417,6 +2289,7 @@ function _openBorderAssignPopup(e, hex) {
 
 function handleTagInput(event) {
   if (event.key === "Enter" && event.shiftKey) {
+    event.preventDefault();
     const input = document.getElementById("new-tag");
     const tagText = input.value.trim();
     if (tagText) {
@@ -1431,6 +2304,7 @@ function handleTagInput(event) {
       });
     }
   } else if (event.key === "Enter") {
+    event.preventDefault();
     addTag();
   }
 }
@@ -1489,8 +2363,10 @@ let currentTag = null;
 
 function openTagModal(tag) {
   var tagName = (tag && tag.childNodes && tag.childNodes[0]) ? tag.childNodes[0].textContent.trim() : '';
-  if (tagName) {
+  var tagId = (tag && tag.dataset) ? tag.dataset.tagId : null;
+  if (tagName || tagId) {
     cwocTagModal.open(tagName, {
+      tagId: tagId || null,
       onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
       onDelete: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
     });
@@ -1501,6 +2377,10 @@ async function _renderSettingsTagTree() {
   const treeContainer = document.getElementById('settings-tag-tree');
   if (!treeContainer) return;
 
+  // Suppress dirty tracking during tree re-render (this mutates observed DOM)
+  var wasSuppressed = window._cwocSuppressDirty;
+  window._cwocSuppressDirty = true;
+
   _invalidateSettingsCache();
   var tags = [];
   try { tags = await loadAllTags(); } catch (e) { tags = []; }
@@ -1509,26 +2389,47 @@ async function _renderSettingsTagTree() {
 
   if (tags.length === 0) {
     treeContainer.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No tags. Use Add Tag above.</div>';
+    _tagBulkUpdateCount();
+    if (!wasSuppressed) window._cwocSuppressDirty = false;
     return;
   }
 
   const tree = buildTagTree(tags);
-  renderTagTree(treeContainer, tree, [], (fullPath, isNowSelected) => {
+  renderTagTree(treeContainer, tree, [], (fullPath, isNowSelected, nodeId) => {
+    // nodeId is the tag's UUID, fullPath is the display name
     cwocTagModal.open(fullPath, {
+      tagId: nodeId || null,
       onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
       onDelete: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
     });
-  });
+  }, { hideCheckboxes: true });
 
   treeContainer.querySelectorAll('[data-tag-row]').forEach(row => {
     var fullPath = row.dataset.tagRow;
     if (!fullPath) return;
 
-    if (_tagHasSharing(fullPath)) {
+    // Resolve tag ID for this row
+    var tagId = (typeof getTagIdByName === 'function') ? getTagIdByName(fullPath) : null;
+
+    // Add bulk-select checkbox (before the existing content)
+    if (tagId) {
+      var bulkCb = document.createElement('input');
+      bulkCb.type = 'checkbox';
+      bulkCb.className = 'tag-bulk-cb';
+      bulkCb.dataset.tagId = tagId;
+      bulkCb.dataset.tagName = fullPath;
+      bulkCb.style.cssText = 'margin:0 4px 0 0;cursor:pointer;flex-shrink:0;';
+      bulkCb.addEventListener('click', function(e) { e.stopPropagation(); });
+      bulkCb.addEventListener('change', function() { _tagBulkUpdateCount(); });
+      row.insertBefore(bulkCb, row.firstChild);
+    }
+
+    // Check sharing by tag ID (shared_tags now uses tag_id field)
+    if (_tagHasSharing(tagId || fullPath)) {
       var linkIcon = document.createElement('span');
       linkIcon.className = 'tag-sharing-link-icon';
       linkIcon.textContent = '🔗';
-      var sharedUsers = _getTagShares(fullPath);
+      var sharedUsers = _getTagShares(tagId || fullPath);
       var userNames = sharedUsers.map(function(s) { return _getTagSharingUserName(s.user_id); });
       linkIcon.title = 'Shared with: ' + userNames.join(', ');
       row.appendChild(linkIcon);
@@ -1545,6 +2446,186 @@ async function _renderSettingsTagTree() {
     });
     row.appendChild(addBtn);
   });
+
+  _tagBulkUpdateCount();
+
+  // Restore dirty tracking state
+  if (!wasSuppressed) window._cwocSuppressDirty = false;
+}
+
+// ── Tag Bulk Actions ─────────────────────────────────────────────────────────
+
+/** Get all checked tag IDs from the bulk checkboxes */
+function _tagBulkGetSelected() {
+  var cbs = document.querySelectorAll('#settings-tag-tree .tag-bulk-cb:checked');
+  var selected = [];
+  cbs.forEach(function(cb) {
+    selected.push({ id: cb.dataset.tagId, name: cb.dataset.tagName });
+  });
+  return selected;
+}
+
+/** Update the bulk action count display and show/hide action buttons */
+function _tagBulkUpdateCount() {
+  var selected = _tagBulkGetSelected();
+  var countEl = document.getElementById('tag-bulk-count');
+  var shareBtn = document.getElementById('tag-bulk-share-btn');
+  var deleteBtn = document.getElementById('tag-bulk-delete-btn');
+  if (countEl) {
+    countEl.textContent = selected.length + ' selected';
+    countEl.style.display = selected.length > 0 ? '' : 'none';
+  }
+  if (shareBtn) shareBtn.style.display = selected.length > 0 ? '' : 'none';
+  if (deleteBtn) deleteBtn.style.display = selected.length > 0 ? '' : 'none';
+}
+
+/** Select all tag checkboxes */
+function _tagBulkSelectAll() {
+  document.querySelectorAll('#settings-tag-tree .tag-bulk-cb').forEach(function(cb) {
+    cb.checked = true;
+  });
+  _tagBulkUpdateCount();
+}
+
+/** Deselect all tag checkboxes */
+function _tagBulkSelectNone() {
+  document.querySelectorAll('#settings-tag-tree .tag-bulk-cb').forEach(function(cb) {
+    cb.checked = false;
+  });
+  _tagBulkUpdateCount();
+}
+
+/** Bulk share selected tags with a user */
+async function _tagBulkShare() {
+  var selected = _tagBulkGetSelected();
+  if (selected.length === 0) return;
+
+  // Load user list if not already loaded
+  await _loadTagSharingUserList();
+  if (!_tagSharingUserList || _tagSharingUserList.length === 0) {
+    cwocToast('No other users available to share with.', 'error');
+    return;
+  }
+
+  // Build a user picker modal
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? currentUser.user_id : null;
+  var availableUsers = _tagSharingUserList.filter(function(u) { return u.id !== currentUserId; });
+
+  if (availableUsers.length === 0) {
+    cwocToast('No other users available to share with.', 'error');
+    return;
+  }
+
+  // Use cwocPromptModal-style approach: build a simple selection modal
+  var userOptions = availableUsers.map(function(u) { return u.display_name || u.username; });
+  var userHtml = '<div style="margin-bottom:10px;">Share <strong>' + selected.length + ' tag' + (selected.length > 1 ? 's' : '') + '</strong> with:</div>';
+  userHtml += '<select id="tag-bulk-share-user" style="width:100%;margin-bottom:8px;">';
+  availableUsers.forEach(function(u) {
+    userHtml += '<option value="' + u.id + '">' + (u.display_name || u.username) + '</option>';
+  });
+  userHtml += '</select>';
+  userHtml += '<select id="tag-bulk-share-role" style="width:100%;"><option value="viewer">👁️ Viewer</option><option value="manager">✏️ Manager</option></select>';
+
+  // Create a temporary modal
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:20px;max-width:350px;width:90%;font-family:Lora,Georgia,serif;';
+  modal.innerHTML = '<h3 style="margin:0 0 12px;text-align:center;color:#4a2c2a;">🔗 Bulk Share</h3>' + userHtml +
+    '<div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">' +
+    '<button type="button" id="tag-bulk-share-cancel" class="standard-button">Cancel</button>' +
+    '<button type="button" id="tag-bulk-share-confirm" class="standard-button" style="background:#2e7d32;color:#fff;">Share</button></div>';
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Handle ESC
+  function escHandler(e) { if (e.key === 'Escape') { cleanup(); } }
+  document.addEventListener('keydown', escHandler, true);
+
+  function cleanup() {
+    document.removeEventListener('keydown', escHandler, true);
+    overlay.remove();
+  }
+
+  document.getElementById('tag-bulk-share-cancel').addEventListener('click', cleanup);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) cleanup(); });
+
+  document.getElementById('tag-bulk-share-confirm').addEventListener('click', async function() {
+    var userId = document.getElementById('tag-bulk-share-user').value;
+    var role = document.getElementById('tag-bulk-share-role').value;
+    if (!userId) { cleanup(); return; }
+
+    cleanup();
+
+    // Load current sharing config
+    await _loadTagSharingData();
+
+    // Add the share to each selected tag
+    var added = 0;
+    for (var i = 0; i < selected.length; i++) {
+      var tagId = selected[i].id;
+      var existingEntry = null;
+      for (var j = 0; j < _tagSharingConfig.length; j++) {
+        if (_tagSharingConfig[j].tag === tagId) { existingEntry = _tagSharingConfig[j]; break; }
+      }
+      if (existingEntry) {
+        var alreadyShared = existingEntry.shares.some(function(s) { return s.user_id === userId; });
+        if (!alreadyShared) {
+          existingEntry.shares.push({ user_id: userId, role: role, tag_permission: 'view' });
+          added++;
+        }
+      } else {
+        _tagSharingConfig.push({ tag: tagId, shares: [{ user_id: userId, role: role, tag_permission: 'view' }] });
+        added++;
+      }
+    }
+
+    // Save to server
+    try {
+      var response = await fetch('/api/settings/shared-tags', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shared_tags: _tagSharingConfig }),
+      });
+      if (response.ok) {
+        cwocToast('Shared ' + added + ' tag' + (added !== 1 ? 's' : '') + '.', 'success');
+        _renderSettingsTagTree();
+      } else {
+        cwocToast('Failed to save sharing config.', 'error');
+      }
+    } catch (err) {
+      cwocToast('Error saving sharing: ' + err.message, 'error');
+    }
+  });
+}
+
+/** Bulk delete selected tags */
+async function _tagBulkDelete() {
+  var selected = _tagBulkGetSelected();
+  if (selected.length === 0) return;
+
+  var names = selected.map(function(t) { return t.name; });
+  var msg = 'Delete ' + selected.length + ' tag' + (selected.length > 1 ? 's' : '') + '?\n\n' + names.join(', ') + '\n\nThis removes them globally from all chits.';
+  var confirmed = await cwocConfirm(msg, { title: 'Bulk Delete Tags', confirmLabel: '🗑️ Delete ' + selected.length, danger: true });
+  if (!confirmed) return;
+
+  var deleted = 0;
+  for (var i = 0; i < selected.length; i++) {
+    try {
+      if (typeof deleteTagInline === 'function') {
+        await deleteTagInline(selected[i].id);
+        deleted++;
+      }
+    } catch (err) {
+      console.error('[TagBulkDelete] Failed to delete tag:', selected[i].name, err);
+    }
+  }
+
+  cwocToast('Deleted ' + deleted + ' tag' + (deleted !== 1 ? 's' : '') + '.', 'success');
+  _renderSettingsTagTree();
+  setSaveButtonUnsaved();
 }
 
 function _syncHiddenTagEditor(tags) {
@@ -1554,6 +2635,7 @@ function _syncHiddenTagEditor(tags) {
   (tags || []).forEach(function(tag) {
     var tagDiv = document.createElement("div");
     tagDiv.className = "tag";
+    tagDiv.dataset.tagId = tag.id || '';
     tagDiv.dataset.color = tag.color || "#d4c4b0";
     tagDiv.dataset.fontColor = tag.fontColor || "#5c3317";
     tagDiv.dataset.favorite = tag.favorite ? 'true' : 'false';
@@ -1770,12 +2852,16 @@ class SettingsManager {
         this.settings.custom_colors = [];
       }
 
+      window._cwocSuppressDirty = true;
       this.updateForm();
       if (typeof _initBadgesSettings === 'function') _initBadgesSettings();
       setSaveButtonSaved();
       monitorChanges();
       this.setupEventListeners();
+      // Allow async rendering (tag tree, etc.) to settle before enabling dirty tracking
+      setTimeout(function() { window._cwocSuppressDirty = false; }, 1000);
     } catch (error) {
+      window._cwocSuppressDirty = false;
       cwocToast('Failed to load settings: ' + error.message, 'error');
     }
   }
@@ -1801,6 +2887,26 @@ class SettingsManager {
         if (auditMaxMbInput && !auditMaxMbInput.value) auditMaxMbInput.value = '1';
       }
       toggleAuditPruneInputs();
+    }
+
+    // Log limits (client log / update log)
+    const logMaxDaysInput = document.getElementById("log-max-days");
+    if (logMaxDaysInput) logMaxDaysInput.value = (this.settings.log_max_days != null && this.settings.log_max_days !== '') ? this.settings.log_max_days : '';
+    const logMaxMbInput = document.getElementById("log-max-mb");
+    if (logMaxMbInput) logMaxMbInput.value = (this.settings.log_max_mb != null && this.settings.log_max_mb !== '') ? this.settings.log_max_mb : '';
+
+    const logPruneCb = document.getElementById("log-prune-enabled");
+    if (logPruneCb) {
+      const logExplicitlyDisabled = this.settings.hasOwnProperty('log_max_days') &&
+                                    this.settings.hasOwnProperty('log_max_mb') &&
+                                    (this.settings.log_max_days == null || this.settings.log_max_days === '') &&
+                                    (this.settings.log_max_mb == null || this.settings.log_max_mb === '');
+      logPruneCb.checked = !logExplicitlyDisabled;
+      if (logPruneCb.checked) {
+        if (logMaxDaysInput && !logMaxDaysInput.value) logMaxDaysInput.value = '30';
+        if (logMaxMbInput && !logMaxMbInput.value) logMaxMbInput.value = '5';
+      }
+      toggleLogPruneInputs();
     }
 
     const co = this.settings.chit_options || {};
@@ -1960,6 +3066,7 @@ class SettingsManager {
     this.settings.tags?.forEach((tag) => {
       const tagDiv = document.createElement("div");
       tagDiv.className = "tag";
+      tagDiv.dataset.tagId = tag.id || '';
       tagDiv.dataset.color = tag.color || "#8b5a2b";
       tagDiv.dataset.fontColor = tag.fontColor || "#2b1e0f";
       tagDiv.dataset.favorite = tag.favorite ? 'true' : 'false';
@@ -2113,6 +3220,7 @@ class SettingsManager {
       alarm_orientation: clocksContainer.classList.contains("vertical") ? "Vertical" : "Horizontal",
       active_clocks: JSON.stringify(Array.from(timeFormatGrid.querySelectorAll(".format-item")).map(item => item.dataset.value)),
       tags: Array.from(document.querySelectorAll("#tag-editor-hidden .tag:not(.tag-input-container .tag)")).map((tag) => ({
+        id: tag.dataset.tagId || undefined,
         name: (tag.childNodes[0]?.textContent || "").trim(),
         color: tag.dataset.color || "#d4c4b0",
         fontColor: tag.dataset.fontColor || "#5c3317",
@@ -2161,6 +3269,8 @@ class SettingsManager {
       })(),
       audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
+      log_max_days: (() => { const cb = document.getElementById("log-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("log-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
+      log_max_mb: (() => { const cb = document.getElementById("log-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("log-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       default_notifications: {
         start: _gatherDefaultNotifList('start'),
         due: _gatherDefaultNotifList('due'),
@@ -2249,8 +3359,11 @@ class SettingsManager {
         );
       }
       if (typeof syncSend === 'function') syncSend('settings_changed', {});
+      window._cwocSuppressDirty = true;
       setSaveButtonSaved();
       document.getElementById("loader").style.display = "none";
+      // Allow any async re-renders triggered by save to settle before re-enabling dirty tracking
+      setTimeout(function() { window._cwocSuppressDirty = false; }, 500);
       return true;
     } catch (error) {
       cwocToast('Failed to save settings: ' + error.message, 'error');
@@ -2385,6 +3498,7 @@ document.addEventListener("DOMContentLoaded", () => {
         'admin': 'admin', 'administration': 'admin',
         'data': 'admin', 'data-management': 'admin', 'dependent-apps': 'admin', 'network-access': 'admin',
         'home-assistant': 'admin', 'kiosk': 'admin', 'version': 'admin', 'updates': 'admin',
+        'backup': 'admin', 'restic-backup': 'admin', 'restic': 'admin',
         'views': 'views', 'omni-view': 'views', 'omni': 'views', 'map-settings': 'views', 'habits': 'views', 'periods': 'views', 'default-view': 'views',
         'collections': 'collections', 'tags': 'collections', 'colors': 'collections', 'saved-locations': 'collections',
         'calendar': 'views',
@@ -2421,11 +3535,14 @@ document.addEventListener("DOMContentLoaded", () => {
         'clocks': '🕰️ Time Format',
         'timezone': '🌐 Timezone',
         'custom-filters': 'Custom Filters & Sorting',
-        'default-view': '🏠 Default View'
+        'default-view': '🏠 Default View',
+        'backup': 'Restic Backup',
+        'restic-backup': 'Restic Backup',
+        'restic': 'Restic Backup'
       };
       var target = headingMap[hash];
       if (target) {
-        var headings = document.querySelectorAll('.settings-tab-content.active h3, .settings-tab-content.active label.setting-subheader');
+        var headings = document.querySelectorAll('.settings-tab-content.active h3, .settings-tab-content.active label.setting-subheader, .settings-tab-content.active div.setting-subheader');
         for (var i = 0; i < headings.length; i++) {
           if (headings[i].textContent.trim().indexOf(target) !== -1 || headings[i].textContent.trim() === target) {
             headings[i].scrollIntoView({ behavior: 'smooth', block: 'start' });

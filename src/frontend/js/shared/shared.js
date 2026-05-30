@@ -2788,11 +2788,12 @@ window._cwocSyncMode = 'none';          // 'ws' | 'poll' | 'hidden' | 'none'
 window._cwocSyncPollId = 0;             // last seen message ID (used for catch-up)
 window._cwocSyncPollTimer = null;       // setTimeout ID for polling
 window._cwocSyncRetries = 0;            // WS reconnect attempt counter
-window._cwocSyncMaxRetries = 3;         // max retries before polling fallback
+window._cwocSyncMaxRetries = 5;         // max retries before polling fallback
 window._cwocSyncHiddenByVisibility = false; // true if WS was closed due to tab hide
 window._cwocSyncPollFailCount = 0;      // consecutive poll failures
 window._cwocSyncHiddenPollInterval = 0; // 0 = no polling when hidden (configurable)
 window._cwocSyncHasVisibilityAPI = (typeof document !== 'undefined' && typeof document.visibilityState !== 'undefined');
+window._cwocSyncWsRetryTimer = null;    // periodic WS retry while in polling mode
 
 /**
  * Entry point. Checks Visibility API, connects WS, registers visibility listener.
@@ -2834,6 +2835,7 @@ function _syncConnect() {
       window._cwocSyncRetries = 0;
       window._cwocSyncPollFailCount = 0;
       _syncStopPolling();
+      _syncStopWsRetry();
       _syncHideDisconnected();
     };
 
@@ -2862,15 +2864,19 @@ function _syncConnect() {
         window._cwocSyncMode = 'hidden';
         return;
       }
-      // Otherwise retry up to 3 times, then fall back to 30s polling
+      // Otherwise retry with exponential backoff, then fall back to polling
       window._cwocSyncMode = 'none';
       window._cwocSyncRetries++;
       if (window._cwocSyncRetries <= window._cwocSyncMaxRetries) {
-        console.debug('[Sync] WebSocket disconnected, reconnecting (attempt ' + window._cwocSyncRetries + '/' + window._cwocSyncMaxRetries + ')');
-        setTimeout(_syncConnect, 2000);
+        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+        var delay = Math.min(2000 * Math.pow(2, window._cwocSyncRetries - 1), 32000);
+        console.debug('[Sync] WebSocket disconnected, reconnecting (attempt ' + window._cwocSyncRetries + '/' + window._cwocSyncMaxRetries + ') in ' + (delay/1000) + 's');
+        setTimeout(_syncConnect, delay);
       } else {
         console.debug('[Sync] WebSocket reconnect failed after ' + window._cwocSyncMaxRetries + ' attempts, falling back to HTTP polling');
         _syncStartPolling(30000);
+        // Periodically try to upgrade back to WebSocket (every 60s)
+        _syncStartWsRetry();
       }
     };
 
@@ -3046,6 +3052,37 @@ function _syncStopPolling() {
   if (window._cwocSyncPollTimer) {
     clearTimeout(window._cwocSyncPollTimer);
     window._cwocSyncPollTimer = null;
+  }
+}
+
+/**
+ * Start periodic WebSocket upgrade attempts while in polling mode.
+ * Every 60s, try to open a WebSocket. If it succeeds, polling stops automatically
+ * (onopen calls _syncStopPolling and _syncStopWsRetry).
+ */
+function _syncStartWsRetry() {
+  if (window._cwocSyncWsRetryTimer) return; // already running
+  console.debug('[Sync] Will retry WebSocket every 60s while polling');
+  window._cwocSyncWsRetryTimer = setInterval(function() {
+    if (window._cwocSyncMode === 'ws') {
+      // Already reconnected — stop retrying
+      _syncStopWsRetry();
+      return;
+    }
+    if (window._cwocSyncHiddenByVisibility) return; // don't retry while hidden
+    console.debug('[Sync] Periodic WS retry attempt...');
+    window._cwocSyncRetries = 0; // reset so _syncConnect doesn't bail
+    _syncConnect();
+  }, 60000);
+}
+
+/**
+ * Stop periodic WebSocket retry.
+ */
+function _syncStopWsRetry() {
+  if (window._cwocSyncWsRetryTimer) {
+    clearInterval(window._cwocSyncWsRetryTimer);
+    window._cwocSyncWsRetryTimer = null;
   }
 }
 
@@ -5928,10 +5965,12 @@ if (typeof document !== 'undefined') {
       _logCwocVersion();
       _initSharedAlarmSystem();
       _initSharedHotkeys();
+      _cwocCheckFirstLoginAbout();
     });
   } else {
     _logCwocVersion();
     _initSharedAlarmSystem();
     _initSharedHotkeys();
+    _cwocCheckFirstLoginAbout();
   }
 }

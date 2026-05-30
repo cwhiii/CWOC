@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Marker tooltip layout — small parchment-styled label shown permanently above map markers.
+     Matches Mobile_Web's .maps-title-tooltip: Lora font, 12sp, #fff8e1 background,
+     #8b5a2b border, #2b1e0f text, 4dp corner radius. -->
+<TextView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tooltip_text"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp"
+    android:background="@drawable/tooltip_background"
+    android:textColor="#2b1e0f"
+    android:textSize="11sp"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:maxWidth="160dp"
+    android:gravity="center" />

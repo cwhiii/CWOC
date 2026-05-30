@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -91,12 +92,27 @@ fun MapScreen(
     val periodLabel by viewModel.periodLabel.collectAsState()
     val statusFilters by viewModel.statusFilters.collectAsState()
     val priorityFilters by viewModel.priorityFilters.collectAsState()
+    val tagFilters by viewModel.tagFilters.collectAsState()
+    val availableTags by viewModel.availableTags.collectAsState()
+    val peopleFilters by viewModel.peopleFilters.collectAsState()
+    val availablePeople by viewModel.availablePeople.collectAsState()
     val flyToPoint by viewModel.flyToPoint.collectAsState()
     val goToError by viewModel.goToError.collectAsState()
     val preferGoogleMaps by viewModel.preferGoogleMaps.collectAsState()
     val defaultLat by viewModel.defaultLat.collectAsState()
     val defaultLon by viewModel.defaultLon.collectAsState()
     val defaultZoom by viewModel.defaultZoom.collectAsState()
+    val isFocusMode by viewModel.isFocusMode.collectAsState()
+    val focusPoint by viewModel.focusPoint.collectAsState()
+
+    // Marker popup state
+    val selectedPopup by viewModel.selectedPopup.collectAsState()
+
+    // People filter panel state
+    val peopleSearchText by viewModel.peopleSearchText.collectAsState()
+    val peopleFavoritesOnly by viewModel.peopleFavoritesOnly.collectAsState()
+    val peopleSelectedTags by viewModel.peopleSelectedTags.collectAsState()
+    val allContactTags by viewModel.allContactTags.collectAsState()
 
     var hasLocationPermission by remember {
         mutableStateOf(
@@ -182,6 +198,38 @@ fun MapScreen(
                 onPriorityToggled = { viewModel.togglePriorityFilter(it) },
                 onClearFilters = { viewModel.clearFilters() }
             )
+
+            // ─── Tag Filter Chips ───────────────────────────────────────────
+            if (availableTags.isNotEmpty()) {
+                MapTagFilters(
+                    availableTags = availableTags,
+                    selectedTags = tagFilters,
+                    onTagToggled = { viewModel.toggleTagFilter(it) }
+                )
+            }
+
+            // ─── People Filter Chips ────────────────────────────────────────
+            if (availablePeople.isNotEmpty()) {
+                MapPeopleFilters(
+                    availablePeople = availablePeople,
+                    selectedPeople = peopleFilters,
+                    onPersonToggled = { viewModel.togglePeopleFilter(it) }
+                )
+            }
+        }
+
+        // ─── People Filter Panel ────────────────────────────────────────────
+        if (mapMode == MapMode.PEOPLE || mapMode == MapMode.BOTH) {
+            PeopleFilterPanel(
+                searchText = peopleSearchText,
+                favoritesOnly = peopleFavoritesOnly,
+                selectedTags = peopleSelectedTags,
+                allTags = allContactTags,
+                onSearchTextChanged = { viewModel.setPeopleSearchText(it) },
+                onFavoritesToggled = { viewModel.setPeopleFavoritesOnly(it) },
+                onTagToggled = { viewModel.togglePeopleTag(it) },
+                onClearFilters = { viewModel.clearPeopleFilters() }
+            )
         }
 
         // ─── Map Content ────────────────────────────────────────────────────
@@ -220,31 +268,56 @@ fun MapScreen(
                         }
                     },
                     update = { view ->
-                        // Clear existing markers and re-add
+                        // Clear existing markers and re-add with clustering
                         view.overlays.removeAll { it is Marker }
 
-                        markers.forEach { chitMarker ->
-                            val marker = Marker(view).apply {
-                                position = chitMarker.geoPoint
-                                title = chitMarker.title
-                                snippet = chitMarker.type ?: ""
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                setOnMarkerClickListener { _, _ ->
-                                    if (chitMarker.type == "contact") {
-                                        onNavigateToContact(chitMarker.chitId)
-                                    } else if (chitMarker.type != "saved") {
-                                        onNavigateToEditor(chitMarker.chitId)
-                                    }
-                                    true
+                        // Determine which marker's popup is currently open (to hide its tooltip)
+                        val popupOpenId = when (val popup = selectedPopup) {
+                            is MarkerPopupData.ChitPopup -> popup.chitId
+                            is MarkerPopupData.ContactPopup -> popup.contactId
+                            else -> null
+                        }
+
+                        // Use MapClusterManager to group nearby markers into clusters
+                        val clusteredOverlays = MapClusterManager.buildClusteredOverlays(
+                            context = context,
+                            mapView = view,
+                            chitMarkers = markers,
+                            onMarkerClick = { chitMarker ->
+                                // Show popup instead of navigating directly
+                                viewModel.onMarkerTapped(chitMarker)
+                            },
+                            onClusterClick = { clusterBounds ->
+                                // Zoom to reveal individual markers within the cluster
+                                view.post {
+                                    view.zoomToBoundingBox(clusterBounds, true, 50)
                                 }
-                            }
+                            },
+                            popupOpenMarkerId = popupOpenId
+                        )
+
+                        clusteredOverlays.forEach { marker ->
                             view.overlays.add(marker)
                         }
 
-                        // Fit bounds
-                        bounds?.let { bb ->
-                            view.post {
-                                view.zoomToBoundingBox(bb, true, 50)
+                        // Add distinct highlight marker at focus point (if in focus mode)
+                        focusPoint?.let { point ->
+                            val highlightMarker = Marker(view).apply {
+                                position = point
+                                title = "Focused Location"
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                icon = MapMarkerDrawer.createHighlightMarkerDrawable(context)
+                                setOnMarkerClickListener { _, _ -> true }
+                            }
+                            view.overlays.add(highlightMarker)
+                        }
+
+                        // Fit bounds — skip when in focus mode to maintain focus on target location
+                        if (!isFocusMode) {
+                            bounds?.let { bb ->
+                                view.post {
+                                    view.zoomToBoundingBox(bb, true, 50)
+                                }
                             }
                         }
 
@@ -268,33 +341,71 @@ fun MapScreen(
                     }
                 }
 
-                // My Location FAB
-                FloatingActionButton(
-                    onClick = {
-                        if (hasLocationPermission) {
-                            mapView?.let { view ->
-                                val locationOverlay = view.overlays
-                                    .filterIsInstance<MyLocationNewOverlay>()
-                                    .firstOrNull()
-                                locationOverlay?.myLocation?.let { loc ->
-                                    view.controller.animateTo(loc)
-                                }
-                            }
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                        }
-                    },
+                // Map FABs (Home + My Location)
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
-                    containerColor = ParchmentBrown
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.End
                 ) {
-                    Icon(
-                        Icons.Default.MyLocation,
-                        contentDescription = if (hasLocationPermission) "My Location" else "Enable Location",
-                        tint = Color.White
-                    )
+                    // Home / Reset View FAB
+                    FloatingActionButton(
+                        onClick = {
+                            mapView?.controller?.animateTo(
+                                GeoPoint(defaultLat, defaultLon),
+                                defaultZoom,
+                                1200L
+                            )
+                        },
+                        containerColor = ParchmentBrown
+                    ) {
+                        Icon(
+                            Icons.Default.Home,
+                            contentDescription = "Reset to default view",
+                            tint = Color.White
+                        )
+                    }
+
+                    // My Location FAB
+                    FloatingActionButton(
+                        onClick = {
+                            if (hasLocationPermission) {
+                                mapView?.let { view ->
+                                    val locationOverlay = view.overlays
+                                        .filterIsInstance<MyLocationNewOverlay>()
+                                        .firstOrNull()
+                                    locationOverlay?.myLocation?.let { loc ->
+                                        view.controller.animateTo(loc)
+                                    }
+                                }
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        },
+                        containerColor = ParchmentBrown
+                    ) {
+                        Icon(
+                            Icons.Default.MyLocation,
+                            contentDescription = if (hasLocationPermission) "My Location" else "Enable Location",
+                            tint = Color.White
+                        )
+                    }
                 }
+
+                // ─── Marker Popup Overlay ────────────────────────────────────
+                MarkerPopupOverlay(
+                    popupData = selectedPopup,
+                    onDismiss = { viewModel.dismissPopup() },
+                    onOpenEditor = { chitId ->
+                        viewModel.dismissPopup()
+                        onNavigateToEditor(chitId)
+                    },
+                    onOpenContact = { contactId ->
+                        viewModel.dismissPopup()
+                        onNavigateToContact(contactId)
+                    }
+                )
             }
         }
     }
@@ -386,8 +497,8 @@ private fun MapFilters(
                 .padding(horizontal = 12.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Prev button
-            if (period != MapPeriod.ALL) {
+            // Prev button (not shown for ALL or NEXT_HOUR which don't support offset navigation)
+            if (period != MapPeriod.ALL && period != MapPeriod.NEXT_HOUR) {
                 IconButton(onClick = onPrevPeriod, modifier = Modifier.size(32.dp)) {
                     Text("◀", style = MaterialTheme.typography.bodyMedium)
                 }
@@ -412,8 +523,8 @@ private fun MapFilters(
                 }
             }
 
-            // Next button
-            if (period != MapPeriod.ALL) {
+            // Next button (not shown for ALL or NEXT_HOUR which don't support offset navigation)
+            if (period != MapPeriod.ALL && period != MapPeriod.NEXT_HOUR) {
                 IconButton(onClick = onNextPeriod, modifier = Modifier.size(32.dp)) {
                     Text("▶", style = MaterialTheme.typography.bodyMedium)
                 }
@@ -477,6 +588,77 @@ private fun MapFilters(
                     Text("Clear", style = MaterialTheme.typography.labelSmall, color = ParchmentBrown)
                 }
             }
+        }
+    }
+}
+
+// ─── Tag Filter Chips ────────────────────────────────────────────────────────
+
+@Composable
+private fun MapTagFilters(
+    availableTags: List<String>,
+    selectedTags: Set<String>,
+    onTagToggled: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "Tags:",
+            style = MaterialTheme.typography.labelSmall,
+            color = ParchmentBrown,
+            modifier = Modifier.align(Alignment.CenterVertically)
+        )
+        availableTags.forEach { tag ->
+            val displayName = tag.substringAfterLast("/")
+            FilterChip(
+                selected = tag in selectedTags,
+                onClick = { onTagToggled(tag) },
+                label = { Text(displayName, style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = ParchmentBrown,
+                    selectedLabelColor = Color.White
+                )
+            )
+        }
+    }
+}
+
+// ─── People Filter Chips (for chit filtering) ───────────────────────────────────
+
+@Composable
+private fun MapPeopleFilters(
+    availablePeople: List<String>,
+    selectedPeople: Set<String>,
+    onPersonToggled: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = "People:",
+            style = MaterialTheme.typography.labelSmall,
+            color = ParchmentBrown,
+            modifier = Modifier.align(Alignment.CenterVertically)
+        )
+        availablePeople.forEach { person ->
+            FilterChip(
+                selected = person in selectedPeople,
+                onClick = { onPersonToggled(person) },
+                label = { Text(person, style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = ParchmentBrown,
+                    selectedLabelColor = Color.White
+                )
+            )
         }
     }
 }

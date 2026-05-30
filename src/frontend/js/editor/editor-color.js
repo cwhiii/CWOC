@@ -1,59 +1,58 @@
 /**
- * editor-color.js — Color zone: swatches, custom colors, background tinting
+ * editor-color.js — Color zone: unified color picker, background tinting
  *
- * Handles fetching custom colors from settings, rendering color swatches,
- * setting the chit color (including editor background tinting), updating
- * the color preview, and attaching click listeners to swatch elements.
+ * Uses the shared cwocRenderColorPicker() from shared-utils.js to render
+ * the unified color palette (defaults + custom colors from settings).
+ * Handles setting the chit color, editor background tinting, and preview updates.
  *
- * Depends on: shared.js (getCachedSettings, setSaveButtonUnsaved),
- *             editor.js (defaultColors)
- * Loaded before: editor-init.js, editor.js
+ * Depends on: shared-utils.js (cwocRenderColorPicker, cwocColorName, _cwocDefaultColors,
+ *             getCachedSettings, setSaveButtonUnsaved)
+ * Loaded before: editor-init.js
  */
 
-async function _fetchCustomColors() {
-  try {
-    const settings = await getCachedSettings();
-    if (!settings.custom_colors) {
-      console.warn("No custom_colors array found in API response");
-      return [];
-    }
-    if (!Array.isArray(settings.custom_colors)) {
-      console.warn("custom_colors is not an array:", settings.custom_colors);
-      return [];
-    }
+/**
+ * Initialize the editor color picker using the shared cwocRenderColorPicker.
+ * Renders all default + custom color swatches into #editor-color-swatches.
+ */
+function _initEditorColorPicker() {
+  var container = document.getElementById('editor-color-swatches');
+  if (!container) return;
 
-    // Normalize colors: preserve name if present, fall back to hex
-    const normalizedColors = settings.custom_colors.map((c) =>
-      typeof c === "string"
-        ? { hex: c, name: c }
-        : { hex: c.hex, name: c.name || c.hex },
-    );
+  var currentColor = document.getElementById('color')?.value || '';
+  if (currentColor === 'transparent') currentColor = '';
 
-    return normalizedColors;
-  } catch (error) {
-    console.error("Error fetching custom colors:", error);
-    return [];
-  }
+  cwocRenderColorPicker(container, currentColor, function(hex) {
+    var name = hex ? cwocColorName(hex) : 'None';
+    _setColor(hex || 'transparent', name);
+  }, { showNone: true });
 }
 
-function _setColor(hex, name = "Custom") {
-  const colorInput = document.getElementById("color");
-  const colorPreview = document.getElementById("selected-color");
-  const colorNameLabel = document.getElementById("selected-color-name");
-  const mainEditor = document.getElementById("mainEditor");
+function _setColor(hex, name) {
+  if (name === undefined) name = cwocColorName(hex);
+  var colorInput = document.getElementById("color");
+  var colorPreview = document.getElementById("selected-color");
+  var colorNameLabel = document.getElementById("selected-color-name");
+  var mainEditor = document.getElementById("mainEditor");
   // NOTE: header-row intentionally NOT colored — design spec says header stays fixed color
 
   if (colorInput) colorInput.value = hex;
   if (colorPreview) colorPreview.style.backgroundColor = hex;
   if (mainEditor) mainEditor.style.backgroundColor = hex;
-  if (colorNameLabel) colorNameLabel.textContent = name;
+  if (colorNameLabel) colorNameLabel.textContent = name || 'None';
 
-  document.querySelectorAll(".color-swatch").forEach((swatch) => {
-    const match = swatch.dataset.color?.toLowerCase() === hex.toLowerCase();
-    swatch.classList.toggle("selected", match);
-  });
-
-  _updateColorPreview(); // Sync preview and selection
+  // Update swatch selection in the picker
+  var container = document.getElementById('editor-color-swatches');
+  if (container) {
+    var normalizedHex = (hex || '').toLowerCase();
+    container.querySelectorAll('.color-swatch').forEach(function(swatch) {
+      swatch.classList.remove('selected');
+      if (!normalizedHex || normalizedHex === 'transparent') {
+        if (swatch.classList.contains('cwoc-color-none')) swatch.classList.add('selected');
+      } else if (swatch.dataset.hex === normalizedHex) {
+        swatch.classList.add('selected');
+      }
+    });
+  }
 
   // Update mobile nav bar color to match chit color
   if (typeof _applyMobileNavBarColor === 'function') _applyMobileNavBarColor();
@@ -64,67 +63,21 @@ function _setColor(hex, name = "Custom") {
   if (!window._editorLoadingChit) setSaveButtonUnsaved();
 }
 
-function _updateColorPreview() {
-  const colorInput = document.getElementById("color");
-  const preview = document.getElementById("selected-color");
-  const color = colorInput.value;
-  const allColors = [...defaultColors, ...(window.customColors || [])];
-  const colorObj = allColors.find(
-    (c) => c.hex.toLowerCase() === color.toLowerCase(),
-  );
-  const label = colorObj ? colorObj.name : "Custom";
-
-  if (preview) preview.style.backgroundColor = color;
-  const mainEditor = document.getElementById("mainEditor");
-  if (mainEditor) mainEditor.style.backgroundColor = color;
-  const colorNameLabel = document.getElementById("selected-color-name");
-  if (colorNameLabel) colorNameLabel.textContent = label;
-
-  document.querySelectorAll(".color-swatch").forEach((swatch) => {
-    swatch.classList.toggle(
-      "selected",
-      swatch.dataset.color?.toLowerCase() === color.toLowerCase(),
-    );
-  });
-}
-
-function _renderCustomColors(customColors) {
-  const customColorsContainer = document.getElementById("custom-colors");
-  if (!customColorsContainer) {
-    console.warn("#custom-colors container not found");
-    return;
+/**
+ * Legacy compatibility: _fetchCustomColors still works but now just returns
+ * the custom colors from settings for use in editor-init.js color resolution.
+ */
+async function _fetchCustomColors() {
+  try {
+    var settings = await getCachedSettings();
+    if (!settings.custom_colors || !Array.isArray(settings.custom_colors)) return [];
+    return settings.custom_colors.map(function(c) {
+      return typeof c === 'string'
+        ? { hex: c, name: cwocColorName(c) }
+        : { hex: c.hex, name: c.name || cwocColorName(c.hex) };
+    });
+  } catch (error) {
+    console.error("Error fetching custom colors:", error);
+    return [];
   }
-
-  // Clear existing custom swatches before re-rendering
-  customColorsContainer.innerHTML = "";
-
-  if (!customColors || customColors.length === 0) return;
-
-  customColors.forEach(({ hex, name }) => {
-    const swatch = document.createElement("div");
-    swatch.className = "color-swatch";
-    swatch.dataset.color = hex;
-    swatch.style.backgroundColor = hex;
-    swatch.title = name || hex;
-
-    swatch.addEventListener("click", () => {
-      _setColor(hex, name || "Custom");
-    });
-
-    customColorsContainer.appendChild(swatch);
-  });
-}
-
-function _attachColorSwatchListeners() {
-  document.querySelectorAll(".color-swatch").forEach((swatch) => {
-    swatch.addEventListener("click", () => {
-      const hex = swatch.dataset.color;
-      const allColors = [...defaultColors, ...(window.customColors || [])];
-      const colorObj = allColors.find(
-        (c) => c.hex.toLowerCase() === hex.toLowerCase(),
-      );
-      const name = colorObj ? colorObj.name : "Custom";
-      _setColor(hex, name);
-    });
-  });
 }

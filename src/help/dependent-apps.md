@@ -4,7 +4,7 @@
 - [Troubleshooting](#troubleshooting)
 
 
-The Settings page includes a **📱 Dependent Apps** block (admin only) for configuring external services that CWOC integrates with. Currently supports Tailscale (mesh VPN for secure remote access) and Ntfy (push notifications to your phone).
+The Settings page includes a **📱 Dependent Apps** block (admin only) for configuring external services that CWOC integrates with. Currently supports [Tailscale](https://tailscale.com/) (mesh VPN for secure remote access), [Ntfy](https://ntfy.sh/) (push notifications to your phone), [Home Assistant](https://www.home-assistant.io/) (home automation), and [Restic](https://restic.net/) (encrypted backups).
 
 ## Tailscale
 

@@ -1,6 +1,7 @@
 package com.cwoc.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -67,11 +68,13 @@ import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.repository.AuthEvent
 import com.cwoc.app.data.repository.AuthRepository
 import com.cwoc.app.data.repository.ChitRepository
+import com.cwoc.app.data.sync.NetworkFallbackState
 import com.cwoc.app.data.sync.SyncEngine
 import com.cwoc.app.data.sync.SyncForegroundService
 import com.cwoc.app.data.sync.SyncPushEngine
 import com.cwoc.app.data.sync.SyncWorker
 import com.cwoc.app.data.repository.SettingsRepository
+import com.cwoc.app.ui.components.FallbackBanner
 import com.cwoc.app.ui.components.NewChitFab
 import com.cwoc.app.ui.components.ProfileMenu
 import com.cwoc.app.ui.components.ClockModal
@@ -93,6 +96,8 @@ import com.cwoc.app.ui.viewmodel.FilterSortViewModel
 import com.cwoc.app.ui.viewmodel.NotificationBadgeViewModel
 import com.cwoc.app.ui.viewmodel.ProfileMenuViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import okhttp3.OkHttpClient
@@ -131,12 +136,32 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var okHttpClient: OkHttpClient
 
+    @Inject
+    lateinit var networkFallbackState: NetworkFallbackState
+
+    @Inject
+    lateinit var weatherRepository: com.cwoc.app.data.repository.WeatherRepository
+
     private val filterSortViewModel: FilterSortViewModel by viewModels()
     private val notificationBadgeViewModel: NotificationBadgeViewModel by viewModels()
     private val emailBadgeViewModel: EmailBadgeViewModel by viewModels()
     private val profileMenuViewModel: ProfileMenuViewModel by viewModels()
 
     private val sidebarStateViewModel: com.cwoc.app.ui.viewmodel.SidebarStateViewModel by viewModels()
+
+    // StateFlow to communicate new intents (from notification taps) to the Compose layer
+    private val _navigateToFlow = MutableStateFlow<String?>(null)
+    val navigateToFlow = _navigateToFlow.asStateFlow()
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val navigateTo = intent.getStringExtra("navigate_to")
+        if (navigateTo != null) {
+            intent.removeExtra("navigate_to")
+            _navigateToFlow.value = navigateTo
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -172,8 +197,18 @@ class MainActivity : ComponentActivity() {
                 contactRepository = contactRepository,
                 standaloneAlertRepository = standaloneAlertRepository,
                 syncPushEngine = syncPushEngine,
-                okHttpClient = okHttpClient
+                okHttpClient = okHttpClient,
+                networkFallbackState = networkFallbackState,
+                navigateToFlow = navigateToFlow,
+                onNavigateConsumed = { _navigateToFlow.value = null }
             )
+        }
+
+        // Emit initial navigate_to from the launching intent (cold start from notification/widget)
+        val initialNavigateTo = intent?.getStringExtra("navigate_to")
+        if (initialNavigateTo != null) {
+            intent?.removeExtra("navigate_to")
+            _navigateToFlow.value = initialNavigateTo
         }
     }
 }
@@ -194,7 +229,10 @@ private fun CwocApp(
     contactRepository: com.cwoc.app.data.repository.ContactRepository,
     standaloneAlertRepository: com.cwoc.app.data.repository.StandaloneAlertRepository,
     syncPushEngine: SyncPushEngine,
-    okHttpClient: OkHttpClient
+    okHttpClient: OkHttpClient,
+    networkFallbackState: NetworkFallbackState,
+    navigateToFlow: kotlinx.coroutines.flow.StateFlow<String?>,
+    onNavigateConsumed: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -318,12 +356,14 @@ private fun CwocApp(
     }
 
     // Handle navigate_to intent extra from widgets and notifications
-    val activity = context as? ComponentActivity
-    LaunchedEffect(Unit) {
-        val navigateTo = activity?.intent?.getStringExtra("navigate_to")
+    // Observes the navigateToFlow from MainActivity — handles both cold start and
+    // warm start (onNewIntent) scenarios
+    val navigateToValue by navigateToFlow.collectAsState()
+    LaunchedEffect(navigateToValue) {
+        val navigateTo = navigateToValue
         if (navigateTo != null && authRepository.isAuthenticated()) {
-            // Clear the extra so it doesn't re-trigger on config changes
-            activity.intent.removeExtra("navigate_to")
+            // Reset the flow so it doesn't re-trigger
+            onNavigateConsumed()
             when {
                 navigateTo.startsWith("editor/") -> {
                     navController.navigate(navigateTo)
@@ -370,6 +410,26 @@ private fun CwocApp(
                 .edit()
                 .putString("last_viewed_tab", matchingTab.name)
                 .apply()
+        }
+    }
+
+    // ── Network fallback toast notifications (once per session) ──────────
+    var fallbackToastShown by remember { mutableStateOf(false) }
+    val currentIsFallback by networkFallbackState.isFallback.collectAsState()
+    val currentFallbackLabel by networkFallbackState.activeLabel.collectAsState()
+
+    LaunchedEffect(currentIsFallback) {
+        if (currentIsFallback && !fallbackToastShown) {
+            snackbarHostState.showSnackbar(
+                message = "Primary server unreachable — switching to $currentFallbackLabel",
+                duration = androidx.compose.material3.SnackbarDuration.Short
+            )
+            fallbackToastShown = true
+        } else if (!currentIsFallback && fallbackToastShown) {
+            snackbarHostState.showSnackbar(
+                message = "Reconnected to primary server",
+                duration = androidx.compose.material3.SnackbarDuration.Short
+            )
         }
     }
 
@@ -794,6 +854,9 @@ private fun CwocApp(
                             .nestedScroll(pullToRefreshState.nestedScrollConnection)
                     ) {
                     Column(modifier = Modifier.fillMaxSize()) {
+                        // Fallback banner (shown when operating on fallback URL)
+                        FallbackBanner(fallbackState = networkFallbackState)
+
                         // Main content area with right-edge swipe detector
                         Box(
                             modifier = Modifier
@@ -884,8 +947,15 @@ private fun CwocApp(
             val weatherPrefs = weatherContext.getSharedPreferences("cwoc_prefs", android.content.Context.MODE_PRIVATE)
             val serverUrl = weatherPrefs.getString("server_url", "") ?: ""
             val authToken = weatherPrefs.getString("auth_token", "") ?: ""
+            // Load cached forecasts from Room for offline modal display
+            var cachedForecastMap by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
+            LaunchedEffect(Unit) {
+                val cached = weatherRepository.getCachedForecasts()
+                cachedForecastMap = cached.associate { it.locationLabel to it.dailyJson }
+            }
             com.cwoc.app.ui.components.WeatherModal(
                 savedLocations = currentSettings?.savedLocations,
+                cachedForecasts = cachedForecastMap,
                 serverUrl = serverUrl.trimEnd('/'),
                 authToken = authToken,
                 okHttpClient = okHttpClient,
@@ -1063,7 +1133,7 @@ private fun CwocApp(
 
 /**
  * Parse tag items from the settings sharedTags JSON string.
- * Format: JSON array of objects with "name", "color", "favorite" fields.
+ * Format: JSON array of objects with "id", "name", "color", "favorite" fields.
  */
 private fun parseTagItemsFromSettings(sharedTagsJson: String?): List<com.cwoc.app.ui.navigation.filter.TagItem> {
     if (sharedTagsJson.isNullOrBlank()) return emptyList()
@@ -1075,7 +1145,9 @@ private fun parseTagItemsFromSettings(sharedTagsJson: String?): List<com.cwoc.ap
             val name = obj.optString("name", "").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             // Filter out system tags
             if (name in systemTags || name.startsWith("CWOC_System/", ignoreCase = true)) return@mapNotNull null
+            val id = obj.optString("id", "").takeIf { it.isNotBlank() }
             com.cwoc.app.ui.navigation.filter.TagItem(
+                id = id,
                 name = name,
                 color = obj.optString("color", "").takeIf { it.isNotBlank() },
                 favorite = obj.optBoolean("favorite", false)

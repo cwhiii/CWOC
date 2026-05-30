@@ -89,7 +89,11 @@ class EdgeCaseHandlerImpl @Inject constructor(
 
     /**
      * Propagates a server-originated tag rename to all local chits:
-     * 1. Get all chits that have oldTag in their tags list
+     * With the tag ID system, chit tags store UUIDs — renames don't affect them.
+     * This handler is kept for backward compatibility with any legacy name-based tags
+     * that might still exist in the local DB (pre-migration data).
+     *
+     * 1. Get all chits that have oldTag in their tags list (name-based match)
      * 2. For each, replace oldTag with newTag in the tags list
      * 3. Upsert the updated entity WITHOUT marking it dirty
      */

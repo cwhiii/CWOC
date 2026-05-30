@@ -24,6 +24,7 @@
 #   src/backend/routes/custom_objects.py — Custom Objects registry CRUD & zone assignments
 #   src/backend/routes/custom_zones.py — Custom Zones CRUD (user-defined zone collections)
 #   src/backend/routes/devices.py — Device token auth & management
+#   src/backend/routes/backup.py — Restic backup configuration, scheduling & operations
 #   src/backend/middleware.py   — Auth middleware (session validation)
 #
 # PWA files served directly from src/pwa/:
@@ -132,6 +133,7 @@ from src.backend.migrations import (
     migrate_add_weather_data,
     migrate_add_audit_log,
     migrate_add_audit_settings,
+    migrate_add_log_limits,
     migrate_add_default_notifications,
     migrate_add_standalone_alerts,
     migrate_add_alert_state,
@@ -213,6 +215,11 @@ from src.backend.migrations import (
     migrate_add_email_thread_id,
     migrate_add_email_esc_quick_exit,
     migrate_cleanup_email_notifications,
+    migrate_backup_config,
+    migrate_tags_to_id_system,
+    migrate_seed_extended_colors,
+    migrate_add_badges_table,
+    migrate_add_location_vault_toggle,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -231,6 +238,7 @@ migrate_add_username()
 migrate_add_weather_data()
 migrate_add_audit_log()
 migrate_add_audit_settings()
+migrate_add_log_limits()
 migrate_add_default_notifications()
 migrate_add_standalone_alerts()
 migrate_add_alert_state()
@@ -309,6 +317,11 @@ migrate_unify_users_contacts()
 migrate_add_email_thread_id()
 migrate_add_email_esc_quick_exit()
 migrate_cleanup_email_notifications()
+migrate_backup_config()
+migrate_tags_to_id_system()
+migrate_seed_extended_colors()
+migrate_add_badges_table()
+migrate_add_location_vault_toggle()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)
@@ -384,6 +397,8 @@ from src.backend.routes.devices import devices_router
 from src.backend.routes.sync import sync_router
 from src.backend.routes.docs import router as docs_router
 from src.backend.routes.client_log import router as client_log_router
+from src.backend.routes.backup import router as backup_router, start_backup_scheduler
+from src.backend.routes.badges import router as badges_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -415,6 +430,8 @@ app.include_router(devices_router)
 app.include_router(sync_router)
 app.include_router(docs_router)
 app.include_router(client_log_router)
+app.include_router(backup_router)
+app.include_router(badges_router)
 
 # ── Bundle reclassification is triggered by rule changes, not on startup ──
 # Triggers: rule update (PUT), rule association (POST), bundle delete (DELETE)
@@ -507,6 +524,7 @@ async def on_startup():
     await start_weather_schedulers()
     await start_rules_scheduler()
     await start_ha_polling_scheduler()
+    await start_backup_scheduler()
     # Warm the chit cache in the background so the first page load is instant
     asyncio.get_event_loop().run_in_executor(None, _warm_chit_cache)
 

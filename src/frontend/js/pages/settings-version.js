@@ -45,11 +45,24 @@ async function refreshDiskUsage() {
       cwocEl.textContent = _formatBytes(data.cwoc_storage) + ' (' + cwocPctStr + '% of disk)';
       cwocEl.style.color = '';
     }
+    // Breakdown: app vs backups
+    var appEl = document.getElementById('app-storage-display');
+    var backupEl = document.getElementById('backup-storage-display');
+    if (appEl && data.app_storage != null) {
+      appEl.textContent = _formatBytes(data.app_storage);
+    }
+    if (backupEl && data.backup_storage != null) {
+      backupEl.textContent = _formatBytes(data.backup_storage);
+    }
   } catch (e) {
     console.error('Error loading disk usage:', e);
     el.textContent = 'Unable to load';
     el.style.color = '#a0522d';
     if (cwocEl) { cwocEl.textContent = '—'; cwocEl.style.color = ''; }
+    var appEl2 = document.getElementById('app-storage-display');
+    var backupEl2 = document.getElementById('backup-storage-display');
+    if (appEl2) appEl2.textContent = '—';
+    if (backupEl2) backupEl2.textContent = '—';
   } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }

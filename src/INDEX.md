@@ -32,13 +32,13 @@ Package marker. No public exports.
 | `app` | FastAPI application instance |
 | `NoCacheStaticMiddleware` | Middleware that adds no-cache headers to `/frontend/`, `/static/`, `/data/` responses |
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
-| `on_startup()` | Startup event — calls `start_weather_schedulers()`, `start_rules_scheduler()`, and `start_ha_polling_scheduler()` |
+| `on_startup()` | Startup event — calls `start_weather_schedulers()`, `start_rules_scheduler()`, `start_ha_polling_scheduler()`, and `start_backup_scheduler()` |
 | `serve_service_worker()` | `GET /sw.js` — Serve the service worker from `src/pwa/sw.js` with `Content-Type: application/javascript` and `Service-Worker-Allowed: /` header |
 | `serve_manifest()` | `GET /manifest.json` — Serve the web app manifest from `src/pwa/manifest.json` with `Content-Type: application/json` |
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, `ha_router`, `sync_router`, and `devices_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, `migrate_omni_view_settings()`, `migrate_add_timezone_column()`, and `migrate_add_sync_version()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, `ha_router`, `sync_router`, `devices_router`, `backup_router`, and `badges_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_add_habit_mode_to_rules()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, `migrate_omni_view_settings()`, `migrate_add_timezone_column()`, `migrate_add_sync_version()`, `migrate_backup_config()`, `migrate_tags_to_id_system()`, and `migrate_add_badges_table()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -46,7 +46,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 |-------|-------------|
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
-| `Tag` | Tag with name, color, fontColor, favorite |
+| `Tag` | Tag with id (Optional[str] — UUID v4, assigned by backend at creation, immutable), name, color, fontColor, favorite |
 | `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, omni_layout (JSON string — Omni View section layout config), omni_locked_filters (JSON string — locked filter defaults for Omni View), default_timezone (Optional[str] — user's default IANA timezone), timezone_override (Optional[str] — manual current timezone override), default_view (Optional[str] — user's preferred landing view, defaults to 'Calendar'), etc. |
 | `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), nest_thread_id (Optional[str] — ID of an email chit in the target thread for nesting non-email chits into email threads), timezone (Optional[str] — IANA timezone identifier for anchored chits, null for floating), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
@@ -86,7 +86,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `compute_display_name(contact)` | Build display name from contact name fields |
 | `serialize_json_field(data)` | Serialize a Python object to a JSON string (or None) |
 | `deserialize_json_field(data)` | Deserialize a JSON string to a Python object (or None) |
-| `compute_system_tags(chit)` | Auto-assign system tags (Calendar, Tasks, Notes, Habits, Habits/[title], CWOC_System/Email, etc.) based on chit properties; adds `Habits` and `Habits/[title]` tags when `habit=True`; adds `CWOC_System/Email` when `email_message_id` or `email_status` is set |
+| `compute_system_tags(chit, tag_registry=None)` | Auto-assign system tags (Calendar, Tasks, Notes, Habits, Habits/[title], CWOC_System/Email, etc.) based on chit properties; adds `Habits` and `Habits/[title]` tags when `habit=True`; adds `CWOC_System/Email` when `email_message_id` or `email_status` is set. Accepts optional `tag_registry` to resolve user tag IDs to names for "Project" detection |
 | `get_or_create_instance_id()` | Get or create a persistent instance UUID |
 | `_build_export_envelope(data_type, data)` | Wrap data in an export envelope with metadata |
 | `get_version_info()` | Read version info from the `version_info` table |
@@ -96,6 +96,11 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `require_admin(request)` | Check that the requesting user is an admin; return user_id or raise 401/403 (shared helper) |
 | `seed_version_info()` | Seed initial version info from `/app/src/VERSION` if table is empty |
 | `get_next_sync_version(cursor)` | Atomically get and increment the global sync version counter in `sync_state` table. Must be called within the same transaction as the record write. Returns the version number to assign |
+| `is_tag_id(value)` | Return True if value matches UUID v4 format (case-insensitive hex with dashes). Used to discriminate Tag_IDs from system tag name strings |
+| `is_system_tag(value)` | Return True if value starts with 'CWOC_System/' or 'Habits/' (case-insensitive). System tags remain name-based and never get IDs |
+| `resolve_tag_ids(tag_ids, tag_registry)` | Resolve a list of tag values (UUIDs and system tag strings) to `[{id, name}]` objects. Orphaned UUIDs are logged and omitted; system tags return `{id: None, name: string}` |
+| `get_tag_registry(conn, user_id)` | Load the user's tag registry from settings. Returns list of tag objects `[{id, name, color, fontColor, favorite}]`, or `[]` if none |
+| `chit_cache` | Instance of `ChitCache` — LRU cache for chit list responses per user. Invalidated on tag rename, chit save, sync push |
 
 ### 1.5 `src/backend/migrations.py` — Database Migrations
 
@@ -168,6 +173,9 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_timezone_column()` | Add `timezone` (TEXT DEFAULT NULL) column to chits table for anchored/floating timezone support. Uses column-existence-check pattern. Fully idempotent |
 | `migrate_add_default_view()` | Add `default_view` (TEXT DEFAULT 'Calendar') column to settings table for user's preferred landing view. Fully idempotent |
 | `migrate_add_sync_version()` | Add `sync_version` (INTEGER DEFAULT 0) and `has_unviewed_conflict` (BOOLEAN DEFAULT 0) columns to chits table; add `sync_version` (INTEGER DEFAULT 0) to contacts and settings tables; create `sync_state` table (single-row global counter); create `device_tokens` table (id, user_id, token_hash, device_name, created_datetime, last_seen_datetime, last_sync_version, revoked); create indexes `idx_chits_sync_version`, `idx_chits_owner_sync`, `idx_contacts_sync_version`, `idx_device_tokens_user`, `idx_device_tokens_hash`; backfill existing records with sequential sync_version values based on `modified_datetime` order. Fully idempotent |
+| `migrate_backup_config()` | Create `backup_config` table (single-row, id=1) with columns: `id` (INTEGER PRIMARY KEY DEFAULT 1), `enabled` (INTEGER DEFAULT 0), `repo_type` (TEXT DEFAULT 'local'), `repo_url` (TEXT), `repo_password_encrypted` (TEXT), `backend_credentials_encrypted` (TEXT), `backup_paths` (TEXT), `schedule_frequency` (TEXT DEFAULT 'daily'), `schedule_time` (TEXT DEFAULT '02:00'), `retention_policy` (TEXT), `notification_recipients` (TEXT), `notification_transfer` (INTEGER DEFAULT 1), `notification_maintenance` (INTEGER DEFAULT 1), `last_backup_time` (TEXT), `last_backup_result` (TEXT), `next_backup_time` (TEXT), `last_check_time` (TEXT), `backup_history` (TEXT), `retry_count` (INTEGER DEFAULT 0), `created_at` (TEXT), `updated_at` (TEXT). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
+| `migrate_tags_to_id_system()` | Migrate all tag references from name-based to UUID-based system. Assigns UUIDs to tag registry entries, converts chit tags from names to IDs, converts recent_tags/custom_view_filters/shared_tags/kiosk_selected_tags/omni_locked_filters/rules from names to IDs, creates entries for orphaned names. Idempotent (detects already-converted values via UUID regex). Transactional (rolls back on failure) |
+| `migrate_add_badges_table()` | Create `badges` table with columns: id (TEXT PK), chit_id (TEXT NOT NULL), category (TEXT NOT NULL), provider_name (TEXT NOT NULL), code (TEXT NOT NULL), url (TEXT NOT NULL), icon (TEXT), label (TEXT NOT NULL), status (TEXT NOT NULL DEFAULT 'active'), detected_at (TEXT NOT NULL), last_updated_at (TEXT NOT NULL), completed_at (TEXT), last_email_subject (TEXT), UNIQUE(provider_name, code). Creates indexes on status, category, and (provider_name, code). Adds `badges_completed_window` (TEXT DEFAULT '3') column to settings table. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -480,7 +488,8 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | Function | Description |
 |----------|-------------|
 | `validate_timezone(tz_value)` | Validate that a timezone string is a recognized IANA timezone. Returns True for valid IANA values or None; False for invalid non-null values. Uses `zoneinfo.available_timezones()` |
-| `_strip_reserved_tags(tags)` | Remove user-submitted tags with reserved `CWOC_System/` prefix |
+| `_strip_reserved_tags(tags)` | Remove user-submitted tags with reserved `CWOC_System/` prefix. Uses `is_system_tag()` for consistent detection |
+| `_process_incoming_tags(conn, user_id, tags, chit, tag_registry)` | Process incoming tags on chit save: strip system tags, separate UUIDs from new name strings, auto-create registry entries for new names via `ensure_tags_in_settings()`, deduplicate IDs, merge with computed system tags. Returns final tags list (UUIDs + system name strings) |
 | `_validate_tag_name(name)` | Return `False` if tag name uses reserved prefix |
 | `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs |
 | `_validate_nest_thread_id(cursor, chit)` | Validate `nest_thread_id` on save — if non-null, verifies the referenced chit exists and is an email chit (`email_message_id IS NOT NULL OR email_status IS NOT NULL`); rejects nest on email chits themselves; returns 422 on invalid |
@@ -672,6 +681,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /wall-station` | `wall_station_redirect()` | Legacy redirect → `/kiosk` |
 | `GET /api/wall-station` | `wall_station_api_redirect()` | Legacy redirect → `/api/kiosk` |
 | `GET /maps` | `maps_page()` | Serve `maps.html` — interactive Leaflet map of chits with locations |
+| `GET /about` | `about_page()` | Serve `about.html` — About & Buy Me a Coffee page |
 
 **Internal helpers:**
 
@@ -1392,6 +1402,93 @@ Provides endpoints for creating device tokens (mobile app authentication), listi
 | `DeviceTokenRequest` | Create device token request — `username` (str), `password` (str), `device_name` (Optional[str], default "Unknown Device") |
 | `DeviceRenameRequest` | Rename device request — `device_name` (str) |
 
+### 1.52 `src/backend/routes/backup.py` — Restic Backup Integration
+
+Provides backup configuration management, credential encryption/decryption, repository URL construction, scheduled backups, snapshot management, restore, prune, and status checking. All endpoints are admin-only (via `require_admin`). Uses Fernet encryption (from `cryptography` package) for credential storage, with base64 fallback for dev environments. Reuses the existing `email.key` file for encryption.
+
+**Constants:**
+
+| Symbol | Description |
+|--------|-------------|
+| `PRE_BACKUP_DB_PATH` | Path to the temporary pre-backup database copy (`/tmp/cwoc-pre-backup.db`) |
+| `_SENSITIVE_ENV_KEYS` | Frozenset of environment variable names that must never be logged (RESTIC_PASSWORD, AWS_ACCESS_KEY_ID, etc.) |
+| `_PASSWORD_MASK` | Mask string (`••••••••`) used to hide passwords in API responses |
+| `_backup_lock` | `asyncio.Lock` preventing concurrent backup operations |
+
+**Routes:**
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/backup/config` | `get_backup_config(request)` | Return current backup configuration with passwords masked |
+| `POST /api/backup/config` | `save_backup_config(request)` | Save or update backup configuration; preserves masked passwords from existing config |
+| `POST /api/backup/run` | `run_backup_now(request)` | Trigger an immediate backup operation |
+| `GET /api/backup/snapshots` | `get_backup_snapshots(request)` | List all snapshots in the backup repository |
+| `GET /api/backup/status` | `get_backup_status(request)` | Check repository health by running `restic check` |
+| `GET /api/backup/info` | `get_backup_info(request)` | Return current backup status information at a glance (last backup time, result, next scheduled, repo type) |
+| `POST /api/backup/restore` | `restore_snapshot(request)` | Restore files from a specific backup snapshot |
+| `POST /api/backup/prune` | `prune_snapshots(request)` | Run restic forget --prune with configured retention flags |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_get_key_path()` | Return the appropriate Fernet key file path (production or dev) |
+| `_get_or_create_fernet_key()` | Load or generate the Fernet encryption key |
+| `_get_fernet()` | Return a Fernet instance for encrypt/decrypt operations |
+| `_encrypt_credential(value)` | Encrypt a credential string using Fernet (or base64 fallback) |
+| `_decrypt_credential(value)` | Decrypt a credential string using Fernet (or base64 fallback) |
+| `_load_backup_config()` | Load backup configuration from the `backup_config` table, decrypting credentials |
+| `_save_backup_config(config)` | Save backup configuration to the `backup_config` table, encrypting credentials |
+| `_build_repo_url(config)` | Construct the restic repository URL from config (supports local, sftp, s3, b2, rest, azure, gs) |
+| `_get_credential_env_vars(config)` | Build environment variable dict for restic subprocess (backend-specific credentials) |
+| `_check_restic_available()` | Check if restic binary is available and return version info, or None if not found |
+| `_categorize_restic_error(result)` | Categorize a restic error into user-friendly error types (auth, network, repo_not_found, locked, etc.) |
+| `_run_restic_command(args, config, timeout)` | Execute a restic subprocess with proper environment variables and timeout handling |
+| `_create_pre_backup_copy()` | Create a consistent SQLite backup copy before running restic (uses `.backup` command) |
+| `_send_backup_notification(config, result)` | Send backup result notifications via ntfy to configured recipients |
+| `_get_notification_recipients(admins)` | Determine notification recipient user IDs from admin list |
+| `_format_notification_body(operation, result)` | Format a human-readable notification body for backup operations |
+| `_run_backup(config)` | Execute a full backup operation: acquire lock, create DB copy, run restic, clean up, notify |
+| `_config_schedule_hash(config)` | Compute a hash of schedule-relevant config fields for change detection |
+| `_calculate_next_run(config)` | Calculate the next scheduled backup time based on frequency and schedule_time |
+| `_backup_scheduler_loop()` | Background async loop — checks schedule, runs backups at configured times, handles retries |
+| `start_backup_scheduler()` | Start the backup scheduler background task |
+| `_parse_snapshots_removed(output)` | Parse the number of snapshots removed from restic forget output |
+| `_parse_space_reclaimed(output)` | Parse the space reclaimed string from restic prune output |
+| `_format_bytes(num_bytes)` | Format byte count into human-readable string (B, KB, MB, GB, TB) |
+
+### 1.53 `src/backend/badge_detectors.py` — Python Smart Link Detector Registry
+
+Python port of the smart link detector registry from `shared-smart-links.js`. Scans email text (subject + body_text + from) for recognizable patterns (tracking numbers, flights, hotels, rentals, events, restaurants, transit, orders) and returns actionable badge matches. Respects user's `smart_actions_config` for disabled detectors/categories and custom detectors.
+
+| Symbol | Description |
+|--------|-------------|
+| `BUILT_IN_DETECTORS` | List of all built-in detector dicts — Package (UPS, FedEx, USPS, DHL, Amazon, UniUni, OnTrac, LaserShip), Flight, Hotel (Marriott, Hilton, IHG, Hyatt, Airbnb, Booking.com, VRBO, Wyndham), Rental (Enterprise, Hertz, Avis/Budget, Turo), Event (Ticketmaster, Eventbrite, AXS, StubHub, SeatGeek), Restaurant (OpenTable, Resy), Transit (Uber, Lyft), Order (Amazon, Apple, Best Buy, Walmart, Target) |
+| `_compile_custom_detectors(custom_defs)` | Compile user-defined custom detector definitions into detector dicts with compiled regex patterns |
+| `_load_smart_actions_config(settings)` | Parse the `smart_actions_config` JSON from settings; returns dict with `disabledCategories`, `disabledDetectors`, `customDetectors` |
+| `detect_badges(chit, settings=None)` | Run all enabled detectors against email text fields (subject + body_text + from) and return list of match dicts with category, provider_name, code, url, icon, label. Deduplicates by (provider_name, code) |
+
+### 1.54 `src/backend/badge_integration.py` — Badge Detection Integration
+
+Hooks badge detection into the email ingestion pipeline. Runs `detect_badges()` against email chit text, UPSERTs matches into the badges table (dedup by provider_name + code), and implements email-based completion for Package badges (delivery keywords).
+
+| Symbol | Description |
+|--------|-------------|
+| `DELIVERY_KEYWORDS` | List of delivery-related keyword strings for Package badge auto-completion |
+| `_check_delivery_completion(text)` | Check if email text contains delivery-related keywords (case-insensitive). Returns bool |
+| `_upsert_badge(cursor, chit_id, match, email_subject)` | UPSERT a single badge into the badges table using INSERT ... ON CONFLICT(provider_name, code) DO UPDATE. Handles both standard insert (active) and completion insert (completed) |
+| `process_badges_for_chit(chit_data, owner_id, cursor=None)` | Main entry point — run badge detection on an email chit and UPSERT matches. Only processes email chits. Returns number of badges upserted |
+| `process_badges_batch(email_chits, owner_id)` | Batch processing for email sync — uses a single DB connection for efficiency. Returns total badges upserted |
+
+### 1.55 `src/backend/routes/badges.py` — Badges API Routes
+
+Provides endpoints for listing badges (active + recently completed) and dismissing individual badges. Authentication via AuthMiddleware.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/badges` | `get_badges(request, completed_window)` | Return all active badges plus completed/dismissed badges within the window. Query param: `completed_window` (days or "all"). Response: `{ badges: [...], counts: { active: N, completed: N } }`. Sorted by category, then last_updated_at descending |
+| `POST /api/badges/{badge_id}/dismiss` | `dismiss_badge(badge_id, request)` | Set badge status=dismissed, completed_at=now. Returns updated badge object. Verifies badge belongs to authenticated user via chit ownership |
+
 ---
 
 ## 2. Frontend JavaScript
@@ -1445,6 +1542,7 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
 | `cwocPromptModal(title, placeholder, onConfirm, opts)` | Show a parchment-styled input modal (replaces browser `prompt()`); calls `onConfirm(value)` when user submits |
 | `cwocUnsavedModal(opts)` | Show a three-button unsaved-changes modal (Save/Discard/Cancel); returns Promise resolving to `'save'`, `'discard'`, or `'cancel'`; opts: `message`, `saveLabel`, `discardLabel`, `cancelLabel` |
+| `_cwocShowAboutModal()` | Show the About CWOC modal with app info, creator credit, version, and Buy Me a Coffee link. Accessible from sidebar footer, dashboard footer, secondary page footers, and help page index |
 | `cwocChitPickerModal(options)` | Shared chit picker modal (table with search, status/priority filters, multi-select checkboxes). Options: `title`, `confirmLabel`, `onConfirm(selectedChits)`, `filterChits(chit)→bool`, `disabledIds`, `preSelectedIds`, `beforeSelect(id)→Promise<bool>`, `onItemDblClick(chit)` |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
 | `formatDate(date)` | Format a Date as `YYYY-Mon-DD` string |
@@ -1563,20 +1661,27 @@ Calendar display helpers, drag interactions, multi-day rendering, and pinch zoom
 
 #### shared-tags.js
 
-Tag tree utilities, filtering, inline tag creation, system tag detection, and chit link resolution.
+Tag tree utilities, filtering, inline tag creation, system tag detection, chit link resolution, and tag ID registry maps.
 
 | Function | Description |
 |----------|-------------|
+| `_tagIdToObj` | Global map: UUID → full tag object {id, name, color, fontColor, favorite} |
+| `_tagNameToId` | Global map: lowercase tag name → UUID |
+| `_rebuildTagMaps(tags)` | Rebuild both ID lookup maps from the tags array (called on every settings load) |
+| `getTagById(id)` | Get the full tag object for a given Tag_ID, or null |
+| `getTagIdByName(name)` | Get the Tag_ID for a given tag name (case-insensitive), or null |
+| `resolveTagId(id)` | Resolve a Tag_ID to its display name, or "[unknown tag]" if not found |
 | `_postSettingsWithRetry(body)` | POST to /api/settings with 401 retry — checks auth and retries once on 401 |
 | `buildTagTree(flatTags)` | Build a nested tag tree from a flat array of tag objects |
 | `flattenTagTree(tree, originalNames)` | Flatten a tag tree back to a flat list of leaf tag objects |
-| `matchesTagFilter(chitTags, filterTag)` | Check if a chit's tags match a filter tag (including descendants) |
-| `renderTagTree(container, tree, selectedTags, onToggle, opts)` | Render a tag tree as an expandable/collapsible HTML tree with checkboxes; opts.onSelectOnly enables Shift+Click to select only one tag |
-| `trackRecentTag(tagPath)` | Track a tag as recently used (session-level, max 3) |
-| `getRecentTags()` | Get the list of recently used tags (up to 3) |
-| `createTagInline(name, opts)` | Create a tag inline — adds it to settings if it doesn't already exist (partial update, tags only) |
-| `updateTagInline(oldName, tagData)` | Update an existing tag in settings (rename, recolor, favorite) — partial update |
-| `deleteTagInline(tagName)` | Delete a tag and sub-tags from settings — partial update |
+| `matchesTagFilter(chitTags, filterTags)` | Check if a chit's tags (objects or strings) match any filter Tag_ID(s) with hierarchical name fallback |
+| `renderTagTree(container, tree, selectedTags, onToggle, opts)` | Render a tag tree as expandable/collapsible HTML tree with checkboxes; selectedTags is Tag_ID array, onToggle passes Tag_ID; opts.onSelectOnly enables Shift+Click to select only one tag |
+| `buildTagPicker(container, selectedTags, opts)` | Build a full tag picker UI (search, favs/recents, tree, active panel); selectedTags is Tag_ID array, onToggle passes Tag_ID; returns { refresh(), getSelected() } |
+| `trackRecentTag(tagId)` | Track a tag as recently used by Tag_ID (UUID), max 5, persists to settings |
+| `getRecentTags()` | Get the list of recently used Tag_IDs (UUIDs, up to 5); callers resolve via getTagById()/resolveTagId() |
+| `createTagInline(name, opts)` | Create a tag inline — sends name to backend, gets UUID back; returns new tag's ID or false; rebuilds tag maps |
+| `updateTagInline(tagId, tagData)` | Update an existing tag in settings by Tag_ID (rename, recolor, favorite) — partial update, rebuilds tag maps |
+| `deleteTagInline(tagId)` | Delete a tag (by Tag_ID) and sub-tags from settings — partial update, rebuilds tag maps |
 | `SYSTEM_TAGS` | Array of system tag names that should not appear in user-facing tag lists |
 | `isSystemTag(tagName)` | Return true if a tag name is a system tag (flat or `CWOC_System/` prefix) |
 | `resolveChitLinks(html, allChits)` | Replace `[[title]]` patterns in HTML with links to matching chits |
@@ -2664,6 +2769,10 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `toggleNotesViewMode(event)` | Toggle between edit (textarea) and rendered (markdown) views for notes |
 | `copyNotesToClipboard(event, source)` | Copy notes text to clipboard from main textarea or modal |
 | `downloadNotes(event, source)` | Download notes as a `.md` file named after the chit title |
+| `_uploadFileAsNote(event)` | Trigger the hidden file input to upload a text file as note content |
+| `_handleNotesFileUpload(input)` | Handle file selection: read as text, reject files over 5 MB |
+| `_applyUploadedNoteContent(content, filename)` | Apply uploaded content — sets directly if empty, or prompts append/replace |
+| `_setNoteContent(text)` | Set note content in main textarea, rendered view, and modal (if open); marks unsaved |
 | `openNotesModal(event)` | Open the fullscreen notes editing modal, pre-populated with current note text |
 | `closeNotesModal(save)` | Close the notes modal; if save is true, copy modal text back to main textarea (from whichever mode is active) |
 | `toggleModalNotesRender()` | Toggle between edit and rendered views inside the notes modal (Edit/Render mode) |
@@ -2811,11 +2920,9 @@ Color zone: swatches, custom colors, background tinting.
 
 | Symbol | Description |
 |--------|-------------|
+| `_initEditorColorPicker()` | Initialize the editor color picker using the shared cwocRenderColorPicker; renders all default + custom swatches |
 | `_fetchCustomColors()` | Fetch custom colors from user settings; returns normalized `[{hex, name}]` array |
 | `_setColor(hex, name)` | Set the chit color — updates hidden input, preview, editor background, and swatch selection |
-| `_updateColorPreview()` | Sync the color preview element, editor background, and swatch highlights with the current color value |
-| `_renderCustomColors(customColors)` | Render custom color swatches into the `#custom-colors` container |
-| `_attachColorSwatchListeners()` | Attach click listeners to all `.color-swatch` elements to set color on click |
 
 #### editor-health.js
 
@@ -3164,16 +3271,23 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `MAX_INDENT_LEVEL` | Maximum nesting depth for checklist items (4) |
 | `Checklist` | Class managing a checklist UI with nested items, drag-drop reorder, inline editing, and inline undo countdown |
 | `Checklist.constructor(container, initialItems, onChangeCallback)` | Initialize checklist with container, optional items, and change callback |
-| `Checklist.init()` | Create input field and header buttons, then render |
+| `Checklist.init()` | Create input field, format toolbar, and header buttons, then render |
 | `Checklist.loadItems(itemsArray)` | Load checklist items from an array, replacing current items |
 | `Checklist.getChecklistData()` | Return a deep copy of current checklist items for JSON serialization |
-| `Checklist.createInput()` | Create the "Add new item" text input with Enter/Escape handlers |
+| `Checklist.createInput()` | Create the "Add new item" text input with Enter/Escape handlers and focus/blur toolbar management |
+| `Checklist._createFormatToolbar()` | Create desktop inline and mobile bottom-pinned format toolbars with markdown formatting buttons |
+| `Checklist._applyFormatToActiveTextarea(action)` | Apply a markdown format action to the currently active textarea or input |
+| `Checklist._showFormatToolbar()` | Show the appropriate format toolbar (desktop inline or mobile bottom-pinned) |
+| `Checklist._hideFormatToolbar()` | Hide all format toolbars and close dropdowns |
+| `Checklist._positionMobileToolbar()` | Position the mobile toolbar above the keyboard using visualViewport |
+| `Checklist._toggleMobileChecklistDropdown()` | Toggle the mobile heading dropdown menu |
+| `Checklist._closeMobileDropdowns()` | Close all mobile toolbar dropdown menus |
 | `Checklist._createHeaderButtons()` | Create "Clear Checked" button and count display in the zone header (with stopPropagation) |
 | `Checklist.addNewItem(text, level, checked, id)` | Add a new checklist item with optional level, checked state, and ID |
 | `Checklist.generateId()` | Generate a random item ID |
 | `Checklist.render()` | Re-render all checklist items — unchecked above, completed below (collapsible, collapsed by default) with ghost parents; updates count |
 | `Checklist.createItemElement(item, isCompleted, isGhost)` | Create a DOM element for a checklist item with checkbox, text, trash, and drag events |
-| `Checklist.startEditing(item, textSpan, clickEvent)` | Start inline editing — cursor positioned at click point via canvas measurement; Enter/Tab/Arrow key navigation |
+| `Checklist.startEditing(item, textSpan, clickEvent)` | Start inline editing — cursor positioned at click point via canvas measurement; Enter/Tab/Arrow key navigation; shows format toolbar |
 | `Checklist.toggleCheck(item, checked)` | Toggle an item's checked state and propagate to subtree; animates check-off with strikethrough + fade |
 | `Checklist.updateCheckedStateForSubtree(item, checked)` | Recursively set checked state on all children |
 | `Checklist.getParent(item)` | Find the parent item of a given item |
@@ -3194,6 +3308,9 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `Checklist._updateMultiSelectToolbar()` | Show/hide/update the multi-select batch action toolbar |
 | `Checklist._multiSelectSendToChit()` | Open send-to-chit modal for batch-selected items |
 | `_pasteClipboardAsChecklistItems(checklist)` | Async — read clipboard text and create each line as a checklist item (same parsing as note-to-checklist) |
+| `_uploadFileAsChecklistItems(checklist)` | Trigger hidden file input to upload a text file as checklist items |
+| `_handleChecklistFileUpload(input)` | Handle file selection: read as text, reject files over 5 MB, parse into items |
+| `_applyUploadedChecklistContent(checklist, text, filename)` | Parse uploaded text into checklist items using same logic as paste, with undo support |
 | `_copyIncompleteToClipboard(checklist)` | Copy all unchecked items to clipboard as markdown checklist lines |
 | `_prefetchSendItemChits()` | Pre-fetch chit list in background for instant send-item popup loading |
 
@@ -3333,6 +3450,11 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `closeDeleteModal()` | Close the delete confirmation modal |
 | `monitorChanges()` | Attach change/input listeners and MutationObservers to detect unsaved changes |
 | `_triggerJsonDownload(data, filename)` | Create a Blob from a data string and trigger a browser download |
+| `openExportDataModal()` | Open the Export Data modal |
+| `closeExportDataModal()` | Close the Export Data modal |
+| `openImportDataModal()` | Open the Import Data modal |
+| `closeImportDataModal()` | Close the Import Data modal |
+| `scrollToResticBackup()` | Scroll to the Restic Backup section and flash the toggle button |
 | `exportChitData()` | Export all chit data as a JSON file download via GET `/api/export/chits` |
 | `exportUserData()` | Export all user data (settings + contacts) as a JSON file download via GET `/api/export/userdata` |
 | `exportAllData()` | Export all data (chits + settings + contacts + alerts) as a single JSON file via GET `/api/export/all` |
@@ -3456,6 +3578,30 @@ Custom Filters & Sorting settings section — per-view custom filter/sort defaul
 | `_isSystemDefault(state)` | Check if a filter state equals system defaults |
 | `_saveCustomFilterModal()` | Save modal state and close |
 | `_resetCustomFilterModal()` | Reset modal to system defaults |
+
+#### settings-integrations.js
+
+Settings integrations section: Tailscale, Ntfy, Home Assistant, and Backup configuration panels.
+
+**Backup functions:**
+
+| Symbol | Description |
+|--------|-------------|
+| `toggleBackupSection()` | Toggle the backup section body visibility (enable/disable checkbox) |
+| `_backupUpdateHeaderIcon(status)` | Update the backup header icon based on status (enabled/disabled/error) |
+| `toggleBackupPasswordVisibility()` | Toggle backup repository password input between `type="password"` and `type="text"` |
+| `onBackupRepoTypeChange()` | Show/hide backend-specific credential fields based on selected repo type |
+| `onBackupScheduleChange()` | Show/hide schedule time row based on frequency (only for Daily and Weekly) |
+| `_backupFeedback(message, type)` | Show inline feedback message in the backup section |
+| `_gatherBackupConfig()` | Gather all backup form field values into a config object for saving |
+| `saveBackupConfig()` | Save backup configuration via POST `/api/backup/config` |
+| `backupNow()` | Trigger immediate backup via POST `/api/backup/run` |
+| `listBackupSnapshots()` | List snapshots via GET `/api/backup/snapshots` and render results |
+| `checkBackupStatus()` | Check repository status via GET `/api/backup/status` |
+| `backupRestore()` | Restore from a snapshot — opens snapshot selection, confirms, then POST `/api/backup/restore` |
+| `backupPrune()` | Prune old snapshots via POST `/api/backup/prune` |
+| `loadBackupConfig()` | Load and populate backup configuration form from GET `/api/backup/config` on page load |
+| `loadBackupInfo()` | Load backup status info from GET `/api/backup/info` and update header/summary display |
 
 #### people.js
 
@@ -3587,6 +3733,14 @@ Weather page: 16-day forecasts for all saved locations rendered as a scrollable 
 | `_wxExtractCity(address)` | Extract a city name from a full address string (e.g., "City, ST") |
 | `_wxBuildCityGroups(chits, savedLocations, forecastDates)` | Build city groups from chits at non-saved locations with date→title mapping |
 | `_wxAddCityRows(container, allChits, savedLocations, forecastDates, weekStartDay)` | Add city-based weather rows for chits at non-saved locations; fetch weather per city |
+
+#### about.js
+
+About page: displays version info fetched from the API.
+
+| Symbol | Description |
+|--------|-------------|
+| *(IIFE)* | Fetch version from `/api/version` and display in `#about-version-label` |
 
 #### attachments.js
 
@@ -3925,6 +4079,29 @@ Custom Objects Editor page: browse, create, edit, toggle, soft-delete, restore, 
 | `_coPreviewEvaluateConditionalDisplay(rule, settings)` | Evaluate conditional_display rule against user settings (pure function) |
 | `_coPreviewGetUnitLabel(obj, unitSystem)` | Get unit label based on user's unit system (pure function) |
 | `_coPreviewGetRangeHighlightClass(value, rangeMin, rangeMax)` | Determine CSS class for range highlighting (pure function) |
+
+#### badges.js
+
+Badges page logic: fetches and displays active/completed badges grouped by category, with staleness indicators, dismiss functionality, and sidebar controls for filtering and refresh.
+
+| Symbol | Description |
+|--------|-------------|
+| `_initBadgesPage()` | Entry point — fetch settings (24h mode, completed_window), fetch badges, render page |
+| `_initBadgesSidebar()` | Initialize sidebar controls (completed window dropdown, refresh button) |
+| `_injectBadgesSidebarControls()` | Inject sidebar HTML (Recently Completed dropdown, Refresh button, dashboard link) |
+| `_fetchAndRenderBadges()` | Fetch `GET /api/badges` with completed_window param and render all sections |
+| `_showBadgesError(message)` | Display an error message in the main content area |
+| `_renderAllCategories()` | Render all category sections (Package, Flight, Hotel, Rental, Event, Restaurant, Transit, Order) |
+| `_renderCategory(category)` | Render a single category section with badge cards or empty state |
+| `_renderCompletedSection()` | Render the "Recently Completed" section below active badges |
+| `_createBadgeCard(badge, isCompleted)` | Create a badge card DOM element with provider icon, name, code, subject, staleness, action button, view-chit link, dismiss button |
+| `_calculateStaleness(lastUpdatedAt)` | Calculate staleness from last_updated_at — returns `{ text, isWarning }` (⏱️ Xm/Xh/Xd format, warning if > 7 days) |
+| `_showStalenessTooltip(targetEl, lastUpdatedAt)` | Show tooltip with exact datetime on hover/focus (respects 24h setting) |
+| `_hideStalenessTooltip()` | Hide the staleness tooltip |
+| `_formatDateTimeForTooltip(date)` | Format a Date for tooltip display respecting user's 24h time preference |
+| `_dismissBadge(badgeId, cardEl)` | POST to `/api/badges/{id}/dismiss`, remove card with animation, update counts |
+| `_onCompletedWindowChange()` | Handle completed window dropdown change — save to settings, re-fetch badges |
+| `_onRefreshClick()` | Refresh button handler — show spinner, POST `/api/email/check`, re-fetch badges |
 
 
 ## 3. Frontend CSS
@@ -4326,6 +4503,7 @@ The `#network-access-block` div inside the `#admin-section` `.settings-grid` pro
 | Function | Description |
 |----------|-------------|
 | `install_tailscale()` | Install Tailscale if not already present; uses `command -v tailscale` to check, runs official install script (`curl -fsSL https://tailscale.com/install.sh \| bash`); non-fatal on failure (`log_warn` + `return 0`); does NOT attempt `tailscale up` or `tailscale login` |
+| `install_restic()` | Install restic backup tool if not already present; uses `command -v restic` to check, installs via apt package manager; non-fatal on failure |
 | `deploy_ha_integration()` | Deploy HA custom integration to a user-specified HA custom_components path. Copies `ha_integration/custom_components/cwoc/` to the target directory. Offers update (overwrite) option for existing deployments. Displays reminder to restart Home Assistant after deployment |
 
 Called in both fresh-install and upgrade paths of `main()`, after `configure_https` and before `start_and_verify`.

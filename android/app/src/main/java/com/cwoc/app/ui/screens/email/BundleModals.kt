@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cwoc.app.data.remote.BundleDto
+import com.cwoc.app.ui.theme.ColorUtils
 import com.cwoc.app.ui.theme.CwocDialogDefaults
 import com.cwoc.app.ui.theme.CwocInputDefaults
 
@@ -47,24 +48,9 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
 
 /**
  * Predefined color swatches for bundle tab colors.
- * Includes a null entry for "None" (no color).
+ * Uses the unified CwocDefaultColors palette with a null entry for "None".
  */
-private val BUNDLE_COLOR_PALETTE = listOf(
-    null,          // None
-    "#C66B6B",     // Red
-    "#D68A59",     // Orange
-    "#E3B23C",     // Yellow/Gold
-    "#8A9A5B",     // Green
-    "#6B8299",     // Blue
-    "#8B6B99",     // Purple
-    "#C77B8B",     // Pink
-    "#B85C5C",     // Darker Red
-    "#C47A3F",     // Darker Orange
-    "#7A8A4B",     // Darker Green
-    "#5B7289",     // Darker Blue
-    "#7B5B89",     // Darker Purple
-    "#996B4E"      // Brown
-)
+private val BUNDLE_COLOR_PALETTE: List<String?> = listOf(null) + ColorUtils.CwocDefaultColorHexes
 
 // ─── Create Bundle Modal ────────────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
-    get_next_sync_version,
+    get_next_sync_version, is_system_tag, chit_cache,
 )
 from src.backend.routes.audit import (
     insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune,
@@ -166,14 +166,126 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=403, detail="Cannot modify another user's settings")
 
     # Validate reserved tag namespace
-    RESERVED_TAG_PREFIX = "cwoc_system/"
     if "tags" in body and body["tags"]:
         for tag in body["tags"]:
-            if isinstance(tag, dict) and tag.get("name", "").lower().startswith(RESERVED_TAG_PREFIX):
-                raise HTTPException(
+            if isinstance(tag, dict) and is_system_tag(tag.get("name", "")):
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
                     status_code=400,
-                    detail="Tags starting with 'CWOC_System/' are reserved for system use and cannot be created manually."
+                    content={"error": "Tags starting with 'CWOC_System/' or 'Habits/' are reserved for system use and cannot be registered."}
                 )
+
+    # ── Tag processing: ID assignment, validation, cascade rename ──
+    _tags_renamed = False
+    if "tags" in body and isinstance(body["tags"], list):
+        incoming_tags = body["tags"]
+
+        # A. ID Assignment — assign UUID v4 to any tag missing an id
+        for tag in incoming_tags:
+            if isinstance(tag, dict) and (not tag.get("id")):
+                tag["id"] = str(uuid4())
+
+        # C. Validation — Name Length (1-200 chars after trim)
+        for tag in incoming_tags:
+            if isinstance(tag, dict):
+                name = (tag.get("name") or "").strip()
+                tag["name"] = name  # normalize trimmed name back
+                if len(name) < 1 or len(name) > 200:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": f"Tag name must be 1-200 characters. Invalid: '{tag.get('name', '')}'"}
+                    )
+
+        # D. Validation — System Tag Prefix (already checked above, but re-check after trim)
+        for tag in incoming_tags:
+            if isinstance(tag, dict) and is_system_tag(tag.get("name", "")):
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "Tags starting with 'CWOC_System/' or 'Habits/' are reserved for system use and cannot be registered."}
+                )
+
+        # B. Validation — Duplicate Names (case-insensitive)
+        seen_names = {}
+        duplicates = []
+        for tag in incoming_tags:
+            if isinstance(tag, dict):
+                lower_name = tag.get("name", "").lower()
+                if lower_name in seen_names:
+                    if lower_name not in [d.lower() for d in duplicates]:
+                        duplicates.append(tag.get("name", ""))
+                else:
+                    seen_names[lower_name] = True
+        if duplicates:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Duplicate tag name(s): {', '.join(duplicates)}"}
+            )
+
+        # E. Cascade Parent Rename — compare incoming vs old tags by ID
+        # Load old tags from DB to detect renames
+        old_tags = []
+        try:
+            conn_tmp = sqlite3.connect(DB_PATH)
+            cur_tmp = conn_tmp.cursor()
+            cur_tmp.execute("SELECT tags FROM settings WHERE user_id = ?", (authenticated_user_id,))
+            row_tmp = cur_tmp.fetchone()
+            if row_tmp and row_tmp[0]:
+                old_tags = deserialize_json_field(row_tmp[0]) or []
+            conn_tmp.close()
+        except Exception:
+            pass
+
+        # Build old ID→name map
+        old_id_to_name = {}
+        for tag in old_tags:
+            if isinstance(tag, dict) and tag.get("id"):
+                old_id_to_name[tag["id"]] = tag.get("name", "")
+
+        # Detect renames and apply cascade
+        renames = {}  # old_name → new_name
+        for tag in incoming_tags:
+            if isinstance(tag, dict) and tag.get("id"):
+                tag_id = tag["id"]
+                new_name = tag.get("name", "")
+                old_name = old_id_to_name.get(tag_id)
+                if old_name is not None and old_name != new_name:
+                    renames[old_name] = new_name
+
+        # Apply cascade: update child tag names for each rename
+        if renames:
+            _tags_renamed = True
+            for old_prefix, new_prefix in renames.items():
+                child_prefix = old_prefix + "/"
+                for tag in incoming_tags:
+                    if isinstance(tag, dict):
+                        tag_name = tag.get("name", "")
+                        if tag_name.startswith(child_prefix):
+                            tag["name"] = new_prefix + "/" + tag_name[len(child_prefix):]
+
+        # F. Reject Rename on Path Collision — check for collisions after cascade
+        if renames:
+            post_rename_names = {}
+            collisions = []
+            for tag in incoming_tags:
+                if isinstance(tag, dict):
+                    lower_name = tag.get("name", "").lower()
+                    if lower_name in post_rename_names:
+                        if lower_name not in [c.lower() for c in collisions]:
+                            collisions.append(tag.get("name", ""))
+                    else:
+                        post_rename_names[lower_name] = True
+            if collisions:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": f"Rename would cause path collision(s): {', '.join(collisions)}"}
+                )
+
+        # Update body with processed tags
+        body["tags"] = incoming_tags
 
     # Validate timezone fields against IANA timezone database
     _valid_timezones = available_timezones()
@@ -208,7 +320,8 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         "week_start_day", "work_start_hour", "work_end_hour", "work_days",
         "enabled_periods", "custom_days_count", "all_view_start_hour",
         "all_view_end_hour", "day_scroll_to_hour", "username",
-        "audit_log_max_days", "audit_log_max_mb", "default_notifications",
+        "audit_log_max_days", "audit_log_max_mb", "log_max_days", "log_max_mb",
+        "default_notifications",
         "unit_system", "habits_success_window", "overdue_border_color",
         "blocked_border_color", "shared_tags", "kiosk_users", "hide_declined",
         "default_show_habits_on_calendar", "map_default_lat", "map_default_lon",
@@ -221,7 +334,7 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
         "omni_locked_filters", "omni_hst_clock_mode", "omni_email_count",
         "omni_normalize_colors", "custom_view_filters",
         "default_timezone", "timezone_override",
-        "default_view",
+        "default_view", "badges_completed_window",
         # Migration 7→8 fields (Android parity)
         "clock_orientation", "hidden_views", "combine_alerts",
         "projects_show_child_count", "projects_show_checklist_count",
@@ -349,12 +462,28 @@ async def save_settings(request: Request, background_tasks: BackgroundTasks):
 
         conn.commit()
 
+        # G. Invalidate chit cache on tag rename — cached responses contain resolved names
+        if _tags_renamed:
+            try:
+                chit_cache.invalidate(authenticated_user_id)
+                logger.info(f"Chit cache invalidated for user '{authenticated_user_id}' due to tag rename")
+            except Exception as e:
+                logger.error(f"Failed to invalidate chit cache on tag rename: {str(e)}")
+
         # Auto-prune audit log if limits changed
         try:
             if "audit_log_max_days" in update_dict or "audit_log_max_mb" in update_dict:
                 _run_auto_prune()
         except Exception as e:
             logger.error(f"Auto-prune after settings save failed: {str(e)}")
+
+        # Auto-prune client/update logs if limits changed
+        try:
+            if "log_max_days" in update_dict or "log_max_mb" in update_dict:
+                from src.backend.routes.client_log import _maybe_rotate
+                _maybe_rotate()
+        except Exception as e:
+            logger.error(f"Log prune after settings save failed: {str(e)}")
 
         # ── Timezone change detection: recalculate floating alerts ──
         # If timezone_override or default_timezone changed, trigger recalculation

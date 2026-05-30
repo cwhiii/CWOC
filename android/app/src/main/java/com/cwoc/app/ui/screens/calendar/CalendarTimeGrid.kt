@@ -90,6 +90,7 @@ fun DayTimeGrid(
     hourStart: Int = 0,
     hourEnd: Int = 24,
     currentUsername: String? = null,
+    currentUserId: String = "",
     onEventTap: (ChitEntity) -> Unit = {},
     onEventLongPress: (ChitEntity) -> Unit = {},
     onEventDragEnd: (String, String?, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
@@ -263,6 +264,7 @@ fun DayTimeGrid(
                             snapMinutes = snapMinutes,
                             hourStart = hourStart,
                             date = date,
+                            currentUserId = currentUserId,
                             onTap = { onEventTap(le.event) },
                             onLongPress = { onEventLongPress(le.event) },
                             onDragEnd = onEventDragEnd,
@@ -290,6 +292,7 @@ private fun DayEventCard(
     snapMinutes: Int,
     hourStart: Int,
     date: LocalDate,
+    currentUserId: String = "",
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onDragEnd: (String, String?, String?, String?, String?) -> Unit,
@@ -299,9 +302,11 @@ private fun DayEventCard(
     val textColor = CwocChitCardStyle.contrastTextColor(eventColor)
     val isCompleted = event.status == "Complete"
     val isDeclined = !event.shares.isNullOrBlank() && event.shares.contains("\"rsvp_status\":\"declined\"")
-    // Viewer-role check: if shares contains viewer role for any user, disable drag
-    // (simplified — full check would need current user ID)
-    val isViewerRole = !event.shares.isNullOrBlank() && event.shares.contains("\"role\":\"viewer\"") && event.ownerId != null
+    // Viewer-role check: use SharingUtils for proper per-user role resolution
+    val isViewerRole = remember(event.shares, event.ownerId, event.assignedTo, currentUserId) {
+        if (currentUserId.isBlank()) false
+        else com.cwoc.app.domain.sharing.SharingUtils.isViewerRole(event, currentUserId)
+    }
     val density = LocalDensity.current
 
     var dragOffsetY by remember { mutableFloatStateOf(0f) }

@@ -61,8 +61,8 @@ import com.cwoc.app.ui.theme.CwocInputDefaults
  * Validates: Requirements 4.2, 4.3, 4.5, 4.6
  *
  * @param allTags The full tag tree (root-level nodes with children)
- * @param selectedTags List of currently selected tag full paths
- * @param onTagToggled Callback when a tag is toggled (passes the tag's fullPath)
+ * @param selectedTags List of currently selected tag IDs (UUIDs) or legacy full paths
+ * @param onTagToggled Callback when a tag is toggled (passes the tag's ID if available, else fullPath)
  * @param onTagCreated Callback when a new tag is created inline (passes the new tag name)
  * @param onDismiss Callback when the sheet is dismissed
  */
@@ -167,13 +167,15 @@ fun TagsPickerSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(favoriteTags, key = { it.fullPath }) { tag ->
-                        val isSelected = selectedTags.contains(tag.fullPath)
+                        // Use tag ID if available, otherwise fall back to fullPath
+                        val tagIdentifier = tag.id ?: tag.fullPath
+                        val isSelected = selectedTags.contains(tagIdentifier) || selectedTags.contains(tag.fullPath)
                         val chipColor = tag.color?.let { parseTagColor(it) }
                             ?: MaterialTheme.colorScheme.primaryContainer
 
                         FilterChip(
                             selected = isSelected,
-                            onClick = { onTagToggled(tag.fullPath) },
+                            onClick = { onTagToggled(tagIdentifier) },
                             label = { Text(tag.name) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = chipColor,
@@ -336,13 +338,15 @@ private fun androidx.compose.foundation.lazy.LazyListScope.renderTagTree(
         val isExpanded = expandedNodes.contains(node.fullPath) || isSearching
 
         item(key = node.fullPath) {
+            // Use tag ID if available, otherwise fall back to fullPath
+            val tagIdentifier = node.id ?: node.fullPath
             TagTreeRow(
                 node = node,
-                isSelected = selectedTags.contains(node.fullPath),
+                isSelected = selectedTags.contains(tagIdentifier) || selectedTags.contains(node.fullPath),
                 hasChildren = hasChildren,
                 isExpanded = isExpanded,
                 depth = depth,
-                onToggleSelect = { onTagToggled(node.fullPath) },
+                onToggleSelect = { onTagToggled(tagIdentifier) },
                 onToggleExpand = { onExpandToggle(node.fullPath) }
             )
         }

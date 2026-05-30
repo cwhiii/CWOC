@@ -7,7 +7,7 @@
 - [Troubleshooting](#troubleshooting)
 
 
-Ntfy is a lightweight push notification service that delivers alerts to your phone even when the browser is closed. CWOC runs its own Ntfy server alongside the main app — no third-party services needed. Notifications work for chit alarms, start times, and due dates.
+Ntfy is a lightweight push notification service that delivers alerts to your phone even when the browser is closed. CWOC runs its own [Ntfy](https://ntfy.sh/) server alongside the main app — no third-party services needed. Notifications work for chit alarms, start times, and due dates.
 
 ## Setup (One-Time)
 

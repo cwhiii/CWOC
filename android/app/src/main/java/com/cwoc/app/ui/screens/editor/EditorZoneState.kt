@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import com.cwoc.app.data.mapper.ChitFormState
 import com.cwoc.app.ui.screens.editor.zones.EDITOR_ZONE_ORDER
 import com.cwoc.app.ui.screens.editor.zones.EditorZone
+import com.cwoc.app.ui.screens.editor.zones.ChecklistOverviewItem
 import com.cwoc.app.ui.screens.editor.zones.SOURCE_TAB_ZONE_MAP
 import com.cwoc.app.ui.screens.editor.zones.ZONE_PREFILL_MAP
 import com.cwoc.app.ui.util.DateUtils
@@ -121,8 +122,10 @@ fun isZoneEmpty(zoneId: String, formState: ChitFormState): Boolean {
  * Build overview rows from the current form state.
  * Includes rows for populated fields, plus placeholder rows for prefill zones
  * when creating a new chit from a specific source tab.
+ *
+ * @param tagNameMap Optional map of tag ID (UUID) → display name for resolving tag IDs.
  */
-fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List<com.cwoc.app.ui.screens.editor.zones.OverviewRow> {
+fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null, tagNameMap: Map<String, String> = emptyMap()): List<com.cwoc.app.ui.screens.editor.zones.OverviewRow> {
     val rows = mutableListOf<com.cwoc.app.ui.screens.editor.zones.OverviewRow>()
     val prefillZoneIds = if (formState.isNew && sourceTab != null) {
         ZONE_PREFILL_MAP[sourceTab] ?: emptyList()
@@ -176,36 +179,44 @@ fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List
     if (!formState.checklist.isNullOrBlank()) {
         try {
             val items = org.json.JSONArray(formState.checklist)
-            val incomplete = mutableListOf<String>()
+            val incomplete = mutableListOf<ChecklistOverviewItem>()
             var totalChecked = 0
             for (i in 0 until items.length()) {
                 val item = items.getJSONObject(i)
                 val checked = item.optBoolean("checked", false)
+                val text = item.optString("text", "").trim()
                 if (checked) {
                     totalChecked++
-                } else {
-                    val text = item.optString("text", "").trim()
-                    if (text.isNotEmpty()) incomplete.add(text)
+                } else if (text.isNotEmpty()) {
+                    incomplete.add(ChecklistOverviewItem(
+                        index = i,
+                        text = if (text.length > 50) text.take(50) + "…" else text,
+                        checked = false
+                    ))
                 }
             }
-            val previewText = if (incomplete.isNotEmpty()) {
-                val lines = incomplete.take(4).map { t ->
-                    "☐ " + if (t.length > 50) t.take(50) + "…" else t
-                }.toMutableList()
-                if (incomplete.size > 4) lines.add("…${incomplete.size - 4} more")
-                if (totalChecked > 0) lines.add("✓ $totalChecked completed")
-                lines.joinToString("\n")
-            } else if (totalChecked > 0) {
-                "✓ All $totalChecked items complete"
-            } else {
-                "Checklist items"
+            val overflowText = buildString {
+                if (incomplete.size > 6) append("…${incomplete.size - 6} more")
+                if (totalChecked > 0) {
+                    if (isNotEmpty()) append(" • ")
+                    append("✓ $totalChecked completed")
+                }
             }
-            rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
-                icon = "☑️",
-                text = previewText,
-                targetZoneId = "checklistSection",
-                isMultiLine = incomplete.size > 1
-            ))
+            if (incomplete.isNotEmpty()) {
+                rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+                    icon = "☑️",
+                    text = overflowText,
+                    targetZoneId = "checklistSection",
+                    isMultiLine = true,
+                    checklistItems = incomplete.take(6)
+                ))
+            } else if (totalChecked > 0) {
+                rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+                    icon = "☑️",
+                    text = "✓ All $totalChecked items complete",
+                    targetZoneId = "checklistSection"
+                ))
+            }
         } catch (e: Exception) {
             rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
                 icon = "☑️",
@@ -223,7 +234,10 @@ fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List
     if (userTagsForOverview.isNotEmpty()) {
         rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
             icon = "🏷️",
-            text = userTagsForOverview.joinToString(", ") { it.substringAfterLast("/") },
+            text = userTagsForOverview.joinToString(", ") { tag ->
+                // Resolve UUID to display name via tagNameMap, or fall back to path leaf
+                tagNameMap[tag]?.substringAfterLast("/") ?: tag.substringAfterLast("/")
+            },
             targetZoneId = "tagsSection"
         ))
     }
@@ -270,6 +284,31 @@ fun buildOverviewRows(formState: ChitFormState, sourceTab: String? = null): List
             icon = "❤️",
             text = "Health indicators recorded",
             targetZoneId = "healthIndicatorsSection"
+        ))
+    }
+
+    // Habits
+    if (formState.habit) {
+        val habitText = buildString {
+            val goal = formState.habitGoal ?: 1
+            val success = formState.habitSuccess ?: 0
+            append("$success / $goal")
+            if (formState.habitResetPeriod != null) {
+                val period = formState.habitResetPeriod
+                val periodLabel = when {
+                    period.contains("DAILY", ignoreCase = true) -> "daily"
+                    period.contains("WEEKLY", ignoreCase = true) -> "weekly"
+                    period.contains("MONTHLY", ignoreCase = true) -> "monthly"
+                    period.contains("YEARLY", ignoreCase = true) -> "yearly"
+                    else -> period.substringAfter(":").lowercase()
+                }
+                append(" ($periodLabel)")
+            }
+        }
+        rows.add(com.cwoc.app.ui.screens.editor.zones.OverviewRow(
+            icon = "🎯",
+            text = habitText,
+            targetZoneId = "habitLogSection"
         ))
     }
 

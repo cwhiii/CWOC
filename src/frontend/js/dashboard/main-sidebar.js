@@ -454,7 +454,7 @@ function _getSelectedFilterValues(containerId, filterType) {
 
 function _getSelectedStatuses() { return _getSelectedFilterValues('status-multi', 'status'); }
 function _getSelectedLabels() {
-  // Use _sidebarTagSelection directly — contains only real tag names now.
+  // Use _sidebarTagSelection directly — contains Tag_IDs (UUID strings).
   return (window._sidebarTagSelection || []).slice();
 }
 function _getSelectedPriorities() { return _getSelectedFilterValues('priority-multi', 'priority'); }
@@ -509,7 +509,7 @@ function _buildTagFilterPanel() {
 
   CwocSidebarFilter({
     containerId: 'panel-label-options',
-    items: allTags.map(function(t) { return { name: t.name, favorite: !!t.favorite, color: t.color }; }),
+    items: allTags.map(function(t) { return { id: t.id, name: t.name, favorite: !!t.favorite, color: t.color }; }),
     selection: window._sidebarTagSelection,
     onChange: function() {
       _cwocUpdateTagVirtualOptions();
@@ -517,7 +517,8 @@ function _buildTagFilterPanel() {
       onFilterChange();
     },
     searchPlaceholder: 'Search tags...',
-    showColorBadge: true
+    showColorBadge: true,
+    useIdSelection: true
   });
 }
 
@@ -527,9 +528,9 @@ function _syncSidebarTagCheckboxes(container, tagObjects) {
   tagObjects.forEach(function(t) {
     var cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.value = t.name;
+    cb.value = t.id || t.name;
     cb.dataset.filter = 'label';
-    cb.checked = sel.includes(t.name);
+    cb.checked = sel.includes(t.id || t.name);
     cb.style.display = 'none';
     container.appendChild(cb);
   });
@@ -732,10 +733,11 @@ function _onTagToggled() {
 
 /**
  * Select ONLY the given tag, deselecting all others (Shift+Click handler).
+ * Accepts a Tag_ID (UUID string).
  */
-function _selectOnlyTag(fullPath) {
+function _selectOnlyTag(tagId) {
   window._sidebarTagSelection.length = 0;
-  window._sidebarTagSelection.push(fullPath);
+  window._sidebarTagSelection.push(tagId);
   _cwocUpdateTagVirtualOptions();
   var container = document.getElementById('label-multi');
   if (container) {

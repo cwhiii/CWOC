@@ -114,13 +114,8 @@
     _isProfileMode = params.get('mode') === 'profile';
     _profileUserId = params.get('user_id') || null;
 
-    // ── Color palette (matches chit editor) ─────────────────────────────
-    var _colorPalette = [
-        '#E3B23C', '#D4764E', '#D45B5B', '#C2185B', '#7B1FA2',
-        '#512DA8', '#303F9F', '#1976D2', '#0097A7', '#00897B',
-        '#388E3C', '#689F38', '#AFB42B', '#F9A825', '#FF8F00',
-        '#D84315', '#795548', '#546E7A', '#8D6E63', '#E91E63'
-    ];
+    // ── Color palette (uses shared cwocRenderColorPicker) ─────────────────
+    // No separate palette needed — cwocRenderColorPicker provides all defaults + custom colors
 
     // ── Init on DOM ready ───────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function () {
@@ -940,23 +935,12 @@
     function _initColorPicker() {
         var container = document.getElementById('colorSwatches');
         if (!container) return;
-        // Clear swatch
-        var clearBtn = document.createElement('span');
-        clearBtn.className = 'color-swatch';
-        clearBtn.style.background = 'linear-gradient(135deg, #fff 45%, #f00 45%, #f00 55%, #fff 55%)';
-        clearBtn.style.border = '1px solid #999';
-        clearBtn.title = 'No color';
-        clearBtn.addEventListener('click', function () { _selectColor(''); });
-        container.appendChild(clearBtn);
 
-        _colorPalette.forEach(function (hex) {
-            var swatch = document.createElement('span');
-            swatch.className = 'color-swatch';
-            swatch.style.backgroundColor = hex;
-            swatch.title = hex;
-            swatch.addEventListener('click', function () { _selectColor(hex); });
-            container.appendChild(swatch);
-        });
+        // Use the shared color picker — unified palette + custom colors
+        var currentColor = document.getElementById('colorHex')?.value || '';
+        cwocRenderColorPicker(container, currentColor, function(hex) {
+            _selectColor(hex);
+        }, { showNone: true });
 
         var hexInput = document.getElementById('colorHex');
         hexInput.addEventListener('input', function () {
@@ -983,10 +967,16 @@
             }
         }
 
-        // Update swatch selection
+        // Update swatch selection in the shared color picker
         var swatches = document.querySelectorAll('#colorSwatches .color-swatch');
+        var normalizedHex = (hex || '').toLowerCase();
         swatches.forEach(function (s) {
-            s.classList.toggle('selected', s.title === hex);
+            s.classList.remove('selected');
+            if (!normalizedHex && s.classList.contains('cwoc-color-none')) {
+                s.classList.add('selected');
+            } else if (normalizedHex && s.dataset.hex === normalizedHex) {
+                s.classList.add('selected');
+            }
         });
         if (_saveSystem) _saveSystem.markUnsaved();
     }
@@ -1446,6 +1436,9 @@
         // Show map for first address if available
         _showContactAddressMap(contact.addresses);
 
+        // Populate saved locations dropdown for addresses
+        _populateContactAddressesDropdown();
+
         // Show delete/QR buttons for existing contacts
         if (_contactId) {
             document.getElementById('deleteButton').style.display = '';
@@ -1660,6 +1653,69 @@
             '&layer=mapnik&marker=' + lat + ',' + lon + '" style="border:0;border-radius:5px;"></iframe>';
     }
     window._showContactAddressMap = _showContactAddressMap;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Saved Locations Dropdown for Addresses ───────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Populate the #contact-addresses-dropdown from cached saved locations.
+     * Supports section headers with optional dividers.
+     * When a location is selected, adds it as a new address entry.
+     */
+    async function _populateContactAddressesDropdown() {
+        var dropdown = document.getElementById('contact-addresses-dropdown');
+        if (!dropdown) return;
+
+        // Remove all options except the first null option
+        while (dropdown.options.length > 1) {
+            dropdown.remove(1);
+        }
+
+        var locations = await loadSavedLocations();
+        var currentSection = null;
+
+        locations.forEach(function (loc) {
+            // Check if this is a section header
+            if (loc.section) {
+                // Add optgroup for the section
+                var group = document.createElement('optgroup');
+                group.label = loc.section;
+                dropdown.appendChild(group);
+                currentSection = loc.section;
+            } else {
+                // Regular location option
+                var opt = document.createElement('option');
+                opt.value = loc.address || '';
+                opt.textContent = loc.label || loc.address || '(unnamed)';
+
+                // If we're in a section, add to the last optgroup
+                if (currentSection) {
+                    var groups = dropdown.querySelectorAll('optgroup');
+                    if (groups.length > 0) {
+                        groups[groups.length - 1].appendChild(opt);
+                        return;
+                    }
+                }
+
+                dropdown.appendChild(opt);
+            }
+        });
+
+        // Attach onchange handler
+        dropdown.onchange = function () {
+            var address = dropdown.value;
+            if (!address) return;
+
+            // Add as a new address entry
+            addMultiValueEntry('addresses', '', address);
+
+            // Reset dropdown
+            dropdown.selectedIndex = 0;
+        };
+    }
+
+    window._populateContactAddressesDropdown = _populateContactAddressesDropdown;
 
     // ═══════════════════════════════════════════════════════════════════════
     // ── Profile Mode ────────────────────────────────────────────────────

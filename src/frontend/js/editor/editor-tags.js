@@ -5,17 +5,25 @@
  * and recents, filtering by search, creating new tags inline, and navigating
  * to the settings page for tag management.
  *
+ * Internal state: window._currentTagSelection is an array of Tag_IDs (UUID strings).
+ * On load: extracts IDs from [{id, name}] API response (done in editor-init.js).
+ * On save: sends the Tag_ID array directly (editor-save.js reads _currentTagSelection).
+ * Display: resolves Tag_IDs to names/colors via getTagById() / resolveTagId().
+ *
  * Depends on: shared.js (getCachedSettings, setSaveButtonUnsaved, getPastelColor),
  *             shared-tags.js (buildTagTree, renderTagTree, trackRecentTag,
- *                             getRecentTags, createTagInline, isSystemTag)
+ *                             getRecentTags, createTagInline, isSystemTag,
+ *                             getTagById, resolveTagId, getTagIdByName)
  * Loaded before: editor-init.js, editor.js
  */
 
 async function _loadTags() {
   try {
-    return await loadAllTags();
+    var tags = await loadAllTags();
+    console.log('[editor-tags] _loadTags returned', tags ? tags.length : 0, 'tags');
+    return tags;
   } catch (error) {
-    console.error("Error fetching tags:", error);
+    console.error("[editor-tags] Error fetching tags:", error);
     return [];
   }
 }
@@ -23,8 +31,8 @@ async function _loadTags() {
 /**
  * Render tags from settings into the editor tag zone.
  * Populates the tag tree container and marks active tags.
- * @param {Array} tags - Array of {name, color} from settings
- * @param {Array} selectedTags - Array of tag name strings currently on the chit
+ * @param {Array} tags - Array of {id, name, color, fontColor, favorite} from settings
+ * @param {Array} selectedTags - Array of Tag_IDs (UUID strings) currently on the chit
  */
 function _renderTags(tags, selectedTags = []) {
   const treeContainer = document.getElementById("tagTreeContainer");
@@ -46,19 +54,29 @@ function _renderTags(tags, selectedTags = []) {
     return;
   }
 
-  // Build nested tree and render
-  const tree = buildTagTree(tags);
-  renderTagTree(treeContainer, tree, selectedTags, (fullPath, isNowSelected) => {
-    const idx = selectedTags.indexOf(fullPath);
+  // Build nested tree and render — selectedTags is Tag_ID array, onToggle receives Tag_ID
+  console.log('[editor-tags] _renderTags called with', tags.length, 'tags,', selectedTags.length, 'selected');
+  var tree;
+  try {
+    tree = buildTagTree(tags);
+  } catch (e) {
+    console.error('[editor-tags] buildTagTree threw:', e);
+    treeContainer.innerHTML = '<p style="color:red;">Error building tag tree. Check console.</p>';
+    return;
+  }
+  console.log('[editor-tags] buildTagTree returned', tree.length, 'root nodes');
+  try {
+  renderTagTree(treeContainer, tree, selectedTags, (tagId, isNowSelected) => {
+    const idx = selectedTags.indexOf(tagId);
     if (isNowSelected && idx === -1) {
-      selectedTags.push(fullPath);
-      trackRecentTag(fullPath);
+      selectedTags.push(tagId);
+      trackRecentTag(tagId);
       // Auto-color: if chit color is transparent and this is the first non-system tag, apply tag color
       const colorInput = document.getElementById('color');
       if (colorInput && (!colorInput.value || colorInput.value === 'transparent')) {
-        const tagObj = tags.find(t => t.name === fullPath);
-        if (tagObj && tagObj.color && !isSystemTag(fullPath)) {
-          _setColor(tagObj.color, fullPath.split('/').pop());
+        const tagObj = getTagById(tagId) || tags.find(t => (t.id || t.name) === tagId);
+        if (tagObj && tagObj.color && !isSystemTag(tagObj.name)) {
+          _setColor(tagObj.color, tagObj.name.split('/').pop());
         }
       }
     } else if (!isNowSelected && idx !== -1) {
@@ -67,13 +85,18 @@ function _renderTags(tags, selectedTags = []) {
     _renderTags(tags, selectedTags);
     setSaveButtonUnsaved();
   });
+  } catch (e) {
+    console.error('[editor-tags] renderTagTree threw:', e);
+    treeContainer.innerHTML = '<p style="color:red;">Error rendering tag tree: ' + e.message + '</p>';
+  }
 
-  // Favorites row
+  // Favorites row — display by name/color, select by Tag_ID (or name fallback)
   if (favContainer) {
     favContainer.innerHTML = "";
     tags.filter(t => t.favorite).forEach(tag => {
+      var tagKey = tag.id || tag.name;
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tagKey) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = "";
       const star = document.createElement('span');
       star.textContent = '★';
@@ -82,8 +105,8 @@ function _renderTags(tags, selectedTags = []) {
       chip.appendChild(document.createTextNode(tag.name.split('/').pop()));
       chip.title = tag.name;
       chip.addEventListener("click", () => {
-        const idx = selectedTags.indexOf(tag.name);
-        if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
+        const idx = selectedTags.indexOf(tagKey);
+        if (idx === -1) { selectedTags.push(tagKey); trackRecentTag(tagKey); }
         else selectedTags.splice(idx, 1);
         _renderTags(tags, selectedTags);
         setSaveButtonUnsaved();
@@ -92,20 +115,21 @@ function _renderTags(tags, selectedTags = []) {
     });
   }
 
-  // Recent row
+  // Recent row — recents are stored as Tag_IDs, resolve to display
   if (recentContainer) {
     recentContainer.innerHTML = "";
     const recents = getRecentTags();
-    recents.forEach(path => {
-      const tag = tags.find(t => t.name === path);
+    recents.forEach(tagId => {
+      const tag = getTagById(tagId) || tags.find(t => (t.id || t.name) === tagId);
       if (!tag) return;
+      var tagKey = tag.id || tag.name;
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tagKey) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = tag.name.split('/').pop();
       chip.title = tag.name;
       chip.addEventListener("click", () => {
-        const idx = selectedTags.indexOf(tag.name);
-        if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
+        const idx = selectedTags.indexOf(tagKey);
+        if (idx === -1) { selectedTags.push(tagKey); trackRecentTag(tagKey); }
         else selectedTags.splice(idx, 1);
         _renderTags(tags, selectedTags);
         setSaveButtonUnsaved();
@@ -114,19 +138,25 @@ function _renderTags(tags, selectedTags = []) {
     });
   }
 
-  // Render active tags panel (exclude system tags)
+  // Render active tags panel — resolve Tag_IDs to display names/colors
   activeContainer.innerHTML = "";
-  selectedTags.filter(t => !isSystemTag(t)).forEach(tagName => {
-    const tag = tags.find(t => t.name === tagName) || { name: tagName, color: null };
+  selectedTags.forEach(tagId => {
+    const tag = getTagById(tagId) || tags.find(t => (t.id || t.name) === tagId);
+    // Fallback for unknown tags or tags created inline (name string during transition)
+    var displayName = tag ? tag.name : resolveTagId(tagId);
+    // Skip system tags from display
+    if (isSystemTag(displayName)) return;
+    var tagColor = tag ? (tag.color || getPastelColor(tag.name)) : 'rgba(139,90,43,0.15)';
+    var tagFontColor = tag ? (tag.fontColor || '#2b1e0f') : '#2b1e0f';
+
     const chip = document.createElement("span");
-    const chipFg = tag.fontColor || '#2b1e0f';
-    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:${chipFg};padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;cursor:pointer;`;
-    chip.textContent = tag.name;
+    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tagColor};color:${tagFontColor};padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;cursor:pointer;`;
+    chip.textContent = displayName;
     chip.title = 'Click to edit tag';
 
     chip.addEventListener("click", (e) => {
       if (e.target.tagName === 'BUTTON') return;
-      editTag(e, tagName);
+      editTag(e, tagId);
     });
 
     const removeBtn = document.createElement("button");
@@ -135,7 +165,7 @@ function _renderTags(tags, selectedTags = []) {
     removeBtn.title = 'Remove from chit';
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const idx = selectedTags.indexOf(tagName);
+      const idx = selectedTags.indexOf(tagId);
       if (idx !== -1) selectedTags.splice(idx, 1);
       _renderTags(tags, selectedTags);
       setSaveButtonUnsaved();
@@ -145,7 +175,10 @@ function _renderTags(tags, selectedTags = []) {
     activeContainer.appendChild(chip);
   });
 
-  if (activeCount) activeCount.textContent = selectedTags.filter(t => !isSystemTag(t)).length;
+  if (activeCount) activeCount.textContent = selectedTags.filter(id => {
+    var tag = getTagById(id) || tags.find(t => (t.id || t.name) === id);
+    return !tag || !isSystemTag(tag.name);
+  }).length;
   window._currentTagSelection = selectedTags;
 }
 
@@ -190,11 +223,18 @@ function createTag(event) {
   if (event) event.stopPropagation();
   cwocTagModal.open(null, {
     onSave: function(tagData) {
-      // Add the new tag to the current selection
+      // After creation, the tag now has an ID assigned by the backend.
+      // Add the new tag's ID to the current selection.
       if (!window._currentTagSelection) window._currentTagSelection = [];
-      if (window._currentTagSelection.indexOf(tagData.name) === -1) {
-        window._currentTagSelection.push(tagData.name);
-        if (typeof trackRecentTag === 'function') trackRecentTag(tagData.name);
+      // tagData should have an id after the modal saves via createTagInline
+      var newTagId = tagData.id || null;
+      if (!newTagId && tagData.name) {
+        // Fallback: look up by name in the registry, or use name directly
+        newTagId = getTagIdByName(tagData.name) || tagData.name;
+      }
+      if (newTagId && window._currentTagSelection.indexOf(newTagId) === -1) {
+        window._currentTagSelection.push(newTagId);
+        if (typeof trackRecentTag === 'function') trackRecentTag(newTagId);
       }
       // Refresh the tag tree
       _invalidateSettingsCache();
@@ -204,24 +244,23 @@ function createTag(event) {
   });
 }
 
-/** Edit an existing tag — open the shared tag modal for editing */
-function editTag(event, tagName) {
+/** Edit an existing tag — open the shared tag modal for editing (by Tag_ID) */
+function editTag(event, tagId) {
   if (event) event.stopPropagation();
+  // Resolve Tag_ID to name for the modal (modal opens by name)
+  var tagName = resolveTagId(tagId);
   cwocTagModal.open(tagName, {
     onSave: function(tagData, oldName) {
-      // If renamed, update the selection
-      if (oldName && oldName !== tagData.name && window._currentTagSelection) {
-        var idx = window._currentTagSelection.indexOf(oldName);
-        if (idx !== -1) window._currentTagSelection[idx] = tagData.name;
-      }
+      // Tag was renamed — the ID stays the same, no selection update needed.
+      // Just refresh the display.
       _invalidateSettingsCache();
       _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
       setSaveButtonUnsaved();
     },
-    onDelete: function(tagName) {
-      // Remove from selection if present
+    onDelete: function(deletedTagName) {
+      // Remove the tag's ID from selection if present
       if (window._currentTagSelection) {
-        var idx = window._currentTagSelection.indexOf(tagName);
+        var idx = window._currentTagSelection.indexOf(tagId);
         if (idx !== -1) window._currentTagSelection.splice(idx, 1);
       }
       _invalidateSettingsCache();

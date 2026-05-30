@@ -129,6 +129,7 @@
             <div class="hotkey-panel-option" onclick="_pickNav('/profile')"><span class="panel-key">8</span><span class="panel-label">👤 Profile</span></div>
             <div class="hotkey-panel-option" onclick="_pickNav('/maps')"><span class="panel-key">9</span><span class="panel-label">🗺️ Maps</span></div>
             <div class="hotkey-panel-option" onclick="_pickNav('/frontend/html/custom-objects-editor.html')"><span class="panel-key"></span><span class="panel-label">🧊 Custom Objects</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/html/badges.html')"><span class="panel-key">B</span><span class="panel-label">🛡️ Badges</span></div>
             <div class="hotkey-panel-option cwoc-admin-only" id="nav-user-admin" onclick="_pickNav('/user-admin')" style="display:none;"><span class="panel-key">0</span><span class="panel-label">👥 User Admin</span></div>
             <div class="hotkey-panel-footer">Number keys to jump · ESC to cancel</div>
         </div>
@@ -362,7 +363,7 @@
                 <!-- Chits will be populated here -->
             </div>
         </div>
-        <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 C.W.&rsquo;s Omni Chits</span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+        <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright"><a href="#" onclick="event.preventDefault();_cwocShowAboutModal();" style="color:inherit;text-decoration:none;cursor:pointer;">&copy; 2026 C.W.&rsquo;s Omni Chits</a></span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
         <!-- ── Timeline Node Template ─────────────────────────────────────── -->
         <template id="tmpl-timeline-node">
             <div class="timeline-node">

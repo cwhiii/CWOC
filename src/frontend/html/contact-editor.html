@@ -150,6 +150,24 @@
             .multi-value-section h4 {
                 margin: 0 0 6px 0;
                 font-size: 0.9em;
+            }
+            /* Saved locations dropdown in multi-value sections */
+            .multi-value-section .saved-locations-row select {
+                width: 100%;
+                padding: 6px 8px;
+                border: 1px solid #8b5a2b;
+                border-radius: 4px;
+                background: #f5e6cc;
+                color: #2b1e0f;
+                font-family: inherit;
+                font-size: 13px;
+                cursor: pointer;
+            }
+            .multi-value-section .saved-locations-row select:focus {
+                outline: none;
+                border-color: #5c4033;
+                box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+            }
                 color: var(--aged-brown-dark);
                 text-transform: uppercase;
                 letter-spacing: 1px;
@@ -230,9 +248,15 @@
                 border: 2px solid transparent;
                 cursor: pointer;
                 transition: transform 0.1s;
+                padding: 0;
+                background: none;
+                font-size: 1.2em;
+                line-height: 28px;
+                text-align: center;
             }
             .color-swatch:hover { transform: scale(1.2); }
             .color-swatch.selected { border-color: var(--aged-brown-dark); box-shadow: 0 0 4px rgba(0,0,0,0.3); }
+            .color-swatch.cwoc-color-none { background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 10px 10px; border: 1px solid #999; }
 
             /* Image modal */
             .image-modal {
@@ -640,6 +664,11 @@
                             </div>
                             <div class="multi-value-section" id="addressesSection">
                                 <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
+                                <div class="saved-locations-row" style="margin-bottom: 8px;">
+                                    <select id="contact-addresses-dropdown" title="Select a saved location">
+                                        <option value="">— Saved Locations —</option>
+                                    </select>
+                                </div>
                                 <div class="multi-value-entries" id="addressesEntries"></div>
                                 <button type="button" class="add-entry-btn" onclick="addMultiValueEntry('addresses', 'Home')">
                                     <i class="fas fa-plus"></i> Add Address

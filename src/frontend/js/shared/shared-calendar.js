@@ -525,6 +525,14 @@ async function _onCalDragEnd(e) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit),
     });
+    if (!putResp.ok) {
+      var errText = await putResp.text();
+      console.error('Calendar drag save failed:', chit.id, putResp.status, errText);
+      if (typeof cwocToast === 'function') cwocToast('Failed to save: ' + (errText || putResp.status), 'error');
+      // Refresh to restore original position
+      if (typeof fetchChits === 'function') fetchChits();
+      return;
+    }
     console.log('Calendar drag saved:', chit.id, putResp.status, 'start:', chit.start_datetime, 'end:', chit.end_datetime, 'due:', chit.due_datetime);
     // Re-apply fade for past events after position change
     if (typeof _applyChitDisplayOptions === 'function') _applyChitDisplayOptions();
@@ -574,15 +582,28 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
       const parentChit = await parentResp.json();
       const newChit = { ...parentChit };
       newChit.id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+      // Clear recurrence fields — this is a standalone instance now
       newChit.recurrence_rule = null;
       newChit.recurrence_exceptions = null;
       newChit.recurrence = null;
       newChit.recurrence_id = null;
+      // Clear fields that shouldn't be inherited by a broken-off instance
+      newChit.nest_thread_id = null;  // Email thread nesting doesn't carry over
+      newChit.sync_version = null;    // Backend assigns new sync version
+      newChit.owner_id = null;        // Backend assigns from auth
+      newChit.owner_display_name = null;
+      newChit.owner_username = null;
       newChit.created_datetime = new Date().toISOString();
       newChit.modified_datetime = new Date().toISOString();
       Object.assign(newChit, newTimes);
       ['health_data', 'weather_data'].forEach(function(f) { if (newChit[f] && typeof newChit[f] === 'object') newChit[f] = JSON.stringify(newChit[f]); });
-      await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newChit) });
+      var postResp = await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newChit) });
+      if (!postResp.ok) {
+        var errText = await postResp.text();
+        console.error('Drag break-off POST failed:', postResp.status, errText);
+        if (typeof cwocToast === 'function') cwocToast('Failed to create instance: ' + (errText || postResp.status), 'error');
+        return;
+      }
       await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
     } catch (e) { console.error('Drag break-off failed:', e); }
     if (typeof fetchChits === 'function') fetchChits();
@@ -628,11 +649,18 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     }
 
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
-    await fetch(`/api/chits/${parentId}`, {
+    var putResp = await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit)
     });
+    if (!putResp.ok) {
+      var errText = await putResp.text();
+      console.error('All in series drag save failed:', parentId, putResp.status, errText);
+      if (typeof cwocToast === 'function') cwocToast('Failed to save series: ' + (errText || putResp.status), 'error');
+      if (typeof fetchChits === 'function') fetchChits();
+      return;
+    }
     // Show feedback about what changed
     if (rule && rule.byDay && rule.byDay.length > 0 && rule.freq === 'WEEKLY' && oldDayStr !== newDayStr) {
       var _dayNames = { SU:'Sunday', MO:'Monday', TU:'Tuesday', WE:'Wednesday', TH:'Thursday', FR:'Friday', SA:'Saturday' };
@@ -682,11 +710,18 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     }
 
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
-    await fetch(`/api/chits/${parentId}`, {
+    var putResp = await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit)
     });
+    if (!putResp.ok) {
+      var errText = await putResp.text();
+      console.error('All following drag save failed:', parentId, putResp.status, errText);
+      if (typeof cwocToast === 'function') cwocToast('Failed to save: ' + (errText || putResp.status), 'error');
+      if (typeof fetchChits === 'function') fetchChits();
+      return;
+    }
     if (typeof fetchChits === 'function') fetchChits();
     else if (typeof displayChits === 'function') displayChits();
   });
@@ -825,11 +860,16 @@ function enableMonthDrag(monthGrid, onDrop) {
         if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]);
       });
 
-      await fetch(`/api/chits/${chit.id}`, {
+      var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chit),
       });
+      if (!putResp.ok) {
+        var errText = await putResp.text();
+        console.error('[MonthDrag] Save failed:', chit.id, putResp.status, errText);
+        if (typeof cwocToast === 'function') cwocToast('Failed to save: ' + (errText || putResp.status), 'error');
+      }
       if (typeof fetchChits === 'function') fetchChits();
     } catch (err) {
       console.error('[MonthDrag] Save failed:', err);
@@ -912,11 +952,16 @@ function enableAllDayDrag(allDayEventsRow, days) {
         if (chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
       }
 
-      await fetch(`/api/chits/${chit.id}`, {
+      var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chit),
       });
+      if (!putResp.ok) {
+        var errText = await putResp.text();
+        console.error('All-day drag save failed:', chit.id, putResp.status, errText);
+        if (typeof cwocToast === 'function') cwocToast('Failed to save: ' + (errText || putResp.status), 'error');
+      }
       if (typeof fetchChits === 'function') fetchChits();
     } catch (err) {
       console.error('All-day drag failed:', err);

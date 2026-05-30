@@ -21,6 +21,9 @@ var _emailSubFilter = 'inbox';
 /* Multi-select state */
 var _emailSelectedIds = [];
 
+/* Unify mode — when true, hides bundles and shows all inbox emails in one flat list */
+var _emailUnifyMode = false;
+
 /* Last checked checkbox index for shift+click range selection */
 var _emailLastCheckedIndex = null;
 
@@ -605,6 +608,18 @@ function _emailSetPillSpinners(spinning) {
             }
         }
     }
+    // Also spin the Omni View email check button
+    var omniCheckBtn = document.getElementById('omni-email-check-btn');
+    if (omniCheckBtn) {
+        var omniIcon = omniCheckBtn.querySelector('.fas');
+        if (omniIcon) {
+            if (spinning) {
+                omniIcon.classList.add('fa-spin');
+            } else {
+                omniIcon.classList.remove('fa-spin');
+            }
+        }
+    }
 }
 
 /**
@@ -807,9 +822,9 @@ function displayEmailView(chitsToDisplay) {
         });
     }
 
-    // Apply bundle filter (only when sub-filter is "inbox" AND bundles data is loaded)
+    // Apply bundle filter (only when sub-filter is "inbox" AND bundles data is loaded AND unify mode is off)
     var allInboxChits = emailChits.slice(); // Keep full list for bundle tab counts
-    if (_emailSubFilter === 'inbox' && typeof _filterByBundle === 'function' && _emailActiveBundle && _emailBundlesData) {
+    if (!_emailUnifyMode && _emailSubFilter === 'inbox' && typeof _filterByBundle === 'function' && _emailActiveBundle && _emailBundlesData) {
         emailChits = _filterByBundle(emailChits, _emailActiveBundle);
     }
 
@@ -855,7 +870,7 @@ function displayEmailView(chitsToDisplay) {
 
     if (emailChits.length === 0) {
         // Still show bundle toolbar even when no emails match — use FULL inbox for counts
-        if (typeof _renderBundleToolbar === 'function') {
+        if (!_emailUnifyMode && typeof _renderBundleToolbar === 'function') {
             var bundleToolbar = _renderBundleToolbar(allInboxChits);
             container.appendChild(bundleToolbar);
         }
@@ -864,7 +879,7 @@ function displayEmailView(chitsToDisplay) {
     }
 
     // Permanent bundle toolbar — pass FULL inbox list for accurate counts on all tabs
-    if (typeof _renderBundleToolbar === 'function') {
+    if (!_emailUnifyMode && typeof _renderBundleToolbar === 'function') {
         var bundleToolbar = _renderBundleToolbar(allInboxChits);
         container.appendChild(bundleToolbar);
     }
@@ -2069,6 +2084,25 @@ function _setEmailSubFilter(filter) {
     // Sync sidebar radio buttons
     var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
     radios.forEach(function(r) { r.checked = (r.value === filter); });
+    if (typeof displayChits === 'function') displayChits();
+}
+
+/**
+ * Toggle Unify mode — hides bundles and shows all inbox emails in one flat list.
+ */
+function _toggleEmailUnify() {
+    _emailUnifyMode = !_emailUnifyMode;
+    // Update button visual state
+    var btn = document.getElementById('sidebar-unify-btn');
+    if (btn) {
+        if (_emailUnifyMode) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    }
+    // Invalidate DOM cache and re-render
+    if (typeof _emailInvalidateDomCache === 'function') _emailInvalidateDomCache();
     if (typeof displayChits === 'function') displayChits();
 }
 

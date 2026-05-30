@@ -229,15 +229,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.renderTagPickerTree(
     nodes.forEach { node ->
         val hasChildren = node.children.isNotEmpty()
         val isExpanded = expandedNodes.contains(node.fullPath) || isSearching
+        // Use tag ID if available, otherwise fall back to fullPath
+        val tagIdentifier = node.id ?: node.fullPath
 
         item(key = "tagpicker_${node.fullPath}") {
             TagPickerRow(
                 node = node,
-                isSelected = selectedTags.contains(node.fullPath),
+                isSelected = selectedTags.contains(tagIdentifier) || selectedTags.contains(node.fullPath),
                 hasChildren = hasChildren,
                 isExpanded = isExpanded,
                 depth = depth,
-                onToggleSelect = { onTagToggled(node.fullPath) },
+                onToggleSelect = { onTagToggled(tagIdentifier) },
                 onToggleExpand = { onExpandToggle(node.fullPath) }
             )
         }

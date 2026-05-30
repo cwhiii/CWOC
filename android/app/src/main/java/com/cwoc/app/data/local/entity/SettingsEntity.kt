@@ -145,6 +145,9 @@ data class SettingsEntity(
     @ColumnInfo(name = "ha_poll_interval") val haPollInterval: String? = null,
     @ColumnInfo(name = "kiosk_selected_tags") val kioskSelectedTags: String? = null,
 
+    // Badges
+    @ColumnInfo(name = "badges_completed_window") val badgesCompletedWindow: String? = "3",
+
     // Phase 3 — dirty tracking for sync
     @ColumnInfo(defaultValue = "0")
     val isDirty: Boolean = false,

@@ -12,6 +12,7 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Indicators](/frontend/html/help.html#indicators) — Health data calendar, log, and charts
 - [Maps](/maps) — Interactive map with chit and people markers
 - [Email](/frontend/html/help.html#email) — Multi-account email client, bundles, threading, PGP
+- [Badges Page](/frontend/html/help.html#badges) — Persisted smart link tracking, auto-completion, categories
 - [Timeline View](/frontend/html/help.html#timeline-view) — Dependency visualization, drag-to-link, critical path
 - [Global Search](/frontend/html/help.html#global-search) — Boolean search, field-scoped queries
 - [Trash](/frontend/html/trash.html) — Soft-delete, restore, permanent delete
@@ -44,7 +45,9 @@ Welcome to the C.W.'s Omni Chits documentation. Use the index below to navigate 
 - [Version & Updates](/frontend/html/help.html#version-management) — Version info and upgrade process
 - [Dependent Apps](/frontend/html/help.html#dependent-apps) — Tailscale VPN configuration
 - [Ntfy Notifications](/frontend/html/help.html#ntfy-notifications) — Push notifications setup
+- [Restic Backup](/frontend/html/help.html#restic-backup) — Encrypted backups, scheduling, restore, retention
 - [Home Assistant](/frontend/html/help.html#home-assistant) — Bidirectional HA integration
 - [Cron Triggers & Habit Rules](/frontend/html/help.html#cron-triggers) — Scheduled rules, cron syntax, weather conditions
 - [Mobile Sync](/frontend/html/help.html#mobile-sync) — Device sync, conflict resolution, device management
 - [Install as App](/frontend/html/help.html#install-app) — PWA installation on all platforms
+- [About & Support](/frontend/html/help.html#about) — App info, creator, Buy Me a Coffee

@@ -75,3 +75,22 @@
     font-size: 1.2em;
     color: #666;
 }
+.cwoc-color-section-label {
+    width: 100%;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b5a2b;
+    margin: 6px 0 2px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+.cwoc-color-section-label:first-child {
+    margin-top: 0;
+}
+.cwoc-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}

@@ -12,9 +12,12 @@ import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.cwoc.app.data.sync.AppLifecycleObserver
+import com.cwoc.app.data.sync.NetworkFallbackState
 import com.cwoc.app.data.sync.SyncOrchestrator
 import com.cwoc.app.notification.NotificationChannelManager
 import com.cwoc.app.notification.NotificationScheduler
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +33,9 @@ class CwocApplication : Application(), Configuration.Provider, ImageLoaderFactor
 
     @Inject
     lateinit var appLifecycleObserver: AppLifecycleObserver
+
+    @Inject
+    lateinit var networkFallbackState: NetworkFallbackState
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -137,6 +143,29 @@ class CwocApplication : Application(), Configuration.Provider, ImageLoaderFactor
             ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         } catch (e: Exception) {
             Log.e("CWOC_APP", "Failed to register AppLifecycleObserver: ${e.message}", e)
+        }
+
+        // Register lifecycle observer for network fallback reachability checks.
+        // Suspends checks when app goes to background, resumes when returning to
+        // foreground while still in fallback mode. (Req 5.5)
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) {
+                    // App came to foreground — resume reachability checks if in fallback
+                    if (networkFallbackState.isFallback.value) {
+                        Log.d("CWOC_APP", "Foreground + fallback active — resuming reachability checks")
+                        networkFallbackState.startReachabilityChecks()
+                    }
+                }
+
+                override fun onStop(owner: LifecycleOwner) {
+                    // App went to background — suspend reachability checks
+                    Log.d("CWOC_APP", "Background — suspending reachability checks")
+                    networkFallbackState.stopReachabilityChecks()
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("CWOC_APP", "Failed to register fallback lifecycle observer: ${e.message}", e)
         }
     }
 

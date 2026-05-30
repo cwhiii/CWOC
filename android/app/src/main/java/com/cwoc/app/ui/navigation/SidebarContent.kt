@@ -293,6 +293,7 @@ fun SidebarContent(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = "View Mode", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = HeaderBrown, modifier = Modifier.padding(bottom = 4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ViewModeButton(text = "🔗 Timeline", isActive = sidebarState.tasksViewMode == "timeline", onClick = { onTasksViewModeChange("timeline") }, modifier = Modifier.weight(1f))
                     ViewModeButton(text = "📋 Tasks", isActive = sidebarState.tasksViewMode == "tasks", onClick = { onTasksViewModeChange("tasks") }, modifier = Modifier.weight(1f))
                     ViewModeButton(text = "🎯 Habits", isActive = sidebarState.tasksViewMode == "habits", onClick = { onTasksViewModeChange("habits") }, modifier = Modifier.weight(1f))
                     ViewModeButton(text = "📌 Assigned", isActive = sidebarState.tasksViewMode == "assigned", onClick = { onTasksViewModeChange("assigned") }, modifier = Modifier.weight(1f))
@@ -383,6 +384,8 @@ fun SidebarContent(
                 SidebarCompactButton(text = "🧮 Calc", onClick = onCalculatorClick, modifier = Modifier.weight(1f))
                 SidebarCompactButton(text = "🤖 Rules", onClick = { onNavigate(Screen.RulesManager); onClose() }, modifier = Modifier.weight(1f))
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            SidebarCompactButton(text = "🛡️ Badges", onClick = { onNavigate(Screen.Badges); onClose() }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = Color(0xFF8B5A2B), thickness = 1.dp)
             Spacer(modifier = Modifier.height(8.dp))
@@ -420,6 +423,10 @@ fun SidebarContent(
                 SidebarCompactButton(text = "📖 Reference", onClick = onReferenceClick, modifier = Modifier.weight(1f))
                 SidebarCompactButton(text = "📘 Help", onClick = { onNavigate(Screen.Help); onClose() }, modifier = Modifier.weight(1f))
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            SidebarCompactButton(text = "ℹ️ About", onClick = { onNavigate(Screen.About); onClose() }, modifier = Modifier.fillMaxWidth())
 
             Spacer(modifier = Modifier.height(6.dp))
 

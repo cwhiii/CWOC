@@ -8,6 +8,80 @@
  * Depends on: shared-utils.js (for getCachedSettings, _invalidateSettingsCache, getPastelColor)
  */
 
+// ── Tag ID Registry Maps ─────────────────────────────────────────────────────
+// Rebuilt on every settings load (page load + after any tag create/rename/delete).
+// Used for all display resolution — users never see UUIDs.
+var _tagIdToObj = {};   // "uuid" → {id, name, color, fontColor, favorite}
+var _tagNameToId = {};  // "work/projects" (lowercase) → "uuid"
+
+/**
+ * Rebuild both tag lookup maps from the tags array.
+ * Called after every settings load to keep maps in sync with the registry.
+ * @param {Array} tags - Array of {id, name, color, fontColor, favorite} objects
+ */
+function _rebuildTagMaps(tags) {
+  _tagIdToObj = {};
+  _tagNameToId = {};
+  if (!tags || !Array.isArray(tags)) return;
+  for (var i = 0; i < tags.length; i++) {
+    var tag = tags[i];
+    if (!tag) continue;
+    // Map by ID if available
+    if (tag.id) {
+      _tagIdToObj[tag.id] = tag;
+    }
+    // Also map by name (as fallback key when tags don't have IDs)
+    if (tag.name) {
+      _tagNameToId[tag.name.toLowerCase()] = tag.id || tag.name;
+      // Allow lookup by name as key too (for backward compat)
+      if (!tag.id) {
+        _tagIdToObj[tag.name] = tag;
+      }
+    }
+  }
+}
+
+/**
+ * Get the full tag object for a given Tag_ID.
+ * @param {string} id - UUID of the tag
+ * @returns {object|null} Tag object {id, name, color, fontColor, favorite} or null
+ */
+function getTagById(id) {
+  if (!id) return null;
+  return _tagIdToObj[id] || null;
+}
+
+/**
+ * Get the Tag_ID for a given tag name (case-insensitive lookup).
+ * Returns the UUID if available, or the tag name itself as a fallback key.
+ * @param {string} name - Tag name (e.g. "Work/Projects")
+ * @returns {string|null} UUID, tag name (fallback), or null if not found
+ */
+function getTagIdByName(name) {
+  if (!name) return null;
+  return _tagNameToId[name.toLowerCase()] || null;
+}
+
+/**
+ * Resolve a Tag_ID to its display name.
+ * Returns "[unknown tag]" if the ID is not found in the registry.
+ * Handles both UUID-based IDs and name-based fallback keys.
+ * @param {string} id - UUID of the tag or tag name (fallback)
+ * @returns {string} Display name or "[unknown tag]"
+ */
+function resolveTagId(id) {
+  if (!id) return '[unknown tag]';
+  var tag = _tagIdToObj[id];
+  if (tag && tag.name) return tag.name;
+  // If the id itself looks like a tag name (not a UUID), return it directly
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+    return id; // It's a name string used as a key
+  }
+  // Unknown UUID tag — log warning
+  console.warn('[Tags] Unknown tag ID: ' + id);
+  return '[unknown tag]';
+}
+
 /**
  * POST to /api/settings with 401 retry. If the first attempt gets 401,
  * checks auth status and retries once. Redirects to login if truly expired.
@@ -49,6 +123,7 @@ async function loadAllTags() {
   var tagObjects = [];
   try {
     var settings = await getCachedSettings();
+    console.log('[shared-tags] loadAllTags: settings.tags type=', typeof settings.tags, 'isArray=', Array.isArray(settings.tags), 'length=', settings.tags ? (Array.isArray(settings.tags) ? settings.tags.length : 'N/A') : 'null/undefined');
     var tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
     tagObjects = tags.map(function(t) {
       return typeof t === 'string' ? { name: t, color: null, favorite: false } : t;
@@ -60,13 +135,16 @@ async function loadAllTags() {
   // Filter out system tags
   tagObjects = tagObjects.filter(function(t) { return !isSystemTag(t.name); });
 
+  // Rebuild ID lookup maps from the full tag list (including system tags for ID resolution)
+  _rebuildTagMaps(tagObjects);
+
   return tagObjects;
 }
 
 /**
  * Build a nested tag tree from a flat array of tag objects.
- * @param {Array} flatTags - Array of { name, color, favorite } objects
- * @returns {Array} Tree nodes: { name, fullPath, color, favorite, children: [] }
+ * @param {Array} flatTags - Array of { id, name, color, favorite, fontColor } objects
+ * @returns {Array} Tree nodes: { id, name, fullPath, color, favorite, children: [] }
  */
 function buildTagTree(flatTags) {
   const root = [];
@@ -82,6 +160,7 @@ function buildTagTree(flatTags) {
       if (!nodeMap[pathSoFar]) {
         const isLeaf = i === parts.length - 1;
         const node = {
+          id: isLeaf ? (tag.id || pathSoFar) : null,
           name: part,
           fullPath: pathSoFar,
           color: isLeaf ? tag.color : null,
@@ -141,28 +220,67 @@ function flattenTagTree(tree, originalNames) {
 }
 
 /**
- * Check if a chit's tags match a filter tag (including descendants).
- * E.g., filter "Work" matches chit tag "Work/Projects/CWOC".
- * @param {string[]} chitTags - tags on the chit
- * @param {string} filterTag - the filter tag path
- * @returns {boolean}
+ * Check if a chit's tags match any of the given filter Tag_IDs (OR logic).
+ * Supports both the new format (tag objects [{id, name}]) and legacy format (name strings).
+ *
+ * Primary match: chit tag's id matches a filter Tag_ID exactly.
+ * Hierarchical fallback: if a filter Tag_ID resolves to name "Work", also match
+ * chit tags whose name starts with "Work/" (case-insensitive).
+ *
+ * @param {Array} chitTags - tags on the chit: [{id: "uuid"|null, name: "string"}] or legacy string[]
+ * @param {string|string[]} filterTags - Tag_ID(s) to filter by (single string or array)
+ * @returns {boolean} true if the chit matches ANY of the filter tags
  */
-function matchesTagFilter(chitTags, filterTag) {
-  if (!Array.isArray(chitTags) || !filterTag) return false;
-  return chitTags.some(t => t === filterTag || t.startsWith(filterTag + '/'));
+function matchesTagFilter(chitTags, filterTags) {
+  if (!Array.isArray(chitTags)) return false;
+  // Normalize filterTags to an array
+  var filters = Array.isArray(filterTags) ? filterTags : [filterTags];
+  if (filters.length === 0) return false;
+
+  for (var fi = 0; fi < filters.length; fi++) {
+    var filterId = filters[fi];
+    if (!filterId) continue;
+
+    // Resolve the filter Tag_ID to a display name for hierarchical matching
+    var filterName = (typeof resolveTagId === 'function') ? resolveTagId(filterId) : null;
+    var filterNameLower = (filterName && filterName !== '[unknown tag]') ? filterName.toLowerCase() : null;
+
+    for (var ci = 0; ci < chitTags.length; ci++) {
+      var chitTag = chitTags[ci];
+
+      // Handle new format: {id, name} objects
+      if (chitTag && typeof chitTag === 'object') {
+        // Primary match: exact ID match
+        if (chitTag.id && chitTag.id === filterId) return true;
+        // Hierarchical fallback: chit tag name starts with filterName + "/"
+        if (filterNameLower && chitTag.name) {
+          var chitNameLower = chitTag.name.toLowerCase();
+          if (chitNameLower === filterNameLower || chitNameLower.startsWith(filterNameLower + '/')) return true;
+        }
+      } else if (typeof chitTag === 'string') {
+        // Legacy format: plain name strings — fall back to name-based matching
+        if (filterNameLower) {
+          var tagLower = chitTag.toLowerCase();
+          if (tagLower === filterNameLower || tagLower.startsWith(filterNameLower + '/')) return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**
  * Render a tag tree as an expandable/collapsible HTML tree.
  * @param {HTMLElement} container - element to render into
  * @param {Array} tree - from buildTagTree()
- * @param {string[]} selectedTags - currently selected full paths
- * @param {function} onToggle - callback(fullPath, isNowSelected) when a tag is toggled
- * @param {object} [opts] - { showFavorites: bool, onSelectOnly: function(fullPath) }
+ * @param {string[]} selectedTags - currently selected Tag_IDs (UUID strings)
+ * @param {function} onToggle - callback(tagId, isNowSelected) when a tag is toggled (passes Tag_ID)
+ * @param {object} [opts] - { showFavorites: bool, onSelectOnly: function(tagId) }
  */
 function renderTagTree(container, tree, selectedTags, onToggle, opts) {
   container.innerHTML = '';
   var onSelectOnly = (opts && opts.onSelectOnly) ? opts.onSelectOnly : null;
+  var hideCheckboxes = (opts && opts.hideCheckboxes) ? true : false;
 
   function renderLevel(nodes, parentEl, depth) {
     nodes.forEach(node => {
@@ -195,20 +313,28 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
         row.appendChild(spacer);
       }
 
-      // Checkbox
-      const isSelected = selectedTags.includes(node.fullPath);
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = isSelected;
-      cb.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0;';
-      cb.addEventListener('click', (e) => { e.stopPropagation(); });
-      cb.addEventListener('change', () => {
-        if (onToggle) onToggle(node.fullPath, cb.checked);
-        // Update badge visual
-        badge.style.fontWeight = cb.checked ? 'bold' : '';
-        badge.style.outline = cb.checked ? '2px solid #4a2c2a' : '';
-      });
-      row.appendChild(cb);
+      // Checkbox — selection is by Tag_ID; intermediate nodes (id=null) can't be selected
+      const nodeId = node.id || null;
+      const isSelected = nodeId ? selectedTags.includes(nodeId) : false;
+      var cb = null;
+      if (!hideCheckboxes) {
+        cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = isSelected;
+        cb.disabled = !nodeId; // Intermediate nodes without an ID can't be toggled
+        cb.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0;' + (!nodeId ? 'opacity:0.4;cursor:default;' : '');
+        cb.addEventListener('click', (e) => { e.stopPropagation(); });
+        cb.addEventListener('change', () => {
+          if (!nodeId) { cb.checked = false; return; }
+          if (onToggle) onToggle(nodeId, cb.checked);
+          // Update badge visual
+          badge.style.fontWeight = cb.checked ? 'bold' : '';
+          badge.style.outline = cb.checked ? '2px solid #4a2c2a' : '';
+        });
+        row.appendChild(cb);
+      } else {
+        // No checkbox — just track nodeId for click handler
+      }
 
       // Favorite star (inline before name)
       if (node.favorite) {
@@ -219,7 +345,7 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
         row.appendChild(star);
       }
 
-      // Tag name with color background — always shows tag color
+      // Tag name with color background — always shows tag name, never UUID
       const tagColor = node.color || (typeof getPastelColor === 'function' ? getPastelColor(node.fullPath) : 'rgba(139,90,43,0.15)');
       const tagFontColor = node.fontColor || '#3c2f2f';
       const badge = document.createElement('span');
@@ -229,16 +355,20 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
 
       // Click row to toggle; Shift+Click to select ONLY this tag
       row.addEventListener('click', (e) => {
+        if (!nodeId) return; // Intermediate nodes can't be selected
         if (e.shiftKey && onSelectOnly) {
           // Shift+Click: select only this tag, deselect all others
-          onSelectOnly(node.fullPath);
-        } else {
+          onSelectOnly(nodeId);
+        } else if (cb) {
           // Normal click: toggle this tag's checkbox
           cb.checked = !cb.checked;
-          if (onToggle) onToggle(node.fullPath, cb.checked);
+          if (onToggle) onToggle(nodeId, cb.checked);
           // Update badge visual
           badge.style.fontWeight = cb.checked ? 'bold' : '';
           badge.style.outline = cb.checked ? '2px solid #4a2c2a' : '';
+        } else {
+          // No checkbox mode — just call onToggle directly
+          if (onToggle) onToggle(node.fullPath, true, nodeId);
         }
       });
 
@@ -269,14 +399,27 @@ async function _loadRecentTags() {
   } catch (e) { /* keep empty */ }
 }
 
-function trackRecentTag(tagPath) {
-  _recentTags = _recentTags.filter(t => t !== tagPath);
-  _recentTags.unshift(tagPath);
+/**
+ * Track a recently used tag by its Tag_ID (UUID).
+ * Stores Tag_IDs in the recent tags list (max 5).
+ * Removes any existing duplicate before inserting at front.
+ * Persists to settings (recent_tags field).
+ * @param {string} tagId — Tag_ID (UUID) to track
+ */
+function trackRecentTag(tagId) {
+  if (!tagId) return;
+  _recentTags = _recentTags.filter(t => t !== tagId);
+  _recentTags.unshift(tagId);
   if (_recentTags.length > 5) _recentTags = _recentTags.slice(0, 5);
   // Persist to server (fire-and-forget)
   _saveRecentTags();
 }
 
+/**
+ * Get the list of recently used Tag_IDs (UUIDs).
+ * Callers resolve IDs to display names via getTagById() or resolveTagId().
+ * @returns {string[]} Array of Tag_IDs (max 5)
+ */
 function getRecentTags() {
   return _recentTags.slice(0, 5);
 }
@@ -296,9 +439,11 @@ _loadRecentTags();
 /**
  * Create a tag inline — adds it to the settings tag list if it doesn't already exist.
  * Works from any page (editor, settings, dashboard).
+ * Sends the tag name to the backend; the backend assigns a UUID.
+ * After creation, rebuilds tag maps so the new ID is immediately available.
  * @param {string} name - Full tag path (e.g. "Work/Projects/NewTag")
  * @param {object} [opts] - { color, fontColor, favorite }
- * @returns {Promise<boolean>} true if created, false if already exists or failed
+ * @returns {Promise<string|false>} the new tag's ID (UUID) if created, false if already exists or failed
  */
 async function createTagInline(name, opts) {
   if (!name || !name.trim()) return false;
@@ -312,25 +457,34 @@ async function createTagInline(name, opts) {
     _invalidateSettingsCache();
     var settings = await getCachedSettings();
     var tags = Array.isArray(settings.tags) ? settings.tags : [];
-    // Check if tag already exists (case-insensitive)
-    var exists = tags.some(function (t) {
+    // Check if tag already exists (case-insensitive) — if so, return its existing ID
+    var existingTag = tags.find(function (t) {
       return (t.name || '').toLowerCase() === name.toLowerCase();
     });
-    if (exists) return false;
+    if (existingTag) return existingTag.id || false;
     tags.push({
       name: name,
       color: opts.color || '#d4c4b0',
       fontColor: opts.fontColor || '#5c3317',
       favorite: !!opts.favorite,
     });
-    // Send only the tags field (partial update) — avoids overwriting other settings
+    // Send only the tags field (partial update) — backend assigns UUID to the new entry
     var resp = await _postSettingsWithRetry({ tags: tags });
     if (!resp.ok) {
       console.error('createTagInline: POST failed with status', resp.status);
       return false;
     }
+    // Reload settings to get the backend-assigned ID
     _invalidateSettingsCache();
-    return true;
+    var updatedSettings = await getCachedSettings();
+    var updatedTags = Array.isArray(updatedSettings.tags) ? updatedSettings.tags : [];
+    // Rebuild tag maps with the updated registry
+    _rebuildTagMaps(updatedTags.filter(function(t) { return t.name && !isSystemTag(t.name); }));
+    // Find the newly created tag by name and return its ID
+    var newTag = updatedTags.find(function(t) {
+      return (t.name || '').toLowerCase() === name.toLowerCase();
+    });
+    return (newTag && newTag.id) ? newTag.id : false;
   } catch (e) {
     console.error('createTagInline failed:', e);
     return false;
@@ -339,29 +493,32 @@ async function createTagInline(name, opts) {
 
 /**
  * Update an existing tag in settings (rename, recolor, favorite).
+ * Identifies the tag by its Tag_ID (UUID), not by name.
  * Also renames sub-tags if the name changed.
- * @param {string} oldName — current tag name
+ * @param {string} tagId — Tag_ID (UUID) of the tag to update
  * @param {object} tagData — { name, color, fontColor, favorite }
  * @returns {Promise<boolean>} true if updated successfully
  */
-async function updateTagInline(oldName, tagData) {
-  if (!oldName || !tagData || !tagData.name) return false;
+async function updateTagInline(tagId, tagData) {
+  if (!tagId || !tagData || !tagData.name) return false;
   try {
     _invalidateSettingsCache();
     var settings = await getCachedSettings();
     var tags = Array.isArray(settings.tags) ? settings.tags : [];
     var found = false;
+    var oldName = '';
     for (var i = 0; i < tags.length; i++) {
-      var tName = (typeof tags[i] === 'string') ? tags[i] : (tags[i].name || '');
-      if (tName.toLowerCase() === oldName.toLowerCase()) {
-        tags[i] = { name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: !!tagData.favorite };
+      if (tags[i].id === tagId) {
+        oldName = tags[i].name || '';
+        tags[i] = { id: tagId, name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: !!tagData.favorite };
         found = true;
         // Rename sub-tags if name changed
-        if (oldName !== tagData.name) {
+        if (oldName && oldName !== tagData.name) {
           var prefix = oldName + '/';
           for (var j = 0; j < tags.length; j++) {
+            if (j === i) continue;
             var subName = (typeof tags[j] === 'string') ? tags[j] : (tags[j].name || '');
-            if (subName.startsWith(prefix)) {
+            if (subName.toLowerCase().startsWith(prefix.toLowerCase())) {
               var newSubName = tagData.name + '/' + subName.substring(prefix.length);
               if (typeof tags[j] === 'string') { tags[j] = newSubName; }
               else { tags[j].name = newSubName; }
@@ -379,6 +536,10 @@ async function updateTagInline(oldName, tagData) {
       return false;
     }
     _invalidateSettingsCache();
+    // Rebuild tag maps with updated data
+    var updatedSettings = await getCachedSettings();
+    var updatedTags = Array.isArray(updatedSettings.tags) ? updatedSettings.tags : [];
+    _rebuildTagMaps(updatedTags.filter(function(t) { return t.name && !isSystemTag(t.name); }));
     return true;
   } catch (e) {
     console.error('updateTagInline failed:', e);
@@ -388,19 +549,29 @@ async function updateTagInline(oldName, tagData) {
 
 /**
  * Delete a tag (and all its sub-tags) from settings.
- * @param {string} tagName — tag name to delete
+ * Identifies the tag by its Tag_ID (UUID), not by name.
+ * @param {string} tagId — Tag_ID (UUID) of the tag to delete
  * @returns {Promise<boolean>} true if deleted successfully
  */
-async function deleteTagInline(tagName) {
-  if (!tagName) return false;
+async function deleteTagInline(tagId) {
+  if (!tagId) return false;
   try {
     _invalidateSettingsCache();
     var settings = await getCachedSettings();
     var tags = Array.isArray(settings.tags) ? settings.tags : [];
-    var prefix = tagName + '/';
+    // Find the tag to delete by ID to get its name for sub-tag removal
+    var targetTag = tags.find(function(t) { return t.id === tagId; });
+    if (!targetTag) return false;
+    var tagName = targetTag.name || '';
+    var prefix = tagName ? tagName + '/' : '';
+    // Remove the tag and all its sub-tags (by name prefix)
     var updatedTags = tags.filter(function(t) {
-      var tName = (typeof t === 'string') ? t : (t.name || '');
-      return tName !== tagName && !tName.startsWith(prefix);
+      if (t.id === tagId) return false;
+      if (prefix) {
+        var tName = (typeof t === 'string') ? t : (t.name || '');
+        if (tName.toLowerCase().startsWith(prefix.toLowerCase())) return false;
+      }
+      return true;
     });
     // Send only the tags field (partial update)
     var resp = await _postSettingsWithRetry({ tags: updatedTags });
@@ -409,6 +580,8 @@ async function deleteTagInline(tagName) {
       return false;
     }
     _invalidateSettingsCache();
+    // Rebuild tag maps after deletion
+    _rebuildTagMaps(updatedTags.filter(function(t) { return t.name && !isSystemTag(t.name); }));
     return true;
   } catch (e) {
     console.error('deleteTagInline failed:', e);
@@ -473,7 +646,7 @@ function resolveChitLinks(html, allChits) {
  * Matches the editor's tag zone: search row, favs/recents, tree, active tags.
  *
  * @param {HTMLElement} container — the DOM element to render into
- * @param {Array} selectedTags — array of selected tag name strings (mutated in place)
+ * @param {Array} selectedTags — array of selected Tag_IDs (UUID strings, mutated in place)
  * @param {Object} [opts] — options:
  *   onChange(selectedTags) — called when selection changes
  *   showHeader: bool (default false) — show Expand All / Collapse All / Create New buttons
@@ -520,9 +693,20 @@ function buildTagPicker(container, selectedTags, opts) {
       setTimeout(function() { searchInput.style.borderColor = ''; }, 2000);
       return;
     }
-    if (selectedTags.indexOf(name) === -1) {
-      selectedTags.push(name);
-      if (typeof trackRecentTag === 'function') trackRecentTag(name);
+    // Check if this tag already exists in the registry by name — if so, use its ID
+    var existingId = (typeof getTagIdByName === 'function') ? getTagIdByName(name) : null;
+    if (existingId) {
+      if (selectedTags.indexOf(existingId) === -1) {
+        selectedTags.push(existingId);
+        if (typeof trackRecentTag === 'function') trackRecentTag(existingId);
+      }
+    } else {
+      // New tag — add by name for now (createTagInline will register it; ID will be assigned by server)
+      // Store the name temporarily; callers should handle mixed ID/name arrays during transition
+      if (selectedTags.indexOf(name) === -1) {
+        selectedTags.push(name);
+        if (typeof trackRecentTag === 'function') trackRecentTag(name);
+      }
     }
     if (typeof createTagInline === 'function') createTagInline(name);
     searchInput.value = '';
@@ -572,14 +756,16 @@ function buildTagPicker(container, selectedTags, opts) {
       favLabel.textContent = 'Favs:';
       favRecentRow.appendChild(favLabel);
       favs.forEach(function(tag) {
+        var tagId = tag.id || null;
         var chip = document.createElement('span');
-        var isSelected = selectedTags.indexOf(tag.name) !== -1;
+        var isSelected = tagId ? selectedTags.indexOf(tagId) !== -1 : false;
         chip.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:' + (tag.color || getPastelColor(tag.name)) + ';color:' + (tag.fontColor || '#2b1e0f') + ';' + (isSelected ? 'outline:2px solid #8b5a2b;' : '');
         chip.innerHTML = '<span style="color:#DAA520;text-shadow:0 0 1px #000;margin-right:2px;">★</span>' + _tagPickerEsc(tag.name.split('/').pop());
         chip.title = tag.name;
         chip.onclick = function() {
-          var idx = selectedTags.indexOf(tag.name);
-          if (idx === -1) { selectedTags.push(tag.name); if (typeof trackRecentTag === 'function') trackRecentTag(tag.name); }
+          if (!tagId) return; // Can't select a tag without an ID
+          var idx = selectedTags.indexOf(tagId);
+          if (idx === -1) { selectedTags.push(tagId); if (typeof trackRecentTag === 'function') trackRecentTag(tagId); }
           else selectedTags.splice(idx, 1);
           render();
           onChange(selectedTags);
@@ -593,17 +779,22 @@ function buildTagPicker(container, selectedTags, opts) {
       recLabel.style.cssText = 'font-size:0.8em;font-weight:bold;color:#6b4e31;margin-left:8px;';
       recLabel.textContent = 'Recent:';
       favRecentRow.appendChild(recLabel);
-      recents.forEach(function(path) {
-        var tag = allTags.find(function(t) { return t.name === path; });
+      recents.forEach(function(tagIdOrPath) {
+        // Recents may store Tag_IDs or legacy name strings — resolve to tag object
+        var tag = null;
+        if (typeof getTagById === 'function') tag = getTagById(tagIdOrPath);
+        if (!tag) tag = allTags.find(function(t) { return t.name === tagIdOrPath; });
         if (!tag) return;
+        var tagId = tag.id || null;
         var chip = document.createElement('span');
-        var isSelected = selectedTags.indexOf(tag.name) !== -1;
+        var isSelected = tagId ? selectedTags.indexOf(tagId) !== -1 : false;
         chip.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:' + (tag.color || getPastelColor(tag.name)) + ';color:' + (tag.fontColor || '#2b1e0f') + ';' + (isSelected ? 'outline:2px solid #8b5a2b;' : '');
         chip.textContent = tag.name.split('/').pop();
         chip.title = tag.name;
         chip.onclick = function() {
-          var idx = selectedTags.indexOf(tag.name);
-          if (idx === -1) { selectedTags.push(tag.name); if (typeof trackRecentTag === 'function') trackRecentTag(tag.name); }
+          if (!tagId) return;
+          var idx = selectedTags.indexOf(tagId);
+          if (idx === -1) { selectedTags.push(tagId); if (typeof trackRecentTag === 'function') trackRecentTag(tagId); }
           else selectedTags.splice(idx, 1);
           render();
           onChange(selectedTags);
@@ -615,17 +806,27 @@ function buildTagPicker(container, selectedTags, opts) {
 
   function renderActivePanel() {
     activeList.innerHTML = '';
-    selectedTags.filter(function(t) { return !isSystemTag(t); }).forEach(function(tagName) {
-      var tag = allTags.find(function(t) { return t.name === tagName; }) || { name: tagName, color: null };
+    selectedTags.forEach(function(tagId) {
+      // Resolve Tag_ID to display info via registry or allTags
+      var tag = null;
+      if (typeof getTagById === 'function') tag = getTagById(tagId);
+      if (!tag) tag = allTags.find(function(t) { return t.id === tagId; });
+      // Fallback: tagId might be a legacy name string during transition
+      if (!tag) tag = allTags.find(function(t) { return t.name === tagId; });
+      var displayName = tag ? tag.name : (typeof resolveTagId === 'function' ? resolveTagId(tagId) : tagId);
+      var tagColor = tag ? (tag.color || getPastelColor(tag.name)) : 'rgba(139,90,43,0.15)';
+      var tagFontColor = tag ? (tag.fontColor || '#2b1e0f') : '#2b1e0f';
+      // Skip system tags from display
+      if (typeof isSystemTag === 'function' && isSystemTag(displayName)) return;
       var chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:' + (tag.color || getPastelColor(tag.name)) + ';color:' + (tag.fontColor || '#2b1e0f') + ';padding:2px 8px;border-radius:4px;font-size:0.85em;margin:2px;';
-      chip.textContent = tag.name;
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:' + tagColor + ';color:' + tagFontColor + ';padding:2px 8px;border-radius:4px;font-size:0.85em;margin:2px;';
+      chip.textContent = displayName;
       var removeBtn = document.createElement('button');
       removeBtn.textContent = '✕';
       removeBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:0.8em;padding:0 0 0 4px;line-height:1;';
       removeBtn.onclick = function(e) {
         e.stopPropagation();
-        var idx = selectedTags.indexOf(tagName);
+        var idx = selectedTags.indexOf(tagId);
         if (idx !== -1) selectedTags.splice(idx, 1);
         render();
         onChange(selectedTags);
@@ -636,9 +837,9 @@ function buildTagPicker(container, selectedTags, opts) {
   }
 
   function render() {
-    renderTagTree(treeWrap, tree, selectedTags, function(fullPath, isNowSelected) {
-      var idx = selectedTags.indexOf(fullPath);
-      if (isNowSelected && idx === -1) { selectedTags.push(fullPath); if (typeof trackRecentTag === 'function') trackRecentTag(fullPath); }
+    renderTagTree(treeWrap, tree, selectedTags, function(tagId, isNowSelected) {
+      var idx = selectedTags.indexOf(tagId);
+      if (isNowSelected && idx === -1) { selectedTags.push(tagId); if (typeof trackRecentTag === 'function') trackRecentTag(tagId); }
       else if (!isNowSelected && idx !== -1) selectedTags.splice(idx, 1);
       render();
       onChange(selectedTags);

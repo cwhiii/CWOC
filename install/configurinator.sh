@@ -821,6 +821,67 @@ NTFY_EOF
 }
 
 # ---------------------------------------------------------------------------
+# Phase: Restic backup tool installation (non-fatal)
+# ---------------------------------------------------------------------------
+
+install_restic() {
+    log_step "Installing restic backup tool..."
+
+    if command -v restic &>/dev/null || [[ -f /usr/bin/restic ]]; then
+        log_ok "Restic already installed — skipping download."
+        return 0
+    fi
+
+    # Detect architecture
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64)  arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        *)
+            log_warn "Unsupported architecture for restic: $arch — skipping."
+            return 0
+            ;;
+    esac
+
+    # Download restic binary from official GitHub releases
+    local restic_version="0.17.3"
+    local restic_url="https://github.com/restic/restic/releases/download/v${restic_version}/restic_${restic_version}_linux_${arch}.bz2"
+    local tmp_bz2="/tmp/restic.bz2"
+
+    log_step "Downloading restic ${restic_version} for ${arch}..."
+    if ! wget -q -O "$tmp_bz2" "$restic_url" 2>/dev/null; then
+        log_warn "Failed to download restic from $restic_url — continuing without restic."
+        rm -f "$tmp_bz2"
+        return 0
+    fi
+
+    # Decompress and install
+    if ! bunzip2 -f "$tmp_bz2" 2>/dev/null; then
+        log_warn "Failed to decompress restic archive — continuing without restic."
+        rm -f "$tmp_bz2"
+        return 0
+    fi
+
+    local tmp_bin="/tmp/restic"
+    cp "$tmp_bin" /usr/bin/restic 2>/dev/null || {
+        log_warn "Failed to install restic to /usr/bin/restic — continuing without restic."
+        rm -f "$tmp_bin"
+        return 0
+    }
+    chmod +x /usr/bin/restic
+    rm -f "$tmp_bin"
+
+    # Verify the binary is executable
+    if ! restic version &>/dev/null; then
+        log_warn "Restic binary installed but not working — continuing without restic."
+        return 0
+    fi
+
+    log_ok "Restic ${restic_version} installed to /usr/bin/restic."
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -847,6 +908,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        install_restic
         deploy_ha_integration
         disable_upgrade_page
         start_and_verify
@@ -887,6 +949,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        install_restic
         deploy_ha_integration
         disable_upgrade_page
         start_and_verify
@@ -901,6 +964,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        install_restic
         deploy_ha_integration
         disable_upgrade_page
         start_and_verify

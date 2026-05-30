@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/images/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Badges — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
+    <!-- Dashboard sidebar styles (variables → layout → sidebar) -->
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-variables.css" />
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-layout.css" />
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-sidebar.css" />
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+
+    <style>
+        /* ══ Badges Page Styles ══ */
+
+        /* ── Page layout (shifts when sidebar active) ── */
+        .badges-page-layout {
+            transition: margin-left 0.3s ease;
+            margin-left: 0;
+        }
+        .sidebar.active ~ .settings-panel .badges-page-layout {
+            margin-left: 240px;
+        }
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .badges-page-layout {
+                margin-left: 0;
+            }
+        }
+
+        /* ── Sidebar position override ── */
+        .sidebar {
+            top: 100px;
+            height: calc(100% - 100px);
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                top: 70px;
+                height: calc(100% - 70px);
+            }
+        }
+
+        /* ── Header border stops where sidebar meets ── */
+        .sidebar.active ~ .settings-panel .header-and-buttons {
+            border-bottom-width: 0;
+            box-shadow: none;
+        }
+        .sidebar.active ~ .settings-panel .header-and-buttons::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 240px;
+            right: 0;
+            height: 2px;
+            background: #8b5a2b;
+        }
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .header-and-buttons {
+                border-bottom-width: 2px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            }
+            .sidebar.active ~ .settings-panel .header-and-buttons::after {
+                display: none;
+            }
+        }
+
+        /* ── Category Section ── */
+        .badge-category {
+            margin-bottom: 24px;
+        }
+        .badge-category-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            border-bottom: 2px solid rgba(139, 90, 43, 0.3);
+        }
+        .badge-category-icon {
+            font-size: 1.4em;
+            line-height: 1;
+        }
+        .badge-category-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #2b1e0f;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .badge-category-count {
+            font-size: 0.8em;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.8;
+            margin-left: auto;
+        }
+
+        /* ── Badge Cards Grid ── */
+        .badge-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 12px;
+        }
+        @media (max-width: 480px) {
+            .badge-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ── Badge Card ── */
+        .badge-card {
+            background: #fff8e1;
+            border: 1px solid var(--aged-brown-medium, #8b4513);
+            border-radius: 8px;
+            padding: 12px 14px;
+            position: relative;
+            transition: box-shadow 0.2s, transform 0.15s, opacity 0.3s;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .badge-card:hover {
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
+        }
+        .badge-card.dismissing {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        /* ── Card Top Row (icon, provider, staleness, dismiss) ── */
+        .badge-card-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge-card-icon {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        .badge-card-icon-emoji {
+            font-size: 1.5em;
+            line-height: 1;
+            flex-shrink: 0;
+            width: 28px;
+            text-align: center;
+        }
+        .badge-card-provider {
+            font-weight: 700;
+            font-size: 1em;
+            color: #2b1e0f;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .badge-card-staleness {
+            font-size: 0.85em;
+            color: var(--aged-brown-light, #a0522d);
+            white-space: nowrap;
+            cursor: help;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(139, 90, 43, 0.08);
+        }
+        .badge-card-staleness.stale-warning {
+            color: var(--danger-red, #b22222);
+            background: rgba(178, 34, 34, 0.08);
+        }
+        .badge-card-dismiss {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: opacity 0.2s, background 0.2s;
+            line-height: 1;
+        }
+        .badge-card-dismiss:hover {
+            opacity: 1;
+            background: rgba(178, 34, 34, 0.1);
+            color: var(--danger-red, #b22222);
+        }
+
+        /* ── Card Code ── */
+        .badge-card-code {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ── Card Subject (last email subject) ── */
+        .badge-card-subject {
+            font-size: 0.85em;
+            color: #4a3728;
+            opacity: 0.85;
+            font-style: italic;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.3;
+        }
+
+        /* ── Card Actions Row ── */
+        .badge-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .badge-card-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 10px;
+            font-size: 0.85em;
+            font-family: 'Lora', Georgia, serif;
+            font-weight: 600;
+            border-radius: 4px;
+            border: 1px solid var(--aged-brown-medium, #8b4513);
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+        .badge-card-action-btn:hover {
+            background: linear-gradient(#c8965a, #a86b3e);
+            transform: translateY(-1px);
+        }
+        .badge-card-view-chit {
+            margin-left: auto;
+            font-size: 0.8em;
+            color: var(--aged-brown-medium, #8b4513);
+            text-decoration: none;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .badge-card-view-chit:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        /* ── Completed Badge Card Variant ── */
+        .badge-card.completed {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+        .badge-card.completed:hover {
+            opacity: 0.9;
+        }
+        .badge-card.dismissed {
+            opacity: 0.6;
+            border-style: dotted;
+        }
+
+        /* ── Completed Status Badge ── */
+        .badge-card-status {
+            font-size: 0.75em;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-card-status.status-completed {
+            background: rgba(70, 130, 180, 0.15);
+            color: #2e5a7e;
+        }
+        .badge-card-status.status-dismissed {
+            background: rgba(178, 34, 34, 0.1);
+            color: #8b2222;
+        }
+
+        /* ── Empty State ── */
+        .badge-empty {
+            text-align: center;
+            padding: 1.5em 1em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            opacity: 0.6;
+            font-size: 0.95em;
+            font-style: italic;
+        }
+
+        /* ── Recently Completed Section ── */
+        .badges-completed-section {
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 2px dashed rgba(139, 90, 43, 0.3);
+        }
+        .badges-completed-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .badges-completed-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #2b1e0f;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .badges-completed-count {
+            font-size: 0.8em;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.8;
+        }
+
+        /* ── Staleness Tooltip ── */
+        .badge-staleness-tooltip {
+            position: absolute;
+            background: #2b1e0f;
+            color: #fdf5e6;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            white-space: nowrap;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .badge-staleness-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* ── Loading State ── */
+        .badges-loading {
+            text-align: center;
+            padding: 3em 1em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            opacity: 0.7;
+        }
+
+        /* ── Page-specific sidebar controls ── */
+        .badges-sidebar-section {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(139, 90, 43, 0.15);
+        }
+        .badges-sidebar-section label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #2b1e0f;
+            margin-bottom: 6px;
+        }
+        .badges-sidebar-section select {
+            width: 100%;
+            font-size: 0.9em;
+            padding: 6px 8px;
+        }
+        .badges-refresh-btn {
+            width: 100%;
+            margin-top: 8px;
+        }
+        .badges-refresh-btn .fa-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        /* ── Responsive: tablet ── */
+        @media (max-width: 768px) {
+            .badge-cards {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            }
+        }
+
+        /* ── Responsive: mobile ── */
+        @media (max-width: 480px) {
+            .badge-category-header {
+                padding-bottom: 6px;
+                margin-bottom: 8px;
+            }
+            .badge-category-title {
+                font-size: 0.95em;
+            }
+            .badge-card {
+                padding: 10px 12px;
+            }
+            .badge-card-provider {
+                font-size: 0.9em;
+            }
+            .badge-card-actions {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="Badges" data-page-icon="🛡️" data-sidebar="true">
+    <div class="settings-panel">
+
+    <!-- ═══ Badges Page Layout ═══ -->
+    <div class="badges-page-layout">
+        <div id="badges-content">
+            <div class="badges-loading">
+                <div class="loader"></div>
+                Loading badges…
+            </div>
+        </div>
+
+        <!-- ── Active Badge Categories ── -->
+        <div id="badges-categories" style="display:none;">
+
+            <!-- 📦 Package -->
+            <div class="badge-category" data-category="Package">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">📦</span>
+                    <span class="badge-category-title">Package</span>
+                    <span class="badge-category-count" id="count-Package"></span>
+                </div>
+                <div class="badge-cards" id="cards-Package">
+                    <div class="badge-empty">No active packages</div>
+                </div>
+            </div>
+
+            <!-- ✈️ Flight -->
+            <div class="badge-category" data-category="Flight">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">✈️</span>
+                    <span class="badge-category-title">Flight</span>
+                    <span class="badge-category-count" id="count-Flight"></span>
+                </div>
+                <div class="badge-cards" id="cards-Flight">
+                    <div class="badge-empty">No active flights</div>
+                </div>
+            </div>
+
+            <!-- 🏨 Hotel -->
+            <div class="badge-category" data-category="Hotel">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">🏨</span>
+                    <span class="badge-category-title">Hotel</span>
+                    <span class="badge-category-count" id="count-Hotel"></span>
+                </div>
+                <div class="badge-cards" id="cards-Hotel">
+                    <div class="badge-empty">No active hotels</div>
+                </div>
+            </div>
+
+            <!-- 🚗 Rental -->
+            <div class="badge-category" data-category="Rental">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">🚗</span>
+                    <span class="badge-category-title">Rental</span>
+                    <span class="badge-category-count" id="count-Rental"></span>
+                </div>
+                <div class="badge-cards" id="cards-Rental">
+                    <div class="badge-empty">No active rentals</div>
+                </div>
+            </div>
+
+            <!-- 🎫 Event -->
+            <div class="badge-category" data-category="Event">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">🎫</span>
+                    <span class="badge-category-title">Event</span>
+                    <span class="badge-category-count" id="count-Event"></span>
+                </div>
+                <div class="badge-cards" id="cards-Event">
+                    <div class="badge-empty">No active events</div>
+                </div>
+            </div>
+
+            <!-- 🍽️ Restaurant -->
+            <div class="badge-category" data-category="Restaurant">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">🍽️</span>
+                    <span class="badge-category-title">Restaurant</span>
+                    <span class="badge-category-count" id="count-Restaurant"></span>
+                </div>
+                <div class="badge-cards" id="cards-Restaurant">
+                    <div class="badge-empty">No active restaurants</div>
+                </div>
+            </div>
+
+            <!-- 🚌 Transit -->
+            <div class="badge-category" data-category="Transit">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">🚌</span>
+                    <span class="badge-category-title">Transit</span>
+                    <span class="badge-category-count" id="count-Transit"></span>
+                </div>
+                <div class="badge-cards" id="cards-Transit">
+                    <div class="badge-empty">No active transit</div>
+                </div>
+            </div>
+
+            <!-- 📋 Order -->
+            <div class="badge-category" data-category="Order">
+                <div class="badge-category-header">
+                    <span class="badge-category-icon">📋</span>
+                    <span class="badge-category-title">Order</span>
+                    <span class="badge-category-count" id="count-Order"></span>
+                </div>
+                <div class="badge-cards" id="cards-Order">
+                    <div class="badge-empty">No active orders</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Recently Completed Section ── -->
+        <div id="badges-completed" class="badges-completed-section" style="display:none;">
+            <div class="badges-completed-header">
+                <span class="badge-category-icon">✅</span>
+                <span class="badges-completed-title">Recently Completed</span>
+                <span class="badges-completed-count" id="completed-count"></span>
+            </div>
+            <div class="badge-cards" id="cards-completed">
+                <div class="badge-empty">No recently completed badges</div>
+            </div>
+        </div>
+
+    </div><!-- /.badges-page-layout -->
+
+    </div><!-- /.settings-panel -->
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-tab-sync.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+    <script src="/frontend/js/shared/shared-sidebar-filter.js"></script>
+    <script src="/frontend/js/shared/shared-sidebar.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Shared editor (for toggle styles) ──────────────────────────── -->
+    <script src="/frontend/js/pages/shared-editor.js"></script>
+
+    <!-- ── 4. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/badges.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,6 +21,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 private const val TAG = "CWOC_WS"
@@ -86,7 +89,8 @@ interface WebSocketClient {
  */
 class WebSocketClientImpl @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val fallbackState: NetworkFallbackState
 ) : WebSocketClient {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -117,6 +121,15 @@ class WebSocketClientImpl @Inject constructor(
 
     /** Set to true on 401 auth failure — permanently stops reconnection. */
     private var permanentlyDisabled: Boolean = false
+
+    /** Whether the current WebSocket is connected via the fallback URL. */
+    private var connectedViaFallback: Boolean = false
+
+    /** Job for periodic primary reconnect attempts while on fallback. */
+    private var primaryReconnectJob: Job? = null
+
+    /** Whether the current connection attempt is targeting the fallback URL. */
+    private var attemptingFallback: Boolean = false
 
     companion object {
         private const val INITIAL_BACKOFF_MS = 1_000L
@@ -149,6 +162,8 @@ class WebSocketClientImpl @Inject constructor(
     override fun disconnect() {
         intentionalDisconnect = true
         reconnecting = false
+        primaryReconnectJob?.cancel()
+        primaryReconnectJob = null
         webSocket?.close(NORMAL_CLOSE_CODE, NORMAL_CLOSE_REASON)
         webSocket = null
         _isConnected.value = false
@@ -164,17 +179,17 @@ class WebSocketClientImpl @Inject constructor(
     }
 
     /**
-     * Builds the WebSocket URL from the stored server URL.
+     * Builds the WebSocket URL from the given server URL, or resolves the active URL.
      * Converts http:// to ws:// and https:// to wss://, then appends /ws/sync.
      */
-    private fun buildWebSocketUrl(): String? {
-        val serverUrl = prefs.getString("server_url", null)
-        if (serverUrl.isNullOrBlank()) {
-            Log.e(TAG, "Cannot connect WebSocket: no server_url configured")
+    private fun buildWebSocketUrl(serverUrl: String? = null): String? {
+        val url = serverUrl ?: fallbackState.resolveActiveUrl() ?: prefs.getString("server_url", null)
+        if (url.isNullOrBlank()) {
+            Log.e(TAG, "Cannot connect WebSocket: no server URL available")
             return null
         }
 
-        val wsUrl = serverUrl.trimEnd('/')
+        val wsUrl = url.trimEnd('/')
             .replace("^http://".toRegex(), "ws://")
             .replace("^https://".toRegex(), "wss://")
 
@@ -183,9 +198,25 @@ class WebSocketClientImpl @Inject constructor(
 
     /**
      * Creates the OkHttp WebSocket connection with the auth token header.
+     * Tries primary URL first; on failure, falls back to alternate URL if available.
      */
     private fun establishConnection() {
-        val url = buildWebSocketUrl() ?: return
+        // Determine which URL to try based on whether we're attempting fallback
+        val targetUrl: String? = if (attemptingFallback) {
+            buildWebSocketUrl(fallbackState.fallbackUrl)
+        } else {
+            buildWebSocketUrl(fallbackState.primaryUrl ?: prefs.getString("server_url", null))
+        }
+
+        val url = targetUrl ?: run {
+            // If no URL available and we haven't tried fallback yet, try it
+            if (!attemptingFallback && fallbackState.hasFallback()) {
+                attemptingFallback = true
+                establishConnection()
+            }
+            return
+        }
+
         val token = prefs.getString("device_token", null)
 
         val requestBuilder = Request.Builder().url(url)
@@ -193,7 +224,7 @@ class WebSocketClientImpl @Inject constructor(
             requestBuilder.header("Authorization", "Bearer $token")
         }
 
-        Log.d(TAG, "Connecting to WebSocket: $url")
+        Log.d(TAG, "Connecting to WebSocket: $url (fallback=$attemptingFallback)")
 
         webSocket = okHttpClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
 
@@ -201,9 +232,24 @@ class WebSocketClientImpl @Inject constructor(
                 Log.d(TAG, "WebSocket connected to $url")
                 _isConnected.value = true
                 _connectionState.value = WebSocketConnectionState.CONNECTED
-                currentBackoffMs = INITIAL_BACKOFF_MS // Reset backoff on success
+                currentBackoffMs = INITIAL_BACKOFF_MS
                 reconnectAttempts = 0
                 reconnecting = false
+
+                if (attemptingFallback) {
+                    // Connected via fallback
+                    connectedViaFallback = true
+                    fallbackState.switchToFallback()
+                    startPrimaryReconnectTimer()
+                    Log.i(TAG, "WebSocket connected via fallback URL")
+                } else {
+                    // Connected via primary
+                    connectedViaFallback = false
+                    primaryReconnectJob?.cancel()
+                    primaryReconnectJob = null
+                    Log.i(TAG, "WebSocket connected via primary URL")
+                }
+                attemptingFallback = false
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -226,6 +272,7 @@ class WebSocketClientImpl @Inject constructor(
 
                 // Auto-reconnect on unexpected close (unless user explicitly disconnected)
                 if (!intentionalDisconnect) {
+                    attemptingFallback = false
                     scheduleReconnect()
                 } else {
                     _connectionState.value = WebSocketConnectionState.DISCONNECTED
@@ -233,7 +280,7 @@ class WebSocketClientImpl @Inject constructor(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "WebSocket failure: ${t.message}", t)
+                Log.e(TAG, "WebSocket failure: ${t.message} (fallback=$attemptingFallback)", t)
                 _isConnected.value = false
                 this@WebSocketClientImpl.webSocket = null
 
@@ -241,11 +288,21 @@ class WebSocketClientImpl @Inject constructor(
                 if (response?.code == 401) {
                     Log.e(TAG, "WebSocket 401 authentication failure — permanently disabling reconnection")
                     permanentlyDisabled = true
+                    attemptingFallback = false
                     _connectionState.value = WebSocketConnectionState.DISCONNECTED
                     return
                 }
 
-                // Auto-reconnect on failure (unless user explicitly disconnected)
+                // If this was the primary attempt and fallback is available, try fallback
+                if (!attemptingFallback && !intentionalDisconnect && fallbackState.hasFallback()) {
+                    Log.d(TAG, "Primary WebSocket failed — attempting fallback")
+                    attemptingFallback = true
+                    establishConnection()
+                    return
+                }
+
+                // Both failed or no fallback — enter backoff
+                attemptingFallback = false
                 if (!intentionalDisconnect) {
                     scheduleReconnect()
                 } else {
@@ -284,11 +341,67 @@ class WebSocketClientImpl @Inject constructor(
 
             if (!intentionalDisconnect && !permanentlyDisabled) {
                 reconnecting = false
+                attemptingFallback = false  // Start each reconnect cycle with primary
                 establishConnection()
             } else {
                 reconnecting = false
             }
         }
+    }
+
+    /**
+     * Starts a periodic timer that attempts to reconnect to the primary URL every 60 seconds
+     * while the WebSocket is connected via the fallback URL.
+     */
+    private fun startPrimaryReconnectTimer() {
+        primaryReconnectJob?.cancel()
+        primaryReconnectJob = scope.launch {
+            while (isActive && connectedViaFallback) {
+                delay(60_000)
+                val primaryWsUrl = buildWebSocketUrl(fallbackState.primaryUrl) ?: continue
+                Log.d(TAG, "Attempting primary reconnect: $primaryWsUrl")
+                tryPrimaryReconnect(primaryWsUrl)
+            }
+        }
+    }
+
+    /**
+     * Attempts a WebSocket connection to the primary URL. On success, closes the fallback
+     * connection and switches over to primary.
+     */
+    private fun tryPrimaryReconnect(primaryWsUrl: String) {
+        val token = prefs.getString("device_token", null) ?: return
+        val request = Request.Builder()
+            .url(primaryWsUrl)
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        // Use a separate short-lived client for the probe
+        val probeClient = okHttpClient.newBuilder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .build()
+
+        probeClient.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, response: Response) {
+                Log.i(TAG, "Primary reconnect succeeded — switching from fallback")
+                // Close the old fallback connection
+                webSocket?.close(NORMAL_CLOSE_CODE, "Switching to primary")
+                webSocket = ws
+                connectedViaFallback = false
+                primaryReconnectJob?.cancel()
+                primaryReconnectJob = null
+                fallbackState.switchToPrimary()
+                _isConnected.value = true
+                _connectionState.value = WebSocketConnectionState.CONNECTED
+                currentBackoffMs = INITIAL_BACKOFF_MS
+                reconnectAttempts = 0
+            }
+
+            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                Log.d(TAG, "Primary reconnect failed: ${t.message}")
+                // Stay on fallback — timer will try again
+            }
+        })
     }
 
     /**

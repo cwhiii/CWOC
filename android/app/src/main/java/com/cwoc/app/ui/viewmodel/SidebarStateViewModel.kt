@@ -27,7 +27,7 @@ data class SidebarState(
     // View modes (tab-specific)
     val projectsViewMode: String = "kanban", // kanban only (list mode hidden)
     val alarmsViewMode: String = "list", // list|independent|notifications|reminders
-    val tasksViewMode: String = "tasks", // tasks|habits|assigned
+    val tasksViewMode: String = "timeline", // timeline|tasks|habits|assigned
 
     // Calendar options
     val monthMode: String = "compress", // compress|scroll
@@ -73,6 +73,11 @@ class SidebarStateViewModel @Inject constructor(
 
     fun goToToday() {
         _state.update { it.copy(currentDate = LocalDate.now()) }
+        updateDateDisplay()
+    }
+
+    fun setDate(date: LocalDate) {
+        _state.update { it.copy(currentDate = date) }
         updateDateDisplay()
     }
 
@@ -224,7 +229,7 @@ class SidebarStateViewModel @Inject constructor(
         val period = prefs.getString("sidebar_period", "Week") ?: "Week"
         val projectsMode = "kanban" // kanban is the only mode now
         val alarmsMode = prefs.getString("sidebar_alarms_mode", "list") ?: "list"
-        val tasksMode = prefs.getString("sidebar_tasks_mode", "tasks") ?: "tasks"
+        val tasksMode = prefs.getString("sidebar_tasks_mode", "timeline") ?: "timeline"
         val monthMode = prefs.getString("sidebar_month_mode", "compress") ?: "compress"
         val habitsWindow = prefs.getInt("sidebar_habits_window", 30)
         val habitsRules = prefs.getBoolean("sidebar_habits_rules", false)

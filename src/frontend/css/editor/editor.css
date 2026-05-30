@@ -2237,11 +2237,13 @@ mark {
 
 .color-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
 .color-picker {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     margin-top: 5px;
@@ -2258,6 +2260,34 @@ mark {
     justify-content: center;
     align-items: center;
     font-size: 2em;
+    padding: 0;
+    background: none;
+    line-height: 30px;
+}
+
+.color-swatch.cwoc-color-none {
+    background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 10px 10px;
+    border: 1px solid #999;
+    font-size: 1.2em;
+}
+.cwoc-color-section-label {
+    width: 100%;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b5a2b;
+    margin: 6px 0 2px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+.cwoc-color-section-label:first-child {
+    margin-top: 0;
+}
+.cwoc-color-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
 }
 
 .color-swatch:hover {
@@ -2454,6 +2484,16 @@ mark {
     line-height: 1.4;
 }
 
+/* ── Checklist Format Toolbar ─────────────────────────────────────────────── */
+.checklist-format-toolbar {
+    margin-bottom: 8px;
+}
+
+/* Hide desktop checklist toolbar on mobile zone mode */
+body.mobile-zone-mode .checklist-format-toolbar {
+    display: none !important;
+}
+
 .trash-icon {
     flex-shrink: 0;
     cursor: pointer;
@@ -2471,10 +2511,13 @@ mark {
 
 .checklist-item:has(.trash-icon:hover),
 .checklist-item:has(.checklist-send-icon:hover),
+.checklist-item:has(.checklist-copy-icon:hover),
 .completed-checklist-item:has(.trash-icon:hover),
 .completed-checklist-item:has(.checklist-send-icon:hover),
+.completed-checklist-item:has(.checklist-copy-icon:hover),
 .ghost-checklist-item:has(.trash-icon:hover),
-.ghost-checklist-item:has(.checklist-send-icon:hover) {
+.ghost-checklist-item:has(.checklist-send-icon:hover),
+.ghost-checklist-item:has(.checklist-copy-icon:hover) {
     background: rgba(107, 78, 49, 0.04);
     border-radius: 4px;
 }
@@ -2488,6 +2531,12 @@ mark {
 .checklist-item:hover .checklist-send-icon,
 .completed-checklist-item:hover .checklist-send-icon,
 .ghost-checklist-item:hover .checklist-send-icon {
+    visibility: visible;
+}
+
+.checklist-item:hover .checklist-copy-icon,
+.completed-checklist-item:hover .checklist-copy-icon,
+.ghost-checklist-item:hover .checklist-copy-icon {
     visibility: visible;
 }
 
@@ -3446,10 +3495,7 @@ button.archive-btn.archived-active {
         width: 100%;
     }
 
-    /* Color row: wrap */
-    .color-row {
-        flex-wrap: wrap;
-    }
+    /* Color row: wrap already applied at base level */
 
     /* Pinned/archived group: compact */
     .pinned-archived-group {
@@ -5527,6 +5573,23 @@ input.location {
     background: rgba(139, 90, 43, 0.1);
 }
 
+/* Copy icon on checklist items (appears on hover, next to send) */
+.checklist-copy-icon {
+    cursor: pointer;
+    font-size: 0.85em;
+    opacity: 0.7;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: opacity 0.15s, background 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+    visibility: hidden;
+}
+.checklist-copy-icon:hover {
+    opacity: 1;
+    background: rgba(139, 90, 43, 0.1);
+}
+
 /* ── Checklist Add Flash Arrow ─────────────────────────────────────────── */
 .checklist-add-flash {
     position: absolute;
@@ -5673,9 +5736,10 @@ input.location {
     }
 }
 
-/* On touch devices, show send/trash icons always (no hover) */
+/* On touch devices, show send/trash/copy icons always (no hover) */
 @media (pointer: coarse) {
     .checklist-send-icon,
+    .checklist-copy-icon,
     .trash-icon {
         visibility: visible !important;
     }
@@ -6121,6 +6185,12 @@ input.location {
 
 .mobile-zone-list-close,
 .mobile-zone-list-close:disabled {
+    display: none;
+}
+
+/* Mobile notes toolbar dropdowns — hidden globally, only shown in mobile-zone-mode when .active */
+.mobile-notes-tb-dropdown,
+.mobile-notes-bottom-toolbar {
     display: none;
 }
 
@@ -7110,6 +7180,11 @@ input.location {
         display: none;
     }
 
+    /* Dropdown menus — hidden by default on all viewports */
+    .mobile-notes-tb-dropdown {
+        display: none;
+    }
+
     /* Dropdown menus from the bottom toolbar */
     body.mobile-zone-mode .mobile-notes-tb-dropdown {
         position: fixed;
@@ -7238,7 +7313,8 @@ input.location {
     padding: 2px 4px;
     border-radius: 3px;
     border: 1px solid rgba(0, 0, 0, 0.2);
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.8);
+    color: #1a1208;
     cursor: pointer;
     flex-shrink: 0;
     width: 95px;

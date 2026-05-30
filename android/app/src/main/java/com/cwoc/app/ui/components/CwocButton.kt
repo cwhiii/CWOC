@@ -6,42 +6,43 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cwoc.app.ui.theme.CwocAgedBrownLight
+import com.cwoc.app.ui.theme.CwocAgedBrownMedium
+import com.cwoc.app.ui.theme.CwocBackground
 import com.cwoc.app.ui.theme.CwocButtonBorder
-import com.cwoc.app.ui.theme.CwocZoneHeaderBrown
 
 /**
  * CWOC-styled button matching the web's `.zone-button` style:
- * - Parchment background (surface color)
- * - Brown border (#5a3f2a)
- * - Brown text (#6b4e31)
- * - Lora font (inherited from theme typography)
+ * - Brown background (#a0522d — aged-brown-light)
+ * - Parchment/cream text (#fdf5e6)
+ * - Outset border (#8b4513 — aged-brown-medium)
  *
- * Use this for zone action buttons, form buttons, and secondary actions.
- * For primary CTA buttons (like "LOG IN"), use the standard Material 3 Button.
+ * Use this for zone action buttons (undo, redo, data, clear, etc.)
+ * within editor zones. Matches the web CSS `.zone-button` exactly.
  */
 @Composable
 fun CwocZoneButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     content: @Composable RowScope.() -> Unit
 ) {
-    OutlinedButton(
+    Button(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
-        border = BorderStroke(1.dp, if (enabled) CwocButtonBorder else CwocButtonBorder.copy(alpha = 0.4f)),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = CwocZoneHeaderBrown,
-            disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-            disabledContentColor = CwocZoneHeaderBrown.copy(alpha = 0.4f)
+        border = BorderStroke(1.dp, if (enabled) CwocAgedBrownMedium else CwocAgedBrownMedium.copy(alpha = 0.4f)),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = CwocAgedBrownLight,
+            contentColor = CwocBackground,
+            disabledContainerColor = CwocAgedBrownLight.copy(alpha = 0.4f),
+            disabledContentColor = CwocBackground.copy(alpha = 0.5f)
         ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        contentPadding = contentPadding,
         content = content
     )
 }

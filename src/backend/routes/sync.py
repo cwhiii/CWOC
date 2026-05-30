@@ -19,6 +19,7 @@ from src.backend.db import (
     compute_system_tags,
     deserialize_json_field,
     get_next_sync_version,
+    is_tag_id,
     serialize_json_field,
 )
 from src.backend.routes.audit import compute_audit_diff, insert_audit_entry
@@ -206,16 +207,14 @@ def get_sync_changes(
                 )
                 for chit_row in cursor.fetchall():
                     chit = dict(zip(columns, chit_row))
-                    # Check if any of the chit's tags match the shared tags
+                    # Check if any of the chit's tag IDs match the shared tag IDs
                     chit_tags_raw = deserialize_json_field(chit.get("tags"))
                     if chit_tags_raw:
-                        chit_tag_names = set()
+                        chit_tag_ids = set()
                         for t in chit_tags_raw:
-                            if isinstance(t, str):
-                                chit_tag_names.add(t)
-                            elif isinstance(t, dict) and t.get("name"):
-                                chit_tag_names.add(t["name"])
-                        if chit_tag_names & relevant_tags:
+                            if isinstance(t, str) and is_tag_id(t):
+                                chit_tag_ids.add(t)
+                        if chit_tag_ids & relevant_tags:
                             tag_shared_chits.append(chit)
 
             # Merge all chits, deduplicating by ID
@@ -491,7 +490,8 @@ _SETTINGS_PUSH_FIELDS = frozenset([
     "week_start_day", "work_start_hour", "work_end_hour", "work_days",
     "enabled_periods", "custom_days_count", "all_view_start_hour",
     "all_view_end_hour", "day_scroll_to_hour",
-    "audit_log_max_days", "audit_log_max_mb", "default_notifications",
+    "audit_log_max_days", "audit_log_max_mb", "log_max_days", "log_max_mb",
+    "default_notifications",
     "unit_system", "habits_success_window", "overdue_border_color",
     "blocked_border_color", "shared_tags", "kiosk_users", "hide_declined",
     "default_show_habits_on_calendar", "map_default_lat", "map_default_lon",
