@@ -529,16 +529,19 @@ async function _onCalDragEnd(e) {
     const info = getCalendarDateInfo(chit);
     if (!info.hasDate) { console.error('Calendar drag: chit has no date info'); return; }
 
+    // Build minimal update payload with only date fields
+    var updatePayload = { id: chit.id };
+
     if (info.isDueOnly) {
       // Update due_datetime
       const d = newDay || info.start;
       const newDue = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
-      chit.due_datetime = newDue.toISOString();
+      updatePayload.due_datetime = newDue.toISOString();
     } else if (info.isPointInTime) {
       // Update point_in_time (move only, no resize)
       const d = newDay || info.start;
       const newPit = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
-      chit.point_in_time = newPit.toISOString();
+      updatePayload.point_in_time = newPit.toISOString();
     } else {
       // Update start/end, preserve duration on move
       const d = newDay || info.start;
@@ -546,22 +549,19 @@ async function _onCalDragEnd(e) {
         const duration = info.end.getTime() - info.start.getTime();
         const newStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
         const newEnd = new Date(newStart.getTime() + duration);
-        chit.start_datetime = newStart.toISOString();
-        chit.end_datetime = newEnd.toISOString();
+        updatePayload.start_datetime = newStart.toISOString();
+        updatePayload.end_datetime = newEnd.toISOString();
       } else {
         // Resize: only change end time
         const newEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newEndH, newEndM);
-        chit.end_datetime = newEnd.toISOString();
+        updatePayload.end_datetime = newEnd.toISOString();
       }
     }
 
-    ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
-    // Convert tags from object format to UUID strings for backend
-    chit.tags = _convertTagsForSave(chit.tags);
     const putResp = await fetch(`/api/chits/${chit.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chit),
+      body: JSON.stringify(updatePayload),
     });
     if (!putResp.ok) {
       var errText = await putResp.text();
@@ -691,6 +691,10 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
     // Convert tags from object format to UUID strings for backend
     chit.tags = _convertTagsForSave(chit.tags);
+    // Ensure locations is an array (not a string)
+    if (chit.locations && typeof chit.locations === 'string') {
+      try { chit.locations = JSON.parse(chit.locations); } catch(e) { chit.locations = []; }
+    }
     var putResp = await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -899,17 +903,21 @@ function enableMonthDrag(monthGrid, onDrop) {
         if (chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
       }
 
-      // Re-serialize fields that need to be strings for PUT
-      ['health_data', 'weather_data'].forEach(function(f) {
-        if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]);
-      });
-      // Convert tags from object format to UUID strings for backend
-      chit.tags = _convertTagsForSave(chit.tags);
+      // Build minimal update payload with only date fields
+      var updatePayload = { id: chit.id };
+      if (info.isDueOnly) {
+        updatePayload.due_datetime = new Date(new Date(chit.due_datetime).getTime() + dayDiff).toISOString();
+      } else if (info.isPointInTime) {
+        updatePayload.point_in_time = new Date(new Date(chit.point_in_time).getTime() + dayDiff).toISOString();
+      } else {
+        if (chit.start_datetime) updatePayload.start_datetime = new Date(new Date(chit.start_datetime).getTime() + dayDiff).toISOString();
+        if (chit.end_datetime) updatePayload.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
+      }
 
       var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(chit),
+        body: JSON.stringify(updatePayload),
       });
       if (!putResp.ok) {
         var errText = await putResp.text();
@@ -999,11 +1007,26 @@ function enableAllDayDrag(allDayEventsRow, days) {
       }
       // Convert tags from object format to UUID strings for backend
       chit.tags = _convertTagsForSave(chit.tags);
+      // Ensure locations is an array (not a string)
+      if (chit.locations && typeof chit.locations === 'string') {
+        try { chit.locations = JSON.parse(chit.locations); } catch(e) { chit.locations = []; }
+      }
+
+      // Build minimal update payload with only date fields
+      var updatePayload = { id: chit.id };
+      if (info.isDueOnly) {
+        updatePayload.due_datetime = new Date(new Date(chit.due_datetime).getTime() + dayDiff).toISOString();
+      } else if (info.isPointInTime) {
+        updatePayload.point_in_time = new Date(new Date(chit.point_in_time).getTime() + dayDiff).toISOString();
+      } else {
+        if (chit.start_datetime) updatePayload.start_datetime = new Date(new Date(chit.start_datetime).getTime() + dayDiff).toISOString();
+        if (chit.end_datetime) updatePayload.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
+      }
 
       var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(chit),
+        body: JSON.stringify(updatePayload),
       });
       if (!putResp.ok) {
         var errText = await putResp.text();
