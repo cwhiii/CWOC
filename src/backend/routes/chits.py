@@ -479,6 +479,8 @@ def _build_chit_list_for_user(user_id: str) -> list:
             chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
             chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
             chit["has_unviewed_conflict"] = bool(chit.get("has_unviewed_conflict"))
+            # Deserialize locations array
+            chit["locations"] = deserialize_json_field(chit.get("locations"))
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -536,7 +538,7 @@ def create_chit(chit: Chit, request: Request):
             INSERT INTO chits (
                 id, title, note, tags, start_datetime, end_datetime, due_datetime, point_in_time,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
-                recurrence, recurrence_id, location, color, people, pinned, archived,
+                recurrence, recurrence_id, location, locations, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, timezone, alerts,
                 recurrence_rule, recurrence_exceptions, weather_data, health_data,
                 habit, habit_goal, habit_success, show_on_calendar,
@@ -569,6 +571,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.recurrence,
                 chit.recurrence_id,
                 chit.location,
+                serialize_json_field(chit.locations),
                 chit.color,
                 serialize_json_field(chit.people),
                 chit.pinned,
@@ -888,7 +891,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 UPDATE chits SET
                     title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?, point_in_time = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
-                    recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
+                    recurrence = ?, recurrence_id = ?, location = ?, locations = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, timezone = ?, alerts = ?,
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
                     habit = ?, habit_goal = ?, habit_success = ?, show_on_calendar = ?,
@@ -920,6 +923,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.recurrence,
                     chit.recurrence_id,
                     chit.location,
+                    serialize_json_field(chit.locations),
                     chit.color,
                     serialize_json_field(chit.people),
                     chit.pinned,

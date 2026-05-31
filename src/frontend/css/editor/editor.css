@@ -3618,6 +3618,147 @@ input.location {
     background-color: var(--danger-red);
 }
 
+/* ── Multiple Locations UI ─────────────────────────────────────────────── */
+
+.locations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.location-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background-color: var(--zone-body-bg, #faf5eb);
+    border: 1px solid var(--border-color, #c9b896);
+    border-radius: 6px;
+    position: relative;
+}
+
+.location-entry.primary {
+    border-color: var(--accent-teal, teal);
+    border-width: 2px;
+}
+
+.location-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.location-primary-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--text-muted, #6b5a4a);
+}
+
+.location-primary-toggle input {
+    margin: 0;
+}
+
+.location-primary-toggle .primary-star {
+    color: var(--accent-gold, #d4a017);
+    font-size: 1.1em;
+}
+
+.location-entry-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+}
+
+.location-entry-actions button {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    background: var(--aged-brown-light);
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.location-entry-actions button:hover {
+    background: var(--accent-teal, teal);
+    color: white;
+}
+
+.location-entry-actions button.delete-btn:hover {
+    background: var(--danger-red);
+}
+
+.location-label-input {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.9em;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-family: 'Lora', Georgia, serif;
+}
+
+.location-address-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 1em;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-family: 'Lora', Georgia, serif;
+    box-sizing: border-box;
+}
+
+.location-address-input:focus {
+    border-color: var(--accent-teal, teal);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+.location-entry-map {
+    height: 150px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.location-entry-map iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.location-entry-loading,
+.location-entry-error {
+    padding: 6px 10px;
+    font-size: 0.85em;
+    text-align: center;
+    border-radius: 4px;
+}
+
+.location-entry-loading {
+    color: var(--warning-orange);
+    background: var(--parchment-light);
+}
+
+.location-entry-error {
+    color: var(--danger-red);
+    background: #fff0f0;
+}
+
+/* Empty state for locations list */
+.locations-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted, #6b5a4a);
+    font-style: italic;
+    font-family: 'Lora', Georgia, serif;
+}
+
 /* ── Extracted inline-style utility classes ─────────────────────────────── */
 /* Compact label for inline checkboxes (recurrence day labels, etc.) */
 .cwoc-inline-label-sm {

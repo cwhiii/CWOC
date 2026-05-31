@@ -1,0 +1,17 @@
+:80 {
+	handle /api/* {
+		reverse_proxy app:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		root * /srv
+
+		@static path *.js *.css
+		header @static Cache-Control "no-cache, must-revalidate"
+
+		try_files {path} /index.html
+		file_server
+	}
+}

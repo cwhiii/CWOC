@@ -948,7 +948,7 @@ async function openAddChitModal() {
         { name: 'priority', val: chit.priority },
         { name: 'severity', val: chit.severity },
         { name: 'status', val: chit.status },
-        { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
+        { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
       ];
       for (var i = 0; i < fields.length; i++) {
         var f = fields[i];
@@ -1012,7 +1012,7 @@ async function openAddChitModal() {
         titleCell.appendChild(titleSpan);
 
         // Tags (non-system, shown as small badges)
-        var userTags = (chit.tags || []).filter(function(t) { return !t.startsWith('CWOC_System/'); });
+        var userTags = (chit.tags || []).map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).filter(function(t) { return !t.startsWith('CWOC_System/'); });
         if (userTags.length > 0) {
           var tagsSpan = document.createElement("span");
           tagsSpan.style.cssText = "margin-left:6px;font-size:0.8em;opacity:0.7;";

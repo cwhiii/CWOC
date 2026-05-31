@@ -405,7 +405,9 @@ function _getChitFieldValue(chit, fieldName) {
     case 'note': return chit.note || '';
     case 'tags':
       var tags = chit.tags || [];
-      return Array.isArray(tags) ? tags.join(', ') : String(tags);
+      if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+      if (!Array.isArray(tags)) tags = [];
+      return tags.map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).join(', ');
     case 'status': return chit.status || '';
     case 'priority': return chit.priority || '';
     case 'severity': return chit.severity || '';

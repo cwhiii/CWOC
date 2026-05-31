@@ -1452,7 +1452,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Populate saved locations dropdown
   loadSavedLocationsDropdown();
-  loadCompactLocationDropdown();
 
   initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); _refreshWeatherOnDateChange(); } });
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d", disableMobile: true });

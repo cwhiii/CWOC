@@ -598,7 +598,7 @@ function showQuickEditModal(chit, onRefresh) {
     if (isLink) {
       showQRModal({ title: '🔗 Link QR Code', data: url, info: url });
     } else {
-      const chitData = { _cwoc: window._instanceId || 'unknown', id: chitId, title: chit.title || '', status: chit.status || '', priority: chit.priority || '', tags: (chit.tags || []).join(';'), note: (chit.note || '').slice(0, 300) };
+      const chitData = { _cwoc: window._instanceId || 'unknown', id: chitId, title: chit.title || '', status: chit.status || '', priority: chit.priority || '', tags: (chit.tags || []).map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).join(';'), note: (chit.note || '').slice(0, 300) };
       const json = JSON.stringify(chitData);
       showQRModal({ title: '📦 Data QR Code', data: json, ecl: json.length > 500 ? 'L' : 'M', info: json.length + ' chars encoded' });
       if (!window._instanceId) {
@@ -1473,8 +1473,9 @@ function _showCreateRuleFromChitModal(chit) {
   if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
   if (Array.isArray(tags) && tags.length > 0) {
     tags.forEach(function(tag) {
-      if (tag && typeof tag === 'string' && !isSystemTag(tag)) {
-        ruleFields.push({ field: 'tags', label: 'Tag: ' + tag, value: tag, operator: 'tag_present' });
+      var tagName = (typeof tag === 'object' && tag !== null) ? tag.name : tag;
+      if (tagName && !isSystemTag(tagName)) {
+        ruleFields.push({ field: 'tags', label: 'Tag: ' + tagName, value: tagName, operator: 'tag_present' });
       }
     });
   }

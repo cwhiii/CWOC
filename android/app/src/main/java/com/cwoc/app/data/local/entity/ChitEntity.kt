@@ -51,6 +51,7 @@ data class ChitEntity(
     val recurrenceRule: String?,
     val recurrenceExceptions: String?,
     val location: String?,
+    val locations: String?,  // JSON array of LocationEntry objects
     val color: String?,
     val people: List<String>?,
     val pinned: Boolean,

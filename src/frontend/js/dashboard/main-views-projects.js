@@ -1546,6 +1546,8 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
                       if (newStatus === 'Complete' && !fullChit.completed_datetime) {
                         fullChit.completed_datetime = new Date().toISOString();
                       }
+                      // Convert tags from object format to UUID strings for backend
+                      if (typeof _convertTagsForSave === 'function') fullChit.tags = _convertTagsForSave(fullChit.tags);
                       await fetch('/api/chits/' + _child.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
                     }
                     _kanbanFetchAndPreserveScroll();
@@ -1636,6 +1638,8 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
             if (!resp.ok) return;
             var fullChit = await resp.json();
             fullChit.status = "Rejected";
+            // Convert tags from object format to UUID strings for backend
+            if (typeof _convertTagsForSave === 'function') fullChit.tags = _convertTagsForSave(fullChit.tags);
             await fetch('/api/chits/' + data.chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
             _kanbanFetchAndPreserveScroll();
           } catch (err) { console.error("Kanban rejected drop error:", err); }

@@ -404,9 +404,14 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
   var _rawTags = chit.tags || [];
   if (typeof _rawTags === 'string') { try { _rawTags = JSON.parse(_rawTags); } catch(e) { _rawTags = []; } }
   if (!Array.isArray(_rawTags)) _rawTags = [];
-  const tags = _rawTags.filter(t => !isSystemTag(t));
+  // Handle both old string format and new object format {id, name}
+  const tags = _rawTags.filter(t => {
+    const tagName = (typeof t === 'object' && t !== null) ? t.name : t;
+    return !isSystemTag(tagName);
+  });
   if (tags.length > 0) {
-    tags.forEach(tagName => {
+    tags.forEach(tag => {
+      const tagName = (typeof tag === 'object' && tag !== null) ? tag.name : tag;
       const tagColor = _getTagColor(tagName);
       const tagFontColor = _getTagFontColor(tagName);
       const chip = document.createElement('span');

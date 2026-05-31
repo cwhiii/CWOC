@@ -98,6 +98,15 @@ class Settings(BaseModel):
     default_view: Optional[str] = "Calendar"             # Default dashboard view on fresh site entry (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alarms, Omni, Last Viewed)
     badges_completed_window: Optional[str] = "3"         # Recently-completed badges window: number of days ("3", "7", "30", "365") or "all"
 
+class LocationEntry(BaseModel):
+    """A single location entry within a chit's locations array."""
+    address: str                          # Required: the address string
+    label: Optional[str] = None           # Optional human-readable label (e.g., "Home", "Office")
+    lat: Optional[float] = None           # Geocoded latitude
+    lon: Optional[float] = None           # Geocoded longitude
+    is_primary: bool = False              # True if this is the primary location
+
+
 class Chit(BaseModel):
     class Config:
         extra = "ignore"
@@ -121,7 +130,8 @@ class Chit(BaseModel):
     recurrence_id: Optional[str] = None
     recurrence_rule: Optional[Dict[str, Any]] = None  # { freq, interval, byDay, until }
     recurrence_exceptions: Optional[List[Dict[str, Any]]] = None  # [{ date, completed, title, broken_off }]
-    location: Optional[str] = None
+    location: Optional[str] = None  # Denormalized primary location address (for backward compatibility)
+    locations: Optional[List[LocationEntry]] = None  # Array of location entries with labels, coords, and primary flag
     location_shared_to_vault: Optional[bool] = True  # When true, location is shared to vault (visible to all users)
     color: Optional[str] = None
     people: Optional[List[str]] = None

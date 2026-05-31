@@ -220,6 +220,7 @@ from src.backend.migrations import (
     migrate_seed_extended_colors,
     migrate_add_badges_table,
     migrate_add_location_vault_toggle,
+    migrate_add_multiple_locations,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -322,6 +323,7 @@ migrate_tags_to_id_system()
 migrate_seed_extended_colors()
 migrate_add_badges_table()
 migrate_add_location_vault_toggle()
+migrate_add_multiple_locations()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)

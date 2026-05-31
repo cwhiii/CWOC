@@ -11,6 +11,42 @@
  *             shared-recurrence.js (for formatRecurrenceRule)
  */
 
+// ── Tag conversion helper ────────────────────────────────────────────────────
+/**
+ * Convert tags from API format [{id, name}] to save format [UUID strings].
+ * The backend returns tags as objects with id/name, but expects UUID strings on save.
+ * @param {Array} tags - tags array from API: [{id: "uuid", name: "string"}, ...] or legacy string[]
+ * @returns {Array} - tags array for save: ["uuid1", "uuid2", ...]
+ */
+function _convertTagsForSave(tags) {
+  if (!tags || !Array.isArray(tags)) return [];
+  var result = [];
+  for (var i = 0; i < tags.length; i++) {
+    var t = tags[i];
+    if (t && typeof t === 'object' && t.id) {
+      // New format: {id: "uuid", name: "string"} — use the UUID
+      result.push(t.id);
+    } else if (t && typeof t === 'object' && t.name) {
+      // New format but system tag (id=null) — skip system tags, keep user tags by name
+      if (!isSystemTag(t.name)) {
+        // Use the tag's ID from the registry if available, otherwise use name
+        var regId = getTagIdByName(t.name);
+        result.push(regId || t.name);
+      }
+    } else if (typeof t === 'string') {
+      // Old format: plain name string or UUID string
+      if (t.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+        result.push(t);
+      } else if (!isSystemTag(t)) {
+        // Plain tag name — look up ID or use name as key
+        var regId2 = getTagIdByName(t);
+        result.push(regId2 || t);
+      }
+    }
+  }
+  return result;
+}
+
 // ── Calendar display helpers ─────────────────────────────────────────────────
 
 /**
@@ -520,6 +556,8 @@ async function _onCalDragEnd(e) {
     }
 
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
+    // Convert tags from object format to UUID strings for backend
+    chit.tags = _convertTagsForSave(chit.tags);
     const putResp = await fetch(`/api/chits/${chit.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -597,6 +635,8 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
       newChit.modified_datetime = new Date().toISOString();
       Object.assign(newChit, newTimes);
       ['health_data', 'weather_data'].forEach(function(f) { if (newChit[f] && typeof newChit[f] === 'object') newChit[f] = JSON.stringify(newChit[f]); });
+      // Convert tags from object format to UUID strings for backend
+      newChit.tags = _convertTagsForSave(newChit.tags);
       var postResp = await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newChit) });
       if (!postResp.ok) {
         var errText = await postResp.text();
@@ -649,6 +689,8 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     }
 
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
+    // Convert tags from object format to UUID strings for backend
+    chit.tags = _convertTagsForSave(chit.tags);
     var putResp = await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -710,6 +752,8 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     }
 
     ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
+    // Convert tags from object format to UUID strings for backend
+    chit.tags = _convertTagsForSave(chit.tags);
     var putResp = await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -859,6 +903,8 @@ function enableMonthDrag(monthGrid, onDrop) {
       ['health_data', 'weather_data'].forEach(function(f) {
         if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]);
       });
+      // Convert tags from object format to UUID strings for backend
+      chit.tags = _convertTagsForSave(chit.tags);
 
       var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
@@ -951,6 +997,8 @@ function enableAllDayDrag(allDayEventsRow, days) {
         if (chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + dayDiff).toISOString();
         if (chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
       }
+      // Convert tags from object format to UUID strings for backend
+      chit.tags = _convertTagsForSave(chit.tags);
 
       var putResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',

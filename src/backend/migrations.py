@@ -4893,3 +4893,70 @@ def migrate_add_location_vault_toggle():
     finally:
         if conn:
             conn.close()
+# ── Multiple Locations: migration ─────────────────────────────────────────
+
+def migrate_add_multiple_locations():
+    """Add locations column to chits table for storing multiple locations per chit.
+
+    Each chit can now have multiple locations with labels, geocoded coordinates,
+    and a primary flag. The existing 'location' column is preserved as a
+    denormalized copy of the primary location address for backward compatibility.
+
+    Data structure: JSON array of LocationEntry objects:
+    [
+        {"address": "123 Main St", "label": "Home", "lat": 42.123, "lon": -71.456, "is_primary": true},
+        {"address": "456 Oak Ave", "label": "Office", "lat": 42.124, "lon": -71.457, "is_primary": false}
+    ]
+
+    Migration behavior:
+    - If 'locations' column doesn't exist, add it
+    - If chit has existing 'location' value but no 'locations', migrate it:
+      - Create locations array with single entry
+      - Set is_primary = true
+      - Copy address to 'location' column (already there, but ensure consistency)
+
+    Fully idempotent — checks column existence before adding.
+    """
+    import json
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        # Add locations column if missing
+        if "locations" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN locations TEXT")
+            logger.info("Added locations column to chits table")
+
+        # Migrate existing single locations to the new array format
+        # Only migrate chits that have a location but no locations array
+        cursor.execute("SELECT id, location FROM chits WHERE location IS NOT NULL AND location != '' AND (locations IS NULL OR locations = '')")
+        rows_to_migrate = cursor.fetchall()
+
+        for chit_id, location_addr in rows_to_migrate:
+            if location_addr and location_addr.strip():
+                # Create the locations array with the existing location as primary
+                locations_array = json.dumps([{
+                    "address": location_addr.strip(),
+                    "label": None,
+                    "lat": None,
+                    "lon": None,
+                    "is_primary": True
+                }])
+                cursor.execute("UPDATE chits SET locations = ? WHERE id = ?", (locations_array, chit_id))
+
+        if rows_to_migrate:
+            logger.info(f"Migrated {len(rows_to_migrate)} chits from single location to locations array")
+
+        conn.commit()
+        logger.info("Multiple locations migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_multiple_locations: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

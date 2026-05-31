@@ -443,79 +443,31 @@
                             class="zone-header"
                             onclick="toggleZone(event, 'locationSection', 'locationContent')"
                         >
-                            <h2 class="zone-title">🗺️ Location</h2>
+                            <h2 class="zone-title">🗺️ Locations</h2>
                             <div class="zone-actions location-zone-actions">
                                 <button
                                     type="button"
-                                    class="zone-button location-left-btn"
-                                    id="locationSearchBtn"
-                                    onclick="searchLocationMap(event)"
-                                    style="display:none;"
-                                >
-                                    <i class="fas fa-search"></i>
-                                    <span class="hideWhenNarrow">Search</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="zone-button location-left-btn"
-                                    id="locationMapBtn"
-                                    onclick="openLocationInNewTab(event)"
-                                    style="display:none;"
-                                >
-                                    <i class="fas fa-external-link-alt"></i>
-                                    <span class="hideWhenNarrow">Map</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="zone-button location-left-btn"
-                                    id="locationDirectionsBtn"
-                                    onclick="openLocationDirections(event)"
-                                    style="display:none;"
-                                >
-                                    <i class="fas fa-directions"></i>
-                                    <span class="hideWhenNarrow">Directions</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="zone-button location-left-btn"
-                                    id="viewInContextBtn"
-                                    onclick="_viewLocationInContext(event)"
-                                    title="View in Context"
-                                    style="display:none;"
-                                >
-                                    <i class="fa-solid fa-circle-nodes"></i>
-                                    <span class="hideWhenNarrow">Context</span>
-                                </button>
-                                <span class="location-actions-spacer"></span>
-                                <button
-                                    type="button"
                                     class="zone-button"
-                                    id="locationAddClearBtn"
-                                    onclick="_locationAddClearToggle(event)"
-                                    title="Populate from default saved location"
+                                    id="locationAddBtn"
+                                    onclick="_addLocationEntry(event)"
+                                    title="Add another location"
                                 >
                                     <i class="fas fa-plus"></i>
-                                    <span class="hideWhenNarrow">Location</span>
+                                    <span class="hideWhenNarrow">Add</span>
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="locationContent" class="zone-body">
+                            <!-- Saved locations quick-add -->
                             <div class="saved-locations-row">
-                                <select id="saved-locations-dropdown" title="Select a saved location">
-                                    <option value="">— Saved Locations —</option>
+                                <select id="saved-locations-dropdown" title="Select a saved location to add">
+                                    <option value="">— Add Saved Location —</option>
                                 </select>
                             </div>
-                            <div
-                                class="field full-width"
-                                style="margin-bottom: 0"
-                            >
-                                <input
-                                    type="text"
-                                    id="location"
-                                    class="location"
-                                    placeholder="4 Rolling Mill Way, Canton, MA 02021"
-                                />
+                            <!-- Multiple locations container -->
+                            <div id="locations-list" class="locations-list">
+                                <!-- Location entries will be rendered here by JS -->
                             </div>
                             <div
                                 id="location-loading"
@@ -523,10 +475,6 @@
                             >
                                 Loading...
                             </div>
-                            <div
-                                id="location-map"
-                                class="location-map-container zone-map"
-                            ></div>
                             <div
                                 id="location-error"
                                 class="location-error zone-status"

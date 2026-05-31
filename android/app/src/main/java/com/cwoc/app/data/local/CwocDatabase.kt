@@ -35,7 +35,7 @@ import com.cwoc.app.data.local.entity.WeatherForecastEntity
         WeatherForecastEntity::class,
         BadgeEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

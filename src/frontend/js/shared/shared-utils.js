@@ -1206,8 +1206,9 @@ function chitMatchesSearch(chit, searchText) {
     var tagTerm = searchText.slice(1);
     if (!tagTerm) return true;
     return Array.isArray(chit.tags) && chit.tags.some(function(t) {
-      if (t.startsWith('CWOC_System/')) return false;
-      var tLower = t.toLowerCase();
+      var tagName = (typeof t === 'object' && t !== null) ? t.name : t;
+      if (tagName.startsWith('CWOC_System/')) return false;
+      var tLower = tagName.toLowerCase();
       return tLower === tagTerm || tLower.includes(tagTerm) || tLower.split('/').some(function(seg) { return seg === tagTerm || seg.includes(tagTerm); });
     });
   }
@@ -1218,7 +1219,10 @@ function chitMatchesSearch(chit, searchText) {
   // Note content
   if (chit.note && chit.note.toLowerCase().includes(searchText)) return true;
   // Tags (exclude system tags)
-  if (Array.isArray(chit.tags) && chit.tags.some(function(t) { return !t.startsWith('CWOC_System/') && t.toLowerCase().includes(searchText); })) return true;
+  if (Array.isArray(chit.tags) && chit.tags.some(function(t) {
+    var tagName = (typeof t === 'object' && t !== null) ? t.name : t;
+    return !tagName.startsWith('CWOC_System/') && tagName.toLowerCase().includes(searchText);
+  })) return true;
   // Status
   if (chit.status && chit.status.toLowerCase().includes(searchText)) return true;
   // People
@@ -1529,7 +1533,7 @@ async function cwocChitPickerModal(options) {
       { name: 'priority', val: chit.priority },
       { name: 'severity', val: chit.severity },
       { name: 'status', val: chit.status },
-      { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
+      { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
     ];
     for (var i = 0; i < fields.length; i++) {
       var f = fields[i];
@@ -1599,7 +1603,7 @@ async function cwocChitPickerModal(options) {
       if (isDisabled) titleSpan.style.fontStyle = 'italic';
       titleCell.appendChild(titleSpan);
 
-      var userTags = (chit.tags || []).filter(function(t) { return !t.startsWith('CWOC_System/'); });
+      var userTags = (chit.tags || []).map(function(t) { return (typeof t === 'object' && t !== null) ? t.name : t; }).filter(function(t) { return !t.startsWith('CWOC_System/'); });
       if (userTags.length > 0) {
         var tagsSpan = document.createElement('span');
         tagsSpan.style.cssText = 'margin-left:6px;font-size:0.8em;opacity:0.7;';

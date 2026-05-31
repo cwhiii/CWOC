@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node (e2e tests only)
+node_modules/
+
+# Environment
+.env
+
+# Storage
+storage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Server-side migration marker (never sync from local)
+.cwopod_migrated

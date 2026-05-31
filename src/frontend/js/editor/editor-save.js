@@ -231,8 +231,20 @@ async function buildChitObject(opts) {
   const noteTextarea = document.getElementById("note");
   chit.note = noteTextarea ? noteTextarea.value.trim() : "";
 
-  const locationInput = document.getElementById("location");
-  chit.location = locationInput ? locationInput.value.trim() : "";
+  // Multiple locations: build array from window._chitLocations
+  // Also denormalize primary location address to 'location' for backward compatibility
+  const locations = (window._chitLocations || []).map(loc => ({
+    address: loc.address || '',
+    label: loc.label || null,
+    lat: loc.lat || null,
+    lon: loc.lon || null,
+    is_primary: loc.is_primary || false
+  }));
+  chit.locations = locations.length > 0 ? locations : null;
+
+  // Denormalize primary location address for backward compatibility
+  const primaryLoc = locations.find(loc => loc.is_primary);
+  chit.location = primaryLoc ? primaryLoc.address : '';
 
   // Collect people from chips
   chit.people = (typeof _peopleChipData !== 'undefined' && _peopleChipData.length > 0)

@@ -1140,10 +1140,12 @@ async function _mapsInit() {
     var urlParams = new URLSearchParams(window.location.search);
     var focusType = urlParams.get('focus');
     var focusAddress = urlParams.get('address');
+    var focusAddresses = urlParams.get('addresses');  // Comma-separated for multiple locations
 
-    if (focusAddress && focusAddress.trim()) {
-      // Focus mode: geocode the address and center the map on it
-      _handleFocusAddress(focusType, focusAddress.trim());
+    if ((focusAddress || focusAddresses) && (focusAddress || focusAddresses).trim()) {
+      // Focus mode: geocode the address(es) and center the map on them
+      var addressesParam = focusAddresses || focusAddress;
+      _handleFocusAddress(focusType, addressesParam.trim());
     } else {
       // Normal mode: trigger the appropriate mode
       _mapsSetMode(_mapsCurrentMode);
@@ -1432,8 +1434,10 @@ L.Control.DefaultView = L.Control.extend({
  * centers the map on it at zoom level 15. Shows a temporary highlight marker
  * at the focused location. Also loads the appropriate mode markers in the
  * background. Called when the maps page is opened with ?focus=...&address=...
+ *
+ * Also supports ?focus=chit&addresses=addr1,addr2,addr3 for multiple locations.
  */
-async function _handleFocusAddress(focusType, address) {
+async function _handleFocusAddress(focusType, addressOrAddresses) {
   // Set focus mode flag to prevent fitBounds from overriding our centered view
   _mapsFocusMode = true;
 
@@ -1447,37 +1451,61 @@ async function _handleFocusAddress(focusType, address) {
   var mode = (focusType === 'contact') ? 'people' : 'chits';
   _mapsSetMode(mode);
 
+  // Support comma-separated addresses for multiple locations
+  var addresses = addressOrAddresses.split(',').map(function(a) { return a.trim(); }).filter(function(a) { return a; });
+
+  if (addresses.length === 0) return;
+
   try {
-    var coords = await _geocodeAddress(address);
-    if (coords && coords.lat && coords.lon) {
-      // Center the map on the address at zoom 15 (skip fitBounds)
-      _mapsLeafletMap.setView([coords.lat, coords.lon], 15);
+    var bounds = [];
+    var markers = [];
 
-      // Add a temporary highlight marker (pulsing circle)
-      var highlightMarker = L.circleMarker([coords.lat, coords.lon], {
-        radius: 18,
-        fillColor: '#d4af37',
-        color: '#8b4513',
-        weight: 3,
-        opacity: 0.9,
-        fillOpacity: 0.35
-      });
-      highlightMarker.addTo(_mapsLeafletMap);
-      highlightMarker.bindPopup(
-        '<div style="font-family:Lora,Georgia,serif;font-size:13px;">' +
-        '<strong>📍 ' + _escHtml(address) + '</strong>' +
-        '</div>'
-      ).openPopup();
+    for (var i = 0; i < addresses.length; i++) {
+      var address = addresses[i];
+      var coords = await _geocodeAddress(address);
+      if (coords && coords.lat && coords.lon) {
+        bounds.push([coords.lat, coords.lon]);
 
-      // Remove the highlight marker after 8 seconds
+        // Add a temporary highlight marker (pulsing circle)
+        var highlightMarker = L.circleMarker([coords.lat, coords.lon], {
+          radius: 18,
+          fillColor: '#d4af37',
+          color: '#8b4513',
+          weight: 3,
+          opacity: 0.9,
+          fillOpacity: 0.35
+        });
+        highlightMarker.addTo(_mapsLeafletMap);
+        highlightMarker.bindPopup(
+          '<div style="font-family:Lora,Georgia,serif;font-size:13px;">' +
+          '<strong>📍 ' + _escHtml(address) + '</strong>' +
+          '</div>'
+        );
+        markers.push(highlightMarker);
+      }
+    }
+
+    if (bounds.length > 0) {
+      if (bounds.length === 1) {
+        // Single address: center at zoom 15
+        _mapsLeafletMap.setView([bounds[0][0], bounds[0][1]], 15);
+        if (markers[0]) markers[0].openPopup();
+      } else {
+        // Multiple addresses: fit bounds with padding
+        _mapsLeafletMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      }
+
+      // Remove highlight markers after 8 seconds
       setTimeout(function() {
-        if (_mapsLeafletMap && highlightMarker) {
-          _mapsLeafletMap.removeLayer(highlightMarker);
+        if (_mapsLeafletMap) {
+          markers.forEach(function(m) {
+            try { _mapsLeafletMap.removeLayer(m); } catch(e) {}
+          });
         }
       }, 8000);
     }
   } catch (e) {
-    console.warn('Could not geocode focus address:', address, e);
+    console.warn('Could not geocode focus address(es):', addressOrAddresses, e);
     // Fall back to normal mode behavior
   }
 }
@@ -2012,16 +2040,45 @@ async function _geocodeChits(chits) {
 
   for (var i = 0; i < chits.length; i++) {
     var chit = chits[i];
-    var address = (chit.location || '').trim();
-    if (!address) continue;
 
-    // _geocodeAddress now checks the shared cache internally
-    try {
-      var coords = await _geocodeAddress(address);
-      results.push({ chit: chit, lat: coords.lat, lon: coords.lon });
-    } catch (e) {
-      console.warn('Geocoding failed for "' + address + '":', e.message);
-      // Skip this chit silently per spec
+    // Support both legacy single location and new locations array
+    var locations = chit.locations;
+    var hasNewFormat = Array.isArray(locations) && locations.length > 0;
+
+    if (hasNewFormat) {
+      // New format: multiple locations with optional pre-geocoded coordinates
+      for (var j = 0; j < locations.length; j++) {
+        var loc = locations[j];
+        var address = (loc.address || '').trim();
+        if (!address) continue;
+
+        // Use pre-geocoded coordinates if available
+        if (loc.lat && loc.lon) {
+          results.push({ chit: chit, lat: loc.lat, lon: loc.lon, location_label: loc.label, is_primary: loc.is_primary });
+          continue;
+        }
+
+        // Geocode the address
+        try {
+          var coords = await _geocodeAddress(address);
+          results.push({ chit: chit, lat: coords.lat, lon: coords.lon, location_label: loc.label, is_primary: loc.is_primary });
+        } catch (e) {
+          console.warn('Geocoding failed for "' + address + '":', e.message);
+          // Skip this location silently
+        }
+      }
+    } else {
+      // Legacy format: single location string
+      var address = (chit.location || '').trim();
+      if (!address) continue;
+
+      try {
+        var coords = await _geocodeAddress(address);
+        results.push({ chit: chit, lat: coords.lat, lon: coords.lon, location_label: null, is_primary: true });
+      } catch (e) {
+        console.warn('Geocoding failed for "' + address + '":', e.message);
+        // Skip this chit silently per spec
+      }
     }
   }
 
@@ -2066,10 +2123,10 @@ function _getMarkerColor(status) {
 // ── Popup content ────────────────────────────────────────────────────────────
 
 /**
- * _buildPopupContent(chit) — Returns HTML string for a marker popup.
- * Includes: title, relevant date, status, and link to editor.
+ * _buildPopupContent(chit, locationLabel, isPrimary) — Returns HTML string for a marker popup.
+ * Includes: title, relevant date, status, location label, and link to editor.
  */
-function _buildPopupContent(chit) {
+function _buildPopupContent(chit, locationLabel, isPrimary) {
   var title = chit.title || '(Untitled)';
 
   // Pick the most relevant date to display
@@ -2136,6 +2193,12 @@ function _buildPopupContent(chit) {
   if (dateStr) {
     html += '<br><span style="font-size:12px;color:#666;">📅 ' + _escHtml(dateStr) + '</span>';
   }
+  // Show location label if present
+  if (locationLabel) {
+    html += '<br><span style="font-size:12px;color:#666;">📍 ' + _escHtml(locationLabel) + (isPrimary ? ' ⭐' : '') + '</span>';
+  } else if (isPrimary) {
+    html += '<br><span style="font-size:12px;color:#666;">📍 Primary location</span>';
+  }
   html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '&from=' + encodeURIComponent('/frontend/html/maps.html') + '" style="font-size:12px;color:#2196F3;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open in Editor →</a>';
   html += '</div>';
 
@@ -2189,8 +2252,11 @@ function _placeMarkers(geocodedChits) {
     // Use the chit's own color, fallback to neutral parchment tan
     var color = item.chit.color || '#d2b48c';
 
+    // Add primary indicator to marker if this is the primary location
+    var isPrimary = item.is_primary !== false;
+
     // Rounded-square divIcon marker for chits
-    var iconHtml = '<div class="maps-chit-marker" style="background-color:' + _hexToRgba(color, 0.85) + ';border-color:#fff;"></div>';
+    var iconHtml = '<div class="maps-chit-marker" style="background-color:' + _hexToRgba(color, 0.85) + ';border-color:#fff;' + (isPrimary ? 'box-shadow:0 0 0 2px #d4af37;' : '') + '"></div>';
     var icon = L.divIcon({
       html: iconHtml,
       className: 'maps-chit-marker-wrapper',
@@ -2202,8 +2268,9 @@ function _placeMarkers(geocodedChits) {
     var marker = L.marker([item.lat, item.lon], { icon: icon });
     marker._cwocMarkerType = 'chit';
     marker._cwocChit = item.chit;
+    marker._cwocLocationLabel = item.location_label;
 
-    marker.bindPopup(_buildPopupContent(item.chit));
+    marker.bindPopup(_buildPopupContent(item.chit, item.location_label, isPrimary));
     (function(m, c) {
       m.on('click', function(e) {
         if (e.originalEvent && (e.originalEvent.metaKey || e.originalEvent.ctrlKey)) {

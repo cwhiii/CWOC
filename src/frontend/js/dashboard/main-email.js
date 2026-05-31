@@ -1843,6 +1843,8 @@ async function _emailBulkArchive() {
             ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
                 if (Array.isArray(chit[f])) chit[f] = JSON.stringify(chit[f]);
             });
+            // Convert tags from object format to UUID strings for backend
+            if (typeof _convertTagsForSave === 'function') chit.tags = _convertTagsForSave(chit.tags);
             var putResp = await fetch('/api/chits/' + encodeURIComponent(chitId), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
