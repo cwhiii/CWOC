@@ -186,6 +186,7 @@ class ProjectsViewModel @Inject constructor(
                 prerequisites = null,
                 syncVersion = 0,
                 lastSyncedAt = null,
+                locations = null,
                 isDirty = true,
                 dirtyFields = "[\"title\",\"status\",\"createdDatetime\",\"modifiedDatetime\"]"
             )

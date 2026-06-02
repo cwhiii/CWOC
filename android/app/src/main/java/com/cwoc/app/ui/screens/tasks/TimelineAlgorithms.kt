@@ -356,7 +356,7 @@ object TimelineAlgorithms {
                     // Try with offset (e.g., "2024-01-15T10:00:00Z" or "2024-01-15T10:00:00+05:00")
                     LocalDateTime.parse(
                         dateStr.substringBefore('Z').substringBefore('+').let {
-                            if (it.contains('-', startIndex = 11)) it.substringBeforeLast('-') else it
+                            if (it.indexOf('-', startIndex = 11) != -1) it.substringBeforeLast('-') else it
                         },
                         DateTimeFormatter.ISO_LOCAL_DATE_TIME
                     ).toLocalDate()

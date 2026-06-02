@@ -840,6 +840,7 @@ class EmailViewModel @Inject constructor(
                 emailAccountId = original.emailAccountId,
                 // Inherit thread_id so the reply stays in the same thread
                 threadId = original.threadId ?: original.emailMessageId,
+                locations = null,
                 isDirty = true,
                 dirtyFields = "[]"
             )
@@ -946,6 +947,7 @@ class EmailViewModel @Inject constructor(
                 emailAccountId = original.emailAccountId,
                 // Forwards start a new thread (different from replies)
                 threadId = null,
+                locations = null,
                 isDirty = true,
                 dirtyFields = "[]"
             )

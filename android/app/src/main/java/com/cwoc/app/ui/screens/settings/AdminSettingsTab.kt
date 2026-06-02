@@ -2832,9 +2832,7 @@ private fun BackupOrphanCard(
                     Text("Cancel")
                 }
             },
-            containerColor = CwocDialogDefaults.containerColor,
-            titleContentColor = CwocDialogDefaults.titleContentColor,
-            textContentColor = CwocDialogDefaults.textContentColor
+            containerColor = CwocDialogDefaults.containerColor
         )
     }
 }
@@ -6098,9 +6096,7 @@ fun BackupRestoreFlow(
                     Text("Cancel")
                 }
             },
-            containerColor = CwocDialogDefaults.containerColor,
-            titleContentColor = CwocDialogDefaults.titleContentColor,
-            textContentColor = CwocDialogDefaults.textContentColor
+            containerColor = CwocDialogDefaults.containerColor
         )
     }
 }

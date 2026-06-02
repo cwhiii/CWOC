@@ -1,12 +1,11 @@
-Build failed: 2026-05-28T11:58:18.402740771Z
+Build failed: 2026-06-02T01:08:41.458487754Z
 
 === Kotlin Compiler Errors ===
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/remote/dto/BackupDto.kt:125:1 Unclosed comment
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:2836:52 [UNRESOLVED_REFERENCE] Unresolved reference: titleContentColor
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:2837:51 [UNRESOLVED_REFERENCE] Unresolved reference: textContentColor
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:6102:52 [UNRESOLVED_REFERENCE] Unresolved reference: titleContentColor
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/settings/AdminSettingsTab.kt:6103:51 [UNRESOLVED_REFERENCE] Unresolved reference: textContentColor
-e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/ui/screens/tasks/TimelineAlgorithms.kt:359:36 [NONE_APPLICABLE] None of the following functions can be called with the arguments supplied: 
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/MainActivity.kt:953:30 [UNRESOLVED_REFERENCE] Unresolved reference: weatherRepository
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/MainActivity.kt:954:56 [UNRESOLVED_REFERENCE] Unresolved reference: it
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/MainActivity.kt:954:76 [UNRESOLVED_REFERENCE] Unresolved reference: it
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/mapper/ChitMapper.kt:245:21 [UNRESOLVED_REFERENCE] Unresolved reference: locations
+e: file:///home/cwhiii/Sync/Secondary%20Data/Development/CWOC/android/app/src/main/java/com/cwoc/app/data/sync/DtoMappers.kt:164:21 [UNRESOLVED_REFERENCE] Unresolved reference: locations
 
 === Task Failure ===
 Execution failed for task ':app:compileDebugKotlin'.

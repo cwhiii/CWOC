@@ -242,6 +242,7 @@ fun ChitFormState.toEntity(
         checklistAutosave = checklistAutosave,
         nestThreadId = nestThreadId,
         autoCompleteChecklist = autoCompleteChecklist,
+        locations = originalEntity?.locations,
         isDirty = true,
         dirtyFields = "[]" // Will be set by DirtyTracker
     )

@@ -199,6 +199,7 @@ class MainActivity : ComponentActivity() {
                 syncPushEngine = syncPushEngine,
                 okHttpClient = okHttpClient,
                 networkFallbackState = networkFallbackState,
+                weatherRepository = weatherRepository,
                 navigateToFlow = navigateToFlow,
                 onNavigateConsumed = { _navigateToFlow.value = null }
             )
@@ -231,6 +232,7 @@ private fun CwocApp(
     syncPushEngine: SyncPushEngine,
     okHttpClient: OkHttpClient,
     networkFallbackState: NetworkFallbackState,
+    weatherRepository: com.cwoc.app.data.repository.WeatherRepository,
     navigateToFlow: kotlinx.coroutines.flow.StateFlow<String?>,
     onNavigateConsumed: () -> Unit = {}
 ) {
@@ -1055,7 +1057,8 @@ private fun CwocApp(
                             snoozedUntil = null,
                             prerequisites = null,
                             syncVersion = 0,
-                            lastSyncedAt = null
+                            lastSyncedAt = null,
+                            locations = null
                         )
                         chitRepository.upsertAndSync(entity, setOf(
                             "title", "point_in_time", "notification", "alerts",

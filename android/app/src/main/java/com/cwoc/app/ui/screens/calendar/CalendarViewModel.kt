@@ -396,7 +396,8 @@ class CalendarViewModel @Inject constructor(
                         snoozedUntil = null,
                         prerequisites = null,
                         syncVersion = 0,
-                        lastSyncedAt = null
+                        lastSyncedAt = null,
+                        locations = null
                     )
                 } catch (_: Exception) { null }
             }
