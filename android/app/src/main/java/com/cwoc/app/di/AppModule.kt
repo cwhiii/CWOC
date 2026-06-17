@@ -15,8 +15,7 @@ import com.cwoc.app.data.local.dao.SettingsDao
 import com.cwoc.app.data.local.dao.StandaloneAlertDao
 import com.cwoc.app.data.local.dao.SyncMetadataDao
 import com.cwoc.app.data.local.dao.WeatherForecastDao
-import com.cwoc.app.data.local.migration.MIGRATION_14_15
-import com.cwoc.app.data.local.migration.MIGRATION_15_16
+import com.cwoc.app.data.local.migration.MIGRATION_12_16
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -68,8 +67,7 @@ object AppModule {
             CwocDatabase::class.java,
             "cwoc.db"
         )
-        .addMigrations(MIGRATION_14_15)
-        .addMigrations(MIGRATION_15_16)
+        .addMigrations(MIGRATION_12_16)
         .build()
     }
 
